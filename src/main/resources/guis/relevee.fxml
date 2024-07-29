@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="598.0" prefWidth="987.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ReleveeController">
+   <children>
+      <Label fx:id="lbl_entreprise" layoutX="12.0" layoutY="85.0" text="Entreprise abonee">
+         <font>
+            <Font name="System Bold" size="16.0" />
+         </font>
+      </Label>
+      <ImageView fitHeight="36.0" fitWidth="24.0" layoutX="953.0" layoutY="11.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Separator layoutX="6.0" layoutY="71.0" prefHeight="8.0" prefWidth="980.0" />
+      <ImageView fitHeight="47.0" fitWidth="45.0" layoutX="17.0" layoutY="15.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/hotel-supplier.png" />
+         </image>
+      </ImageView>
+      <DatePicker fx:id="dpk1" layoutX="658.0" layoutY="86.0" onAction="#chooseperiod" prefHeight="24.0" prefWidth="134.0" promptText="Debut" />
+      <DatePicker fx:id="dpk2" layoutX="824.0" layoutY="87.0" onAction="#chooseperiod" prefHeight="24.0" prefWidth="134.0" promptText="Fin" />
+      <Label layoutX="805.0" layoutY="88.0" text="-">
+         <font>
+            <Font name="System Bold" size="16.0" />
+         </font>
+      </Label>
+      <TabPane fx:id="relevtabs" layoutX="9.0" layoutY="120.0" prefHeight="466.0" prefWidth="970.0" side="LEFT" style="-fx-background-color: white; -fx-border-color: #44cef5;" tabClosingPolicy="UNAVAILABLE">
+        <tabs>
+          <Tab fx:id="rlv" text="Relevee">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="427.0" prefWidth="899.0">
+                     <children>
+                        <TableView fx:id="tbreleve" layoutX="7.0" layoutY="43.0" prefHeight="368.0" prefWidth="920.0" tableMenuButtonVisible="true">
+                          <columns>
+                            <TableColumn fx:id="cdate" prefWidth="75.0" text="Date" />
+                            <TableColumn fx:id="cbon" prefWidth="75.0" text="Bon" />
+                              <TableColumn fx:id="cclient" prefWidth="75.0" text="Dépendant" />
+                              <TableColumn fx:id="cproduit" prefWidth="75.0" text="Produit" />
+                              <TableColumn fx:id="cquantite" prefWidth="75.0" text="Quantite" />
+                              <TableColumn fx:id="cprixunit" prefWidth="75.0" text="P.U." />
+                              <TableColumn fx:id="cprixtotal" prefWidth="75.0" text="Prix total" />
+                              <TableColumn fx:id="cparent" prefWidth="75.0" text="Agents" />
+                          </columns>
+                           <columnResizePolicy>
+                              <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                           </columnResizePolicy>
+                        </TableView>
+                        <Label fx:id="totalRlv" layoutX="14.0" layoutY="421.0" text="TOTAL :">
+                           <font>
+                              <Font name="System Bold" size="19.0" />
+                           </font>
+                        </Label>
+                        <ImageView fitHeight="36.0" fitWidth="24.0" layoutX="864.0" layoutY="9.0" onMouseClicked="#exportXlsRelevee" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/excel.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <ImageView fitHeight="24.0" fitWidth="24.0" layoutX="891.0" layoutY="9.0" onMouseClicked="#exportPdfRelevee" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/download-pdf.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Pane layoutX="248.0" layoutY="7.0" prefHeight="31.0" prefWidth="429.0" style="-fx-background-radius: 20; -fx-border-radius: 20; -fx-background-color: white; -fx-border-color: #eeeeee;">
+                           <children>
+                              <ImageView fitHeight="20.0" fitWidth="15.0" layoutX="406.0" layoutY="8.0" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/search32.png" />
+                                 </image>
+                              </ImageView>
+                              <TextField fx:id="searchRelv" layoutX="11.0" layoutY="3.0" prefHeight="24.0" prefWidth="393.0" promptText="Rechercher" style="-fx-background-color: white;" />
+                           </children>
+                        </Pane>
+                        <Label layoutX="12.0" layoutY="13.0" text="Releve de consommation">
+                           <font>
+                              <Font size="16.0" />
+                           </font>
+                        </Label>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+            <Tab fx:id="inv" text="Liste des factures">
+              <content>
+                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <TableView fx:id="tfactures" layoutX="11.0" layoutY="48.0" prefHeight="364.0" prefWidth="915.0" tableMenuButtonVisible="true">
+                          <columns>
+                            <TableColumn fx:id="cnumero" prefWidth="75.0" text="Numero" />
+                            <TableColumn fx:id="cperiode" prefWidth="75.0" text="Periode" />
+                              <TableColumn fx:id="cmontant" prefWidth="75.0" text="Montant" />
+                              <TableColumn fx:id="cmontantpaye" prefWidth="75.0" text="Montant paye" />
+                              <TableColumn fx:id="cmontantrestant" prefWidth="75.0" text="Montant restant" />
+                              <TableColumn fx:id="cetat" prefWidth="75.0" text="Etat" />
+                          </columns>
+                           <columnResizePolicy>
+                              <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                           </columnResizePolicy>
+                        </TableView>
+                        <Label layoutX="19.0" layoutY="13.0" text="Toutes les factures">
+                           <font>
+                              <Font size="16.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="14.0" layoutY="428.0" prefHeight="20.0" prefWidth="639.0" text="Total">
+                           <font>
+                              <Font name="System Bold" size="16.0" />
+                           </font>
+                        </Label>
+                        <Pane layoutX="194.0" layoutY="10.0" prefHeight="31.0" prefWidth="480.0" style="-fx-background-radius: 20; -fx-border-radius: 20; -fx-background-color: white; -fx-border-color: #eeeeee;">
+                           <children>
+                              <ImageView fitHeight="20.0" fitWidth="15.0" layoutX="452.0" layoutY="8.0" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/search32.png" />
+                                 </image>
+                              </ImageView>
+                              <TextField layoutX="11.0" layoutY="3.0" prefHeight="24.0" prefWidth="434.0" promptText="Rechercher" style="-fx-background-color: white;" />
+                           </children>
+                        </Pane>
+                        <Button layoutX="697.0" layoutY="13.0" mnemonicParsing="false" onAction="#createBill" style="-fx-background-color: #44cef5;" text="Générer la facture de la période" textFill="WHITE">
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                           <effect>
+                              <DropShadow height="6.17" radius="3.3275" width="9.14" />
+                           </effect>
+                        </Button>
+                        <Pane fx:id="wait_insert_pane" layoutX="349.0" layoutY="210.0" prefHeight="54.0" prefWidth="247.0" style="-fx-background-color: white; -fx-background-radius: 12;">
+                           <children>
+                              <ProgressIndicator layoutX="14.0" layoutY="14.0" prefHeight="30.0" prefWidth="31.0" />
+                              <Label layoutX="57.0" layoutY="19.0" text="Traitement en cours..." />
+                           </children>
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                        </Pane>
+                     </children>
+                  </AnchorPane>
+              </content>
+            </Tab>
+          <Tab fx:id="bills" text="Apercu facture">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <CheckBox fx:id="unpaids" layoutX="14.0" layoutY="16.0" mnemonicParsing="false" text="Inclures les factures impayees" />
+                        <ImageView fitHeight="45.0" fitWidth="36.0" layoutX="882.0" layoutY="8.0" onMouseClicked="#printit" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/printing.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <ScrollPane layoutX="6.0" layoutY="52.0" prefHeight="406.0" prefWidth="924.0" vvalue="0.27">
+                          <content>
+                            <AnchorPane fx:id="billbed" minHeight="0.0" minWidth="0.0" prefHeight="563.0" prefWidth="905.0">
+                                 <children>
+                                    <Pane fx:id="pane_invoiced" layoutX="69.0" layoutY="37.0" maxHeight="1.7976931348623157E308" prefHeight="515.0" prefWidth="784.0" style="-fx-background-color: white;">
+                                       <children>
+                                          <Label fx:id="txt_bill_companyname" layoutX="83.0" layoutY="18.0" text="Company">
+                                             <font>
+                                                <Font name="System Bold" size="14.0" />
+                                             </font>
+                                          </Label>
+                                          <Label fx:id="txt_comp_adresse" layoutX="85.0" layoutY="63.0" prefHeight="16.0" prefWidth="188.0" text="Goma" wrapText="true">
+                                             <font>
+                                                <Font size="9.0" />
+                                             </font>
+                                          </Label>
+                                          <Label fx:id="txt_bill_comp_id" layoutX="85.0" layoutY="36.0" text="Inconnue">
+                                             <font>
+                                                <Font size="10.0" />
+                                             </font>
+                                          </Label>
+                                          <Label fx:id="txt_bill_num_facture" layoutX="645.0" layoutY="61.0" prefHeight="21.0" prefWidth="115.0" text="Facture N#">
+                                             <font>
+                                                <Font size="11.0" />
+                                             </font>
+                                          </Label>
+                                          <Label fx:id="txt_bill_date_vente" layoutX="643.0" layoutY="22.0" prefHeight="16.0" prefWidth="122.0" text="Date">
+                                             <font>
+                                                <Font size="11.0" />
+                                             </font>
+                                          </Label>
+                                          <Separator layoutX="6.0" layoutY="205.0" prefHeight="0.0" prefWidth="769.0" style="-fx-background-color: black;" />
+                                          <VBox layoutX="12.0" layoutY="218.0" prefHeight="268.0" prefWidth="763.0">
+                                             <children>
+                                                <Pane fx:id="pane_tab" prefHeight="69.0" prefWidth="763.0" VBox.vgrow="ALWAYS">
+                                                   <children>
+                                                      <TableView fx:id="tbl_bill_facts" layoutY="-1.0" maxHeight="1.7976931348623157E308" prefHeight="57.0" prefWidth="763.0">
+                                                         <columns>
+                                                            <TableColumn fx:id="col_bill_qte" maxWidth="2500.0" prefWidth="30.0" text="Qte" />
+                                                            <TableColumn fx:id="col_bill_designation" maxWidth="6000.0" prefWidth="180.0" text="Designation" />
+                                                            <TableColumn fx:id="col_bill_pu" maxWidth="2000.0" prefWidth="40.0" text="PU" />
+                                                            <TableColumn fx:id="col_bill_prix_unit" maxWidth="4000.0" text="Prix Total" />
+                                                         </columns>
+                                                         <columnResizePolicy>
+                                                            <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                         </columnResizePolicy>
+                                                      </TableView>
+                                                   </children>
+                                                </Pane>
+                                                <Pane fx:id="arrierre_pane" layoutX="10.0" layoutY="73.0" maxHeight="1.7976931348623157E308" prefHeight="94.0" prefWidth="763.0">
+                                                   <children>
+                                                      <TableView fx:id="tbl_bill_arr_facts" layoutX="320.0" layoutY="38.0" maxHeight="1.7976931348623157E308" prefHeight="54.0" prefWidth="439.0">
+                                                         <columns>
+                                                            <TableColumn fx:id="col_bill_arr_numero" maxWidth="2500.0" prefWidth="30.0" text="Numero" />
+                                                            <TableColumn fx:id="col_bill_arr_designation" maxWidth="6000.0" prefWidth="180.0" text="Periode de facturation" />
+                                                            <TableColumn fx:id="col_bill_prix_arr_unit" maxWidth="4000.0" text="Montant" />
+                                                         </columns>
+                                                         <columnResizePolicy>
+                                                            <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                         </columnResizePolicy>
+                                                      </TableView>
+                                                      <Label layoutX="321.0" layoutY="18.0" text="Factures impayées sauf erreur">
+                                                         <font>
+                                                            <Font name="System Bold Italic" size="13.0" />
+                                                         </font>
+                                                      </Label>
+                                                   </children>
+                                                </Pane>
+                                                <Pane maxHeight="1.7976931348623157E308" prefHeight="108.0" prefWidth="763.0" VBox.vgrow="ALWAYS">
+                                                   <children>
+                                                      <Label fx:id="txt_bill_cash_paid" layoutX="14.0" layoutY="37.0" text="TOTAL PAYEE">
+                                                         <font>
+                                                            <Font name="System Bold" size="12.0" />
+                                                         </font>
+                                                      </Label>
+                                                      <Label fx:id="txt_bill_contact_entreprise" layoutX="23.0" layoutY="84.0" prefHeight="11.0" prefWidth="166.0" text="Contact entreprise">
+                                                         <font>
+                                                            <Font size="9.0" />
+                                                         </font>
+                                                      </Label>
+                                                      <Pane fx:id="pane_bill_cash_paid" layoutX="602.0" layoutY="38.0" prefHeight="21.0" prefWidth="141.0" style="-fx-background-color: white; -fx-border-color: #44cef5;">
+                                                         <children>
+                                                            <Label fx:id="txt_bill_somme_facture" alignment="TOP_RIGHT" layoutX="-1.0" layoutY="2.0" prefHeight="16.0" prefWidth="141.0" text="0.000" textAlignment="RIGHT">
+                                                               <font>
+                                                                  <Font name="System Bold" size="12.0" />
+                                                               </font>
+                                                            </Label>
+                                                         </children>
+                                                      </Pane>
+                                                      <Label fx:id="txt_bill_user" layoutX="17.0" layoutY="61.0" text="User">
+                                                         <font>
+                                                            <Font size="11.0" />
+                                                         </font>
+                                                      </Label>
+                                                      <Separator layoutX="4.0" layoutY="77.0" prefHeight="0.0" prefWidth="758.0" style="-fx-background-color: black;" />
+                                                      <Label fx:id="txt_lbl_credit" layoutX="13.0" layoutY="11.0" text="RESTE A PAYER">
+                                                         <font>
+                                                            <Font name="System Bold" size="12.0" />
+                                                         </font>
+                                                      </Label>
+                                                      <Pane fx:id="pane_bill_sum_credit" layoutX="602.0" layoutY="9.0" prefHeight="19.0" prefWidth="141.0" style="-fx-background-color: white; -fx-border-color: #44cef5;">
+                                                         <children>
+                                                            <Label fx:id="txt_bill_somme_credit" alignment="TOP_RIGHT" layoutX="-2.0" layoutY="1.0" prefHeight="21.0" prefWidth="141.0" text="0.000" textAlignment="RIGHT">
+                                                               <font>
+                                                                  <Font name="System Bold" size="12.0" />
+                                                               </font>
+                                                            </Label>
+                                                         </children>
+                                                      </Pane>
+                                                      <Label fx:id="txt_comp_adresse_tel" alignment="CENTER_RIGHT" layoutX="429.0" layoutY="83.0" prefHeight="16.0" prefWidth="321.0" text="Tel" textAlignment="RIGHT" wrapText="true">
+                                                         <font>
+                                                            <Font size="9.0" />
+                                                         </font>
+                                                      </Label>
+                                                   </children>
+                                                </Pane>
+                                             </children>
+                                          </VBox>
+                                          <ImageView fx:id="img_vu_logo" fitHeight="72.0" fitWidth="73.0" layoutX="7.0" layoutY="12.0" pickOnBounds="true" preserveRatio="true">
+                                             <image>
+                                                <Image url="@../icons/office-building.png" />
+                                             </image>
+                                          </ImageView>
+                                          <Label fx:id="txt_bill_comp_idnat" layoutX="84.0" layoutY="50.0" text="Inconnue">
+                                             <font>
+                                                <Font size="10.0" />
+                                             </font>
+                                          </Label>
+                                          <Pane layoutX="9.0" layoutY="104.0" prefHeight="97.0" prefWidth="414.0" style="-fx-background-color: white; -fx-border-color: #44cef5; -fx-background-radius: 5; -fx-border-radius: 5;">
+                                             <children>
+                                                <Label fx:id="txt_nom_client" layoutX="10.0" layoutY="13.0" prefHeight="21.0" prefWidth="199.0" text="Client :...." />
+                                                <Label fx:id="txt_nom_client1" layoutX="11.0" layoutY="38.0" prefHeight="21.0" prefWidth="199.0" text="....." />
+                                                <Label fx:id="txt_comp_adresse1" layoutX="12.0" layoutY="66.0" prefHeight="16.0" prefWidth="188.0" text="Goma" wrapText="true">
+                                                   <font>
+                                                      <Font size="9.0" />
+                                                   </font>
+                                                </Label>
+                                             </children>
+                                          </Pane>
+                                       </children>
+                                    </Pane>
+                                 </children>
+                              </AnchorPane>
+                          </content>
+                        </ScrollPane>
+                        <Label fx:id="txt_print_status" layoutX="811.0" layoutY="17.0" prefHeight="16.0" prefWidth="64.0" text="..." />
+                        <ComboBox fx:id="cbx_printers" layoutX="550.0" layoutY="13.0" prefHeight="24.0" prefWidth="251.0" promptText="Choisir l'imprimente" />
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+        </tabs>
+      </TabPane>
+      <Label layoutX="73.0" layoutY="34.0" text="Consommations de l'abonne">
+         <font>
+            <Font name="System Bold" size="19.0" />
+         </font>
+      </Label>
+   </children>
+</AnchorPane>

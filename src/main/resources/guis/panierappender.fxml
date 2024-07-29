@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="485.0" prefWidth="432.0" style="-fx-background-color: white; -fx-background-radius: 5; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.PanierappenderController">
+   <children>
+      <ImageView fx:id="img_vu_pixa_prod" fitHeight="80.0" fitWidth="80.0" layoutX="6.0" layoutY="5.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/gallery.png" />
+         </image>
+      </ImageView>
+      <Label fx:id="txt_codebar" layoutX="101.0" layoutY="16.0" prefHeight="21.0" prefWidth="267.0" text="Code bar">
+         <font>
+            <Font size="18.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_product_name" layoutX="100.0" layoutY="40.0" prefHeight="16.0" prefWidth="290.0" text="Designation" />
+      <ComboBox fx:id="cbx_mesure_selected" layoutX="247.0" layoutY="197.0" prefHeight="32.0" prefWidth="110.0" />
+      <Separator layoutY="83.0" prefHeight="16.0" prefWidth="430.0" />
+      <TextField fx:id="tf_input_quant" layoutX="71.0" layoutY="197.0" onAction="#addToCart" prefHeight="32.0" prefWidth="170.0" promptText="Quantité" text="1" />
+      <Button layoutX="26.0" layoutY="196.0" mnemonicParsing="false" onAction="#decrease" prefHeight="32.0" prefWidth="36.0" style="-fx-background-color: #44CEF5;" text="-" textFill="WHITE">
+         <font>
+            <Font size="18.0" />
+         </font></Button>
+      <Button layoutX="361.0" layoutY="196.0" mnemonicParsing="false" onAction="#increase" prefHeight="33.0" prefWidth="47.0" style="-fx-background-color: #44CEF5;" text="+" textFill="#eeeaea">
+         <font>
+            <Font size="18.0" />
+         </font></Button>
+      <Separator layoutX="-1.0" layoutY="428.0" prefHeight="4.0" prefWidth="430.0" />
+      <TextField fx:id="tf_prix_unitr_usd" layoutX="26.0" layoutY="276.0" prefHeight="32.0" prefWidth="180.0" promptText="Prix unitaire" />
+      <TextField fx:id="tf_prix_unitr_cdf" layoutX="218.0" layoutY="275.0" prefHeight="32.0" prefWidth="188.0" />
+      <Label fx:id="txt_total_usd" layoutX="30.0" layoutY="330.0" prefHeight="21.0" prefWidth="180.0" text="....">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_total_cdf" layoutX="223.0" layoutY="325.0" prefHeight="21.0" prefWidth="180.0" text="....">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Label>
+      <Button layoutX="168.0" layoutY="438.0" mnemonicParsing="false" onAction="#close" prefHeight="38.0" prefWidth="78.0" style="-fx-background-color: #CCCCCC;" text="%xbtn.close" textFill="WHITE" />
+      <Button fx:id="btn_add2cart" layoutX="260.0" layoutY="438.0" mnemonicParsing="false" onAction="#addToCart" prefHeight="38.0" prefWidth="144.0" style="-fx-background-color: #44cef5;" text="%xajouuter_panier" textFill="#fcf8f8">
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor></Button>
+      <ImageView fitHeight="21.0" fitWidth="36.0" layoutX="395.0" layoutY="13.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+      </ImageView>
+      <Label fx:id="txt_available_quant" alignment="CENTER_RIGHT" layoutX="225.0" layoutY="152.0" prefHeight="21.0" prefWidth="196.0" text=".....">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_product_name1" layoutX="34.0" layoutY="243.0" prefHeight="16.0" prefWidth="180.0" text="USD" />
+      <Label fx:id="txt_product_name11" layoutX="225.0" layoutY="243.0" prefHeight="16.0" prefWidth="180.0" text="CDF" />
+      <Separator layoutX="1.0" layoutY="173.0" prefHeight="16.0" prefWidth="430.0" />
+      <ComboBox fx:id="cbx_lot_recquisitionee" layoutX="31.0" layoutY="115.0" prefHeight="32.0" prefWidth="170.0" />
+      <Label fx:id="txt_peremption" layoutX="224.0" layoutY="115.0" prefHeight="32.0" prefWidth="196.0" style="-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;" text="Non perissable">
+         <opaqueInsets>
+            <Insets />
+         </opaqueInsets>
+      </Label>
+      <Label fx:id="txt_alerte_pa" layoutX="15.0" layoutY="162.0" prefHeight="14.0" prefWidth="82.0" text="st-alerte">
+         <font>
+            <Font size="11.0" />
+         </font></Label>
+      <Label fx:id="txt_alerte_pa1" layoutX="6.0" layoutY="95.0" text="%xinformation_lot" />
+      <Label fx:id="localisabel" layoutX="101.0" layoutY="67.0" prefHeight="16.0" prefWidth="281.0" text="Localisation" />
+      <ImageView fitHeight="32.0" fitWidth="113.0" layoutX="387.0" layoutY="380.0" onMouseClicked="#showFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/printing(1).png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Pane layoutX="173.0" layoutY="366.0" prefHeight="62.0" prefWidth="206.0">
+         <children>
+            <ImageView fx:id="img_codebar" fitHeight="44.0" fitWidth="196.0" layoutX="4.0" layoutY="9.0" pickOnBounds="true" preserveRatio="true" />
+         </children>
+      </Pane>
+      <Pane fx:id="pane_print" layoutX="46.0" layoutY="246.0" prefHeight="200.0" prefWidth="200.0" style="-fx-background-color: white; -fx-background-radius: 5;" visible="false">
+         <effect>
+            <DropShadow />
+         </effect>
+         <children>
+            <ComboBox fx:id="cbx_printers" layoutX="16.0" layoutY="40.0" prefHeight="24.0" prefWidth="170.0" />
+            <ImageView fitHeight="21.0" fitWidth="36.0" layoutX="163.0" layoutY="11.0" onMouseClicked="#closeFloatingPane" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/Cancel_32px_1.png" />
+               </image>
+            </ImageView>
+            <ImageView fitHeight="21.0" fitWidth="18.0" layoutX="154.0" layoutY="107.0" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/printer.png" />
+               </image>
+            </ImageView>
+            <ImageView fitHeight="24.0" fitWidth="32.0" layoutX="151.0" layoutY="74.0" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/printing.png" />
+               </image>
+            </ImageView>
+            <RadioButton fx:id="jet" layoutX="26.0" layoutY="75.0" mnemonicParsing="false" text="Jet d'encre" />
+            <RadioButton fx:id="thermal" layoutX="26.0" layoutY="108.0" mnemonicParsing="false" text="Thermal" />
+            <Separator layoutX="2.0" layoutY="142.0" prefHeight="4.0" prefWidth="196.0" />
+            <Button layoutX="142.0" layoutY="162.0" mnemonicParsing="false" onAction="#printbarcode" text="OK" />
+         </children>
+      </Pane>
+   </children>
+</AnchorPane>

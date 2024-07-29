@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="468.0" prefWidth="600.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.DeliveryController">
+   <children>
+      <TextField fx:id="tf_numpiece" layoutX="93.0" layoutY="121.0" prefHeight="30.0" prefWidth="416.0" promptText="%xnum_piece" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <ComboBox fx:id="cbx_choose_fourniss_lic" editable="true" layoutX="92.0" layoutY="71.0" prefHeight="30.0" prefWidth="416.0" promptText="%xfourniss" AnchorPane.leftAnchor="92.0" AnchorPane.rightAnchor="93.0" />
+      <DatePicker fx:id="dpk_dateLivr" layoutX="365.0" layoutY="16.0" prefHeight="30.0" prefWidth="188.0" promptText="%xlbl.date" AnchorPane.leftAnchor="364.0" AnchorPane.rightAnchor="48.0" />
+      <TextField fx:id="tf_montantpaye" layoutX="93.0" layoutY="239.0" prefHeight="30.0" prefWidth="416.0" promptText="%xmo_ntant_paye" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <ImageView fx:id="btn_goto_suppliers" fitHeight="30.0" fitWidth="29.0" layoutX="524.0" layoutY="72.0" onMouseClicked="#gotoSuplier" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="367.0" AnchorPane.rightAnchor="48.0" AnchorPane.topAnchor="72.0">
+         <image>
+            <Image url="@../icons/buying-decision.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <TextField fx:id="tf_reduction" layoutX="93.0" layoutY="278.0" prefHeight="30.0" prefWidth="416.0" promptText="%xreduction" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <TextField fx:id="tf_libelle" layoutX="92.0" layoutY="163.0" prefHeight="30.0" prefWidth="416.0" promptText="%xlibelle" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <TextField fx:id="tf_observation" layoutX="93.0" layoutY="319.0" prefHeight="30.0" prefWidth="416.0" promptText="%xtxtf.prompt.observation" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <TextField fx:id="tf_montantfss" layoutX="93.0" layoutY="200.0" prefHeight="30.0" prefWidth="416.0" promptText="%xmo_ntant_total" AnchorPane.leftAnchor="93.0" AnchorPane.rightAnchor="92.0" />
+      <Separator layoutX="1.0" layoutY="61.0" prefHeight="3.0" prefWidth="600.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="0.0" />
+      <Separator layoutY="112.0" prefHeight="3.0" prefWidth="600.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+      <ImageView fx:id="btn_goto_suppliers1" fitHeight="45.0" fitWidth="37.0" layoutX="14.0" layoutY="11.0" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="14.0">
+         <image>
+            <Image url="@../icons/hotel-supplier.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Label layoutX="6.0" layoutY="79.0" text="Fournisseur" AnchorPane.leftAnchor="6.0" />
+      <Separator layoutX="1.0" layoutY="376.0" prefHeight="3.0" prefWidth="600.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+      <Button layoutX="288.0" layoutY="396.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="126.0" style="-fx-background-color: cccccc;" text="%xbtn.close" textFill="WHITE" AnchorPane.rightAnchor="221.0" />
+      <ImageView fx:id="btn_goto_suppliers2" fitHeight="23.0" fitWidth="29.0" layoutX="571.0" layoutY="6.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="7.0" AnchorPane.topAnchor="6.0">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Button fx:id="bntsave" layoutX="384.0" layoutY="395.0" mnemonicParsing="false" onAction="#saveLivraison" prefHeight="37.0" prefWidth="168.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" AnchorPane.rightAnchor="48.0" />
+      <Label layoutX="59.0" layoutY="16.0" prefHeight="30.0" prefWidth="150.0" text="Livraison" AnchorPane.leftAnchor="59.0">
+         <font>
+            <Font size="20.0" />
+         </font>
+      </Label>
+   </children>
+</AnchorPane>

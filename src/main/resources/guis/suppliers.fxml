@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.text.Font?>
+
+<Pane fx:id="pane_fournisseur" prefHeight="355.0" prefWidth="1090.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.SuppliersController">
+   <effect>
+      <DropShadow />
+   </effect>
+   <children>
+      <Separator layoutY="66.0" prefHeight="3.0" prefWidth="1090.0" />
+      <ImageView fitHeight="43.0" fitWidth="37.0" layoutX="11.0" layoutY="10.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/hotel-supplier.png" />
+         </image>
+      </ImageView>
+      <Label layoutX="54.0" layoutY="21.0" text="%xfourniss">
+         <font>
+            <Font size="18.0" />
+         </font>
+      </Label>
+      <ImageView fitHeight="21.0" fitWidth="22.0" layoutX="1058.0" layoutY="11.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="OPEN_HAND" />
+         </cursor>
+      </ImageView>
+      <TextField fx:id="tf_nom_fourn" layoutX="110.0" layoutY="75.0" prefHeight="24.0" prefWidth="373.0" promptText="%xfourniss" />
+      <Label layoutX="12.0" layoutY="78.0" prefHeight="16.0" prefWidth="45.0" text="%xfourniss" />
+      <TextField fx:id="tf_phone_fourn" layoutX="109.0" layoutY="116.0" prefHeight="24.0" prefWidth="373.0" promptText="%xlbl.phone" />
+      <TextField fx:id="tf_identif_fourn" layoutX="109.0" layoutY="155.0" prefHeight="24.0" prefWidth="373.0" promptText="%xid_fourniss" />
+      <TextField fx:id="tf_adresse_fourn" layoutX="109.0" layoutY="191.0" prefHeight="24.0" prefWidth="373.0" promptText="%xadresse" />
+      <Label layoutX="9.0" layoutY="118.0" prefHeight="16.0" prefWidth="92.0" text="%xlbl.phone" />
+      <Label layoutX="9.0" layoutY="160.0" prefHeight="16.0" prefWidth="92.0" text="%xid_fourniss" />
+      <Label layoutX="9.0" layoutY="196.0" prefHeight="16.0" prefWidth="67.0" text="%xadresse" />
+      <Separator layoutX="-2.0" layoutY="270.0" prefHeight="3.0" prefWidth="1090.0" />
+      <ListView fx:id="listvu_list_fournisseurs" layoutX="526.0" layoutY="73.0" prefHeight="186.0" prefWidth="533.0" />
+      <Button layoutX="715.0" layoutY="288.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="76.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="#fcf7f7" />
+      <Button layoutX="813.0" layoutY="288.0" mnemonicParsing="false" onAction="#saveSupplier" prefHeight="37.0" prefWidth="246.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
+      <TextField fx:id="tf_search2cloud" layoutX="527.0" layoutY="27.0" onAction="#searchSupplyOnCloud" prefHeight="31.0" prefWidth="451.0" promptText="%xserach_supplier" style="-fx-background-radius: 25;" />
+      <Separator layoutX="508.0" layoutY="75.0" orientation="VERTICAL" prefHeight="186.0" prefWidth="3.0" />
+      <Pane fx:id="pane_progress_fourn" layoutX="668.0" layoutY="146.0" prefHeight="37.0" prefWidth="267.0" style="-fx-background-radius: 25; -fx-background-color: #ffffff;" visible="false">
+         <children>
+            <ProgressIndicator layoutX="7.0" layoutY="1.0" prefHeight="37.0" prefWidth="28.0" />
+            <Label layoutX="45.0" layoutY="10.0" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" prefHeight="16.0" prefWidth="186.0" text="Chargement des données..." />
+         </children>
+         <effect>
+            <DropShadow />
+         </effect>
+      </Pane>
+      <ImageView fx:id="img_btn_search" fitHeight="21.0" fitWidth="21.0" layoutX="948.0" layoutY="31.0" onMouseClicked="#searchSupplyOnCloud" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/cloud.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+   </children>
+</Pane>

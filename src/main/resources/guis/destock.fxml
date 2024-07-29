@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.TilePane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="723.0" prefWidth="600.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.DestockController">
+   <children>
+      <ImageView fitHeight="46.0" fitWidth="50.0" layoutX="23.0" layoutY="15.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/products.png" />
+         </image>
+      </ImageView>
+      <Separator layoutX="-1.0" layoutY="76.0" prefHeight="10.0" prefWidth="600.0" />
+      <Label layoutX="77.0" layoutY="30.0" text="%xdestock_vers">
+         <font>
+            <Font size="18.0" />
+         </font>
+      </Label>
+      <ImageView fitHeight="27.0" fitWidth="22.0" layoutX="565.0" layoutY="13.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+      </ImageView>
+      <Label fx:id="txt_reference_dstk" layoutX="388.0" layoutY="92.0" prefHeight="21.0" prefWidth="153.0" text="%xreference">
+         <font>
+            <Font size="14.0" />
+         </font>
+      </Label>
+      <Label layoutX="36.0" layoutY="92.0" text="%xlbel.produx" />
+      <ComboBox fx:id="cbx_choose_product_dstk" editable="true" layoutX="130.0" layoutY="132.0" prefHeight="30.0" prefWidth="413.0" />
+      <Separator layoutY="174.0" prefHeight="10.0" prefWidth="600.0" />
+      <ComboBox fx:id="cbx_choose_mesure_dstk" editable="true" layoutX="423.0" layoutY="310.0" prefHeight="30.0" prefWidth="153.0" promptText="%xmes_ure" />
+      <TextField fx:id="tf_quantite_dstk" layoutX="257.0" layoutY="311.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcol.quantite" />
+      <TextField fx:id="tf_cout_unitr_cump_dstk" layoutX="278.0" layoutY="270.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcot_unitr" />
+      <Label fx:id="txt_somme_ct_dstk" layoutX="130.0" layoutY="450.0" prefHeight="20.0" prefWidth="282.0" text="%xtotal">
+         <font>
+            <Font name="System Bold" size="16.0" />
+         </font>
+      </Label>
+      <Separator layoutY="481.0" prefHeight="3.0" prefWidth="600.0" />
+      <Button layoutX="432.0" layoutY="440.0" mnemonicParsing="false" onAction="#addDestocker" prefHeight="30.0" prefWidth="108.0" style="-fx-background-color: #44cef5;" text="%xaddingitem" textFill="WHITE" />
+      <ListView fx:id="listview_dstks" layoutX="33.0" layoutY="517.0" prefHeight="113.0" prefWidth="542.0" style="-fx-border-color: #44cef5; -fx-background-color: #ffffff;" />
+      <Separator layoutX="-1.0" layoutY="665.0" prefHeight="3.0" prefWidth="600.0" />
+      <Button layoutX="427.0" layoutY="675.0" mnemonicParsing="false" onAction="#saveDestock" prefHeight="37.0" prefWidth="115.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
+      <Button layoutX="297.0" layoutY="675.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="115.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="WHITE" />
+      <Label fx:id="txt_somme_global_dstk" alignment="CENTER_RIGHT" layoutX="247.0" layoutY="636.0" prefHeight="20.0" prefWidth="282.0" text="%xcot_total" textAlignment="RIGHT">
+         <font>
+            <Font name="System Bold" size="16.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_count_dstk" layoutX="37.0" layoutY="491.0" text="%xitems" />
+      <DatePicker fx:id="dpk_date_dstk" layoutX="390.0" layoutY="44.0" prefHeight="22.0" prefWidth="177.0" promptText="%xdate_2_destockage" />
+      <Label fx:id="txt_stk_alerte" layoutX="126.0" layoutY="322.0" prefHeight="16.0" prefWidth="108.0" text="%xalerte_stk" textFill="#22a85e">
+         <font>
+            <Font name="System Bold Italic" size="13.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_date_expiry" layoutX="376.0" layoutY="234.0" prefHeight="26.0" prefWidth="218.0" style="-fx-background-color: #ffffff; -fx-background-radius: 20; -fx-label-padding: 2;" text="%xdate_exp_short">
+         <opaqueInsets>
+            <Insets />
+         </opaqueInsets>
+         <effect>
+            <DropShadow />
+         </effect>
+         <font>
+            <Font size="12.0" />
+         </font></Label>
+      <ComboBox fx:id="cbx_destination_dstk" layoutX="113.0" layoutY="352.0" prefHeight="30.0" prefWidth="244.0" promptText="%xmag_destination" />
+      <ComboBox fx:id="cbx_stock_lots" editable="true" layoutX="111.0" layoutY="231.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcol.lot" />
+      <Separator layoutX="1.0" layoutY="210.0" prefHeight="10.0" prefWidth="600.0" />
+      <Label fx:id="methode" layoutX="28.0" layoutY="186.0" text="Methode" />
+      <Label fx:id="value_stock" layoutX="449.0" layoutY="269.0" prefHeight="30.0" prefWidth="127.0" style="-fx-border-color: #44cef5;" text="%xvaleur_stock_dispo" />
+      <TextField fx:id="tf_quant_disponible" editable="false" layoutX="113.0" layoutY="270.0" prefHeight="30.0" prefWidth="153.0" promptText="%xquant_disponible" />
+      <TextField fx:id="tf_observation" layoutX="113.0" layoutY="399.0" prefHeight="26.0" prefWidth="461.0" promptText="%xtxtf.prompt.observation" />
+      <Label fx:id="alveol" layoutX="273.0" layoutY="236.0" text="%xalveole" />
+      <CheckBox fx:id="save_req" layoutX="369.0" layoutY="353.0" mnemonicParsing="false" prefHeight="26.0" prefWidth="218.0" text="%xsave_recq4pos" />
+      <Pane fx:id="pricepane" layoutX="83.0" layoutY="386.0" prefHeight="328.0" prefWidth="463.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5; -fx-border-color: #44cef5; -fx-border-radius: 5;">
+         <children>
+            <Pane layoutX="47.0" layoutY="181.0" prefHeight="37.0" prefWidth="31.0" style="-fx-border-color: #44cef5; -fx-background-color: white; -fx-background-radius: 12; -fx-border-radius: 12;" visible="false">
+               <children>
+                  <ImageView fx:id="applyCurrentPrice" fitHeight="24.0" fitWidth="28.0" layoutX="3.0" layoutY="6.0" onMouseClicked="#applyOldPrice" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../icons/price-tag(3).png" />
+                     </image>
+                     <cursor>
+                        <Cursor fx:constant="HAND" />
+                     </cursor>
+                  </ImageView>
+               </children>
+            </Pane>
+            <TextField fx:id="tf_qte_min" layoutX="32.0" layoutY="58.0" prefHeight="30.0" prefWidth="139.0" promptText="%xtxtf.prompt.quantmin" />
+            <TextField fx:id="tf_qte_max" layoutX="188.0" layoutY="59.0" prefHeight="30.0" prefWidth="127.0" promptText="%xtxtf.prompt.quantmax" />
+            <ComboBox fx:id="cbx_choose_mesure_vente" layoutX="324.0" layoutY="59.0" prefHeight="30.0" prefWidth="108.0" promptText="%xmes_ure" />
+            <TextField fx:id="tf_prix_de_vente" layoutX="32.0" layoutY="105.0" prefHeight="30.0" prefWidth="185.0" promptText="%xtxtf.prompt.prixvun" />
+            <ComboBox fx:id="cbx_devise_req1" layoutX="229.0" layoutY="106.0" prefHeight="30.0" prefWidth="90.0" />
+            <Label fx:id="txt_equivalentCdf" layoutX="326.0" layoutY="112.0" text="%xtxtf.equival.cdf" />
+            <ImageView fx:id="addPrix" fitHeight="30.0" fitWidth="28.0" layoutX="424.0" layoutY="158.0" onMouseClicked="#addPriceIfPossible" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/price-tag-4.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+            <Pane layoutX="378.0" layoutY="155.0" prefHeight="37.0" prefWidth="31.0" style="-fx-border-color: #44cef5; -fx-border-radius: 12; -fx-background-radius: 12; -fx-background-color: white;">
+               <children>
+                  <ImageView fx:id="clearPrice" fitHeight="21.0" fitWidth="21.0" layoutX="6.0" layoutY="7.0" onMouseClicked="#clearPrices" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../icons/effacer-le-fichier.png" />
+                     </image>
+                     <cursor>
+                        <Cursor fx:constant="HAND" />
+                     </cursor>
+                  </ImageView>
+               </children>
+            </Pane>
+            <ScrollPane layoutX="8.0" layoutY="200.0" prefHeight="76.0" prefWidth="448.0" style="-fx-border-color: #44CEF5;">
+               <content>
+                  <TilePane fx:id="tilepn_prices1" disable="true" prefHeight="60.0" prefWidth="456.0" style="-fx-background-radius: 12;" />
+               </content>
+            </ScrollPane>
+            <Label layoutX="177.0" layoutY="68.0" text="--" />
+            <ImageView fitHeight="27.0" fitWidth="22.0" layoutX="426.0" layoutY="16.0" onMouseClicked="#closeFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/Cancel_32px_1.png" />
+               </image>
+            </ImageView>
+            <Separator layoutX="-1.0" layoutY="43.0" prefHeight="3.0" prefWidth="461.0" />
+            <Label layoutX="14.0" layoutY="17.0" prefHeight="16.0" prefWidth="146.0" text="%xprices">
+               <font>
+                  <Font name="System Bold" size="16.0" />
+               </font>
+            </Label>
+            <Separator layoutX="3.0" layoutY="148.0" prefHeight="3.0" prefWidth="461.0" />
+            <Button layoutX="278.0" layoutY="285.0" mnemonicParsing="false" onAction="#addRecquisit" prefHeight="30.0" prefWidth="153.0" style="-fx-background-color: #44cef5;" text="Ajouter le prix de vente" textFill="WHITE">
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </Button>
+         </children>
+         <effect>
+            <DropShadow />
+         </effect>
+      </Pane>
+   </children>
+</AnchorPane>

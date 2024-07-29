@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Accordion?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.effect.Light.Distant?>
+<?import javafx.scene.effect.Lighting?>
+<?import javafx.scene.effect.Shadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.TilePane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="790.0" prefWidth="588.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ProduitItemController">
+   <children>
+      <Label layoutX="70.0" layoutY="22.0" text="%xlbl.new_prod">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Label>
+      <ImageView fitHeight="46.0" fitWidth="36.0" layoutX="22.0" layoutY="17.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/boxes.png" />
+         </image>
+      </ImageView>
+      <Separator layoutY="61.0" prefHeight="0.0" prefWidth="600.0" />
+      <Label layoutX="10.0" layoutY="70.0" text="%xlbl.categorie" />
+      <ComboBox fx:id="cbx_choose_category" editable="true" layoutX="110.0" layoutY="82.0" prefHeight="24.0" prefWidth="365.0" promptText="%xchoose_category" />
+      <Button layoutX="487.0" layoutY="82.0" mnemonicParsing="false" onAction="#showCategoryDlg" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" />
+      <Separator layoutY="112.0" prefHeight="16.0" prefWidth="600.0" />
+      <Label layoutX="10.0" layoutY="135.0" text="%xlbel.produx" />
+      <TextField fx:id="tf_input_nomproduit" layoutX="109.0" layoutY="468.0" prefHeight="24.0" prefWidth="407.0" promptText="%xtxtf.prompt.nomp" />
+      <Pane layoutX="110.0" layoutY="135.0" prefHeight="288.0" prefWidth="365.0" style="-fx-border-color: #44cef5; -fx-background-color: white;">
+         <children>
+            <ImageView fx:id="imgvu_product" fitHeight="285.0" fitWidth="357.0" layoutX="4.0" layoutY="1.0" pickOnBounds="true" preserveRatio="true" />
+            <ImageView fx:id="imgvu_empty_avatar" cache="true" fitHeight="78.0" fitWidth="97.0" layoutX="149.0" layoutY="102.0" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/gallery.png" />
+               </image>
+            </ImageView>
+         </children>
+      </Pane>
+      <Pane layoutX="481.0" layoutY="135.0" prefHeight="36.0" prefWidth="36.0" style="-fx-border-color: #44cef5;">
+         <children>
+            <ImageView fx:id="img_btn_ordimage" fitHeight="24.0" fitWidth="36.0" layoutX="7.0" layoutY="8.0" onMouseClicked="#browseFiles" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/folder.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+         </children>
+      </Pane>
+      <TextField fx:id="tf_input_markproduit" layoutX="109.0" layoutY="502.0" prefHeight="24.0" prefWidth="407.0" promptText="%xtxtf.prompt.mark" />
+      <Pane layoutX="481.0" layoutY="185.0" prefHeight="36.0" prefWidth="36.0" style="-fx-border-color: #44cef5;">
+         <children>
+            <ImageView fx:id="img_btn_search_img_google" fitHeight="36.0" fitWidth="29.0" layoutX="4.0" layoutY="3.0" onMouseClicked="#serchImgOnGoogle" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/google.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+         </children>
+      </Pane>
+      <TextField fx:id="tf_input_modelproduit" layoutX="109.0" layoutY="536.0" prefHeight="24.0" prefWidth="407.0" promptText="%xtxtf.prompt.model" />
+      <TextField fx:id="tf_input_tailleproduit" layoutX="109.0" layoutY="571.0" prefHeight="24.0" prefWidth="407.0" promptText="%xtxtf.prompt.tail" />
+      <TextField fx:id="tf_input_couleurproduit" layoutX="109.0" layoutY="605.0" prefHeight="24.0" prefWidth="407.0" promptText="%xtxtf.prompt.color" />
+      <Separator layoutX="-1.0" layoutY="722.0" prefHeight="16.0" prefWidth="600.0" />
+      <Button layoutX="252.0" layoutY="738.0" mnemonicParsing="false" onAction="#close" onMouseClicked="#close" prefHeight="36.0" prefWidth="90.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="WHITE">
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor></Button>
+      <Button layoutX="351.0" layoutY="738.0" mnemonicParsing="false" onAction="#saveProduct" prefHeight="36.0" prefWidth="118.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE">
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor></Button>
+      <ImageView cache="true" fitHeight="26.0" fitWidth="32.0" layoutX="556.0" layoutY="19.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+      </ImageView>
+      <Pane fx:id="categorie_pane" layoutX="79.0" layoutY="124.0" prefHeight="89.0" prefWidth="479.0" style="-fx-background-color: white;" visible="false">
+         <effect>
+            <DropShadow />
+         </effect>
+         <children>
+            <TextField fx:id="tf_input_category" layoutX="14.0" layoutY="13.0" prefHeight="24.0" prefWidth="357.0" promptText="Nouvelle categorie" />
+            <Button layoutX="380.0" layoutY="46.0" mnemonicParsing="false" onAction="#hideCategoryDlg" prefHeight="24.0" prefWidth="90.0" style="-fx-background-color: #cccccc;" text="Fermer" textFill="WHITE">
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </Button>
+            <Button layoutX="379.0" layoutY="13.0" mnemonicParsing="false" onAction="#saveCategoryDlg" style="-fx-background-color: #44cef5;" text="Enregistrer" textFill="WHITE">
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </Button>
+            <Pane layoutX="13.0" layoutY="45.0" prefHeight="36.0" prefWidth="36.0" style="-fx-border-color: #44cef5;">
+               <children>
+                  <ImageView fitHeight="26.0" fitWidth="29.0" layoutX="5.0" layoutY="4.0" onMouseClicked="#deleteCategory" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                     <cursor>
+                        <Cursor fx:constant="HAND" />
+                     </cursor>
+                     <image>
+                        <Image url="@../icons/Trash%x20Can_32px.png" />
+                     </image>
+                     <effect>
+                        <Lighting>
+                           <bumpInput>
+                              <Shadow />
+                           </bumpInput>
+                           <light>
+                              <Light.Distant />
+                           </light>
+                        </Lighting>
+                     </effect>
+                  </ImageView>
+               </children>
+            </Pane>
+         </children>
+      </Pane>
+      <TextField fx:id="tf_input_codebarproduit" layoutX="108.0" layoutY="434.0" prefHeight="24.0" prefWidth="293.0" promptText="%xtxtf.prompt.cbar" />
+      <Pane layoutX="473.0" layoutY="738.0" prefHeight="36.0" prefWidth="36.0" style="-fx-border-color: #44cef5;">
+         <children>
+            <ImageView fx:id="img_vu_edit" fitHeight="24.0" fitWidth="36.0" layoutX="6.0" layoutY="7.0" onMouseClicked="#modifierSelectedProduit" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/edit(2).png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+         </children>
+      </Pane>
+      <Accordion layoutX="430.0" layoutY="636.0" />
+      <TextField fx:id="tf_quant_mzr" layoutX="323.0" layoutY="646.0" onKeyPressed="#addMZ" prefHeight="24.0" prefWidth="153.0" promptText="%xcbx.prompt.unit_m" />
+      <Separator layoutX="-6.0" layoutY="632.0" prefHeight="16.0" prefWidth="600.0" />
+      <Label layoutX="20.0" layoutY="649.0" text="%xmes_ure" />
+      <Button layoutX="485.0" layoutY="646.0" mnemonicParsing="false" onAction="#addMesures" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" />
+      <ScrollPane layoutX="99.0" layoutY="678.0" prefHeight="45.0" prefWidth="427.0" style="-fx-background-color: #ffffff; -fx-background-radius: 50; -fx-border-color: #44cef5;">
+         <content>
+            <TilePane fx:id="tile_pn_mesures" nodeOrientation="LEFT_TO_RIGHT" prefHeight="40.0" prefWidth="420.0" style="-fx-background-radius: 12; -fx-background-color: white;" />
+         </content>
+      </ScrollPane>
+      <ComboBox fx:id="cbx_descr_mzr" editable="true" layoutX="109.0" layoutY="645.0" prefHeight="24.0" prefWidth="204.0" promptText="%xcbx.prompt.descrim" />
+      <Pane layoutX="478.0" layoutY="427.0" prefHeight="36.0" prefWidth="36.0" style="-fx-border-color: #44cef5;">
+         <children>
+            <ImageView fx:id="img_btn_search_img_google1" fitHeight="36.0" fitWidth="29.0" layoutX="4.0" layoutY="3.0" onMouseClicked="#showFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/printing(1).png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+         </children>
+      </Pane>
+      <ImageView fx:id="img_codebar" fitHeight="29.0" fitWidth="64.0" layoutX="410.0" layoutY="431.0" pickOnBounds="true" preserveRatio="true">
+         <effect>
+            <DropShadow />
+         </effect>
+         <cursor>
+            <Cursor fx:constant="OPEN_HAND" />
+         </cursor>
+      </ImageView>
+      <Pane fx:id="pane_print" layoutX="350.0" layoutY="402.0" prefHeight="158.0" prefWidth="231.0" style="-fx-background-color: white; -fx-background-radius: 8;" visible="false">
+         <effect>
+            <DropShadow />
+         </effect>
+         <children>
+            <ImageView fitHeight="26.0" fitWidth="24.0" layoutX="197.0" layoutY="6.0" onMouseClicked="#closeFloatingPane" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/Cancel_32px_1.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+            <Label layoutX="11.0" layoutY="6.0" text="Imprimente">
+               <font>
+                  <Font size="18.0" />
+               </font>
+            </Label>
+            <Separator layoutY="33.0" prefHeight="3.0" prefWidth="231.0" />
+            <ComboBox fx:id="cbx_printers" layoutX="6.0" layoutY="42.0" prefHeight="24.0" prefWidth="217.0" />
+            <Button layoutX="43.0" layoutY="124.0" mnemonicParsing="false" onAction="#printbarcode" style="-fx-background-color: #44cef5;" text="Imprimer le codebar" textFill="#f2f2f2" />
+            <RadioButton fx:id="thermal" layoutX="42.0" layoutY="73.0" mnemonicParsing="false" text="Thermal" />
+            <RadioButton fx:id="jet" layoutX="42.0" layoutY="94.0" mnemonicParsing="false" text="Jet d'encre" />
+            <Separator layoutY="118.0" prefHeight="3.0" prefWidth="231.0" />
+         </children>
+      </Pane>
+   </children>
+</AnchorPane>

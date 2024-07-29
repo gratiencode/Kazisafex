@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.shape.Circle?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="592.0" prefWidth="1089.0" style="-fx-background-color: white; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.EntrepriseController">
+   <effect>
+      <DropShadow />
+   </effect>
+   <children>
+      <Label fx:id="txt_nom_entreprise" layoutX="153.0" layoutY="14.0" text="Label" AnchorPane.leftAnchor="153.0" AnchorPane.topAnchor="14.0">
+         <font>
+            <Font size="27.0" />
+         </font>
+      </Label>
+      <Separator layoutY="115.0" prefHeight="2.0" prefWidth="1089.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+      <Label fx:id="txt_identifiant_eze" layoutX="153.0" layoutY="55.0" text="Label" AnchorPane.leftAnchor="153.0" AnchorPane.topAnchor="55.0">
+         <font>
+            <Font size="19.0" />
+         </font></Label>
+      <SplitPane dividerPositions="0.7" layoutX="10.0" layoutY="128.0" prefHeight="460.0" prefWidth="1065.0" AnchorPane.bottomAnchor="4.0" AnchorPane.leftAnchor="10.0" AnchorPane.rightAnchor="14.0" AnchorPane.topAnchor="128.0">
+         <items>
+            <TabPane prefHeight="423.0" prefWidth="722.0" tabClosingPolicy="UNAVAILABLE">
+              <tabs>
+                <Tab text="Compagnie">
+                  <content>
+                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="390.0" prefWidth="722.0" style="-fx-background-color: white;">
+                           <children>
+                              <TextField fx:id="tf_identifiant_eze" layoutX="353.0" layoutY="34.0" prefHeight="30.0" prefWidth="237.0" promptText="Idenifiant (ex N° RCCM)" AnchorPane.rightAnchor="132.0" />
+                              <TextField fx:id="tf_ville_eze" layoutX="356.0" layoutY="118.0" prefHeight="30.0" prefWidth="237.0" promptText="Ville" AnchorPane.rightAnchor="129.0" />
+                              <TextField fx:id="tf_adresse_eze" layoutX="128.0" layoutY="162.0" prefHeight="30.0" prefWidth="464.0" promptText="Adresse" AnchorPane.leftAnchor="128.0" AnchorPane.rightAnchor="130.0" />
+                              <TextField fx:id="tf_site_web_eze" layoutX="126.0" layoutY="248.0" prefHeight="30.0" prefWidth="465.0" promptText="Site web (facultatif)" AnchorPane.leftAnchor="128.0" AnchorPane.rightAnchor="130.0" />
+                              <TextField fx:id="tf_nom_eze" layoutX="129.0" layoutY="34.0" prefHeight="30.0" prefWidth="219.0" promptText="Nom de l'entreprise" AnchorPane.leftAnchor="129.0" AnchorPane.rightAnchor="374.0" />
+                              <TextField fx:id="tf_email_eze" layoutX="129.0" layoutY="205.0" prefHeight="30.0" prefWidth="462.0" promptText="adresse mail" AnchorPane.leftAnchor="128.0" AnchorPane.rightAnchor="130.0" />
+                              <ComboBox fx:id="cbx_domaine_eze" editable="true" layoutX="129.0" layoutY="118.0" prefHeight="30.0" prefWidth="219.0" promptText="Domaine" AnchorPane.leftAnchor="129.0" AnchorPane.rightAnchor="374.0" />
+                              <Button layoutX="148.0" layoutY="343.0" mnemonicParsing="false" onAction="#saveNewEntreprise" prefHeight="35.0" prefWidth="225.0" style="-fx-background-color: #44cef5;" text="Enregistrer une nouvel entité" textFill="WHITE" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="148.0" AnchorPane.rightAnchor="349.0" />
+                              <Separator layoutY="330.0" prefHeight="3.0" prefWidth="722.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <Button layoutX="445.0" layoutY="345.0" mnemonicParsing="false" onAction="#updateEntreprise" prefHeight="35.0" prefWidth="99.0" style="-fx-background-color: #44face;" text="Modifier" textFill="WHITE" AnchorPane.bottomAnchor="12.0" AnchorPane.rightAnchor="150.0" />
+                              <Label layoutX="383.0" layoutY="386.0" text="ou" AnchorPane.bottomAnchor="22.0" AnchorPane.rightAnchor="292.0">
+                                 <font>
+                                    <Font size="15.0" />
+                                 </font>
+                              </Label>
+                              <Pane fx:id="pane_progress" layoutX="353.0" layoutY="127.0" prefHeight="97.0" prefWidth="324.0" style="-fx-background-radius: 25; -fx-background-color: white;" visible="false">
+                                 <children>
+                                    <ProgressIndicator layoutX="11.0" layoutY="29.0" prefHeight="45.0" prefWidth="54.0" />
+                                    <Label layoutX="65.0" layoutY="38.0" prefHeight="25.0" prefWidth="251.0" text="Chargement en cours...">
+                                       <font>
+                                          <Font size="20.0" />
+                                       </font>
+                                    </Label>
+                                 </children>
+                                 <effect>
+                                    <DropShadow />
+                                 </effect>
+                              </Pane>
+                              <Separator layoutY="19.0" prefHeight="3.0" prefWidth="722.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <TextField fx:id="tf_numero_impot" layoutX="129.0" layoutY="77.0" prefHeight="30.0" prefWidth="219.0" promptText="Numero d'impot" AnchorPane.leftAnchor="129.0" AnchorPane.rightAnchor="374.0" />
+                              <TextField fx:id="tf_idnat_eze" layoutX="355.0" layoutY="77.0" prefHeight="30.0" prefWidth="237.0" promptText="Identification nationale" AnchorPane.rightAnchor="129.0" />
+                              <TextField fx:id="tf_phone_eze" layoutX="126.0" layoutY="291.0" prefHeight="30.0" prefWidth="465.0" promptText="Téléphone (facultatif)" AnchorPane.leftAnchor="128.0" AnchorPane.rightAnchor="130.0" />
+                              <Label layoutX="44.0" layoutY="33.0" text="Détails" AnchorPane.leftAnchor="44.0">
+                                 <font>
+                                    <Font size="15.0" />
+                                 </font>
+                              </Label>
+                           </children>
+                        </AnchorPane>
+                  </content>
+                </Tab>
+                <Tab text="Succursale">
+                  <content>
+                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" style="-fx-background-color: white;">
+                           <children>
+                              <Label layoutX="17.0" layoutY="18.0" text="Mes succursales" AnchorPane.leftAnchor="17.0" AnchorPane.topAnchor="18.0">
+                                 <font>
+                                    <Font size="15.0" />
+                                 </font>
+                              </Label>
+                              <ListView fx:id="list_sucursale_eze" layoutX="17.0" layoutY="49.0" prefHeight="325.0" prefWidth="690.0" style="-fx-background-radius: 12;" AnchorPane.bottomAnchor="18.0" AnchorPane.leftAnchor="17.0" AnchorPane.rightAnchor="15.0" AnchorPane.topAnchor="49.0" />
+                           </children>
+                        </AnchorPane>
+                  </content>
+                </Tab>
+              </tabs>
+            </TabPane>
+            <AnchorPane prefHeight="414.0" prefWidth="363.0" style="-fx-background-color: white; -fx-border-color: #44cef5;">
+               <children>
+                  <Label layoutX="51.0" layoutY="9.0" text="Plan de paiement" AnchorPane.leftAnchor="51.0" AnchorPane.rightAnchor="46.0">
+                     <font>
+                        <Font name="System Bold" size="24.0" />
+                     </font>
+                  </Label>
+                  <Label fx:id="txt_type_abonnement_eze" alignment="CENTER" layoutX="136.0" layoutY="349.0" text="Gold" textFill="#f7fa45" AnchorPane.bottomAnchor="26.0" AnchorPane.leftAnchor="136.0" AnchorPane.rightAnchor="113.0">
+                     <font>
+                        <Font name="System Bold" size="33.0" />
+                     </font>
+                  </Label>
+                  <Circle fill="WHITE" layoutX="178.0" layoutY="222.0" opacity="0.74" radius="98.0" stroke="#44cef5" strokeType="INSIDE" AnchorPane.bottomAnchor="130.0" AnchorPane.leftAnchor="79.0" AnchorPane.rightAnchor="86.0" AnchorPane.topAnchor="123.0" />
+                  <Label fx:id="txt_abonn_value_eze" alignment="CENTER" contentDisplay="CENTER" layoutX="77.0" layoutY="208.0" prefHeight="25.0" prefWidth="200.0" text="0000" textAlignment="CENTER" AnchorPane.leftAnchor="75.0">
+                     <font>
+                        <Font name="System Bold" size="20.0" />
+                     </font>
+                  </Label>
+                  <Label alignment="CENTER" contentDisplay="CENTER" layoutX="108.0" layoutY="66.0" text="Abonnement" textAlignment="CENTER" AnchorPane.leftAnchor="52.0" AnchorPane.rightAnchor="47.0" AnchorPane.topAnchor="66.0">
+                     <font>
+                        <Font size="21.0" />
+                     </font>
+                  </Label>
+                  <Label fx:id="txt_design_balance_eze" alignment="CENTER" layoutX="137.0" layoutY="242.0" prefHeight="19.0" prefWidth="85.0" text="Record" AnchorPane.leftAnchor="137.0">
+                     <font>
+                        <Font size="15.0" />
+                     </font>
+                  </Label>
+               </children>
+            </AnchorPane>
+         </items>
+      </SplitPane>
+      <ImageView fitHeight="43.0" fitWidth="26.0" layoutX="1044.0" layoutY="17.0" onMouseClicked="#setOnFields" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="19.0" AnchorPane.topAnchor="17.0">
+         <image>
+            <Image url="@../icons/edit32.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Pane layoutX="12.0" layoutY="6.0" prefHeight="102.0" prefWidth="125.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" AnchorPane.leftAnchor="12.0" AnchorPane.topAnchor="6.0">
+         <children>
+            <ImageView fx:id="img_logo_eze" fitHeight="88.0" fitWidth="96.0" layoutX="4.0" layoutY="3.0" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/office-building.png" />
+               </image>
+            </ImageView>
+            <ImageView fitHeight="35.0" fitWidth="26.0" layoutX="95.0" layoutY="76.0" onMouseClicked="#chooseLogo" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/camera.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+         </children>
+      </Pane>
+      <Label fx:id="txt_adresse_eze" layoutX="154.0" layoutY="85.0" text="Label" AnchorPane.leftAnchor="154.0" AnchorPane.topAnchor="85.0" />
+   </children>
+</AnchorPane>

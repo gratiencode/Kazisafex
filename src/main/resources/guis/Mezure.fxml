@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="490.0" prefWidth="433.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.MezureController">
+   <children>
+      <ImageView fitHeight="38.0" fitWidth="47.0" layoutX="20.0" layoutY="14.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/categories.png" />
+         </image>
+      </ImageView>
+      <Label layoutX="69.0" layoutY="20.0" prefHeight="25.0" prefWidth="271.0" text="%xlbl.mes_ure_prosel">
+         <font>
+            <Font size="14.0" />
+         </font>
+      </Label>
+      <Separator layoutX="5.0" layoutY="66.0" prefHeight="0.0" prefWidth="425.0" />
+      <TextField fx:id="mez_desc" layoutX="121.0" layoutY="174.0" prefHeight="24.0" prefWidth="271.0" promptText="%xtxtf.prompt.descr" />
+      <TextField fx:id="mez_quants" layoutX="122.0" layoutY="219.0" prefHeight="24.0" prefWidth="271.0" promptText="%xcbx.prompt.unit_m" />
+      <Button layoutX="278.0" layoutY="445.0" mnemonicParsing="false" onAction="#save" style="-fx-background-color: #44cef5;" text="%xadd_mes_ure" textFill="#f2efef" />
+      <Label layoutX="17.0" layoutY="170.0" prefHeight="25.0" prefWidth="84.0" text="%xtxtf.prompt.descr" />
+      <Label layoutX="20.0" layoutY="218.0" prefHeight="25.0" prefWidth="91.0" text="%xcbx.prompt.unit_m" />
+      <Separator layoutX="5.0" layoutY="261.0" prefHeight="0.0" prefWidth="425.0" />
+      <Button layoutX="175.0" layoutY="445.0" mnemonicParsing="false" onAction="#close" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="#f2efef" />
+      <ListView fx:id="list_mezr" layoutX="18.0" layoutY="281.0" prefHeight="127.0" prefWidth="396.0" />
+      <Separator layoutX="4.0" layoutY="425.0" prefHeight="0.0" prefWidth="425.0" />
+      <ImageView fitHeight="24.0" fitWidth="18.0" layoutX="394.0" layoutY="14.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Separator layoutX="3.0" layoutY="128.0" prefHeight="0.0" prefWidth="425.0" />
+      <Label fx:id="txt_label_select_pro" layoutX="14.0" layoutY="82.0" prefHeight="38.0" prefWidth="396.0" text="%xlbel.produx">
+         <font>
+            <Font size="14.0" />
+         </font>
+      </Label>
+      <ImageView fitHeight="24.0" fitWidth="28.0" layoutX="397.0" layoutY="138.0" onMouseClicked="#modify" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/edit32.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+   </children>
+</AnchorPane>
