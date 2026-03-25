@@ -8,7 +8,6 @@ package util.decoders;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
 import java.io.StringReader;
 import java.text.DateFormat;
 import java.text.ParseException;
@@ -52,6 +51,7 @@ import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.JsonUtil;
 import tools.Tables;
 
@@ -69,7 +69,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
 
     @Override
     public BaseModel decode(String s) throws DecodeException {
-       // System.out.println("REcept "+s);
+   
         if (willDecode(s)) {
             String type = String.valueOf(vmap.get("type"));
             Tables table = Tables.valueOf(type);
@@ -105,7 +105,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     return p;
                 case MESURE:
                     Mesure m = new Mesure(String.valueOf(vmap.get("uid")));
-                    m.setDescription(String.valueOf(vmap.get("description")));
+                    m.setDescription(String.valueOf(vmap.get("description"))); 
                     m.setQuantContenu((Double) vmap.get("quantContenu"));
                     m.setProduitId((Produit) vmap.get("produitId"));
 
@@ -169,9 +169,9 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     stok.setStockAlerte((Double) vmap.get("stockAlerte"));
                     Object obz = vmap.get("dateExpir");
                     if (obz != null) {
-                        stok.setDateExpir((Date) obz);
+                        stok.setDateExpir(LocalDate.parse(String.valueOf(obz)));
                     }
-                    stok.setDateStocker((Date) vmap.get("dateStocker"));
+                    stok.setDateStocker(LocalDateTime.parse(String.valueOf(vmap.get("dateStocker"))));
                     stok.setLivraisId((Livraison) vmap.get("livraisId"));
                     stok.setMesureId((Mesure) vmap.get("mesureId"));
                     stok.setProductId((Produit) vmap.get("productId"));
@@ -195,7 +195,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     destok.setRegion(String.valueOf(vmap.get("region")));
                     destok.setQuantite((Double) vmap.get("quantite"));
                     destok.setDestination(String.valueOf(vmap.get("destination")));
-                    destok.setDateDestockage((Date) vmap.get("dateDestockage"));
+                    destok.setDateDestockage(LocalDateTime.parse(String.valueOf(vmap.get("dateDestockage"))));
                     destok.setMesureId((Mesure) vmap.get("mesureId"));
                     destok.setProductId((Produit) vmap.get("productId"));
 
@@ -219,9 +219,9 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     recq.setStockAlert((Double) vmap.get("stockAlert"));
                     Object de = vmap.get("dateExpiry");
                     if (de != null) {
-                        recq.setDateExpiry((Date) de);
+                        recq.setDateExpiry(LocalDate.parse(String.valueOf(de)));
                     }
-                    recq.setDate((Date) vmap.get("date"));
+                    recq.setDate(LocalDateTime.parse(String.valueOf(vmap.get("date"))));
                     recq.setMesureId((Mesure) vmap.get("mesureId"));
                     recq.setProductId((Produit) vmap.get("productId"));
 
@@ -272,7 +272,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     ClientAppartenir oper = new ClientAppartenir();
                     oper.setUid(String.valueOf(vmap.get("uid")));
                     oper.setRegion(String.valueOf(vmap.get("region")));
-                    oper.setDateAppartenir((Date) vmap.get("date"));
+                    oper.setDateAppartenir((LocalDate) vmap.get("date"));
                     oper.setClientId((Client) vmap.get("clientId"));
                     oper.setClientOrganisationId((ClientOrganisation) vmap.get("clientOrganisationId"));
 
@@ -321,9 +321,9 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     vente.setReference(String.valueOf(vmap.get("reference")));
                     Object ech = vmap.get("echeance");
                     if (ech != null) {
-                        vente.setEcheance((Date) ech);
+                        vente.setEcheance(LocalDate.parse(String.valueOf(ech)));
                     }
-                    vente.setDateVente((Date) vmap.get("dateVente"));
+                    vente.setDateVente(LocalDateTime.parse(String.valueOf(vmap.get("dateVente"))));
                     vente.setDeviseDette(String.valueOf(vmap.get("deviseDette")));
                     vente.setClientId((Client) vmap.get("clientId"));
 
@@ -344,7 +344,6 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     lignv.setQuantite((Double) vmap.get("quantite"));
                     lignv.setMontantCdf((Double) vmap.get("montantCdf"));
                     lignv.setMontantUsd((Double) vmap.get("montantUsd"));
-
                     lignv.setProductId((Produit) vmap.get("productId"));
                     lignv.setMesureId((Mesure) vmap.get("mesureId"));
                     lignv.setReference((Vente) vmap.get("reference"));
@@ -361,8 +360,8 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     Facture f = new Facture();
                     f.setUid(String.valueOf(vmap.get("uid")));
 
-                    f.setStartDate((Date) vmap.get("startDate"));
-                    f.setStartDate((Date) vmap.get("endDate"));
+                    f.setStartDate((LocalDate) vmap.get("startDate"));
+                    f.setStartDate((LocalDate) vmap.get("endDate"));
 
                     f.setNumero(String.valueOf(vmap.get("numero")));
                     f.setOrganisId((ClientOrganisation) vmap.get("organisId"));
@@ -387,7 +386,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     aretir.setReferenceVente(String.valueOf(vmap.get("referenceVente")));
                     aretir.setRegion(String.valueOf(vmap.get("region")));
                     aretir.setStatus(String.valueOf(vmap.get("status")));
-                    aretir.setDate((Date) vmap.get("date"));
+                    aretir.setDate((LocalDateTime) vmap.get("date"));
                     aretir.setClientId((Client) vmap.get("clientId"));
                     aretir.setLigneVenteId((LigneVente) vmap.get("ligneVenteId"));
                     aretir.setMesureId((Mesure) vmap.get("mesureId"));
@@ -407,7 +406,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     rtrmag.setReferenceVente(String.valueOf(vmap.get("referenceVente")));
                     rtrmag.setMotif(String.valueOf(vmap.get("motif")));
                     rtrmag.setQuantite((Double) vmap.get("quantite"));
-                    rtrmag.setDate((Date) vmap.get("date"));
+                    rtrmag.setDate(LocalDateTime.parse(String.valueOf(vmap.get("date"))));
                     rtrmag.setLigneVenteId((LigneVente) vmap.get("ligneVenteId"));
                     rtrmag.setClientId((Client) vmap.get("recquisitionId"));
                     rtrmag.setMesureId((Mesure) vmap.get("mesureId"));
@@ -431,7 +430,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     rtrdep.setQuantite((Double) vmap.get("quantite"));
                     rtrdep.setRegionDest(String.valueOf(vmap.get("regionDest")));
                     rtrdep.setRegionProv(String.valueOf(vmap.get("regionProv")));
-                    rtrdep.setDate((Date) vmap.get("date"));
+                    rtrdep.setDate((LocalDateTime)vmap.get("date"));
                     rtrdep.setDestockerId((Destocker) vmap.get("destockerId"));
                     rtrdep.setRecquisitionId((Recquisition) vmap.get("recquisitionId"));
                     rtrdep.setMesureId((Mesure) vmap.get("mesureId"));
@@ -452,7 +451,6 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     bill.setRegion(String.valueOf(vmap.get("region")));
                     bill.setSoldeMinimum((Double) vmap.get("soldeMinimum"));
                     bill.setTypeCompte(String.valueOf(vmap.get("typeCompte")));
-
                     bill.setAction(String.valueOf(vmap.get("action")));
                     bill.setCount(Long.parseLong(String.valueOf(vmap.get("count"))));
                     bill.setPriority(Integer.parseInt(String.valueOf(vmap.get("priority"))));
@@ -491,8 +489,8 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     }
                     tres.setMontantUsd((Double) vmap.get("montantUsd"));
                     tres.setReference(String.valueOf(vmap.get("reference")));
-                    tres.setDate((Date) vmap.get("date"));
-                    tres.setAction(String.valueOf(vmap.get("action")));
+                    tres.setDate(LocalDateTime.parse(String.valueOf(vmap.get("date"))));
+                    tres.setAction(String.valueOf(vmap.get("action")));   
                     tres.setCount(Long.parseLong(String.valueOf(vmap.get("count"))));
                     tres.setPriority(Integer.parseInt(String.valueOf(vmap.get("priority"))));
                     tres.setCounter(Long.parseLong(String.valueOf(vmap.get("counter"))));
@@ -531,10 +529,10 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     if (deps != null) {
                         operation.setDepenseId((Depense) deps);
                     }
-                    operation.setDate((Date) vmap.get("date"));
+                    operation.setDate(LocalDateTime.parse(String.valueOf(vmap.get("date"))));
                     operation.setCaisseOpId((Traisorerie) vmap.get("caisseOpId"));
                     operation.setAction(String.valueOf(vmap.get("action")));
-                    operation.setCount(Long.valueOf(String.valueOf(vmap.get("count"))));
+                    operation.setCount(Long.parseLong(String.valueOf(vmap.get("count"))));
                     operation.setPriority(Integer.valueOf(String.valueOf(vmap.get("priority"))));
                     operation.setCounter(Long.valueOf(String.valueOf(vmap.get("counter"))));
                     operation.setType(String.valueOf(vmap.get("type")));
@@ -544,7 +542,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                 case REFRESH:
                     Refresher r = new Refresher();
                     r.setTarget(String.valueOf(vmap.get("target")));
-                    r.setAction(String.valueOf(vmap.get("action")));
+                    r.setAction(String.valueOf(vmap.get("action"))); 
                     r.setCount(Long.parseLong(String.valueOf(vmap.get("count"))));
                     r.setPriority(Integer.parseInt(String.valueOf(vmap.get("priority"))));
                     r.setCounter(Long.parseLong(String.valueOf(vmap.get("counter"))));
@@ -559,7 +557,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     abx.setPriority(Integer.parseInt(String.valueOf(vmap.get("priority"))));
                     abx.setCounter(Long.parseLong(String.valueOf(vmap.get("counter"))));
                     abx.setType(String.valueOf(vmap.get("type")));
-                    abx.setDateAbonnement((Date) vmap.get("dateAbonnement"));
+                    abx.setDateAbonnement((LocalDateTime) vmap.get("dateAbonnement"));
                     abx.setDevise("USD");
                     abx.setEtat(String.valueOf(vmap.get("etat")));
                     abx.setAgent(String.valueOf(vmap.get("agent")));
@@ -1252,11 +1250,7 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     t.setRegion(jso.getString("region"));
                     t.setMontantUsd(jso.getJsonNumber("montantUsd").doubleValue());
                     t.setReference(jso.getString("reference"));
-                    try {
-                        t.setDate(tools.Constants.DATE_HEURE_FORMAT.parse(jso.getString("date")));
-                    } catch (ParseException ex) {
-                        Logger.getLogger(BaseModelDecoder.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    t.setDate(LocalDateTime.parse(jso.getString("date")));
                     vmap.put("caisseOpId", t);
                     vmap.put("type", json.getString("type"));
                     vmap.put("action", json.getString("action"));

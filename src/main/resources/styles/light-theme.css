@@ -1,0 +1,57 @@
+.root {
+    -fx-accent: #44cef5;
+    -fx-focus-color: #44cef5;
+    -fx-faint-focus-color: rgba(68, 206, 245, 0.18);
+}
+
+.tool-bar {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #f5fbff);
+}
+
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #eef9ff;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #eaf7fd;
+    -fx-background-radius: 8 8 0 0;
+    -fx-border-color: transparent transparent #d6eef8 transparent;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #44cef5;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+}
+
+.button {
+    -fx-background-radius: 10;
+}
+
+.text-field, .combo-box, .date-picker {
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: #d0edf8;
+}
+
+.table-view {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d0edf8;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #eaf7fd;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #d8f3fd;
+}
+
+.label {
+    -fx-text-fill: #0f172a;
+}

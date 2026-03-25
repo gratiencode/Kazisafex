@@ -18,6 +18,8 @@ import delegates.RecquisitionDelegate;
 import delegates.RetourMagasinDelegate;
 import delegates.StockerDelegate;
 import delegates.VenteDelegate;
+import delegates.InventaireDelegate;
+import delegates.CompterDelegate;
 import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
 import java.io.File;
@@ -36,11 +38,14 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import data.*;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -85,6 +90,7 @@ import javafx.scene.control.ScrollBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Spinner;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
@@ -103,6 +109,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.CornerRadii;
@@ -123,6 +130,7 @@ import data.Fournisseur;
 import data.LigneVente;
 import data.Livraison;
 import data.Mesure;
+import data.PermitTo;
 import data.PrixDeVente;
 import data.Produit;
 import data.Recquisition;
@@ -131,6 +139,8 @@ import data.RetourMagasin;
 import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
+import data.Inventaire;
+import data.Compter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -149,7 +159,6 @@ import static tools.Constants.CAISSES;
 import tools.DataId;
 import tools.FileUtils;
 import tools.InventoryMagasin;
-import services.JpaStorage;
 import tools.ListViewItem;
 import tools.MainUI;
 import tools.PhysicalInventoryLine;
@@ -164,10 +173,19 @@ import utilities.Peremption;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import data.helpers.TypeTraisorerie;
-import java.util.concurrent.ExecutionException;
+import delegates.PermissionDelegate;
+import delegates.TraisorerieDelegate;
+import java.math.BigInteger;
+import java.util.Base64;
+import tools.NotificationHandler;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import services.SafeConnectionFactory;
+import tools.ComptageItem;
+import tools.NetLoockup;
+import java.util.concurrent.TimeUnit;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.TextInputDialog;
+import tools.ComboBoxAutoCompletion;
+import tools.JsonUtil;
 
 /**
  * FXML Controller class
@@ -194,18 +212,19 @@ public class PosController implements Initializable {
     private Tab tabcarts;
     @FXML
     private Tab tab_axsoir;
+
     @FXML
     Pane pane_wait_import;
     @FXML
     private TilePane tile_pane;
-    @FXML
-    private Tab tab_requisition;
+//    @FXML
+//    private Tab tab_requisition;
     @FXML
     Tab tab_rupture;
     @FXML
     ImageView btn_view_mode;
     @FXML
-    private Pagination pagination;
+    private Pagination pagination_req;
     @FXML
     Pane load_history;
     @FXML
@@ -236,6 +255,7 @@ public class PosController implements Initializable {
     private TextArea comment_retour;
     @FXML
     ProgressIndicator syncIndicator;
+    Fournisseur choosenSupply;
     //rupture
     ObservableList<Rupture> obl_rupture_list;
     @FXML
@@ -291,6 +311,23 @@ public class PosController implements Initializable {
 
     @FXML
     private DatePicker dpk_fin_req;
+    @FXML
+    private ComboBox<String> cbx_provenance_req;
+    @FXML
+    private TabPane tabpane_req_left;
+    @FXML
+    private Tab tab_requisition;
+    @FXML
+    private TextField search_livraiz_req;
+    @FXML
+    private ListView<Livraison> list_livraison_req;
+    @FXML
+    private TextField search_supplier_req;
+    @FXML
+    private ListView<Fournisseur> list_supplier_req;
+    ObservableList<Livraison> obl_livraisons_req;
+    ListViewItem newValue;
+
     @FXML
     private DatePicker dpk_debut_inv_mag;
     @FXML
@@ -386,15 +423,14 @@ public class PosController implements Initializable {
     private ImageView img_vu_compact_save_cart;
     @FXML
     private ImageView img_vu_compact_saved_cart;
-    @FXML
     Pane pn_compact_save_panier;
-    @FXML
     ImageView img_vu_compact_codebarr_show;
-    @FXML
     ImageView img_vu_compact_print_codebar;
 
     @FXML
     private TableView<LigneVente> tbl_compact_panier;
+
+    Livraison livraison;
 
     @FXML
     private Tab peremption;
@@ -485,7 +521,7 @@ public class PosController implements Initializable {
     @FXML
     private ImageView btn_stock_rupture;
     @FXML
-    private ImageView img_vu_clear_cart, btn_export, btn_delete, btn_refresh, btn_refresh_h, btn_export_h;
+    private ImageView img_vu_clear_cart, btn_export_req, btn_refresh_req, btn_refresh_h, btn_export_h;
     @FXML
     private Label txt_total_chiffre_affaire, txt_inv_mag;
     @FXML
@@ -532,7 +568,6 @@ public class PosController implements Initializable {
     ScrollPane scrollPos;
     @FXML
     Pane cmdfss;
-    @FXML
     ImageView imgvu_mode_vupos;
     @FXML
     ImageView refreshRupture;
@@ -588,11 +623,15 @@ public class PosController implements Initializable {
     ObservableList<String> regions;
 
     ObservableList<InventoryMagasin> ols_retours_invent_items;
-    ObservableList<ListViewItem> list_mode_ls;
+    ObservableList<Inventaire> obl_inventaires;
+    ObservableList<ComptageItem> obl_comptages;
+    ObservableList<String> states;
+    private SimpleBooleanProperty canCreateInventory = new SimpleBooleanProperty(false);
     TreeItem<SaleItem> rootView;
     ObservableList<TreeItem<SaleItem>> treeSaleItems;
     ObservableList<Category> categs;
     ObservableList<Fournisseur> obl_fournisseurs;
+    ObservableList<ListViewItem> list_mode_ls;
     Set<Vente> selectedAvedCarts = new HashSet<>();
     List<Produit> prodx;
     LigneVente choosenLv;
@@ -617,6 +656,204 @@ public class PosController implements Initializable {
     private ResourceBundle bundle;
     @FXML
     TextField tf_cart_label;
+    @FXML
+    private TabPane tabpane_main_pos;
+    @FXML
+    private Tab tab_main_pos;
+    @FXML
+    private TabPane tabpane_pos;
+    @FXML
+    private TableColumn<?, ?> col_numlot_view111;
+    @FXML
+    private ImageView btn_delete_inv_req;
+    @FXML
+    private Label lbl_livrez_recq;
+    @FXML
+    private Tab tab_invteorik;
+    @FXML
+    private TableColumn<?, ?> col_stok_init_tInv_mag;
+    @FXML
+    private Label txt_table_req_count1211;
+    @FXML
+    private Label txt_table_req_count111;
+    @FXML
+    private CheckBox chbx_perempt;
+    @FXML
+    private ProgressIndicator pgsIndicator_load_inv;
+    @FXML
+    private Tab tab_invphys;
+    @FXML
+    private ComboBox<Inventaire> cbx_inventaire_compter;
+    @FXML
+    private DatePicker dpk_date_today_compter;
+    @FXML
+    private DatePicker dpk_date_exp_compter;
+    @FXML
+    private ComboBox<Produit> cbx_produit_compter;
+    @FXML
+    private ComboBox<Mesure> cbx_mesure_compter;
+    @FXML
+    private TextField tf_numlot_compter;
+    @FXML
+    private TextField tf_coutachat_compter;
+    @FXML
+    private DatePicker dpk_datefin_inv_compter;
+    @FXML
+    private TextField tf_code_inv_compter;
+    @FXML
+    private DatePicker dpk_datedebut_inv_compter;
+    @FXML
+    private ComboBox<String> cbx_etat_inv_compter;
+    @FXML
+    private ComboBox<String> cbx_region_inv_compter;
+    @FXML
+    private TextField tf_comment_inv_compter;
+    @FXML
+    private TableView<ComptageItem> tbl_comptage_inv;
+    @FXML
+    private TableColumn<ComptageItem, String> col_date_today_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_code_inv_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_etat_inv_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_debut_date_inv_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_produit_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_stk_theorik_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_quantite_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_quant_ecart_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_valeur_unit_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_valeur_tot_compter;
+    @FXML
+    private TableColumn<ComptageItem, Number> col_val_ecart_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_lot_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_date_perem_compter;
+    @FXML
+    private TableColumn<ComptageItem, String> col_ecart_obs_compter;
+    @FXML
+    private Label txt_cloture_message_compter;
+    @FXML
+    private ProgressIndicator progress_cloture_inv_compter;
+    @FXML
+    private Label txt_valeur_global_compter;
+    @FXML
+    private ImageView imgvu_downlod_excel_compter;
+    @FXML
+    private TextField tf_quantite_compter;
+    @FXML
+    private ImageView imgvu_sync_compter;
+    @FXML
+    private Label txt_stkheorik_comptage;
+    @FXML
+    private Label txt_ecart_comptage;
+    @FXML
+    private TextField input_observ_comptage;
+    @FXML
+    private Label txt_valeurtotal_ecart_compter;
+    @FXML
+    private Label txt_table_req_count11;
+    @FXML
+    private Label txt_table_req_count121;
+    @FXML
+    private DatePicker datePremption1;
+    @FXML
+    private ProgressIndicator pgrs_trashing;
+    @FXML
+    private Label lbl_trashing_msg;
+    @FXML
+    private RadioButton rb_trashed;
+    @FXML
+    private RadioButton rb_untrashed;
+    @FXML
+    private ImageView btn_export_h1;
+    @FXML
+    private TableColumn<?, ?> tbl_rupt_prixvente;
+    @FXML
+    private Tab tab_retd;
+    @FXML
+    private ComboBox<?> cbx_produit_retd;
+    @FXML
+    private Label txt_available_retd;
+    @FXML
+    private TextField tf_quant_tran_retd;
+    @FXML
+    private TextArea txtarea_motif_retd;
+    @FXML
+    private TableView<?> tbl_info_retd;
+    @FXML
+    private TableColumn<?, ?> col_date_retd;
+    @FXML
+    private TableColumn<?, ?> cpl_produit_retd;
+    @FXML
+    private TableColumn<?, ?> col_lot_retd;
+    @FXML
+    private TableColumn<?, ?> col_qte_retd;
+    @FXML
+    private TableColumn<?, ?> col_coutach_retd;
+    @FXML
+    private TableColumn<?, ?> col_total_retd;
+    @FXML
+    private TableColumn<?, ?> col_motif_retd;
+    @FXML
+    private TableColumn<?, ?> col_prov_retd;
+    @FXML
+    private TableColumn<?, ?> col_dest_retd;
+    @FXML
+    private Label txt_count_retd;
+    @FXML
+    private ComboBox<?> cbx_mesure_retd;
+    @FXML
+    private Label txt_total_val_retd;
+    @FXML
+    private ComboBox<?> cbx_region_dest_retd;
+    @FXML
+    private ComboBox<?> cbx_region_prov_retd;
+    @FXML
+    private ComboBox<?> cbx_numlot_retd;
+    @FXML
+    private Tab tab_compact;
+    @FXML
+    private TableColumn<?, ?> col_codebar_compact;
+    @FXML
+    private TableColumn<?, ?> col_nomprod_compact;
+    @FXML
+    private TableColumn<?, ?> col_marque_compact;
+    @FXML
+    private TableColumn<?, ?> col_model_compact;
+    @FXML
+    private TableColumn<?, ?> col_tail_compact;
+    @FXML
+    private TableColumn<?, ?> col_color_compact;
+    @FXML
+    private TableColumn<?, ?> col_quant_compact;
+    @FXML
+    private TableColumn<?, ?> col_mesure_compact;
+    @FXML
+    private TableColumn<?, ?> col_prix_compact;
+    @FXML
+    private TableColumn<?, ?> col_prix_tot_compact;
+    @FXML
+    private TableColumn<?, ?> col_numlot_compact;
+    @FXML
+    private TableColumn<?, ?> col_region_compact;
+    @FXML
+    private Pane pane_etkt_panier_compact;
+    @FXML
+    private Label lbl_stock_dispo_compact;
+    @FXML
+    private ComboBox<?> cbx_compact_printers;
+    @FXML
+    private CheckBox chbx_compact_reduxion;
+
+    Compter choosenCompter;
 
     private void configcbx() {
         cbx_categofilter.setConverter(new StringConverter<Category>() {
@@ -672,7 +909,12 @@ public class PosController implements Initializable {
         }
     }
 
-    public void addVente(Vente liv) {
+    @FXML
+    public void addVente(Event e) {
+
+    }
+
+    public void addVentex(Vente liv) {
         Vente l = VenteDelegate.findVente(liv.getUid());//db.findByUid(Vente.class, liv.getUid());
         if (l == null) {
             l = VenteDelegate.saveVente(liv);//db.insertOnly(liv);
@@ -773,7 +1015,7 @@ public class PosController implements Initializable {
         theCart.setLibelle(tf_cart_label.getText());
         theCart.setObservation("Drafted");
         theCart.setClientId(anonym);
-        theCart.setDateVente(new Date());
+        theCart.setDateVente(LocalDateTime.now());
         theCart.setDeviseDette("USD");
         theCart.setLatitude(0d);
         theCart.setLongitude(0d);
@@ -997,11 +1239,14 @@ public class PosController implements Initializable {
         ObservableList<Integer> rows = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP.setItems(rows);
         rowPP.getSelectionModel().selectFirst();
-        // pagination.setPageFactory(this::createDataPage);
+        // pagination_pos.setPageFactory(this::createPosView);
+        // pagination_req.setPageFactory(this::createDataPage);
+        // pagination_sale.setPageFactory(this::createDataPage1);
+        // pagination_inv.setPageFactory(this::createDataPage2);
         ObservableList<Integer> rows1 = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP1.setItems(rows1);
         rowPP1.getSelectionModel().selectFirst();
-        //pagination1.setPageFactory(this::createDataPage1);
+        //pagination_sale.setPageFactory(this::createDataPage1);
         ObservableList<Integer> rows2 = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP2.setItems(rows2);
         rowPP2.getSelectionModel().selectFirst();
@@ -1010,7 +1255,7 @@ public class PosController implements Initializable {
         cbx_devise.setItems(FXCollections.observableArrayList("$", "Fc", "FF", "Fb", "€", "£"));
 
         cbx_forunisseur_cmd.getSelectionModel().selectFirst();
-        // pagination2.setPageFactory(this::createDataPage2);
+        // pagination_inv.setPageFactory(this::createDataPage2);
         cbx_forunisseur_cmd.setItems(obl_fournisseurs);
         ttable_ventes_hyst.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<TreeItem<SaleItem>>() {
             @Override
@@ -1060,7 +1305,7 @@ public class PosController implements Initializable {
 
         modif.setOnAction((ActionEvent event) -> {
             if (choosenReq != null) {
-                MainUI.floatDialog(tools.Constants.RECQ_DLG, 531, 728, null, kazisafe, tools.Constants.ACTION_UPDATE, choosenReq, entreprise);
+                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, tools.Constants.ACTION_UPDATE, choosenReq, entreprise, cbx_provenance_req.getValue());
             }
         });
         del.setOnAction((ActionEvent event) -> {
@@ -1089,6 +1334,7 @@ public class PosController implements Initializable {
         configList();
         confDraft();
         tbl_rupture.setItems(obl_rupture_list);
+        initRequisitionTab();
         tab_rupture.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
@@ -1147,9 +1393,10 @@ public class PosController implements Initializable {
         tbcarts.setItems(savedCarts);
         cbx_paymode.setItems(FXCollections.observableArrayList("Par Banque/Cheque", "Au comptant", "En temperament"));
         cbx_modapay.setItems(FXCollections.observableArrayList("30 jours", "A la livraison", "Périodique"));
-        pagination.setPageFactory(this::createDataPage);
-        pagination1.setPageFactory(this::createDataPage1);
-        pagination2.setPageFactory(this::createDataPage2);
+//        pagination_pos.setPageFactory(this::createPosView);
+        pagination_req.setPageFactory(this::createDataPage);
+//        pagination_sale.setPageFactory(this::createDataPage1);
+//        pagination_inv.setPageFactory(this::createDataPage2);
         tab_axsoir.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
@@ -1181,9 +1428,9 @@ public class PosController implements Initializable {
                 }
             }
         });
-        Tooltip.install(btn_refresh, new Tooltip("Actualiser les données"));
-        Tooltip.install(btn_delete, new Tooltip("Supprimer les données"));
-        Tooltip.install(btn_export, new Tooltip("Exporter vers excel"));
+//        Tooltip.install(btn_refresh, new Tooltip("Actualiser les données"));
+//        Tooltip.install(btn_delete, new Tooltip("Supprimer les données"));
+//        Tooltip.install(btn_export, new Tooltip("Exporter vers excel"));
         Tooltip.install(btn_refresh_h, new Tooltip("Actualiser l'historique"));
         Tooltip.install(btn_export_h, new Tooltip("Exporter vers excel"));
         Tooltip.install(txt_inv_mag, new Tooltip("Valeur du stock"));
@@ -1198,6 +1445,7 @@ public class PosController implements Initializable {
         cmdfss.setVisible(false);
         pgsIndicator.setVisible(false);
         progs.setVisible(false);
+        initInventoryTab();
     }
 
     @FXML
@@ -1238,143 +1486,136 @@ public class PosController implements Initializable {
         }
 
         try {
-            PDDocument document = new PDDocument();
-            PDPage fPage = new PDPage(PDRectangle.A4);
-            document.addPage(fPage);
-
-            int pageW = (int) PDRectangle.A4.getWidth();//fPage.getTrimBox().getWidth();
-            int pageH = (int) PDRectangle.A4.getHeight();//fPage.getTrimBox().getHeight();
-
-            PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
-            PDFUtils pdf = new PDFUtils(document, contentStream);
-
-            //PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
-            // PDFont normal = new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
-            PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            File f = FileUtils.pointFile(entrep.getUid() + ".png");
-            InputStream is;
-            if (!f.exists()) {
-                is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-                f = FileUtils.streamTofile(is);
-            }
-            java.awt.Color endeleya = new java.awt.Color(68, 206, 245);
-            java.awt.Color egray = new java.awt.Color(218, 218, 219);
-            PDImageXObject logo = PDImageXObject.createFromFile(f.getPath(), document);
-            contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
-
-            pdf.addTextLine("Bon de commande", 25, pageH - 98, hbold, 40, java.awt.Color.DARK_GRAY);
-
-            contentStream.setStrokingColor(endeleya);
-            contentStream.setLineWidth(2);
-            contentStream.moveTo(25, 700);
-            contentStream.lineTo(pageW - 25, 700);
-            contentStream.stroke();
-
-            pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 180, hnormal, 18, java.awt.Color.BLACK);
-            pdf.addTextLine(new String[]{"Adresse : " + entrep.getAdresse(),
-                "RCCM : " + entrep.getIdentification(), entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(), entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()}, 15, 25, pageH - 192, hnormal, 14, java.awt.Color.BLACK);
-            String idf = ff.getIdentification();
-
-            pdf.addTextLine(ff.getNomFourn(), ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 180, hnormal, 18, java.awt.Color.BLACK);
-            pdf.addTextLine(new String[]{"Adresse : " + ff.getAdresse(), idf == null ? ""
-                : "RCCM : " + idf,
-                "Tel : " + ff.getPhone()}, 15, ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 192, hnormal, 14, java.awt.Color.BLACK);
-
-            String date = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
-            pdf.addTextLine(new String[]{date,
-                "Bon de commande N# : " + (int) (Math.random() * 100000)}, 15, ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal, 14, java.awt.Color.BLACK);
-
-            String tfAdl = tf_adresse_livr.getText();
-            String perso = tf_conta_perso.getText();
-            String perso_phone = tf_phone_conta_perso.getText();
-            pdf.addTextLine(new String[]{"Modalité de paiement : " + cbx_modapay.getValue(),
-                "Mode de paiement : " + cbx_paymode.getValue(), "Adresse de livraison : " + (tfAdl.isEmpty() ? entrep.getAdresse() : tfAdl), (perso.isEmpty() ? "" : "Personne de contact : " + perso), (perso_phone.isEmpty() ? "" : "Contact : " + perso_phone)}, 15, 25, pageH - 300, hnormal, 14, java.awt.Color.BLACK);
-
-            //Tableau items
-            int table[] = {55, 230, 100, 65, 90};
-
-            pdf.addTable(table, 30, 25, pageH - 400);
-            pdf.setFont(hnormal, 11, java.awt.Color.WHITE);
-
-            pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-
-            pdf.addCell("N#", endeleya);
-            pdf.addCell("Désignation", endeleya);
-            pdf.addCell("Quantité", endeleya);
-            pdf.addCell("P.U.", endeleya);
-            pdf.addCell("P. total", endeleya);
-            pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
-            contentStream.setFont(hnormal, 10);
-            int i = 0;
-            double somme = 0;
-            int ln = 0;
-            int lpp = 26;
-            for (Rupture rupture : commandelist) {
-                i++;
-                ln++;
-                if (i > 13) {
-                    if (i == 14 | ln == lpp) {
-                        contentStream.close();
-                        PDPage fPage2 = new PDPage(PDRectangle.A4);
-                        document.addPage(fPage2);
-                        contentStream = new PDPageContentStream(document, fPage2);
-                        pdf = new PDFUtils(document, contentStream);
-                        int tablex[] = {55, 230, 100, 65, 90};
-
-                        pdf.addTable(tablex, 30, 25, pageH - 68);
-                        pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
-
-                        pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-                        contentStream.setFont(hnormal, 10);
-                        if (ln == lpp || i == 14) {
-                            ln = 0;
-                        }
-                    }
-//                 
+            final File bcmd;
+            try (PDDocument document = new PDDocument()) {
+                PDPage fPage = new PDPage(PDRectangle.A4);
+                document.addPage(fPage);
+                int pageW = (int) PDRectangle.A4.getWidth();//fPage.getTrimBox().getWidth();
+                int pageH = (int) PDRectangle.A4.getHeight();//fPage.getTrimBox().getHeight();
+                PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
+                PDFUtils pdf = new PDFUtils(document, contentStream);
+                //PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
+                // PDFont normal = new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
+                PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+                File f = FileUtils.pointFile(entrep.getUid() + ".png");
+                InputStream is;
+                if (!f.exists()) {
+                    is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                    f = FileUtils.streamTofile(is);
                 }
-
-                Produit x = rupture.getProduit();
+                java.awt.Color endeleya = new java.awt.Color(68, 206, 245);
+                java.awt.Color egray = new java.awt.Color(218, 218, 219);
+                String path = f.getPath();
+                System.out.println("path ->>>>>>XXXXX " + path);
+                if (new File(path).exists()) {
+                    try {
+                        PDImageXObject logo = PDImageXObject.createFromFile(path, document);
+                        contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
+                    } catch (Exception e) {
+                        Throwable cause = e.getCause();
+                        cause.printStackTrace();
+                    }
+                }
+                pdf.addTextLine("Bon de commande", 25, pageH - 98, hbold, 40, java.awt.Color.DARK_GRAY);
+                contentStream.setStrokingColor(endeleya);
+                contentStream.setLineWidth(2);
+                contentStream.moveTo(25, 700);
+                contentStream.lineTo(pageW - 25, 700);
+                contentStream.stroke();
+                pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 180, hnormal, 18, java.awt.Color.BLACK);
+                pdf.addTextLine(new String[]{"Adresse : " + entrep.getAdresse(),
+                    "RCCM : " + entrep.getIdentification(), entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(), entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()}, 15, 25, pageH - 192, hnormal, 14, java.awt.Color.BLACK);
+                String idf = ff.getIdentification();
+                pdf.addTextLine(ff.getNomFourn(), ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 180, hnormal, 18, java.awt.Color.BLACK);
+                pdf.addTextLine(new String[]{"Adresse : " + ff.getAdresse(), idf == null ? ""
+                    : "RCCM : " + idf,
+                    "Tel : " + ff.getPhone()}, 15, ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 192, hnormal, 14, java.awt.Color.BLACK);
+                String date = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                pdf.addTextLine(new String[]{date,
+                    "Bon de commande N# : " + (int) (Math.random() * 100000)}, 15, ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal, 14, java.awt.Color.BLACK);
+                String tfAdl = tf_adresse_livr.getText();
+                String perso = tf_conta_perso.getText();
+                String perso_phone = tf_phone_conta_perso.getText();
+                pdf.addTextLine(new String[]{"Modalité de paiement : " + cbx_modapay.getValue(),
+                    "Mode de paiement : " + cbx_paymode.getValue(), "Adresse de livraison : " + (tfAdl.isEmpty() ? entrep.getAdresse() : tfAdl), (perso.isEmpty() ? "" : "Personne de contact : " + perso), (perso_phone.isEmpty() ? "" : "Contact : " + perso_phone)}, 15, 25, pageH - 300, hnormal, 14, java.awt.Color.BLACK);
+                //Tableau items
+                int table[] = {55, 230, 100, 65, 90};
+                pdf.addTable(table, 30, 25, pageH - 400);
+                pdf.setFont(hnormal, 11, java.awt.Color.WHITE);
                 pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-                pdf.addCell(i + ".", egray);
-                pdf.addCell(x.getNomProduit() + " "
-                        + "" + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
-                pdf.addCell(rupture.getQuant() + " " + rupture.getMesure().getDescription(), egray);
-                pdf.addCell(rupture.getUnitprice() + " " + cbx_devise.getValue(), egray);
-                somme += rupture.getQuant() * rupture.getUnitprice();
-                pdf.addCell(BigDecimal.valueOf(rupture.getQuant() * rupture.getUnitprice()).setScale(2, RoundingMode.HALF_EVEN) + " " + cbx_devise.getValue(), egray);
-
-            }
-
-            if (ln == lpp - 1 || ln == 0) {
-                contentStream.close();
-                PDPage fPage2 = new PDPage(PDRectangle.A4);
-                document.addPage(fPage2);
-                contentStream = new PDPageContentStream(document, fPage2);
-                pdf = new PDFUtils(document, contentStream);
-                int tablex[] = {55, 230, 100, 65, 90};
-                pdf.addTable(tablex, 30, 25, pageH - 68);
+                pdf.addCell("N#", endeleya);
+                pdf.addCell("Désignation", endeleya);
+                pdf.addCell("Quantité", endeleya);
+                pdf.addCell("P.U.", endeleya);
+                pdf.addCell("P. total", endeleya);
                 pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
-                pdf.setRightAlignedColumns(new int[]{2, 3, 4});
                 contentStream.setFont(hnormal, 10);
+                int i = 0;
+                double somme = 0;
+                int ln = 0;
+                int lpp = 26;
+                for (Rupture rupture : commandelist) {
+                    i++;
+                    ln++;
+                    if (i > 13) {
+                        if (i == 14 | ln == lpp) {
+                            contentStream.close();
+                            PDPage fPage2 = new PDPage(PDRectangle.A4);
+                            document.addPage(fPage2);
+                            contentStream = new PDPageContentStream(document, fPage2);
+                            pdf = new PDFUtils(document, contentStream);
+                            int tablex[] = {55, 230, 100, 65, 90};
+
+                            pdf.addTable(tablex, 30, 25, pageH - 68);
+                            pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
+
+                            pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                            contentStream.setFont(hnormal, 10);
+                            if (ln == lpp || i == 14) {
+                                ln = 0;
+                            }
+                        }
+//
+                    }
+
+                    Produit x = rupture.getProduit();
+                    pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                    pdf.addCell(i + ".", egray);
+                    pdf.addCell(x.getNomProduit() + " "
+                            + "" + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
+                    pdf.addCell(rupture.getQuant() + " " + rupture.getMesure().getDescription(), egray);
+                    pdf.addCell(rupture.getUnitprice() + " " + cbx_devise.getValue(), egray);
+                    somme += rupture.getQuant() * rupture.getUnitprice();
+                    pdf.addCell(BigDecimal.valueOf(rupture.getQuant() * rupture.getUnitprice()).setScale(2, RoundingMode.HALF_EVEN) + " " + cbx_devise.getValue(), egray);
+
+                }
+                if (ln == lpp - 1 || ln == 0) {
+                    contentStream.close();
+                    PDPage fPage2 = new PDPage(PDRectangle.A4);
+                    document.addPage(fPage2);
+                    contentStream = new PDPageContentStream(document, fPage2);
+                    pdf = new PDFUtils(document, contentStream);
+                    int tablex[] = {55, 230, 100, 65, 90};
+                    pdf.addTable(tablex, 30, 25, pageH - 68);
+                    pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
+                    pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                    contentStream.setFont(hnormal, 10);
+                }
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("", null);
+                pdf.addCell("Total", egray);
+                pdf.addCell("", egray);
+                pdf.addCell(BigDecimal.valueOf(somme).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + cbx_devise.getValue(), egray);
+                contentStream.close();
+                bcmd = FileUtils.pointFile(System.currentTimeMillis() + ".pdf");
+                document.save(bcmd);
             }
-
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("Total", egray);
-            pdf.addCell("", egray);
-            pdf.addCell(BigDecimal.valueOf(somme).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + cbx_devise.getValue(), egray);
-            contentStream.close();
-
-            final File bcmd = FileUtils.pointFile(System.currentTimeMillis() + ".pdf");
-            document.save(bcmd);
-            document.close();
             new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -1526,7 +1767,7 @@ public class PosController implements Initializable {
                         .submit(() -> {
                             try {
                                 System.out.println("Raprochement.....");
-                                List<PhysicalInventoryLine> datas = Util.importInventoryFromExcel(choosenFile, cbx_region_maginv.getValue() == null ? region : cbx_region_maginv.getValue());
+                                List<PhysicalInventoryLine> datas = Util.importInventoryFromExcelFile(choosenFile, cbx_region_maginv.getValue() == null ? region : cbx_region_maginv.getValue());
                                 if (datas == null) {
                                     progs.setVisible(false);
                                     pgsIndicator.setVisible(false);
@@ -1549,7 +1790,7 @@ public class PosController implements Initializable {
                                 List<LigneVente> lvs = new ArrayList<>();
                                 Vente v = new Vente(DataId.generateInt());
                                 v.setClientId(ClientDelegate.findImporterClient());
-                                v.setDateVente(new Date());
+                                v.setDateVente(LocalDateTime.now());
                                 v.setDeviseDette("USD");
                                 v.setReference(ref);
                                 v.setLatitude(0d);
@@ -1559,7 +1800,7 @@ public class PosController implements Initializable {
                                 v.setMontantCdf(0);
                                 v.setMontantDette(0d);
                                 v.setObservation("CORRECTION");
-                               
+
                                 for (PhysicalInventoryLine data : datas) {
                                     List<Produit> produits = ProduitDelegate.findAllByCodebar(data.getCodebarr());
                                     Produit produit;
@@ -1579,7 +1820,7 @@ public class PosController implements Initializable {
                                         produit.setTaille(data.getTailleProduit());
                                         produit.setMethodeInventaire("FIFO");
                                         produit.setCodebar(data.getCodebarr());
-                                        produit.setDateCreation(new Date());
+                                        produit.setDateCreation(LocalDateTime.now());
                                         ProduitDelegate.saveProduit(produit);
                                     } else {
                                         produit = produits.get(0);
@@ -1597,9 +1838,9 @@ public class PosController implements Initializable {
                                         produit.setTaille(data.getTailleProduit());
                                         produit.setMethodeInventaire("FIFO");
                                         produit.setCodebar(data.getCodebarr());
-                                        produit.setDateCreation(new Date());
+                                        produit.setDateCreation(LocalDateTime.now());
                                         ProduitDelegate.updateProduit(produit);
-                                        
+
                                     }
                                     String mesure = data.getMesure();
                                     String descr;
@@ -1623,22 +1864,22 @@ public class PosController implements Initializable {
                                         MesureDelegate.saveMesure(mz);
                                     } else {
                                         mz = mzs.get(0);
-                                    } 
+                                    }
                                     double rem;
-                                    if(data.isMultiBatch()){
-                                       rem = RecquisitionDelegate.findRemainedInMagasinForBatched(produit.getUid(),data.getNumlot()); 
-                                    }else{
-                                       rem = RecquisitionDelegate.findRemainedInMagasinFor(produit.getUid()); 
+                                    if (data.isMultiBatch()) {
+                                        rem = RecquisitionDelegate.findRemainedInMagasinForBatched(produit.getUid(), data.getNumlot());
+                                    } else {
+                                        rem = RecquisitionDelegate.findRemainedInMagasinFor(produit.getUid());
                                     }
                                     double phys = data.getStockPhysique();
-                                    double ecart = phys - (rem/quantM);
+                                    double ecart = phys - (rem / quantM);
                                     System.out.println("Ecart " + ecart);
                                     if (ecart > 0) {
                                         //Nouveau Recquis
                                         List<Recquisition> rqs = RecquisitionDelegate.findDescSortedByDateForProduit(produit.getUid());
                                         Recquisition req = new Recquisition(DataId.generate());
                                         req.setCoutAchat(data.getCoutAchat());
-                                        req.setDate(new Date());
+                                        req.setDate(LocalDateTime.now());
                                         req.setQuantite(ecart);
                                         req.setRegion(data.getRegion());
                                         req.setDateExpiry(data.getDateExpiration());
@@ -1651,49 +1892,49 @@ public class PosController implements Initializable {
                                         RecquisitionDelegate.saveRecquisition(req);
                                         if (rqs.isEmpty()) {
                                             String pvs = data.getPrixDeVente();
-                                            if(pvs!=null){
-                                            if (!pvs.isEmpty()) {
-                                                if (pvs.startsWith("[") || !StringUtils.isNumeric(pvs)) {
-                                                    if (pvs.contains(";") && pvs.contains("]")) {
-                                                        pvs = pvs.replace("[", "");
-                                                        pvs = pvs.replace("]", "");
-                                                        String[] pvx = pvs.split(";");
-                                                        for (String pv : pvx) {
-                                                            if (pv.contains("-")) {
-                                                                String min = pv.split("-")[0];
-                                                                String max = pv.split("-")[1].split(":")[0];
-                                                                String px = pv.split("-")[1].split(":")[1];
-                                                                if (StringUtils.isNumeric(min) && StringUtils.isNumeric(max) && StringUtils.isNumeric(px)) {
-                                                                    PrixDeVente prix = new PrixDeVente(DataId.generate());
-                                                                    prix.setQmin(Double.valueOf(min));
-                                                                    prix.setQmax(Double.valueOf(max));
-                                                                    prix.setPrixUnitaire(Double.valueOf(px));
-                                                                    prix.setDevise("USD");
-                                                                    prix.setMesureId(mz);
-                                                                    prix.setPourcentParCunit(0d);
-                                                                    prix.setRecquisitionId(req);
-                                                                    PrixDeVenteDelegate.savePrixDeVente(prix);
+                                            if (pvs != null) {
+                                                if (!pvs.isEmpty()) {
+                                                    if (pvs.startsWith("[") || !StringUtils.isNumeric(pvs)) {
+                                                        if (pvs.contains(";") && pvs.contains("]")) {
+                                                            pvs = pvs.replace("[", "");
+                                                            pvs = pvs.replace("]", "");
+                                                            String[] pvx = pvs.split(";");
+                                                            for (String pv : pvx) {
+                                                                if (pv.contains("-")) {
+                                                                    String min = pv.split("-")[0];
+                                                                    String max = pv.split("-")[1].split(":")[0];
+                                                                    String px = pv.split("-")[1].split(":")[1];
+                                                                    if (StringUtils.isNumeric(min) && StringUtils.isNumeric(max) && StringUtils.isNumeric(px)) {
+                                                                        PrixDeVente prix = new PrixDeVente(DataId.generate());
+                                                                        prix.setQmin(Double.valueOf(min));
+                                                                        prix.setQmax(Double.valueOf(max));
+                                                                        prix.setPrixUnitaire(Double.valueOf(px));
+                                                                        prix.setDevise("USD");
+                                                                        prix.setMesureId(mz);
+                                                                        prix.setPourcentParCunit(0d);
+                                                                        prix.setRecquisitionId(req);
+                                                                        PrixDeVenteDelegate.savePrixDeVente(prix);
+                                                                    }
                                                                 }
                                                             }
+                                                        } else {
+                                                            PrixDeVente prix = new PrixDeVente(DataId.generate());
+                                                            prix.setQmin(0.1);
+                                                            prix.setQmax(1000000d);
+                                                            prix.setPrixUnitaire(Double.valueOf(pvs));
+                                                            prix.setDevise("USD");
+                                                            prix.setMesureId(mz);
+                                                            prix.setPourcentParCunit(0d);
+                                                            prix.setRecquisitionId(req);
+                                                            PrixDeVenteDelegate.savePrixDeVente(prix);
                                                         }
                                                     } else {
-                                                        PrixDeVente prix = new PrixDeVente(DataId.generate());
-                                                        prix.setQmin(0.1);
-                                                        prix.setQmax(1000000d);
-                                                        prix.setPrixUnitaire(Double.valueOf(pvs));
-                                                        prix.setDevise("USD");
-                                                        prix.setMesureId(mz);
-                                                        prix.setPourcentParCunit(0d);
-                                                        prix.setRecquisitionId(req);
-                                                        PrixDeVenteDelegate.savePrixDeVente(prix);
+                                                        MainUI.notify(null, "Erreur", "Le prix du produit " + data.getNomProduit() + "  a la ligne " + data.getLigne() + " est mal notee", 4, "error");
+                                                        progs.setVisible(false);
+                                                        pgsIndicator.setVisible(false);
+                                                        return;
                                                     }
-                                                } else {
-                                                    MainUI.notify(null, "Erreur", "Le prix du produit " + data.getNomProduit() + "  a la ligne " + data.getLigne() + " est mal notee", 4, "error");
-                                                    progs.setVisible(false);
-                                                    pgsIndicator.setVisible(false);
-                                                    return;
                                                 }
-                                            }
                                             }
                                         } else {
                                             List<PrixDeVente> prices = PrixDeVenteDelegate.findPricesForRecq(rqs.get(0).getUid());
@@ -1712,7 +1953,7 @@ public class PosController implements Initializable {
                                     } else if (ecart < 0) {
                                         //Nouvelle vente
                                         v.setRegion(data.getRegion());
-                                        double q =Math.abs(ecart);
+                                        double q = Math.abs(ecart);
                                         LigneVente lv = new LigneVente(DataId.generateLong());
                                         lv.setClientId("-");
                                         lv.setMesureId(mz);
@@ -1723,16 +1964,15 @@ public class PosController implements Initializable {
                                         lv.setProductId(produit);
                                         lv.setQuantite(q);
                                         lvs.add(lv);
-                                        
-                                        LigneVenteDelegate.saveLigneVente(lv,v);
+
+                                        LigneVenteDelegate.saveLigneVente(lv, v);
                                     }
                                     Platform.runLater(() -> {
-                                        progs.setText(data.getLigne() + "/" + (size+12)+ " lignes");
+                                        progs.setText(data.getLigne() + "/" + (size + 12) + " lignes");
                                     });
                                     System.out.println("Ligne INV " + data.getLigne() + " enregistreee");
                                 }
-                                
-                               
+
 //                                createSafeVente(v);
                                 progs.setVisible(false);
                                 pgsIndicator.setVisible(false);
@@ -1749,12 +1989,12 @@ public class PosController implements Initializable {
         }
 
     }
-    
-    private void createSafeVente(Vente v){
-       
-//        SafeConnectionFactory.beginTransaction();
-//        SafeConnectionFactory.getEntityManager().persist(v);
-//        SafeConnectionFactory.commit();
+
+    private void createSafeVente(Vente v) {
+
+//        ManagedSessionFactory.beginTransaction();
+//        ManagedSessionFactory.getEntityManager().persist(v);
+//        ManagedSessionFactory.commit();
     }
 
     @FXML
@@ -1807,7 +2047,7 @@ public class PosController implements Initializable {
             double retqpc = quant * choosenMesure4Retour.getQuantContenu();
             RetourMagasin rmg = new RetourMagasin(DataId.generate());
             rmg.setClientId(choosenVente.getClientId());
-            rmg.setDate(new Date());
+            rmg.setDate(LocalDateTime.now());
             rmg.setLigneVenteId(elm);
             rmg.setMesureId(choosenMesure4Retour);
             rmg.setMotif(valueobs);
@@ -1904,8 +2144,8 @@ public class PosController implements Initializable {
         cexp.set(Calendar.MINUTE, 59);
         cexp.set(Calendar.SECOND, 59);
         cexp.set(Calendar.MILLISECOND, 0);
-        List<Stocker> stks = StockerDelegate.findByDateExpInterval(leo.getTime(), darg == null ? cexp.getTime() : darg);
-        List<Recquisition> reks = RecquisitionDelegate.findByDateExpInterval(leo.getTime(), darg == null ? cexp.getTime() : darg);
+        List<Stocker> stks = StockerDelegate.findByDateExpInterval(Constants.Datetime.toLocalDate(leo.getTime()), Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
+        List<Recquisition> reks = RecquisitionDelegate.findByDateExpInterval(Constants.Datetime.toLocalDate(leo.getTime()), Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
         ols_peremption.clear();
         valeurs = 0;
         for (Stocker stk : stks) {
@@ -2041,7 +2281,7 @@ public class PosController implements Initializable {
                         : Constants.USER_READABLE_FORMAT.format(Constants.Datetime.toUtilDate(ldf)));
                 hmap.put("operateur", pref.get("operator", "Uknown"));
 
-                File xlsInv = Util.exportXlsInventoryMagasin(hmap, table_inv_mag.getItems());
+                File xlsInv = Util.exportXlsInventoryMagasin(hmap, table_inv_mag.getItems(), pref.get("mainCur", "USD"));
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
@@ -2054,7 +2294,7 @@ public class PosController implements Initializable {
     @FXML
     private void goToClient(Event e) {
         String token = pref.get("token", null);
-        MainUI.floatDialog(tools.Constants.CLIENT_DLG, 521, 635, token, kazisafe, entreprise, region);
+        MainUI.floatDialog(tools.Constants.CLIENT_DLG, 1090, 489, token, kazisafe, entreprise, region);
     }
 
     private ScrollBar getVScrollbar(TableView<ListViewItem> table) {
@@ -2179,7 +2419,7 @@ public class PosController implements Initializable {
         });
         col_date_expir_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
-            return new SimpleStringProperty(r.getPeremption() == null ? "Non perissable" : tools.Constants.DATE_HEURE_FORMAT.format(r.getPeremption()));
+            return new SimpleStringProperty(r.getPeremption() == null ? "Non perissable" : r.getPeremption().toString());
         });
         col_taille_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
@@ -2193,7 +2433,7 @@ public class PosController implements Initializable {
 //            } else {
 //                rest = RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid(), region);
 //            }
-////            r.getQuantiteRestant();
+            ////            r.getQuantiteRestant();
             Mesure m = r.getMesureAchat();
             return new SimpleStringProperty(rest + " " + m.getDescription());
         });
@@ -2260,15 +2500,19 @@ public class PosController implements Initializable {
             return new SimpleStringProperty(r.getQuantite() + " " + (mx == null ? "" : mx.getDescription()));
         });
         col_date_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
-            return new SimpleStringProperty(tools.Constants.DATE_HEURE_FORMAT.format(param.getValue().getDate()));
+            return new SimpleStringProperty(param.getValue().getDate().toString());
         });
         col_expiry_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
-            return new SimpleStringProperty(r.getDateExpiry() == null ? "" : tools.Constants.DATE_HEURE_FORMAT.format(r.getDateExpiry()));
+            return new SimpleStringProperty(r.getDateExpiry() == null ? "" : r.getDateExpiry().toString());
         });
         col_prod_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
-            Produit p = SafeConnectionFactory.getEntityManager().find(Produit.class, r.getProductId().getUid());
+            Produit x = r.getProductId();
+            if (x == null) {
+                return null;
+            }
+            Produit p = ProduitDelegate.findProduit(x.getUid());
             if (p == null) {
                 return null;
             }
@@ -2315,7 +2559,7 @@ public class PosController implements Initializable {
         });
         col_date_exp.setCellValueFactory((TableColumn.CellDataFeatures<Peremption, String> param) -> {
             Peremption p = param.getValue();
-            return new SimpleStringProperty(Constants.USER_READABLE_FORMAT.format(p.getDateExpiry()));
+            return new SimpleStringProperty(p.getDateExpiry().toString());
         });
         col_localisation_exp.setCellValueFactory((TableColumn.CellDataFeatures<Peremption, String> param) -> {
             Peremption p = param.getValue();
@@ -2443,8 +2687,7 @@ public class PosController implements Initializable {
         });
         cart_date.setCellValueFactory((TableColumn.CellDataFeatures<Vente, String> param) -> {
             Vente r = param.getValue();
-            return new SimpleStringProperty(Constants.DATE_HEURE_FORMAT.format(r.getDateVente()));
-
+            return new SimpleStringProperty(r.getDateVente().toString());
         });
     }
 
@@ -2507,8 +2750,8 @@ public class PosController implements Initializable {
         });
         col_expiry_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
             InventoryMagasin im = param.getValue();
-            Date dex = im.getExpiry();
-            return new SimpleStringProperty(dex == null ? "" : Constants.USER_READABLE_FORMAT.format(dex));
+            LocalDate dex = im.getExpiry();
+            return new SimpleStringProperty(dex == null ? "" : Constants.USER_READABLE_FORMAT.format(Constants.Datetime.toUtilDate(dex)));
         });
     }
 
@@ -2526,7 +2769,7 @@ public class PosController implements Initializable {
                 return null;
             }
             double q = value.getQuantite();
-            Mesure mx = value.getMesure();
+            Mesure mx = value.getMesureObj();
             return new SimpleStringProperty(q + " " + ((mx == null) ? "" : mx.getDescription()));
         });
         trcol_facture_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, String> param) -> {
@@ -2590,8 +2833,8 @@ public class PosController implements Initializable {
             if (vls == null) {
                 return null;
             }
-            Date date = vls.getDateEcheance();
-            return new SimpleStringProperty(date == null ? "" : tools.Constants.DATE_HEURE_FORMAT.format(date));
+            LocalDate date = vls.getDatEcheance();
+            return new SimpleStringProperty(date == null ? "" : date.toString());
         });
 
         trcol_libelle_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, String> param) -> {
@@ -2778,7 +3021,7 @@ public class PosController implements Initializable {
             invm.setValeurStock(patpc);
             Recquisition newr = new Recquisition(DataId.generate());
             newr.setCoutAchat(caparpc * mr.getQuantContenu());
-            newr.setDate(new Date());
+            newr.setDate(LocalDateTime.now());
             newr.setDateExpiry(chosenReqRet.getDateExpiry());
             newr.setMesureId(mr);
             newr.setNumlot(chosenReqRet.getNumlot());
@@ -2887,18 +3130,21 @@ public class PosController implements Initializable {
     }
 
     private double getQuant(String idpro, Date d1, Date d2, boolean entreOuSorti) {
+        LocalDate ld1 = d1.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate ld2 = d2.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
         double result = 0;
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
             if (entreOuSorti) {
-                result = RecquisitionDelegate.sumByProduit(idpro, d1, d2);
+                result = RecquisitionDelegate.sumByProduit(idpro, ld1, ld2);
             } else {
-                result = LigneVenteDelegate.sumByProduit(idpro, d1, d2);
+                result = LigneVenteDelegate.sumByProduit(idpro, ld1, ld2);
             }
         } else {
             if (entreOuSorti) {
-                result = RecquisitionDelegate.sumByProduit(idpro, d1, d2, region);
+                result = RecquisitionDelegate.sumByProduit(idpro, ld1, ld2, region);
             } else {
-                result = LigneVenteDelegate.sumByProduit(idpro, d1, d2, region);
+                result = LigneVenteDelegate.sumByProduit(idpro, ld1, ld2, region);
             }
         }
         return result;
@@ -2933,7 +3179,7 @@ public class PosController implements Initializable {
 //            if (!Objects.isNull(good[11])) {
 //                try {
 //                    String exp = String.valueOf(good[11]);
-////                    if (StringUtils.isNumeric(exp)) {
+    ////                    if (StringUtils.isNumeric(exp)) {
 //                    Date ex = Constants.DATE_ONLY_FORMAT.parse(String.valueOf(exp));
 //                    lvi.setPeremption(ex);
 ////                    }
@@ -3013,19 +3259,15 @@ public class PosController implements Initializable {
 
     double sommeUsd = 0, sommeCdf = 0, sommeDette = 0;
 
-    private void refreshHistory(List<SaleItem> lsi, List<String> dates) {
+    private void refreshHistory(List<SaleItem> lsi, List<LocalDate> dates) {
         new Thread(() -> {
             sommeUsd = 0;
             sommeCdf = 0;
             sommeDette = 0;
-            for (String date : dates) {
-                Quintuplet<Date, List<SaleItem>, Double, Double, Double> rst = Util.findByDate(lsi, date);
+            for (LocalDate date : dates) {
+                Quintuplet<LocalDate, List<SaleItem>, Double, Double, Double> rst = Util.findByDate(lsi, date);
                 SaleItem parent = new SaleItem();
-                try {
-                    parent.setDate(Constants.USER_READABLE_FORMAT.parse(date));
-                } catch (ParseException ex) {
-                    Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-                }
+                parent.setDate(date.atStartOfDay());
                 parent.setSaleAmountCdf(rst.getY());
                 parent.setSaleAmountUsd(rst.getX());
                 parent.setSaleAmountCredit(rst.getZ());
@@ -3051,7 +3293,11 @@ public class PosController implements Initializable {
                         Produit pt = ProduitDelegate.findProduit(item.getProductId().getUid());
                         silv.setProduit(pt);
                         silv.setQuantite(item.getQuantite());
-                        Mesure mzr = MesureDelegate.findMesure(item.getMesureId().getUid());
+                        Mesure mm = item.getMesureId();
+                        if (mm == null) {
+                            continue;
+                        }
+                        Mesure mzr = MesureDelegate.findMesure(mm.getUid());
                         silv.setMesure(mzr);
                         silv.setUnitPrice(item.getPrixUnit());
                         silv.setTotalCost(item.getMontantUsd());
@@ -3093,17 +3339,341 @@ public class PosController implements Initializable {
     }
 
     @FXML
-    private void refreshFinAccount(MouseEvent event) {
+    private void gotoCloture(MouseEvent event) {
+        // TODO: Implement Cloture functionality
+        MainUI.notify(null, "Info", "Fonctionnalité de clôture en cours de développement", 1, "info");
     }
 
     public void clearTableSelection() {
         tbl_list_pro.getSelectionModel().clearSelection();
     }
 
+    private void initRequisitionTab() {
+        obl_livraisons_req = FXCollections.observableArrayList();
+        if (obl_fournisseurs == null) {
+            obl_fournisseurs = FXCollections.observableArrayList();
+        }
+        list_livraison_req.setItems(obl_livraisons_req);
+        list_supplier_req.setItems(obl_fournisseurs);
+
+        cbx_provenance_req.setItems(FXCollections.observableArrayList("Achat", "Entrepot"));
+        cbx_provenance_req.getSelectionModel().selectFirst();
+
+        list_livraison_req.setCellFactory(param -> new ListCell<Livraison>() {
+            @Override
+            protected void updateItem(Livraison item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getReference() + " - " + (item.getFournId() != null ? item.getFournId().getNomFourn() : "") + " le " + item.getDateLivr().toString());
+                }
+            }
+        });
+
+        list_supplier_req.setCellFactory(param -> new ListCell<Fournisseur>() {
+            @Override
+            protected void updateItem(Fournisseur item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getNomFourn() + " - " + item.getPhone());
+                }
+            }
+        });
+
+        search_livraiz_req.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue.isEmpty()) {
+                list_livraison_req.setItems(obl_livraisons_req);
+            } else {
+                ObservableList<Livraison> filtered = FXCollections.observableArrayList();
+                for (Livraison l : obl_livraisons_req) {
+                    if (l.getReference().toLowerCase().contains(newValue.toLowerCase()) || (l.getFournId() != null && l.getFournId().getNomFourn().toLowerCase().contains(newValue.toLowerCase()))) {
+                        filtered.add(l);
+                    }
+                }
+                list_livraison_req.setItems(filtered);
+            }
+        });
+
+        search_supplier_req.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue.isEmpty()) {
+                list_supplier_req.setItems(obl_fournisseurs);
+            } else {
+                ObservableList<Fournisseur> filtered = FXCollections.observableArrayList();
+                for (Fournisseur f : obl_fournisseurs) {
+                    if (f.getNomFourn() != null && f.getNomFourn().toLowerCase().contains(newValue.toLowerCase())) {
+                        filtered.add(f);
+                    }
+                }
+                list_supplier_req.setItems(filtered);
+            }
+        });
+
+        list_supplier_req.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Fournisseur>() {
+            @Override
+            public void changed(ObservableValue<? extends Fournisseur> observable, Fournisseur oldValue,
+                    Fournisseur newValue) {
+                if (newValue != null) {
+                    choosenSupply = newValue;
+                    Double somm = LivraisonDelegate.sumBySupplier(choosenSupply.getUid());
+                    List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+                    lbl_livrez_recq.setText(choosenSupply.getNomFourn() + ", " + choosenSupply.getAdresse() + " "
+                            + choosenSupply.getPhone() + "/ " + livrs.size() + " Livraisons, Total achat : " + somm);
+                    obl_livraisons_req.setAll(livrs);
+                }
+            }
+        });
+
+        ContextMenu ctxt = new ContextMenu();
+        MenuItem updatef = new MenuItem(bundle.getString("xbtn.update"));
+        MenuItem deletef = new MenuItem(bundle.getString("delete"));
+        MenuItem livraizf = new MenuItem(bundle.getString("selectdeliv"));
+        MenuItem settleSupplierDebt = new MenuItem("Regler dette fournisseur");
+        MenuItem supplierDebtReport = new MenuItem("Releve dettes fournisseur");
+        ctxt.getItems().add(updatef);
+        ctxt.getItems().add(deletef);
+        ctxt.getItems().add(livraizf);
+        ctxt.getItems().add(settleSupplierDebt);
+        ctxt.getItems().add(supplierDebtReport);
+        list_supplier_req.setContextMenu(ctxt);
+        updatef.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                if (choosenSupply != null) {
+                    MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, entreprise,
+                            choosenSupply);
+                }
+            }
+        });
+        deletef.setOnAction((ActionEvent event) -> {
+            if (choosenSupply != null) {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Voulez vous vraiment supprimer le fournisseur " + choosenSupply.getNomFourn() + " ?",
+                        ButtonType.YES, ButtonType.CANCEL);
+                alert.setTitle("Attention!");
+                alert.setHeaderText(null);
+                Optional<ButtonType> showAndWait = alert.showAndWait();
+                if (showAndWait.get() == ButtonType.YES) {
+                    if (role.equals(Role.Trader.name())
+                            | role.equals(Role.Manager.name())
+                            | role.equals(Role.Magazinner.name())
+                            | role.contains(Role.ALL_ACCESS.name())) {
+                        FournisseurDelegate.deleteFournisseur(choosenSupply);
+                        obl_fournisseurs.remove(choosenSupply);
+                        // count_fournisseur.setText(String.format(bundle.getString("xitems"), list_supplier_req.size()));
+                        MainUI.notify(null, "Succes", "Fournisseur supprime avec success", 3, "info");
+                    } else {
+                        MainUI.notify(null, "Attention",
+                                "Vous n'avez pas assez de privileges pour effectuer cette action", 3, "warning");
+                    }
+                }
+            }
+        });
+        livraizf.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                if (choosenSupply != null) {
+                    showSupplierDeliveries();
+                }
+            }
+        });
+        settleSupplierDebt.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                if (choosenSupply == null) {
+                    MainUI.notify(null, "Selection", "Selectionnez d'abord un fournisseur", 3, "warning");
+                    return;
+                }
+                List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+                Livraison target = null;
+                for (Livraison liv : livrs) {
+                    if (safeAmount(liv.getRemained()) > 0d) {
+                        target = liv;
+                        break;
+                    }
+                }
+                if (target == null) {
+                    MainUI.notify(null, "Info", "Ce fournisseur n'a plus de dette restante", 3, "info");
+                    return;
+                }
+                settleSupplierDebt(target);
+            }
+        });
+        supplierDebtReport.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                exportSupplierDebtStatement();
+            }
+        });
+
+    }
+
+    private void exportSupplierDebtStatement() {
+        if (choosenSupply == null) {
+            MainUI.notify(null, "Selection", "Selectionnez d'abord un fournisseur", 3, "warning");
+            return;
+        }
+        List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+        if (livrs == null || livrs.isEmpty()) {
+            MainUI.notify(null, "Info", "Aucune livraison pour ce fournisseur", 3, "info");
+            return;
+        }
+        new Thread(() -> {
+            File report = Util.exportXlsLivraison(TraisorerieDelegate.findTraisoreries(), livrs, 1d);
+            if (report == null) {
+                MainUI.notify(null, "Erreur", "Echec de generation du releve", 3, "error");
+                return;
+            }
+            try {
+                Desktop.getDesktop().open(report);
+            } catch (IOException ex) {
+                Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }).start();
+    }
+
     @FXML
     private void addRequest(ActionEvent event) {
-        MainUI.floatDialog(tools.Constants.RECQ_DLG, 531, 728, null, kazisafe, tools.Constants.ACTION_CREATE, null, entreprise);
+        String prov = cbx_provenance_req.getValue();
+        if ("Achat".equals(prov)) {
+            //on affiche le dialogue de DELIVERY_DLG
+            MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, null, Constants.POS);
+        } else {
+            //on affiche le RECQ_DLG
+            addRequestItem(event);
+        }
     }
+
+    private boolean hasPermission(PermitTo permit) {
+        return role != null && role.toUpperCase().contains(Role.ALL_ACCESS.name())
+                || role.toUpperCase().equals(Role.Trader.name()) || PermissionDelegate.hasPermission(permit);
+    }
+
+    private void settleSupplierDebt(Livraison target) {
+        if (!hasPermission(PermitTo.UPDATE_LIVRAISON)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de regler cette dette", 3, "warning");
+            return;
+        }
+        double remained = safeAmount(target.getRemained());
+        if (remained <= 0d) {
+            MainUI.notify(null, "Info", "Cette livraison est deja reglee", 3, "info");
+            return;
+        }
+        TextInputDialog amountDialog = new TextInputDialog(String.valueOf(remained));
+        amountDialog.setTitle("Reglement dette fournisseur");
+        amountDialog.setHeaderText("Livraison " + target.getNumPiece() + " - dette restante USD " + remained);
+        amountDialog.setContentText("Montant a regler (USD):");
+        Optional<String> amountInput = amountDialog.showAndWait();
+        if (amountInput.isEmpty()) {
+            return;
+        }
+        double amount = safeAmount(amountInput.get());
+        if (amount <= 0d) {
+            MainUI.notify(null, "Validation", "Le montant doit etre superieur a zero", 3, "warning");
+            return;
+        }
+        TextInputDialog recuDialog = new TextInputDialog();
+        recuDialog.setTitle("Numero recu fournisseur");
+        recuDialog.setHeaderText("Enregistrer le numero de recu du fournisseur");
+        recuDialog.setContentText("Numero recu:");
+        Optional<String> recuInput = recuDialog.showAndWait();
+        if (recuInput.isEmpty()) {
+            return;
+        }
+        String recu = recuInput.get().trim();
+        if (recu.isBlank()) {
+            MainUI.notify(null, "Validation", "Le numero de recu est obligatoire", 3, "warning");
+            return;
+        }
+        double applied = Math.min(amount, remained);
+        target.setPayed(safeAmount(target.getPayed()) + applied);
+        double left = Math.max(0d, remained - applied);
+        target.setRemained(left);
+        target.setToreceive(Double.valueOf(Math.max(0d, applied - remained)));
+        String baseObs = target.getObservation() == null ? "" : target.getObservation();
+        String line = " | RECU_FOURNISSEUR=" + recu + " ; MONTANT=" + applied + " ; DATE=" + LocalDateTime.now();
+        target.setObservation((baseObs + line).trim());
+        Livraison saved = LivraisonDelegate.updateLivraison(target);
+        if (saved == null) {
+            MainUI.notify(null, "Erreur", "Echec d'enregistrement local du reglement", 3, "error");
+            return;
+        }
+//        Util.sync(saved, Constants.ACTION_UPDATE, Tables.LIVRAISON);
+        syncLivraisonByHttp(saved);
+//        int index = obl_livraisons_req.indexOf(saved);
+//        if (index >= 0) {
+//            obl_livraisons_req.set(index, saved);
+//        }
+//        if (livraison != null && livraison.getUid().equals(saved.getUid())) {
+//            livraison = saved;
+//            global_achat.setText("Total : USD " + safeAmount(saved.getPayed()));
+//        }
+        MainUI.notify(null, "Succes", "Reglement fournisseur enregistre (recu: " + recu + ")", 4, "info");
+    }
+
+    private void syncLivraisonByHttp(Livraison l) {
+        if (kazisafe == null || l == null || l.getFournId() == null) {
+            return;
+        }
+        kazisafe.syncDelivery(l.getUid(),
+                l.getNumPiece(),
+                l.getDateLivr() == null ? LocalDate.now().toString() : l.getDateLivr().toString(),
+                l.getReference(),
+                l.getLibelle(),
+                String.valueOf(safeAmount(l.getReduction())),
+                l.getObservation(),
+                String.valueOf(safeAmount(l.getTopay())),
+                String.valueOf(safeAmount(l.getPayed())),
+                String.valueOf(safeAmount(l.getRemained())),
+                String.valueOf(safeAmount(l.getToreceive())),
+                l.getFournId().getUid())
+                .enqueue(new Callback<Livraison>() {
+                    @Override
+                    public void onResponse(Call<Livraison> call, Response<Livraison> rspns) {
+                        System.out.println("Livraison sync update " + rspns.code());
+                    }
+
+                    @Override
+                    public void onFailure(Call<Livraison> call, Throwable thrwbl) {
+                        System.err.println("Livraison sync update failed " + thrwbl.getMessage());
+                    }
+                });
+    }
+
+    private double safeAmount(Double value) {
+        return value == null ? 0d : value;
+    }
+
+    private double safeAmount(String value) {
+        try {
+            return Double.parseDouble(value == null ? "0" : value.trim());
+        } catch (NumberFormatException e) {
+            return 0d;
+        }
+    }
+
+    private void showSupplierDeliveries() {
+
+        if (tabpane_req_left.getSelectionModel().getSelectedIndex() == 1) {
+            choosenSupply = list_supplier_req.getSelectionModel().getSelectedItem();
+            if (choosenSupply == null) {
+                MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3, "error");
+                return;
+            }
+            List<Livraison> livs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+            obl_livraisons_req.setAll(livs);
+            tabpane_req_left.getSelectionModel().select(0);
+            lbl_livrez_recq.setText(choosenSupply.getNomFourn() + ", " + choosenSupply.getAdresse() + " "
+                    + choosenSupply.getPhone() + "/ " + livs.size() + " Livraisons, Total achat : " + livs.stream().mapToDouble(l -> l.getTopay()).sum());
+
+        } else {
+            MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3, "error");
+            return;
+        }
+    }
+
     boolean isCard = true;
 
     public void refreshPosUi() {
@@ -3273,6 +3843,17 @@ public class PosController implements Initializable {
         return pane;
     }
 
+    public void addProductItem(Produit good) {
+        if (good != null) {
+            Platform.runLater(() -> {
+                Node pane = addProduit(good);
+                if (pane != null) {
+                    tile_pane.getChildren().add(pane);
+                }
+            });
+        }
+    }
+
     private void fillProducts(boolean reinit, Collection<Produit> ps) {
 //        new Thread(new Runnable() {
 //            @Override
@@ -3308,14 +3889,10 @@ public class PosController implements Initializable {
     }
 
     @FXML
-    private void exportInventaitaire(MouseEvent event) {
-    }
-
-    @FXML
     private void selectRowPerPage(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
         rowsDataCount = (int) cbx.getValue();
-        pagination.setPageFactory(this::createDataPage);
+        pagination_req.setPageFactory(this::createDataPage);
         System.out.println("Row set to " + rowsDataCount);
     }
 
@@ -3323,7 +3900,7 @@ public class PosController implements Initializable {
     private void selectRowPerPage1(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
         rowsDataCount1 = (int) cbx.getValue();
-        pagination1.setPageFactory(this::createDataPage1);
+//        pagination_sale.setPageFactory(this::createDataPage1);
         System.out.println("Row set to " + rowsDataCount1);
     }
 
@@ -3331,7 +3908,7 @@ public class PosController implements Initializable {
     private void selectRowPerPage2(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
         rowsDataCount2 = (int) cbx.getValue();
-        pagination2.setPageFactory(this::createDataPage2);
+//        pagination_inv.setPageFactory(this::createDataPage2);
         System.out.println("Row set to " + rowsDataCount2);
     }
 
@@ -3342,7 +3919,7 @@ public class PosController implements Initializable {
             table_req.setItems(FXCollections.observableArrayList(lsreq.subList(offset, limit)));
             txt_table_req_count.setText(lsreq.size() + " elements");
         } catch (java.lang.IllegalArgumentException e) {
-            pagination.setPageCount(pgindex);
+            pagination_req.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
         return table_req;
@@ -3358,7 +3935,7 @@ public class PosController implements Initializable {
                 txt_table_hyst_count.setText(rootView.getChildren().size() + " elements");
             }
         } catch (java.lang.IllegalArgumentException e) {
-            pagination1.setPageCount(pgindex);
+//            pagination_sale.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
         return ttable_ventes_hyst;
@@ -3371,7 +3948,7 @@ public class PosController implements Initializable {
             table_inv_mag.setItems(FXCollections.observableArrayList(lsinventaire.subList(offset, limit)));
 
         } catch (java.lang.IllegalArgumentException e) {
-            pagination2.setPageCount(pgindex);
+//            pagination_inv.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
         return table_inv_mag;
@@ -3404,7 +3981,7 @@ public class PosController implements Initializable {
                 Vente v = new Vente(r);
                 Client clt = ClientDelegate.findAnonymousClient();//db.findWithAndClause(Client.class, new String[]{"phone"}, new String[]{"0000"});
                 v.setClientId(clt);
-                v.setDateVente(new Date());
+                v.setDateVente(LocalDateTime.now());
                 v.setDeviseDette("USD");
                 v.setLatitude(0d);
                 v.setLibelle("Déclassement de stock");
@@ -3443,6 +4020,7 @@ public class PosController implements Initializable {
         }
     }
 
+    @FXML
     public void clearCart() {
         lslgnventes.clear();
         btn_pay_now.setDisable(true);
@@ -3453,7 +4031,6 @@ public class PosController implements Initializable {
         return chbx_scancbar.isSelected();
     }
 
-    @FXML
     public void clearCart(Event e) {
         lslgnventes.clear();
         btn_pay_now.setDisable(lslgnventes.isEmpty());
@@ -3461,8 +4038,8 @@ public class PosController implements Initializable {
 
     public void fillProductInTable(final String cat) {
         new Thread(() -> {
-            List<ListViewItem> datalist =
-                    RecquisitionDelegate.populate();
+            List<ListViewItem> datalist
+                    = RecquisitionDelegate.populate();
             Platform.runLater(() -> {
                 list_mode_ls.setAll(datalist);
                 tbl_list_pro.setItems(list_mode_ls);
@@ -3470,16 +4047,16 @@ public class PosController implements Initializable {
         }).start();
     }
 
-
     List<ListViewItem> searcher = null;
 
     @FXML
     public void selectProduct(Event evt) {
-        ListViewItem sel = tbl_list_pro.getSelectionModel().getSelectedItem();
-        if (sel == null) {
+
+        newValue = tbl_list_pro.getSelectionModel().getSelectedItem();
+        if (newValue == null) {
             return;
         }
-        Produit p = sel.getProduit();
+        Produit p = newValue.getProduit();
         MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
         System.out.println("Test " + p.getCodebar());
         tbl_list_pro.getSelectionModel().clearSelection();
@@ -3706,10 +4283,10 @@ public class PosController implements Initializable {
 
             List<Vente> vts;
             if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                vts = VenteDelegate.findAllByDateInterval(Constants.Datetime.toUtilDate(dpk_debut_hyst.getValue()), Constants.Datetime.toUtilDate(dpk_fin_hyst.getValue()));
+                vts = VenteDelegate.findAllByDateInterval(dpk_debut_hyst.getValue(), dpk_fin_hyst.getValue());
             } else {
 
-                vts = VenteDelegate.findAllByDateInterval(Constants.Datetime.toUtilDate(dpk_debut_hyst.getValue()), Constants.Datetime.toUtilDate(dpk_fin_hyst.getValue()), region);
+                vts = VenteDelegate.findAllByDateInterval(dpk_debut_hyst.getValue(), dpk_fin_hyst.getValue(), region);
             }
 
             fillSaleHistory(vts);
@@ -3724,7 +4301,7 @@ public class PosController implements Initializable {
         if (dpk_debut_req.getValue() != null && dpk_fin_req.getValue() != null) {
             ObservableList<Recquisition> result = FXCollections.observableArrayList();
             for (Recquisition e : lsreq) {
-                if (Util.isDateBetween(Constants.Datetime.toUtilDate(dpk_debut_req.getValue()), Constants.Datetime.toUtilDate(dpk_fin_req.getValue()), e.getDate())) {
+                if (Util.isDateBetween(dpk_debut_req.getValue(), dpk_fin_req.getValue(), e.getDate().toLocalDate())) {
                     result.add(e);
                 }
             }
@@ -3733,6 +4310,49 @@ public class PosController implements Initializable {
             refreshRecqs(null);
         }
 
+    }
+
+    public boolean pass(double quantDem, Recquisition req, Produit choosenPro, Mesure choosenMesure) {
+        // Check available stock from StockDepotAgregate aggregate table
+        if (newValue == null) {
+            return false;
+        }
+        // String regionStock = req.getRegion() != null ? req.getRegion() : region;
+        Mesure mx = newValue.getMesureAchat();
+        double availableStock = newValue.getQuantiteRestant() * mx.getQuantContenu();
+
+        // Also check what's already in the current list to prevent double counting
+        double alreadyQueued = lslgnventes.stream()
+                .filter(d -> d.getProductId().getUid().equals(choosenPro.getUid()))
+                .mapToDouble(d -> d.getQuantite() * d.getMesureId().getQuantContenu()).sum();
+
+        double netAvailable = availableStock - alreadyQueued;
+
+        // Récupérer la mesure réelle du stocker pour les calculs de conversion
+        Mesure reel = MesureDelegate.findMesure(choosenMesure.getUid());
+        double qco = reel.getQuantContenu();
+
+        double alert = req.getStockAlert() * qco;
+        if (netAvailable <= alert) {
+            MainUI.notify(null, bundle.getString("warning"), bundle.getString("alertmess") + " de "
+                    + req.getStockAlert() + " " + reel.getDescription(), 5, "warning");
+        }
+        // Also calculate based on direct stocker-destocker difference for backward
+        // compatibility
+
+        double qinpc = quantDem * choosenMesure.getQuantContenu();
+        double dispo = netAvailable - qinpc;
+        double stab = alreadyQueued / choosenMesure.getQuantContenu();
+        double stockRestant = netAvailable / choosenMesure.getQuantContenu();
+
+        if (dispo < 0) {
+            MainUI.notify(null, bundle.getString("error"),
+                    String.format("Stock insuffisant. Disponible: %.2f %s (déjà dans la liste: %.2f)",
+                            stockRestant, choosenMesure.getDescription(), stab),
+                    5, "error");
+            return false;
+        }
+        return true;
     }
     double savedSum = 0;
 
@@ -3761,6 +4381,43 @@ public class PosController implements Initializable {
         return result;
     }
 
+    public void addDelivery(Livraison l) {
+        obl_livraisons_req.add(l);
+    }
+
+    public void addLivraison(Livraison liv) {
+        Livraison l = LivraisonDelegate.findLivraison(liv.getUid());
+        Fournisseur f = FournisseurDelegate.findFournisseur(liv.getFournId().getUid());
+        if (f != null) {
+            System.out.println("Fournisiiseur " + JsonUtil.jsonify(f).toString());
+        } else {
+            SuppliersController sup = SuppliersController.getInstance();
+            sup.addSupplier(f);
+        }
+        if (l == null) {
+            l = LivraisonDelegate.saveLivraison(liv);
+            addDelivery(l);
+        } else {
+            l = LivraisonDelegate.updateLivraison(liv);
+            int index = obl_livraisons_req.indexOf(l);
+            if (index != -1) {
+                obl_livraisons_req.set(index, liv);
+            } else {
+                addDelivery(l);
+            }
+        }
+
+    }
+
+    public void loadRegionsLocally() {
+        for (String key : regKeys()) {
+            String r = pref.get(key, "...");
+            if (!regions.contains(r)) {
+                regions.add(r);
+            }
+        }
+    }
+
     public void setDatabase() {
 
         kazisafe = KazisafeServiceFactory.createService(token);
@@ -3771,6 +4428,7 @@ public class PosController implements Initializable {
         ols_peremption = FXCollections.observableArrayList();
         categs = FXCollections.observableArrayList();
         lsreq = FXCollections.observableArrayList();
+        obl_livraisons_req = FXCollections.observableArrayList();
         cbx_categofilter.setItems(categs);
         tablePeremption.setItems(ols_peremption);
         cbx_lgnvt_retour.setItems(ols_ligvt_retour);
@@ -3786,12 +4444,15 @@ public class PosController implements Initializable {
         cbx_region_rupture.setItems(regions);
         prodx = FXCollections.observableArrayList();
         String meth = pref.get("meth", "FIFO");
-
+        loadRegionsLocally();
 //        Executors.newSingleThreadExecutor()
 //                .execute(() -> {
 //        JpaStorage dbase = JpaStorage.getInstance();
         obl_fournisseurs.setAll(FournisseurDelegate.findFournisseurs());
         categs.addAll(CategoryDelegate.findCategories());
+        List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate();
+        obl_livraisons_req.addAll(foundl);
+        list_livraison_req.setItems(obl_livraisons_req);
         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
             List<Recquisition> lsr = (List<Recquisition>) MainuiController.dataCache.get("pos-recq-" + role);
             if (lsr == null) {
@@ -3892,6 +4553,36 @@ public class PosController implements Initializable {
                 }
             });
 
+            list_livraison_req.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Livraison>() {
+                @Override
+                public void changed(ObservableValue<? extends Livraison> observable, Livraison oldValue,
+                        Livraison newValue) {
+                    livraison = newValue;
+                    if (livraison != null) {
+                        ObservableList<Recquisition> stockrs = FXCollections
+                                .observableArrayList(RecquisitionDelegate.findByReference(livraison.getReference()));
+                        lbl_livrez_recq.setText(livraison.getFournId().getNomFourn() + " : " + livraison.getNumPiece() + ", "
+                                + livraison.getDateLivr().toString() + " (" + stockrs.size() + " articles), Total : " + stockrs.stream()
+                                .mapToDouble(r -> r.getCoutAchat() * r.getQuantite()).sum());
+                        table_req.setItems(stockrs);
+                        txt_table_req_count.setText(String.format(bundle.getString("xitems"), stockrs.size()));
+
+                    }
+                }
+            });
+            ContextMenu ctx = new ContextMenu();
+            MenuItem addArt = new MenuItem("Ajouter un article");
+            ctx.getItems().add(addArt);
+            addArt.setOnAction((ActionEvent event) -> {
+                Livraison liv = list_livraison_req.getSelectionModel().getSelectedItem();
+                if (liv == null) {
+                    MainUI.notify(null, "Erreur", "Veuillez selectionner une livraison", 3, "error");
+                    return;
+                }
+                String prov = cbx_provenance_req.getValue();
+                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, new Object[]{tools.Constants.ACTION_CREATE, null, entreprise, prov, liv});
+            });
+            list_livraison_req.setContextMenu(ctx);
             tbcarts.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             tbcarts.getSelectionModel().selectedItemProperty()
                     .addListener(new ChangeListener<Vente>() {
@@ -3949,7 +4640,9 @@ public class PosController implements Initializable {
 //                                    }
 //                                    List<Produit> prod = prodx.subList(or, limit);
 //                                    addProductInTable(prod);
-////                            lisprod.addAll(prod);
+
+        
+        ////                            lisprod.addAll(prod);
 ////                            fillProducts(true, lisprod);
 //                                    Platform.runLater(new Runnable() {
 //                                        @Override
@@ -4014,7 +4707,7 @@ public class PosController implements Initializable {
             }
         });
 
-        kazisafe.getRegions(entr).enqueue(new Callback<List<String>>() {
+        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
             @Override
             public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
                 if (rspns.isSuccessful()) {
@@ -4030,6 +4723,7 @@ public class PosController implements Initializable {
                     int i = 0;
                     for (String reg : lreg) {
                         if (reg != null) {
+
                             pref.put("region" + (++i), reg);
                         }
                     }
@@ -4130,7 +4824,8 @@ public class PosController implements Initializable {
 //        });
         tbl_list_pro.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode().equals(KeyCode.ENTER)) {
-                ListViewItem newValue = tbl_list_pro.getSelectionModel().getSelectedItem();
+
+                newValue = tbl_list_pro.getSelectionModel().getSelectedItem();
                 if (newValue != null) {
                     Produit p = newValue.getProduit();
                     MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
@@ -4214,7 +4909,7 @@ public class PosController implements Initializable {
                     rfr.setAction("read");
                     rfr.setCount(1);
                     rfr.setCounter(1);
-                    Util.sync(rfr, "read",Tables.REFRESH);
+                    Util.sync(rfr, "read", Tables.REFRESH);
                 });
 
     }
@@ -4337,6 +5032,7 @@ public class PosController implements Initializable {
             }
             if (region == null) {
                 List<LigneVente> lvs = LigneVenteDelegate.findByReference(v.getUid());
+                System.out.println("Today - " + v.getDateVente() + " : " + lvs.size());
                 SaleItem si = new SaleItem();
                 si.setClient(v.getClientId());
                 si.setDate(v.getDateVente());
@@ -4347,14 +5043,14 @@ public class PosController implements Initializable {
                 si.setSaleAmountUsd(v.getMontantUsd());
                 si.setLibelle(v.getLibelle());
                 double paym = sumAllCurrency(v.getUid());
-                si.setSaleAmountCredit(v.getMontantDette() == null ? 0 : (v.getMontantDette()));
-                if (lvs != null) {
-                    si.setItems(lvs);
-                } else {
-                    List<LigneVente> lvt = LigneVenteDelegate.findByReference(v.getUid());
-                    //  Util.getLigneVenteForVente(jpas.findAll(), v.getUid());
-                    si.setItems(lvt);
-                }
+                si.setSaleAmountCredit(v.getMontantDette());
+//                if (lvs != null) {
+                si.setItems(lvs);
+//                } else {
+//                    List<LigneVente> lvt = LigneVenteDelegate.findByReference(v.getUid());
+//                    //  Util.getLigneVenteForVente(jpas.findAll(), v.getUid());
+//                    si.setItems(lvt);
+//                }
                 if (si.getItems().isEmpty()) {
                     List<LigneVente> items = getItemsForVente(v.getUid());
                     // System.err.println("Items value " + items.size());
@@ -4381,7 +5077,7 @@ public class PosController implements Initializable {
                     si.setLibelle(v.getLibelle());
                     double paym = sumAllCurrency(v.getUid());
                     System.out.println("Dette OKKK " + v.getMontantDette() + " " + v.getReference());
-                    si.setSaleAmountCredit(v.getMontantDette() == null ? 0 : (v.getMontantDette() - paym));
+                    si.setSaleAmountCredit(v.getMontantDette());
                     if (lvs != null) {
                         si.setItems(lvs);
                     } else {
@@ -4559,7 +5255,7 @@ public class PosController implements Initializable {
                     String exp = String.valueOf(good[11]);
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                     Date ex = sdf.parse(String.valueOf(exp));
-                    im.setExpiry(ex);
+                    im.setExpiry(Constants.Datetime.toLocalDate(ex));
                 } catch (ParseException ex) {
                     Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -4574,7 +5270,7 @@ public class PosController implements Initializable {
                 continue;
             }
             Set<PrixDeVente> prices = PrixDeVenteDelegate.findPricesSetForRecq(req);
-            String px=stringfyprices(prices);
+            String px = stringfyprices(prices);
             im.setPrixDeVente(px);
             double rest = Double.parseDouble(String.valueOf(good[7]));
             im.setLocalisation(getLocation(pro.getUid()));
@@ -4598,20 +5294,23 @@ public class PosController implements Initializable {
             }
         });
     }
-    private String stringfyprices(Set<PrixDeVente> prices){
-        if(prices.isEmpty())return "";
-        StringBuilder sb=new StringBuilder();
+
+    private String stringfyprices(Set<PrixDeVente> prices) {
+        if (prices.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
         sb.append("[");
         for (PrixDeVente price : prices) {
-           sb.append(price.getQmin())
-                   .append("-")
-                   .append(price.getQmax())
-                   .append(":")
-                   .append(price.getPrixUnitaire())
-                   .append(",");
+            sb.append(price.getQmin())
+                    .append("-")
+                    .append(price.getQmax())
+                    .append(":")
+                    .append(price.getPrixUnitaire())
+                    .append(",");
         }
-        if(sb.toString().endsWith(",")){
-          sb.replace(sb.length()-1,sb.length(),"");
+        if (sb.toString().endsWith(",")) {
+            sb.replace(sb.length() - 1, sb.length(), "");
         }
         sb.append("]");
         return sb.toString();
@@ -4625,7 +5324,7 @@ public class PosController implements Initializable {
         Vente v = VenteDelegate.findVente(uid);
         if (v != null) {
             if (v.getEcheance() != null) {
-                Double rst = VenteDelegate.sumPayedCredit(v.getUid() + "-" + v.getReference(), taux2change);
+                Double rst = VenteDelegate.sumPayedCredit("F-" + v.getReference(), taux2change);
                 return rst == null ? 0 : rst;
             }
         }
@@ -4681,7 +5380,8 @@ public class PosController implements Initializable {
         }
         for (LigneVente lv : sorties) {
             Mesure mz = lv.getMesureId();
-            Mesure m = MesureDelegate.findMesure(mz.getUid());
+
+            Mesure m = (mz == null) ? mesure1(idPro) : MesureDelegate.findMesure(mz.getUid());
             if (m == null) {
                 List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idPro);//db.findByProduitAsc(Mesure.class, idPro, "quantContenu");
                 m = mesures.get(0);
@@ -4702,6 +5402,12 @@ public class PosController implements Initializable {
         return rest <= alert;
     }
 
+    private Mesure mesure1(String idpro) {
+        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idpro);//db.findByProduitAsc(Mesure.class, idPro, "quantContenu");
+        return (mesures.isEmpty()) ? null : mesures.get(0);
+
+    }
+
     /**
      * Cette fonction test si un produit sera expiree dans 6 mois ou pas
      *
@@ -4720,11 +5426,11 @@ public class PosController implements Initializable {
         if (last == null) {
             return false;
         }
-        Date expDate = last.getDateExpiry();
+        LocalDate expDate = last.getDateExpiry();
         if (expDate == null) {
             return false;
         }
-        long time = expDate.getTime();
+        long time = Constants.Datetime.dateInMillis(expDate);
         long now = System.currentTimeMillis();
         long sixMonth = 3600000 * 24 * 30 * 6;
         long timeDiff = time - now;
@@ -4751,4 +5457,919 @@ public class PosController implements Initializable {
         return selectedCart;
     }
 
+    @FXML
+    private void refreshRecquisition(Event et) {
+        refreshRecqs(et);
+    }
+
+    private void saveRetourDepot(ActionEvent et) {
+        saveRetourAuDepot(et);
+    }
+
+    @FXML
+    private void clearArticles(MouseEvent et) {
+//        oblcart.clear();
+//        table_cart.setItems(oblcart);
+    }
+
+    @FXML
+    private void goToAccessories(MouseEvent et) {
+//        MainUI.getPage(kazisafe, "accessories.fxml", null);
+    }
+
+    @FXML
+    private void goToHistory(MouseEvent et) {
+//        MainUI.getPage(kazisafe, "history.fxml", null);
+    }
+
+    @FXML
+    private void refreshVentesHttp(MouseEvent et) {
+        refreshSales(et);
+    }
+
+    @FXML
+    private void saleHere(ActionEvent et) {
+        // Placeholder
+    }
+
+    @FXML
+    private void saveCompter(ActionEvent et) {
+        Inventaire inv = cbx_inventaire_compter.getValue();
+        if (inv == null) {
+            MainUI.notify(null, "Erreur", "Veuillez d'abord sélectionner un inventaire.", 3, "error");
+            return;
+        }
+        if (!"en cours...".equalsIgnoreCase(inv.getEtat())) {
+            MainUI.notify(null, "Action impossible", "L'inventaire n'est pas en état 'en cours...'.", 3, "error");
+            return;
+        }
+
+        Produit p = cbx_produit_compter.getValue();
+        Mesure m = cbx_mesure_compter.getValue();
+        if (p == null || m == null || tf_quantite_compter.getText().isEmpty()) {
+            MainUI.notify(null, "Erreur", "Veuillez remplir les champs obligatoires (Produit, Mesure, Quantité).", 3, "error");
+            return;
+        }
+
+        try {
+            Compter c = new Compter();
+            c.setUid(DataId.generate());
+            c.setInventaireId(inv);
+            c.setProductId(p);
+            c.setMesureId(m);
+            c.setQuantite(Double.parseDouble(tf_quantite_compter.getText()));
+            c.setNumlot(tf_numlot_compter.getText());
+            c.setRegion(region);
+            c.setDateCount(LocalDateTime.now());
+            c.setObservation(input_observ_comptage.getText());
+            c.setCoutAchat(tf_coutachat_compter.getText().isEmpty() ? 0 : Double.parseDouble(tf_coutachat_compter.getText()));
+            if (dpk_date_exp_compter.getValue() != null) {
+                c.setDateExpiration(dpk_date_exp_compter.getValue());
+            }
+
+            // Calcul theorique tire de StockAgregate
+            data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p, inv.getRegion(), LocalDate.now(), LocalDate.now());
+
+            double theorik = (sa != null && sa.getFinalQuantity() != null) ? sa.getFinalQuantity() : 0.0;
+            c.setQuantiteTheorik(theorik);
+
+            double ecart = c.getQuantite() - (theorik / m.getQuantContenu());
+            c.setEcart(ecart);
+
+            // Mettre a jour le total ecart en valeur
+            double existingVal = inv.getValeurTotalEcart() != null ? inv.getValeurTotalEcart() : 0.0;
+            inv.setValeurTotalEcart(existingVal + (ecart * c.getCoutAchat()));
+            delegates.InventaireDelegate.updateInventaire(inv);
+            saveInventaireByHttp(inv);
+
+            Compter saved = CompterDelegate.createCompter(c);
+            obl_comptages.add(0, comptageRender(saved));
+            Mesure mz = saved.getMesureId();
+            double cau = saved.getCoutAchat() / mz.getQuantContenu();
+            RecquisitionDelegate.rectifyStock(saved.getProductId(), LocalDate.now(), LocalDate.now(), region, cau);
+            MainUI.notify(null, "Succès", "Comptage enregistré.", 2, "info");
+
+            // Clear inputs
+            tf_quantite_compter.clear();
+            input_observ_comptage.clear();
+        } catch (NumberFormatException ex) {
+            MainUI.notify(null, "Erreur format", "Veuillez vérifier les valeurs numériques.", 3, "error");
+        }
+    }
+
+    @FXML
+    private void saveInventaire(ActionEvent et) {
+        if (!canCreateInventory.get()) {
+            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de créer ou modifier un inventaire.", 3, "error");
+            return;
+        }
+
+        if (tf_code_inv_compter.getText().isEmpty() || cbx_etat_inv_compter.getValue() == null) {
+            MainUI.notify(null, "Erreur", "Le code et l'état sont obligatoires.", 3, "error");
+            return;
+        }
+
+        Inventaire inv = cbx_inventaire_compter.getValue();
+        boolean isUpdate = inv != null && inv.getUid() != null;
+
+        if (!isUpdate) {
+            inv = new Inventaire();
+            inv.setUid(DataId.generate());
+        }
+
+        inv.setCodeInventaire(tf_code_inv_compter.getText());
+        inv.setEtat(cbx_etat_inv_compter.getValue());
+        inv.setRegion(cbx_region_inv_compter.getValue() == null ? region : cbx_region_inv_compter.getValue());
+        inv.setComment(tf_comment_inv_compter.getText());
+        inv.setDateDebut(dpk_datedebut_inv_compter.getValue());
+        inv.setDateFin(dpk_datefin_inv_compter.getValue());
+
+        if (isUpdate) {
+            InventaireDelegate.updateInventaire(inv);
+            saveInventaireByHttp(inv);
+            MainUI.notify(null, "Succès", "Inventaire mis à jour.", 2, "info");
+        } else {
+            Inventaire saved = InventaireDelegate.createInventaire(inv);
+            obl_inventaires.add(0, saved);
+            saveInventaireByHttp(saved);
+            cbx_inventaire_compter.getSelectionModel().select(saved);
+            MainUI.notify(null, "Succès", "Inventaire créé.", 2, "info");
+        }
+    }
+
+    private void initInventoryTab() {
+        obl_inventaires = FXCollections.observableArrayList();
+        cbx_inventaire_compter.setItems(obl_inventaires);
+        obl_comptages = FXCollections.observableArrayList();
+        states = FXCollections.observableArrayList("Non commencé", "En cours...", "Terminé");
+
+        canCreateInventory.set(PermissionDelegate.hasPermission(PermitTo.CREATE_INVENTORY)
+                || role.contains("ALL_ACCESS") || role.equals(Role.Trader.name()));
+
+        cbx_etat_inv_compter.setItems(states);
+        cbx_region_inv_compter.setItems(regions);
+
+        MainUI.setPattern(dpk_date_today_compter);
+        MainUI.setPattern(dpk_date_exp_compter);
+        MainUI.setPattern(dpk_datefin_inv_compter);
+        MainUI.setPattern(dpk_datedebut_inv_compter);
+        dpk_date_today_compter.setValue(LocalDate.now());
+
+        // Setup table
+        tbl_comptage_inv.setItems(obl_comptages);
+        col_code_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getCodeInventaire()));
+        col_etat_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getEtatInventaire()));
+        col_debut_date_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDebutInventair().toString()));
+        col_date_today_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDateCompter().toString()));
+        col_produit_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getProduit().getNomProduit()));
+        col_stk_theorik_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantiteTheorik()));
+        col_quantite_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantite()));
+        col_quant_ecart_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getEcart()));
+        col_valeur_unit_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getCoutAchat()));
+
+        col_valeur_tot_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantite() * cellData.getValue().getCoutAchat()));
+        col_val_ecart_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getEcart() * cellData.getValue().getCoutAchat()));
+        col_lot_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getNumlot()));
+        col_date_perem_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDateExpiration() != null ? cellData.getValue().getDateExpiration().toString() : ""));
+        col_ecart_obs_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getObservation()));
+        this.tbl_comptage_inv.getSelectionModel().selectedItemProperty().addListener((ov, t, t1) -> {
+            if (t1 != null) {
+                Inventaire inv = InventaireDelegate.findInventaireByCode((String) t1.getCodeInventaire());
+                this.tf_code_inv_compter.setText(t1.getCodeInventaire());
+                this.cbx_etat_inv_compter.setValue(t1.getEtatInventaire());
+                this.cbx_region_inv_compter.setValue(inv.getRegion());
+                this.dpk_datedebut_inv_compter.setValue(inv.getDateDebut());
+                this.dpk_datefin_inv_compter.setValue(inv.getDateFin());
+                this.tf_comment_inv_compter.setText(inv.getComment());
+                this.cbx_inventaire_compter.setValue(inv);
+                this.dpk_date_today_compter.setValue(t1.getDateCompter().toLocalDate());
+                this.dpk_date_exp_compter.setValue(t1.getDateExpiration());
+                this.cbx_produit_compter.setValue(t1.getProduit());
+                this.cbx_mesure_compter.setValue(t1.getMesure());
+                this.tf_coutachat_compter.setText(Double.toString(t1.getCoutAchat()));
+                this.tf_numlot_compter.setText(t1.getNumlot());
+                this.tf_quantite_compter.setText(Double.toString(t1.getQuantite()));
+                this.choosenCompter = CompterDelegate.findCompterByInventaireAndProduit(inv.getUid(), t1.getProduit().getUid());
+            }
+        });
+
+        // Converters
+        cbx_inventaire_compter.setConverter(new StringConverter<Inventaire>() {
+            @Override
+            public String toString(Inventaire o) {
+                return o == null ? "" : o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " (" + o.getEtat() + ")".toUpperCase();
+            }
+
+            @Override
+            public Inventaire fromString(String s) {
+                return cbx_inventaire_compter.getItems()
+                        .stream()
+                        .filter(o -> (o != null && (o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " (" + o.getEtat() + ")").toUpperCase()
+                        .equalsIgnoreCase(s.toUpperCase())))
+                        .findFirst().orElse(null);
+            }
+        });
+        cbx_produit_compter.setConverter(new StringConverter<Produit>() {
+            @Override
+            public String toString(Produit object) {
+                return object == null ? null : object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                        + (object.getModele() == null ? "" : object.getModele()) + " " + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar();
+            }
+
+            @Override
+            public Produit fromString(String string) {
+                return cbx_produit_compter.getItems()
+                        .stream()
+                        .filter(object -> (object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                        + (object.getModele() == null ? "" : object.getModele()) + " " + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar())
+                        .equalsIgnoreCase(string))
+                        .findFirst().orElse(null);
+            }
+        });
+        cbx_mesure_compter.setConverter(new StringConverter<Mesure>() {
+            @Override
+            public String toString(Mesure object) {
+                return object == null ? null : object.getDescription();
+            }
+
+            @Override
+            public Mesure fromString(String string) {
+                return cbx_mesure_compter.getItems()
+                        .stream()
+                        .filter(v -> (v.getDescription())
+                        .equalsIgnoreCase(string))
+                        .findFirst().orElse(null);
+            }
+        });
+
+        // Listeners
+        cbx_inventaire_compter.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                tf_code_inv_compter.setText(newVal.getCodeInventaire());
+                cbx_etat_inv_compter.setValue(newVal.getEtat());
+                cbx_region_inv_compter.setValue(newVal.getRegion());
+                tf_comment_inv_compter.setText(newVal.getComment());
+                dpk_datedebut_inv_compter.setValue(newVal.getDateDebut());
+                dpk_datefin_inv_compter.setValue(newVal.getDateFin());
+                // Load associated counts
+                List<Compter> lcs = CompterDelegate.findCompterBYInventaire(newVal.getUid());
+                obl_comptages.setAll(comptageRender(lcs, newVal));
+                txt_valeur_global_compter.setText("Valeur comptee : " + newVal.getValeurTotal());
+                txt_valeurtotal_ecart_compter.setText("Ecart en valeur : " + newVal.getValeurTotalEcart());
+            }
+        });
+
+        cbx_produit_compter.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                cbx_mesure_compter.setItems(FXCollections.observableArrayList(MesureDelegate.findAscSortedByQuantWithProduit(newVal.getUid())));
+                cbx_mesure_compter.getSelectionModel().selectFirst();
+                String meth = pref.get("meth", "FIFO");
+                Recquisition rq = RecquisitionDelegate.getLastEntry(meth, newVal, region);
+                tf_numlot_compter.setText(rq.getNumlot());
+                tf_coutachat_compter.setText(String.valueOf(rq.getCoutAchat()));
+                if (rq.getDateExpiry() != null) {
+                    dpk_date_exp_compter.setValue(rq.getDateExpiry());
+                }
+                // Update theoretical stock label from StockAgregate
+                data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(newVal, region, LocalDate.now(), LocalDate.now());
+                double theorik = (sa != null && sa.getFinalQuantity() != null) ? sa.getFinalQuantity() : 0.0;
+                txt_stkheorik_comptage.setText("Theor.: " + theorik);
+                updateEcartLive();
+            }
+        });
+
+        tf_quantite_compter.textProperty().addListener((obs, oldV, newV) -> updateEcartLive());
+        cbx_mesure_compter.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> updateEcartLive());
+        NotificationHandler.setOnDataSyncListener(basemodel -> {
+            int index = -2;
+            if (basemodel instanceof Inventaire) {
+                Inventaire inventaire = (Inventaire) basemodel;
+                if (this.obl_inventaires == null) {
+                    return;
+                }
+                index = this.obl_inventaires.indexOf(inventaire);
+                if (index == -1) {
+                    this.obl_inventaires.add(inventaire);
+                } else {
+                    this.obl_inventaires.set(index, inventaire);
+                }
+                if (inventaire.getEtat().equalsIgnoreCase("Terminé")) {
+                    CompterDelegate.closeInventoryByFixingNoCounts(inventaire);
+                }
+            } else if (basemodel instanceof Compter) {
+                Compter compter = (Compter) basemodel;
+
+                if (this.obl_comptages == null) {
+                    return;
+                }
+                ComptageItem ci = this.comptageRender(compter);
+                index = this.obl_comptages.indexOf(ci);
+                if (index == -1) {
+                    this.obl_comptages.add(ci);
+                } else {
+                    this.obl_comptages.set(index, ci);
+                }
+                System.out.println("incoming expiry " + String.valueOf(compter.getDateExpiration()));
+            } else if (basemodel instanceof Recquisition) {
+                Recquisition req = (Recquisition) basemodel;
+                if (!PrixDeVenteDelegate.findPricesForRecq((String) req.getUid()).isEmpty()) {
+                    this.refreshPosUi();
+                }
+            } else if (basemodel instanceof PrixDeVente) {
+                PrixDeVente pv = (PrixDeVente) basemodel;
+                if (RecquisitionDelegate.findRecquisition((String) pv.getRecquisitionId().getUid()) != null) {
+                    this.refreshPosUi();
+                }
+            } else if (basemodel instanceof LigneVente) {
+                LigneVente i = (LigneVente) basemodel;
+                this.refreshPosUi();
+            }
+            System.out.println(">>>>>>>>>>> index " + index + ">>>>>>>>>>>>>>>>uid enregirte venant de synchronization = " + basemodel.getType());
+        });
+
+        // Load data
+        obl_inventaires.setAll(InventaireDelegate.findInventaires(region));
+        obl_inventaires.add(null);
+//        cbx_inventaire_compter.setItems(obl_inventaires);
+        cbx_produit_compter.setItems(FXCollections.observableArrayList(ProduitDelegate.findProduits()));
+        new ComboBoxAutoCompletion<>(cbx_produit_compter);
+    }
+
+    private void updateEcartLive() {
+        if (txt_stkheorik_comptage.getText() == null || !txt_stkheorik_comptage.getText().contains(":")) {
+            return;
+        }
+        try {
+            double theorik = Double.parseDouble(txt_stkheorik_comptage.getText().split(":")[1].trim());
+            double qte = tf_quantite_compter.getText().isEmpty() ? 0 : Double.parseDouble(tf_quantite_compter.getText());
+            Mesure m = cbx_mesure_compter.getValue();
+            if (m != null && m.getQuantContenu() != null && m.getQuantContenu() > 0) {
+                double ecart = qte - (theorik / m.getQuantContenu());
+                txt_ecart_comptage.setText(String.format("Ecart: %.2f", ecart));
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private void saveInventaireByHttp(data.Inventaire inv) {
+        if (kazisafe == null) {
+            return;
+        }
+        java.util.concurrent.Executors.newSingleThreadExecutor().submit(() -> {
+            int attempt = 0;
+            while (attempt < 5) {
+                try {
+                    retrofit2.Response<data.Inventaire> response = kazisafe.createInventair(inv).execute();
+                    if (response.code() == 200 || response.code() == 201) {
+                        break;
+                    }
+                } catch (java.io.IOException e) {
+                }
+                attempt++;
+                try {
+                    java.util.concurrent.TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+    }
+
+    @FXML
+    public void saveCompter(Event e) {
+        if (cbx_inventaire_compter.getValue() == null || this.tf_coutachat_compter.getText().isBlank() || this.tf_quantite_compter.getText().isBlank() || this.tf_numlot_compter.getText().isBlank()) {
+            MainUI.notify(null, (String) "", (String) "Completer les champs non facultatives du cote comptage puis reessayer", (long) 5L, (String) "error");
+            return;
+        }
+        if (cbx_inventaire_compter.getValue().getEtat().equals("Terminé")) {
+            MainUI.notify(null, (String) "", (String) "Impossible d'ajouter un pointage sur un inventaire cloture", (long) 4L, (String) "error");
+            return;
+        }
+        if (cbx_inventaire_compter.getValue().getEtat().equalsIgnoreCase("Non commencé")) {
+            cbx_inventaire_compter.getValue().setEtat("En cours...");
+            InventaireDelegate.updateInventaire(cbx_inventaire_compter.getValue());
+            this.syncInventaireHttp(cbx_inventaire_compter.getValue());
+            MainUI.notify(null, "", "Inventaire physique marque comme en cours...", 4L, "info");
+        }
+        Inventaire inv = this.cbx_inventaire_compter.getValue();
+        Mesure m = this.cbx_mesure_compter.getValue();
+        Produit p = this.cbx_produit_compter.getValue();
+        if (this.choosenCompter == null) {
+            this.choosenCompter = new Compter();
+            this.choosenCompter.setCoutAchat(Double.parseDouble(this.tf_coutachat_compter.getText()));
+            this.choosenCompter.setDateCount(LocalDateTime.now());
+            this.choosenCompter.setDateExpiration((LocalDate) this.dpk_date_exp_compter.getValue());
+            this.choosenCompter.setInventaireId(inv);
+            this.choosenCompter.setMesureId(m);
+            this.choosenCompter.setQuantite(Double.parseDouble(this.tf_quantite_compter.getText()));
+            if (dpk_date_exp_compter.getValue() != null) {
+                choosenCompter.setDateExpiration(dpk_date_exp_compter.getValue());
+            }
+            // Calcul theorique tire de StockAgregate
+            StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p, cbx_inventaire_compter.getValue().getRegion(), LocalDate.now(), LocalDate.now());
+
+            double theorik = (sa == null) ? 0.0 : (sa.getFinalQuantity() == null) ? 0.0 : sa.getFinalQuantity();
+            double th = (theorik / m.getQuantContenu());
+            double ecart = choosenCompter.getQuantite() - th;
+            choosenCompter.setEcart(ecart);
+
+            // Mettre a jour le total ecart en valeur
+            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null ? inv.getValeurTotalEcart() : 0.0;
+            cbx_inventaire_compter.getValue().setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
+            InventaireDelegate.updateInventaire(cbx_inventaire_compter.getValue());
+            saveInventaireByHttp(cbx_inventaire_compter.getValue());
+            this.choosenCompter.setQuantiteTheorik(th);
+            this.choosenCompter.setObservation(this.input_observ_comptage.getText());
+            this.choosenCompter.setNumlot(this.tf_numlot_compter.getText());
+            this.choosenCompter.setProductId(p);
+            this.choosenCompter.setRegion(this.cbx_region_inv_compter.getValue());
+            this.choosenCompter.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
+            List<Compter> cpts = CompterDelegate.findCompterForProduct(p.getUid(), inv.getUid());
+
+            Compter created = CompterDelegate.createCompter(choosenCompter);
+            if (created != null) {
+                ComptageItem crender = this.comptageRender(created);
+                if (crender == null) {
+                    return;
+                }
+                this.obl_comptages.add(0, crender);
+            }
+            for (int i = 0; i < cpts.size(); ++i) {
+                Compter get = (Compter) cpts.get(i);
+                if (i == cpts.size() - 1) {
+                    get.setEcart(created.getEcart());
+                } else {
+                    get.setEcart(created.getEcart());
+                }
+                Compter updated = CompterDelegate.updateCompter((Compter) get);
+                this.syncCompterHttp(updated);
+            }
+        } else {
+            this.choosenCompter.setCoutAchat(Double.parseDouble(this.tf_coutachat_compter.getText()));
+            this.choosenCompter.setDateCount(LocalDateTime.now());
+            this.choosenCompter.setRegion(cbx_region_inv_compter.getValue());
+            this.choosenCompter.setQuantite(Double.parseDouble(this.tf_quantite_compter.getText()));
+
+            if (dpk_date_exp_compter.getValue() != null) {
+                choosenCompter.setDateExpiration(dpk_date_exp_compter.getValue());
+            }
+
+            // Calcul theorique tire de StockAgregate
+            StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p,
+                    choosenCompter.getRegion(),
+                    LocalDate.now(),
+                    LocalDate.now());
+
+            double theorik = (sa == null) ? 0.0 : (sa.getFinalQuantity() == null) ? 0.0 : sa.getFinalQuantity();
+            double th = (theorik / m.getQuantContenu());
+            double ecart = choosenCompter.getQuantite() - th;
+            choosenCompter.setEcart(ecart);
+
+            // Mettre a jour le total ecart en valeur
+            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null ? inv.getValeurTotalEcart() : 0.0;
+            cbx_inventaire_compter.getValue().setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
+            delegates.InventaireDelegate.updateInventaire(cbx_inventaire_compter.getValue());
+            saveInventaireByHttp(cbx_inventaire_compter.getValue());
+            this.choosenCompter.setInventaireId(inv);
+            this.choosenCompter.setMesureId(m);
+            this.choosenCompter.setNumlot(this.tf_numlot_compter.getText());
+            this.choosenCompter.setProductId(this.cbx_produit_compter.getValue());
+            this.choosenCompter.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
+            Compter created = CompterDelegate.updateCompter(this.choosenCompter);
+            if (created != null) {
+                int index = obl_comptages.indexOf(choosenCompter);
+                ComptageItem crender = this.comptageRender(created);
+                if (crender == null) {
+                    return;
+                }
+                this.obl_comptages.set(index, crender);
+                MainUI.notify(null, "", "Inventaire enregistre avec succes", 4L, "info");
+            }
+            this.syncCompterHttp(created);
+        }
+//        this.tf_quantite_compter.clear();
+//        this.tf_numlot_compter.clear();
+//        double cau = choosenCompter.getCoutAchat() / m.getQuantContenu();
+//        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), this.region, cau);
+        String dev = this.pref.get("mainCur", "USD");
+        this.txt_valeur_global_compter.setText("Valeur totale compt\u00e9e :" + this.obl_comptages.stream().mapToDouble(l -> {
+            double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+            return val;
+        }).sum() + " " + dev);
+        this.txt_valeurtotal_ecart_compter.setText("Valeur totale \u00e9cart :" + this.obl_comptages.stream().mapToDouble(l -> {
+            double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+            return val;
+        }).sum() + " " + dev);
+        choosenCompter = null;
+    }
+
+    public void refreshPoints(Event e) {
+        Executors.newSingleThreadExecutor().submit(() -> {
+            if (cbx_inventaire_compter.getValue() == null) {
+                MainUI.notify(null, (String) "Erreur", (String) "Selectionner un inventaire puis reessayer!", (long) 4L, (String) "error");
+                return;
+            }
+            this.obl_comptages.clear();
+            List<Compter> lscs = CompterDelegate.findCompterBYInventaire(cbx_inventaire_compter.getValue().getUid());
+            for (Compter lsc : lscs) {
+                ComptageItem cit = this.comptageRender(lsc);
+                this.obl_comptages.add(cit);
+            }
+        });
+    }
+
+    @FXML
+    public void cloturerInventaire(Event e) {
+        this.txt_cloture_message_compter.setVisible(true);
+        this.progress_cloture_inv_compter.setVisible(true);
+        Executors.newSingleThreadExecutor().submit(() -> {
+            Inventaire inv = cbx_inventaire_compter.getValue();
+            if (inv == null) {
+                return;
+            }
+            if (!inv.getEtat().equalsIgnoreCase("Terminé")) {
+                inv.setEtat("Terminé");
+                inv.setDateFin(LocalDate.now());
+                double valeurTotal = this.obl_comptages.stream().mapToDouble(l -> {
+                    double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    return val;
+                }).sum();
+                double valeurTotalEcart = this.obl_comptages.stream().mapToDouble(l -> {
+                    double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    return val;
+                }).sum();
+                inv.setValeurTotal(valeurTotal);
+                inv.setValeurTotalEcart(valeurTotalEcart);
+                InventaireDelegate.updateInventaire(inv);
+                this.syncInventaireHttp(inv);
+                CompterDelegate.closeInventoryByFixingNoCounts(inv);
+            }
+            Platform.runLater(() -> {
+                this.txt_cloture_message_compter.setVisible(false);
+                this.progress_cloture_inv_compter.setVisible(false);
+                this.showLastInventory();
+                MainUI.notify(null, "Succès", "Inventaire clôturé.", 2, "info");
+            });
+        });
+    }
+
+    @FXML
+    public void createNewProductIfnotExist(Event e) {
+        MainUI.floatDialog((String) "produit_item.fxml", (int) 600, (int) 790, (String) this.token, (Kazisafe) this.kazisafe, (Object[]) new Object[]{this.entreprise, null});
+    }
+
+    private void syncInventaireHttp(Inventaire inv) {
+        Executors.newCachedThreadPool().submit(() -> this.saveInvHttp(inv));
+    }
+
+    private boolean saveInvHttp(Inventaire inv) {
+        try {
+            if (!NetLoockup.NETWORK_STATUS_ON) {
+                return false;
+            }
+            Response syncinv = this.kazisafe.createInventaire(inv).execute();
+            System.out.println("inventaire sync response " + String.valueOf(syncinv));
+            if (syncinv.isSuccessful()) {
+                System.out.println("Inventaire synced..OK");
+                return true;
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return false;
+    }
+
+    private void syncCompterHttp(Compter compter) {
+        Executors.newCachedThreadPool().submit(() -> {
+            try {
+                int retries = 0;
+                while (retries < 5) {
+                    Response syncinv = this.kazisafe.createCompter(compter).execute();
+                    System.out.println("compter sync response " + String.valueOf(syncinv));
+                    if (syncinv.isSuccessful()) {
+                        System.out.println("Compter synced..OK");
+                        break;
+                    }
+                    if (syncinv.code() == 417) {
+                        String msg = syncinv.errorBody().string();
+                        if (msg.contains("Inventaire")) {
+                            this.saveInvHttp(InventaireDelegate.findInventaire((String) compter.getInventaireId().getUid()));
+                        } else {
+                            this.sendProduitIfNotExist(compter.getProductId(), MesureDelegate.findMesureByProduit((String) compter.getProductId().getUid()));
+                        }
+                    }
+                    ++retries;
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(200L * (long) Math.pow(2.0, retries));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            } catch (IOException ex) {
+                Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        });
+    }
+
+    private void sendProduitIfNotExist(Produit produit, List<Mesure> mesures) {
+        byte[] imageBytes = produit.getImage();
+        if (imageBytes == null) {
+            imageBytes = this.loadDefaultImage();
+        }
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+        this.saveProductByHttpSafely(produit, base64Image, mesures);
+    }
+
+    private byte[] loadDefaultImage() {
+        byte[] byArray;
+        block8:
+        {
+            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+            try {
+                byArray = FileUtils.readAllBytes((InputStream) is);
+                if (is == null) {
+                    break block8;
+                }
+            } catch (Throwable throwable) {
+                try {
+                    if (is != null) {
+                        try {
+                            is.close();
+                        } catch (Throwable throwable2) {
+                            throwable.addSuppressed(throwable2);
+                        }
+                    }
+                    throw throwable;
+                } catch (IOException e) {
+                    System.err.println("Erreur lors du chargement de l'image par d\u00e9faut" + e.getMessage());
+                    return new byte[0];
+                }
+            } finally {
+                try {
+                    is.close();
+                } catch (IOException ex) {
+                    Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+
+        }
+        return byArray;
+    }
+
+    @FXML
+    private void deleteInventory(ActionEvent event) {
+        if (!canCreateInventory.get()) {
+            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de supprimer un inventaire.", 3, "error");
+            return;
+        }
+        if (cbx_inventaire_compter.getValue() != null) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer l'inventaire physique ?", new ButtonType[]{ButtonType.YES, ButtonType.CANCEL});
+            alert.setTitle("Attention!");
+            alert.setHeaderText(null);
+            Optional showAndWait = alert.showAndWait();
+            if (showAndWait.get() == ButtonType.YES) {
+                if (this.role.equals(Role.Trader.name())
+                        | this.role.equals(Role.Manager_ALL_ACCESS.name())) {
+                    List counts = CompterDelegate.findCompterBYInventaire((String) cbx_inventaire_compter.getValue().getUid());
+                    if (counts.isEmpty()) {
+                        InventaireDelegate.deleteInventaire((Inventaire) cbx_inventaire_compter.getValue());
+                        MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s", (long) 4L, (String) "info");
+                    } else {
+                        MainUI.notify(null, (String) "Erreur", (String) "Cet inventaire n'est pas vide", (long) 4L, (String) "erreur");
+                    }
+                } else {
+                    MainUI.notify(null, (String) "Impossible de supprimer", (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression", (long) 2L, (String) "warn");
+                }
+            }
+        }
+    }
+
+    @FXML
+    private void deleteCompter(ActionEvent event) {
+        if (this.choosenCompter != null) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer ce comptage ?", new ButtonType[]{ButtonType.YES, ButtonType.CANCEL});
+            alert.setTitle("Attention!");
+            alert.setHeaderText(null);
+            Optional showAndWait = alert.showAndWait();
+            if (showAndWait.get() == ButtonType.YES) {
+                if (PermissionDelegate.hasPermission((PermitTo) PermitTo.CREATE_INVENTORY)) {
+                    Inventaire parent = this.choosenCompter.getInventaireId();
+                    CompterDelegate.deleteCompter((Compter) this.choosenCompter);
+                    ComptageItem crender = this.comptageRender(this.choosenCompter);
+                    if (crender == null) {
+                        return;
+                    }
+                    this.obl_comptages.remove(crender);
+                    double newvalue = this.obl_comptages.stream().mapToDouble(l -> l.getCoutTotal()).sum();
+                    parent.setValeurTotal(newvalue);
+                    InventaireDelegate.updateInventaire((Inventaire) parent);
+                    this.syncInventaireHttp(parent);
+                    MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s", (long) 4L, (String) "info");
+                } else {
+                    MainUI.notify(null, (String) "Impossible de supprimer", (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression", (long) 2L, (String) "warn");
+                }
+            }
+        }
+    }
+
+    @FXML
+    private void addRequestItem(Event et) {
+        Livraison liv = null;
+        if (tabpane_req_left.getSelectionModel().getSelectedIndex() == 0) {
+            liv = list_livraison_req.getSelectionModel().getSelectedItem();
+            if (liv == null) {
+                MainUI.notify(null, "Erreur", "Veuillez selectionner une livraison", 3, "error");
+                return;
+            }
+            String prov = cbx_provenance_req.getValue();
+            MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, new Object[]{tools.Constants.ACTION_CREATE, null, entreprise, prov, liv});
+        } else {
+            MainUI.notify(null, "Erreur", "Veuillez selectionner une livraison dans l'onglet Livraisons", 3, "error");
+        }
+    }
+
+    @FXML
+    private void gotoSupplier(Event e) {
+        MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, entreprise,
+                choosenSupply);
+    }
+
+    @FXML
+    private void createNewProductIfnotExist(ActionEvent et) {
+        // Placeholder
+    }
+
+    @FXML
+    private void recloturer(MouseEvent event) {
+    }
+
+    @FXML
+    private void exportInventoryPhys(MouseEvent event) {
+    }
+
+    @FXML
+    private void refreshComptage(MouseEvent event) {
+    }
+
+    @FXML
+    private void exportxlsPerimees(MouseEvent event) {
+    }
+
+    @FXML
+    private void saveRetourDepot(MouseEvent event) {
+    }
+
+    @FXML
+    private void updateRetourDepot(MouseEvent event) {
+    }
+
+    @FXML
+    private void deleteRetourDepot(MouseEvent event) {
+    }
+
+    @FXML
+    private void showCompactCartSavePane(MouseEvent event) {
+    }
+
+    @FXML
+    private void removeArticle(MouseEvent event) {
+    }
+
+    private ComptageItem comptageRender(Compter compter) {
+        Produit pro = compter.getProductId();
+        Mesure m = compter.getMesureId();
+        Inventaire in = compter.getInventaireId();
+        Produit p = ProduitDelegate.findProduit((String) pro.getUid());
+        Inventaire inv = InventaireDelegate.findInventaire((String) in.getUid());
+        Mesure mz = MesureDelegate.findMesure((String) m.getUid());
+        ComptageItem co = new ComptageItem();
+        co.setCodeInventaire(inv.getCodeInventaire());
+        co.setCoutAchat(compter.getCoutAchat());
+        co.setCoutTotal(BigDecimal.valueOf(compter.getCoutAchat() * compter.getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+        co.setDateCompter(compter.getDateCount());
+        co.setDateExpiration(compter.getDateExpiration());
+        co.setQuantiteTheorik(compter.getQuantiteTheorik().doubleValue());
+        co.setEcart(compter.getEcart().doubleValue());
+        co.setObservation(compter.getObservation());
+        co.setDebutInventair(inv.getDateDebut());
+        co.setEtatInventaire(inv.getEtat());
+        co.setMesure(mz);
+        co.setNomProduit(p.getNomProduit() + " " + p.getModele() + " " + p.getTaille() + " " + p.getMarque());
+        co.setNumlot(compter.getNumlot());
+        co.setProduit(p);
+        co.setQuantite(compter.getQuantite());
+        return co;
+    }
+
+    private List<ComptageItem> comptageRender(Collection<Compter> cs, Inventaire inv) {
+        if (inv == null) {
+            MainUI.notify(null, (String) "Error", (String) "Erreur : veuillez reselectionner l'inventaire puis reesayer", (long) 4L, (String) "error");
+            return null;
+        }
+        ArrayList<ComptageItem> result = new ArrayList<>();
+        for (Compter c : cs) {
+            Produit p = c.getProductId();
+            ComptageItem co = new ComptageItem();
+            co.setCodeInventaire(inv.getCodeInventaire());
+            co.setCoutAchat(c.getCoutAchat());
+            co.setCoutTotal(BigDecimal.valueOf(c.getCoutAchat() * c.getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            co.setDateCompter(c.getDateCount());
+            co.setDateExpiration(c.getDateExpiration());
+            co.setDebutInventair(inv.getDateDebut());
+            co.setEtatInventaire(inv.getEtat());
+            co.setQuantiteTheorik(c.getQuantiteTheorik());
+            co.setEcart(c.getEcart().doubleValue());
+            co.setObservation(c.getObservation());
+            co.setMesure(c.getMesureId());
+            co.setNomProduit(p.getNomProduit() + " " + p.getModele() + " " + p.getTaille() + " " + p.getMarque());
+            co.setNumlot(c.getNumlot());
+            co.setProduit(p);
+            co.setQuantite(c.getQuantite());
+            result.add(co);
+        }
+        return result;
+    }
+
+    private void showLastInventory() {
+        String dev = this.pref.get("mainCur", "USD");
+        Inventaire in = InventaireDelegate.findLastInventory();
+        List co = CompterDelegate.findCompterBYInventaire(in.getUid());
+        List<ComptageItem> crender = this.comptageRender(co, in);
+        if (crender == null) {
+            return;
+        }
+        this.obl_comptages.setAll(crender);
+        this.txt_valeur_global_compter.setText("Valeur totale compt\u00e9e: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(l -> {
+            double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+            return val;
+        }).sum()) + " " + dev);
+        this.txt_valeurtotal_ecart_compter.setText("Val.totale ecart: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(e -> {
+            double val = BigDecimal.valueOf(e.getEcart() * e.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+            return val;
+        }).sum()) + " " + dev);
+    }
+
+    private void saveProductByHttpSafely(Produit produit, String base64Image, List<Mesure> mesures) {
+        int retries = 0;
+        while (retries < 5) {
+            try {
+                Response<Produit> saveR = this.saveProduitByHttp(produit, base64Image, mesures);
+                if (saveR.isSuccessful()) {
+                    break;
+                }
+                Category c = CategoryDelegate.findCategory((String) produit.getCategoryId().getUid());
+                if (this.saveCategoryByHttp(c)) {
+                    ++retries;
+                }
+                try {
+                    TimeUnit.MILLISECONDS.sleep(200L * (long) Math.pow(2.0, retries));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException ex) {
+                System.out.println("Instant save product error " + ex.getMessage());
+                Logger.getLogger(PaymentController.class.getName()).log(Level.INFO, null, ex);
+                break;
+            }
+        }
+    }
+
+    private Response<Produit> saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures) throws IOException {
+        ProduitHelper produitHelper = this.createProduitHelper(produit, base64Image, mesures);
+        Response response = this.kazisafe.saveLite(produitHelper).execute();
+        if (response.isSuccessful()) {
+            System.out.println("Save synchrone Produit " + response.code());
+        } else {
+            System.err.println("Erreur lors de l'enregistrement du produit : " + response.code());
+        }
+        return response;
+    }
+
+    private ProduitHelper createProduitHelper(Produit produit, String base64Image, List<Mesure> mesures) {
+        if (base64Image == null) {
+            InputStream inputStream = this.getClass().getResourceAsStream("/icons/gallery.png");
+        }
+        ProduitHelper produitHelper = new ProduitHelper();
+        produitHelper.setUid(produit.getUid());
+        produitHelper.setCategoryId(produit.getCategoryId().getUid());
+        produitHelper.setCodebar(produit.getCodebar());
+        produitHelper.setCouleur(produit.getCouleur());
+        produitHelper.setMarque(produit.getMarque());
+        produitHelper.setModele(produit.getModele());
+        produitHelper.setNomProduit(produit.getNomProduit());
+        produitHelper.setTaille(produit.getTaille());
+        produitHelper.setMethodeInventaire(produit.getMethodeInventaire());
+        produitHelper.setMesureList(mesures);
+        return produitHelper;
+    }
+
+    private boolean saveCategoryByHttp(Category c) throws IOException {
+        Response exec = this.kazisafe.saveCategory(c).execute();
+        System.out.println("Instant save Category response = " + exec.code());
+        return exec.isSuccessful();
+    }
 }

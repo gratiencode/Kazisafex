@@ -1,8 +1,8 @@
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.util.List;
 import java.util.Objects;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class Pool {
     private String codebar;

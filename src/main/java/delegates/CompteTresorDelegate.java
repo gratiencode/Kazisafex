@@ -6,9 +6,9 @@
 package delegates;
 
 import IServices.CompteTresorStorage;
-import static delegates.CompteTresorDelegate.getCompteTresorStorage;
 import java.util.List;
 import data.CompteTresor;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -58,5 +58,17 @@ public class CompteTresorDelegate {
 
     public static List<CompteTresor> findByNumeroCompte(String numeroCompte) {
         return getCompteTresorStorage().findByNumeroCompte(numeroCompte);
+    }
+
+    public static List<CompteTresor> findUnSyncedCompteTresors(long disconnected_at) {
+       return getCompteTresorStorage().findUnSyncedCompteTresors(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getCompteTresorStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getCompteTresorStorage().isExists(uid);
     }
 }

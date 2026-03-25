@@ -42,7 +42,7 @@ import data.Mesure;
 import data.Produit;
 import data.Stocker;
 import tools.FicheItem;
-import services.JpaStorage;
+import services.RepportService;
 import tools.MainUI;
 import tools.SyncEngine;
 import tools.Util;
@@ -101,10 +101,7 @@ public class FichedestockController implements Initializable {
     Produit produit;
     Mesure choosenM;
     private FicheItem selectedItem;
-//    NitriteStorage<Mesure> db;
-//    NitriteStorage<Stocker> db;
-//    NitriteStorage<Destocker> db;
-    JpaStorage db;
+    RepportService db;
     ObservableList<FicheItem> ficheItems;
     ObservableList<Mesure> mzrs;
     ObservableList<String> regions;
@@ -115,7 +112,6 @@ public class FichedestockController implements Initializable {
     
 
     public FichedestockController() {
-        db=JpaStorage.getInstance();
         instance = this;
     }
 
@@ -141,21 +137,14 @@ public class FichedestockController implements Initializable {
         }
         List<FicheItem> fiche;
         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            fiche = Util.findFicheDeStock(choosenM, db.findAll(Mesure.class),
-                    db.findByProduit(Stocker.class, p.getUid()),
-                    db.findByProduit(Destocker.class, p.getUid()),
-                    p);
+          
         } else {
-            cbx_regions.setVisible(false);
-            fiche = Util.findFicheDeStock(choosenM, db.findAll(Mesure.class),
-                    db.findByProduit(Stocker.class, p.getUid(),region),
-                    db.findByProduit(Destocker.class, p.getUid(),region),
-                    p);
+           
                   
         }
-        ficheItems.setAll(fiche);
+//        ficheItems.setAll(fiche);
         table_fiche_stock.setItems(ficheItems);
-        mzrs = FXCollections.observableArrayList(Util.findMesureForProduitWithId(db.findAll(Mesure.class), p.getUid()));
+        mzrs = FXCollections.observableArrayList();
         cbx_choose_mesure.setItems(mzrs);
         cbx_choose_mesure.getSelectionModel().selectFirst();
         txt_count.setText(String.format(bundle.getString("xitems"), ficheItems.size()));
@@ -163,11 +152,8 @@ public class FichedestockController implements Initializable {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null) {
-                    List<FicheItem> fichel = Util.findFicheDeStock(choosenM, db.findAll(Mesure.class),
-                    db.findByProduit(Stocker.class, p.getUid()),
-                    db.findByProduit(Destocker.class, p.getUid()),
-                    p);
-                    ficheItems.setAll(fichel);
+                   
+//                    ficheItems.setAll(fichel);
                     table_fiche_stock.setItems(ficheItems);
                 }
             }
@@ -222,11 +208,8 @@ public class FichedestockController implements Initializable {
         cbx_choose_mesure.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             choosenM = newValue;
             if (choosenM != null) {
-                List<FicheItem> fiche = Util.findFicheDeStock(choosenM,db.findByProduit(Mesure.class, produit.getUid()),
-                    db.findByProduit(Stocker.class, produit.getUid()),
-                    db.findByProduit(Destocker.class, produit.getUid()),
-                    produit);
-                ficheItems.setAll(fiche);
+               
+//                ficheItems.setAll(fiche);
             }
         });
         col_destination_fiche.setCellValueFactory((TableColumn.CellDataFeatures<FicheItem, String> param) -> new SimpleStringProperty(param.getValue().getDestination()));
@@ -307,22 +290,20 @@ public class FichedestockController implements Initializable {
         if (dpk_debut_fiche.getValue() != null && dpk_fin_fiche.getValue() != null) {
             long debut = tools.Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
             long fin = tools.Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
-            List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-                    db.findByProduit(Stocker.class, produit.getUid()),
-                    db.findByProduit(Destocker.class, produit.getUid()),
+            
            
-                    produit, debut, fin);
-            ficheItems.setAll(fiche);
+//                    produit, debut, fin);
+//            ficheItems.setAll(fiche);
             txt_count.setText(String.format(bundle.getString("xitems"), ficheItems.size() ));
         }
     }
 
     @FXML
     private void refresh(Event e) {
-        List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-                db.findByProduit(Stocker.class, produit.getUid()),
-                db.findByProduit(Destocker.class, produit.getUid()), produit);
-        ficheItems.setAll(fiche);
+//        List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
+//                db.findByProduit(Stocker.class, produit.getUid()),
+//                db.findByProduit(Destocker.class, produit.getUid()), produit);
+//        ficheItems.setAll(fiche);
     }
 
     @FXML
@@ -334,16 +315,16 @@ public class FichedestockController implements Initializable {
             public void run() {
                 if (dpk_debut_fiche.getValue() != null && dpk_debut_fiche.getValue() != null) {
                     long debut = tools.Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
-                    long fin = tools.Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
-                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-                            db.findByProduit(Stocker.class, produit.getUid()),
-                            db.findByProduit(Destocker.class, produit.getUid()), produit, debut, fin);
-                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
+//                    long fin = tools.Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
+//                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
+//                            db.findByProduit(Stocker.class, produit.getUid()),
+//                            db.findByProduit(Destocker.class, produit.getUid()), produit, debut, fin);
+//                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
                 } else {
-                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-                           db.findByProduit(Stocker.class, produit.getUid()),
-                           db.findByProduit(Destocker.class, produit.getUid()), produit);
-                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
+//                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
+//                           db.findByProduit(Stocker.class, produit.getUid()),
+//                           db.findByProduit(Destocker.class, produit.getUid()), produit);
+//                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
                 }
                 try {
 

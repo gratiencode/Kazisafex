@@ -14,8 +14,14 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import data.Client;
+import data.CompteTresor;
+import data.Depense;
 import data.Destocker;
+import data.Entreposer;
 import data.Fournisseur;
+import data.Livraison;
+import data.Matiere;
+import data.Operation;
 import data.Produit;
 import data.Vente;
 
@@ -102,6 +108,50 @@ public class ComboBoxAutoCompletion<T> implements EventHandler {
                 if ((p.getNomProduit()+" "+p.getModele()+" "+
                         p.getMarque()+" "+p.getCodebar()+" "+p.getCouleur()
                                 +" "+p.getTaille()).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof Matiere) {
+                Matiere p = (Matiere) datum;
+                if ((p.getMatiereName()+" - "+p.getTypeMatiere()).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof Livraison) {
+                Livraison p = (Livraison) datum;
+                Fournisseur f=p.getFournId();
+                if ((p.getDateLivr().toString()+" "+p.getNumPiece()+" "+
+                        p.getLibelle()+" "+(f==null?"":f.getNomFourn())+" "+p.getReference()).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof Entreposer) {
+                Entreposer p = (Entreposer) datum;
+                String c=p.getComment();
+                String mat=p.getMatiereId().getMatiereName();
+                String numlot = p.getNumlot();
+                if ((c+" "+mat+" "+numlot+" "+p.getDepotId().getNomDepot()).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof Depense) {
+                Depense p = (Depense) datum;
+                String c=p.getNomDepense();
+                String mat=p.getFrequence();
+               
+                if ((c+" "+mat).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof CompteTresor) {
+                CompteTresor p = (CompteTresor) datum;
+                String c=p.getIntitule();
+                String mat=p.getBankName();
+                String numlot = p.getTypeCompte();
+                if ((c+" "+mat+" "+numlot+" "+p.getNumeroCompte()).toUpperCase().contains(s.toUpperCase())) {
+                    list.add(datum);
+                }
+            }else if (datum instanceof Operation) {
+                Operation p = (Operation) datum;
+                String c=p.getLibelle();
+                String mat=p.getReferenceOp();
+                String numlot = p.getDepenseId().getNomDepense();
+                if ((c+" "+mat+" "+numlot).toUpperCase().contains(s.toUpperCase())) {
                     list.add(datum);
                 }
             }

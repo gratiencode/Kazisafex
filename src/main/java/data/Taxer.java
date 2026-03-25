@@ -3,9 +3,11 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +34,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
     @NamedQuery(name = "Taxer.findAll", query = "SELECT DISTINCT  t FROM Taxer t")
     , @NamedQuery(name = "Taxer.findByUid", query = "SELECT DISTINCT  t FROM Taxer t WHERE t.uid = :uid")
     , @NamedQuery(name = "Taxer.findByMontantPercu", query = "SELECT DISTINCT  t FROM Taxer t WHERE t.montantPercu = :montantPercu")})
+
 public class Taxer extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -44,11 +47,11 @@ public class Taxer extends BaseModel implements Serializable {
    
     @JoinColumn(name = "taxe_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+    
     private Taxe taxeId;
     @JoinColumn(name = "vente_reference", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+    
     private Vente venteReference;
     
     

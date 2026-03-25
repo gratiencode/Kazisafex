@@ -5,12 +5,14 @@
  */
 package data;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,6 +25,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -40,7 +43,7 @@ import tools.Tables;
     @NamedQuery(name = "Fournisseur.findByNameAdresse", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone = :nomForn AND f.adresse = :adrss"),
     @NamedQuery(name = "Fournisseur.findByName", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.nomFourn LIKE :nomFourniss"),
     @NamedQuery(name = "Fournisseur.findByPhone", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone LIKE :phone")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+
 public class Fournisseur extends BaseModel implements Serializable {
 
     @Column(name = "nom_fourn")
@@ -57,9 +60,16 @@ public class Fournisseur extends BaseModel implements Serializable {
     @Id
     @Column(name = "uid", updatable = false, nullable = false)
     private String uid;
-    @JsonManagedReference
     @OneToMany(mappedBy = "fournId")
+    @JsonBackReference(value = "fss-livr")
     private List<Livraison> livraisonList;
+    @OneToMany(mappedBy = "fournisseurId")
+    @JsonBackReference(value = "fss-cmd")
+    private List<Commande> commandeList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     @PrePersist
     @PreUpdate
@@ -67,6 +77,7 @@ public class Fournisseur extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Fournisseur() {
@@ -101,7 +112,6 @@ public class Fournisseur extends BaseModel implements Serializable {
         this.nomFourn = nomFourn;
     }
 
-    @JsonbTransient
     public List<Livraison> getLivraisonList() {
         return livraisonList;
     }
@@ -132,7 +142,7 @@ public class Fournisseur extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "entities.Fournisseur[ uid=" + uid + " ]";
+        return "entities.Fournisseur[ uid=" + uid + ", nomforun = " + nomFourn + " ]";
     }
 
     public String getAdresse() {
@@ -157,6 +167,30 @@ public class Fournisseur extends BaseModel implements Serializable {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public List<Commande> getCommandeList() {
+        return commandeList;
+    }
+
+    public void setCommandeList(List<Commande> commandeList) {
+        this.commandeList = commandeList;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
 }

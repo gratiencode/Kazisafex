@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.Cursor?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
@@ -15,7 +14,6 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
-<?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
 <AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="549.0" prefWidth="1138.0" style="-fx-background-radius: 12; -fx-background-color: white;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ParametreController">
@@ -31,102 +29,144 @@
             <Font size="23.0" />
          </font>
       </Label>
-      <ScrollPane layoutX="7.0" layoutY="64.0" prefHeight="479.0" prefWidth="1126.0" vvalue="0.57" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="64.0">
+      <ScrollPane layoutX="7.0" layoutY="64.0" prefHeight="479.0" prefWidth="1126.0" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="64.0">
         <content>
-          <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="988.0" prefWidth="1119.0">
+          <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="1461.0" prefWidth="1137.0">
                <children>
-                  <Pane layoutX="241.0" layoutY="11.0" prefHeight="69.0" prefWidth="736.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="142.0">
+                  <AnchorPane layoutX="241.0" layoutY="11.0" prefHeight="183.0" prefWidth="754.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="142.0" AnchorPane.topAnchor="11.0">
                      <children>
-                        <ToggleButton fx:id="tgbtn_session" layoutX="647.0" layoutY="23.0" mnemonicParsing="false" onAction="#configSession" text="%xbtn.no" />
-                        <Label layoutX="14.0" layoutY="31.0" text="%xlbl.session_open">
+                        <ToggleButton fx:id="tgbtn_session" layoutX="643.0" layoutY="33.0" mnemonicParsing="false" onAction="#configSession" text="%xbtn.no" AnchorPane.rightAnchor="31.0" AnchorPane.topAnchor="33.0" />
+                        <Label layoutX="16.0" layoutY="30.0" prefHeight="21.0" prefWidth="272.0" text="%xlbl.session_open" AnchorPane.leftAnchor="15.0" AnchorPane.rightAnchor="467.0">
                            <font>
                               <Font size="17.0" />
                            </font>
                         </Label>
-                        <Label layoutX="10.0" layoutY="7.0" text="%xlbl.seconnect" />
+                        <Label layoutX="17.0" layoutY="7.0" prefHeight="16.0" prefWidth="419.0" text="%xlbl.seconnect" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="319.0" />
+                        <Separator layoutX="2.0" layoutY="130.0" prefHeight="3.0" prefWidth="750.0" />
+                        <ToggleButton fx:id="tgbtn_dark_theme" layoutX="644.0" layoutY="93.0" mnemonicParsing="false" onAction="#configDarkTheme" text="%xbtn.no" AnchorPane.rightAnchor="30.0" AnchorPane.topAnchor="93.0" />
+                        <Label layoutX="21.0" layoutY="94.0" prefHeight="21.0" prefWidth="214.0" text="%xlbl.dark_theme" AnchorPane.leftAnchor="20.0" AnchorPane.rightAnchor="520.0">
+                           <font>
+                              <Font size="17.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="19.0" layoutY="63.0" prefHeight="16.0" prefWidth="490.0" text="%xlbl.dark_theme_desc" AnchorPane.leftAnchor="18.0" AnchorPane.rightAnchor="246.0" />
+                        <ComboBox fx:id="cbx_main_cur" layoutX="592.0" layoutY="143.0" prefHeight="26.0" prefWidth="135.0" promptText="Devise principale" AnchorPane.rightAnchor="27.0" AnchorPane.topAnchor="143.0" />
+                        <Label layoutX="455.0" layoutY="149.0" text="%xmaincarency" AnchorPane.rightAnchor="194.0" AnchorPane.topAnchor="149.0" />
+                        <Button layoutX="396.0" layoutY="146.0" mnemonicParsing="false" onAction="#configTaux" text="OK" AnchorPane.rightAnchor="321.0" AnchorPane.topAnchor="146.0" />
+                        <TextField fx:id="tf_taux_de_change" layoutX="237.0" layoutY="146.0" onAction="#configTaux" prefHeight="26.0" prefWidth="148.0" promptText="%xtxtf.equiv_taux" AnchorPane.leftAnchor="237.0" AnchorPane.rightAnchor="377.0" />
+                        <Label layoutX="19.0" layoutY="148.0" prefHeight="16.0" prefWidth="191.0" text="%xlbl.taux" AnchorPane.leftAnchor="18.0" />
                      </children>
-                  </Pane>
+                  </AnchorPane>
                   <Label layoutX="14.0" layoutY="16.0" text="%xlbl.accesibl" AnchorPane.leftAnchor="14.0" />
-                  <Separator layoutX="1.0" layoutY="89.0" prefHeight="3.0" prefWidth="1119.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="0.0" />
-                  <Pane layoutX="241.0" layoutY="103.0" prefHeight="88.0" prefWidth="734.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" AnchorPane.leftAnchor="240.0" AnchorPane.rightAnchor="145.0">
-                     <children>
-                        <Button layoutX="359.0" layoutY="32.0" mnemonicParsing="false" onAction="#configTaux" text="OK" />
-                        <TextField fx:id="tf_taux_de_change" layoutX="39.0" layoutY="36.0" onAction="#configTaux" prefHeight="26.0" prefWidth="304.0" promptText="%xtxtf.equiv_taux" />
-                        <Label layoutX="14.0" layoutY="11.0" text="%xlbl.taux" />
-                        <Label layoutX="450.0" layoutY="36.0" text="%xmaincarency" />
-                        <ComboBox fx:id="cbx_main_cur" layoutX="558.0" layoutY="32.0" prefHeight="26.0" prefWidth="135.0" />
-                     </children>
-                  </Pane>
                   <Label layoutX="11.0" layoutY="100.0" text="%xlbl.taux" AnchorPane.leftAnchor="12.0" />
                   <Label layoutX="9.0" layoutY="214.0" text="%xlbl.parametre_sync" AnchorPane.leftAnchor="12.0" />
-                  <Separator layoutY="202.0" prefHeight="3.0" prefWidth="1117.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="2.0" />
-                  <Pane layoutX="241.0" layoutY="215.0" prefHeight="69.0" prefWidth="734.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" AnchorPane.leftAnchor="240.0" AnchorPane.rightAnchor="145.0">
+                  <Separator layoutY="202.0" prefHeight="3.0" prefWidth="1117.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="2.0" AnchorPane.topAnchor="202.0" />
+                  <AnchorPane layoutX="240.0" layoutY="214.0" prefHeight="150.0" prefWidth="752.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="240.0" AnchorPane.rightAnchor="145.0">
                      <children>
-                        <ToggleButton fx:id="tgbtn_sync" layoutX="624.0" layoutY="28.0" mnemonicParsing="false" onAction="#configSync" text="xbtn.yes" />
-                        <ComboBox fx:id="cbx_frequence" layoutX="39.0" layoutY="29.0" prefHeight="27.0" prefWidth="319.0" promptText="Frequence de synchronisation" />
-                        <Label layoutX="486.0" layoutY="35.0" text="Secondes" />
-                        <Pane layoutX="579.0" layoutY="28.0" prefHeight="24.0" prefWidth="22.0" style="-fx-border-color: #44cef5;">
-                           <children>
-                              <ImageView fx:id="image_sync" fitHeight="16.0" fitWidth="29.0" layoutX="3.0" layoutY="4.0" onMouseClicked="#configFreqSync" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                 <image>
-                                    <Image url="@../icons/Sync_32px.png" />
-                                 </image>
-                                 <cursor>
-                                    <Cursor fx:constant="HAND" />
-                                 </cursor>
-                              </ImageView>
-                           </children>
-                        </Pane>
-                        <Label layoutX="14.0" layoutY="6.0" text="%xlbl.synchronisation" />
+                        <ToggleButton fx:id="tgbtn_sync" layoutX="624.0" layoutY="28.0" mnemonicParsing="false" onAction="#configSync" text="xbtn.yes" AnchorPane.rightAnchor="36.0" AnchorPane.topAnchor="28.0" />
+                        <ComboBox fx:id="cbx_frequence" layoutX="39.0" layoutY="29.0" prefHeight="27.0" prefWidth="319.0" promptText="Frequence de synchronisation" AnchorPane.leftAnchor="39.0" AnchorPane.rightAnchor="375.0" />
+                        <Label layoutX="378.0" layoutY="35.0" text="Secondes" AnchorPane.rightAnchor="293.0" AnchorPane.topAnchor="35.0" />
+                        <Label layoutX="14.0" layoutY="6.0" text="%xlbl.synchronisation" AnchorPane.leftAnchor="14.0" />
+                        <ComboBox fx:id="cbx_display_ports" layoutX="212.0" layoutY="113.0" prefHeight="29.0" prefWidth="251.0" promptText="Display COM client" AnchorPane.bottomAnchor="8.0" AnchorPane.leftAnchor="212.0" AnchorPane.rightAnchor="292.0" />
+                        <Label layoutX="37.0" layoutY="120.0" prefHeight="16.0" prefWidth="174.0" text="Port serie display client :" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="37.0" />
+                        <Button layoutX="40.0" layoutY="75.0" mnemonicParsing="false" onAction="#reinitSync" text="Reinitiliser la synchronization" AnchorPane.leftAnchor="40.0" AnchorPane.topAnchor="75.0" />
+                    </children>
+                  </AnchorPane>
+                  <Label layoutX="15.0" layoutY="604.0" text="%xlbl.print_param" AnchorPane.leftAnchor="15.0" />
+                  <Separator layoutX="-1.0" layoutY="367.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                  <Label layoutX="12.0" layoutY="391.0" text="%xlbl.param_meth" AnchorPane.leftAnchor="12.0" />
+                  <AnchorPane layoutX="240.0" layoutY="376.0" prefHeight="203.0" prefWidth="752.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="240.0" AnchorPane.rightAnchor="145.0">
+                     <children>
+                        <RadioButton fx:id="fifo" layoutX="383.0" layoutY="38.0" mnemonicParsing="false" text="%xlbl.fifo" AnchorPane.rightAnchor="284.0" />
+                        <RadioButton fx:id="lifo" layoutX="595.0" layoutY="34.0" mnemonicParsing="false" text="%xlbl.lifo" AnchorPane.rightAnchor="73.0" />
+                        <RadioButton fx:id="ppps" layoutX="18.0" layoutY="34.0" mnemonicParsing="false" text="%xlbl.ppps" AnchorPane.leftAnchor="18.0" AnchorPane.rightAnchor="623.0" />
+                        <Label layoutX="34.0" layoutY="105.0" text="Periodicite de calcul :" />
+                        <ComboBox layoutX="193.0" layoutY="102.0" prefHeight="24.0" prefWidth="508.0" promptText="choisir la periode" />
                      </children>
-                  </Pane>
-                  <Label layoutX="14.0" layoutY="447.0" text="%xlbl.print_param" AnchorPane.leftAnchor="14.0" />
-                  <Separator layoutX="-2.0" layoutY="309.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                  <Label layoutX="12.0" layoutY="314.0" text="%xlbl.param_meth" AnchorPane.leftAnchor="12.0" />
-                  <Pane layoutX="240.0" layoutY="350.0" prefHeight="60.0" prefWidth="734.0" style="-fx-border-color: #44cef5; -fx-background-color: white;" AnchorPane.leftAnchor="240.0" AnchorPane.rightAnchor="145.0">
+                  </AnchorPane>
+                  <Separator layoutX="1.0" layoutY="595.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="-1.0" />
+                  <AnchorPane layoutX="240.0" layoutY="634.0" prefHeight="493.0" prefWidth="757.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="334.0" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
                      <children>
-                        <RadioButton fx:id="fifo" layoutX="315.0" layoutY="13.0" mnemonicParsing="false" text="%xlbl.fifo" />
-                        <RadioButton fx:id="lifo" layoutX="557.0" layoutY="13.0" mnemonicParsing="false" text="%xlbl.lifo" />
-                        <RadioButton fx:id="ppps" layoutX="16.0" layoutY="13.0" mnemonicParsing="false" text="%xlbl.ppps" />
-                     </children>
-                  </Pane>
-                  <Separator layoutX="-3.0" layoutY="428.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                  <AnchorPane layoutX="238.0" layoutY="447.0" prefHeight="522.0" prefWidth="734.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="54.0" AnchorPane.leftAnchor="238.0" AnchorPane.rightAnchor="147.0" AnchorPane.topAnchor="447.0">
-                     <children>
-                        <Button layoutX="663.0" layoutY="276.0" mnemonicParsing="false" onAction="#setMessage4CustomersOnBill" prefHeight="30.0" prefWidth="60.0" text="OK" AnchorPane.rightAnchor="11.0" />
-                        <TextField fx:id="message4client" layoutX="251.0" layoutY="280.0" onAction="#setMessage4CustomersOnBill" prefHeight="26.0" prefWidth="378.0" promptText="%xprompt.message_fact" AnchorPane.leftAnchor="250.0" AnchorPane.rightAnchor="105.0" />
-                        <Label layoutX="26.0" layoutY="277.0" text="%xlbl.bas_fac_ture" AnchorPane.leftAnchor="23.0" />
-                        <Label layoutX="24.0" layoutY="79.0" text="%xcounter_param" AnchorPane.leftAnchor="24.0" />
-                        <Separator layoutX="1.0" layoutY="262.0" prefHeight="3.0" prefWidth="730.0" />
-                        <ComboBox fx:id="cbx_counter" layoutX="163.0" layoutY="78.0" prefHeight="27.0" prefWidth="474.0" promptText="counter" AnchorPane.leftAnchor="163.0" AnchorPane.rightAnchor="96.0" />
-                        <Label layoutX="17.0" layoutY="18.0" prefHeight="21.0" prefWidth="490.0" text="%xlbl.print_when_sale" AnchorPane.leftAnchor="17.0">
+                        <Button layoutX="684.0" layoutY="270.0" mnemonicParsing="false" onAction="#setMessage4CustomersOnBill" prefHeight="30.0" prefWidth="60.0" text="OK" AnchorPane.rightAnchor="13.0" AnchorPane.topAnchor="270.0" />
+                        <TextField fx:id="message4client" layoutX="248.0" layoutY="271.0" onAction="#setMessage4CustomersOnBill" prefHeight="26.0" prefWidth="402.0" promptText="%xprompt.message_fact" AnchorPane.leftAnchor="248.0" AnchorPane.rightAnchor="109.0" />
+                        <Label layoutX="27.0" layoutY="268.0" text="%xlbl.bas_fac_ture" AnchorPane.leftAnchor="27.0" />
+                        <Label layoutX="26.0" layoutY="85.0" text="%xcounter_param" AnchorPane.leftAnchor="26.0" />
+                        <Separator layoutX="5.0" layoutY="253.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" />
+                        <ComboBox fx:id="cbx_counter" layoutX="165.0" layoutY="84.0" prefHeight="27.0" prefWidth="474.0" promptText="counter" AnchorPane.leftAnchor="165.0" AnchorPane.rightAnchor="98.0" />
+                        <Label layoutX="19.0" layoutY="24.0" prefHeight="21.0" prefWidth="490.0" text="%xlbl.print_when_sale" AnchorPane.leftAnchor="19.0" AnchorPane.rightAnchor="228.0">
                            <font>
                               <Font size="17.0" />
                            </font>
                         </Label>
-                        <ToggleButton fx:id="tgbtn_print_bill" layoutX="655.0" layoutY="15.0" mnemonicParsing="false" onAction="#configPrint" text="%xbtn.no" AnchorPane.rightAnchor="11.0" />
-                        <Label layoutX="22.0" layoutY="215.0" prefHeight="18.0" prefWidth="199.0" text="%xlbl.tai_lle_police" AnchorPane.leftAnchor="22.0" />
-                        <ComboBox fx:id="cbx_param_paper_size" layoutX="251.0" layoutY="212.0" prefHeight="26.0" prefWidth="383.0" AnchorPane.leftAnchor="250.0" AnchorPane.rightAnchor="100.0" />
-                        <Separator layoutX="2.0" layoutY="123.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="1.0" />
-                        <Separator layoutY="58.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                        <Separator layoutX="2.0" layoutY="200.0" prefHeight="3.0" prefWidth="730.0" />
-                        <Spinner fx:id="spinner" editable="true" layoutX="166.0" layoutY="149.0" prefHeight="26.0" prefWidth="466.0" AnchorPane.leftAnchor="166.0" AnchorPane.rightAnchor="101.0" />
-                        <Label layoutX="34.0" layoutY="153.0" text="Copies :" AnchorPane.leftAnchor="34.0" />
-                        <Separator layoutX="2.0" layoutY="328.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="1.0" />
-                        <CheckBox fx:id="avertiBill" layoutX="31.0" layoutY="351.0" mnemonicParsing="false" prefHeight="26.0" prefWidth="155.0" text="%xwarn_cli" AnchorPane.leftAnchor="30.0">
+                        <ToggleButton fx:id="tgbtn_print_bill" layoutX="664.0" layoutY="23.0" mnemonicParsing="false" onAction="#configPrint" text="%xbtn.no" AnchorPane.rightAnchor="13.0" AnchorPane.topAnchor="23.0" />
+                        <Label layoutX="24.0" layoutY="221.0" prefHeight="18.0" prefWidth="199.0" text="%xlbl.tai_lle_police" AnchorPane.leftAnchor="24.0" />
+                        <ComboBox fx:id="cbx_param_paper_size" layoutX="252.0" layoutY="218.0" prefHeight="26.0" prefWidth="383.0" AnchorPane.leftAnchor="252.0" AnchorPane.rightAnchor="102.0" />
+                        <Separator layoutX="3.0" layoutY="129.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="3.0" AnchorPane.rightAnchor="3.0" />
+                        <Separator layoutX="2.0" layoutY="64.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="2.0" AnchorPane.rightAnchor="2.0" />
+                        <Separator layoutX="4.0" layoutY="206.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="3.0" />
+                        <Spinner fx:id="spinner" editable="true" layoutX="168.0" layoutY="155.0" prefHeight="26.0" prefWidth="466.0" AnchorPane.leftAnchor="168.0" AnchorPane.rightAnchor="103.0" />
+                        <Label layoutX="36.0" layoutY="159.0" text="Copies :" AnchorPane.leftAnchor="36.0" />
+                        <Separator layoutX="5.0" layoutY="319.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="3.0" />
+                        <CheckBox fx:id="avertiBill" layoutX="34.0" layoutY="342.0" mnemonicParsing="false" prefHeight="26.0" prefWidth="155.0" text="%xwarn_cli" AnchorPane.leftAnchor="34.0">
                            <font>
                               <Font size="12.0" />
                            </font>
                         </CheckBox>
-                        <TextField fx:id="text_msg" layoutX="188.0" layoutY="350.0" prefHeight="26.0" prefWidth="440.0" promptText="%xwarn_cli" text="CHER CLIENT S.V.P,VEUILLEZ VERIFIER VOS PRODUITS A LA RECEPTION PAS DES RECLAMATIONS APRES" AnchorPane.leftAnchor="187.0" AnchorPane.rightAnchor="107.0" />
-                        <Label layoutX="30.0" layoutY="406.0" text="Imprimer les mentions facultatives :" />
-                        <Separator layoutX="2.0" layoutY="391.0" prefHeight="3.0" prefWidth="730.0" />
-                        <CheckBox fx:id="print_mark" layoutX="186.0" layoutY="444.0" mnemonicParsing="false" selected="true" text="Marque" />
-                        <CheckBox fx:id="print_modele" layoutX="311.0" layoutY="446.0" mnemonicParsing="false" selected="true" text="Modele" />
-                        <CheckBox fx:id="print_tail" layoutX="431.0" layoutY="447.0" mnemonicParsing="false" selected="true" text="Taille" />
-                        <CheckBox fx:id="print_total_usd" layoutX="526.0" layoutY="448.0" mnemonicParsing="false" selected="true" text="Total en USD" />
+                        <TextField fx:id="text_msg" layoutX="247.0" layoutY="341.0" prefHeight="26.0" prefWidth="402.0" promptText="%xwarn_cli" text="CHER CLIENT S.V.P,VEUILLEZ VERIFIER VOS PRODUITS A LA RECEPTION PAS DES RECLAMATIONS APRES" AnchorPane.leftAnchor="247.0" AnchorPane.rightAnchor="110.0" />
+                        <Label layoutX="34.0" layoutY="400.0" text="Imprimer les mentions facultatives :" AnchorPane.leftAnchor="34.0" AnchorPane.topAnchor="400.0" />
+                        <Separator layoutX="5.0" layoutY="382.0" prefHeight="3.0" prefWidth="730.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="3.0" />
+                        <CheckBox fx:id="print_mark" layoutX="147.0" layoutY="433.0" mnemonicParsing="false" selected="true" text="Marque" AnchorPane.leftAnchor="147.0" AnchorPane.topAnchor="433.0" />
+                        <CheckBox fx:id="print_modele" layoutX="397.0" layoutY="434.0" mnemonicParsing="false" selected="true" text="Modele" AnchorPane.leftAnchor="397.0" AnchorPane.topAnchor="434.0" />
+                        <CheckBox fx:id="print_tail" layoutX="285.0" layoutY="436.0" mnemonicParsing="false" selected="true" text="Taille" AnchorPane.rightAnchor="413.0" />
+                        <CheckBox fx:id="print_total_usd" layoutX="530.0" layoutY="438.0" mnemonicParsing="false" selected="true" text="Total en USD" AnchorPane.rightAnchor="118.0" />
                      </children>
                   </AnchorPane>
+                  <Separator layoutY="1142.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                  <AnchorPane layoutX="241.0" layoutY="1155.0" prefHeight="294.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                     <children>
+                        <Label layoutX="57.0" layoutY="19.0" text="Mode de stockage de donnees" AnchorPane.leftAnchor="57.0" AnchorPane.topAnchor="19.0">
+                           <font>
+                              <Font size="16.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutX="2.0" layoutY="58.0" prefHeight="3.0" prefWidth="754.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="2.0" />
+                        <Label layoutX="32.0" layoutY="256.0" prefHeight="20.0" prefWidth="315.0" text="Installer Kazisafe et commencer directement a l'utiliser" wrapText="true" AnchorPane.bottomAnchor="18.0" AnchorPane.leftAnchor="32.0">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <ImageView fitHeight="118.0" fitWidth="259.0" layoutX="58.0" layoutY="123.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="58.0" AnchorPane.topAnchor="123.0">
+                           <image>
+                              <Image url="@../icons/SQLite.png" />
+                           </image>
+                        </ImageView>
+                        <ImageView fitHeight="66.0" fitWidth="217.0" layoutX="455.0" layoutY="109.0" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="86.0" AnchorPane.topAnchor="109.0">
+                           <image>
+                              <Image url="@../icons/mysql_horizontal_logo.png" />
+                           </image>
+                        </ImageView>
+                        <ImageView fitHeight="29.0" fitWidth="29.0" layoutX="17.0" layoutY="14.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="17.0" AnchorPane.topAnchor="14.0">
+                           <image>
+                              <Image url="@../icons/officedatabase.png" />
+                           </image>
+                        </ImageView>
+                        <Separator layoutX="360.0" layoutY="92.0" orientation="VERTICAL" prefHeight="176.0" prefWidth="0.0" AnchorPane.bottomAnchor="25.0" AnchorPane.leftAnchor="360.0" AnchorPane.topAnchor="92.0" />
+                        <RadioButton fx:id="rb_emarque" layoutX="32.0" layoutY="82.0" mnemonicParsing="false" selected="true" text="Mode embarque" AnchorPane.leftAnchor="32.0" />
+                        <RadioButton fx:id="rb_serveur" layoutX="391.0" layoutY="84.0" mnemonicParsing="false" text="Mode serveur" AnchorPane.leftAnchor="391.0" AnchorPane.topAnchor="84.0" />
+                        <Label layoutX="386.0" layoutY="174.0" text="Connexion" AnchorPane.rightAnchor="302.0" />
+                        <TextField fx:id="tf_ip_serveur" layoutX="458.0" layoutY="212.0" prefHeight="24.0" prefWidth="162.0" promptText="ex: 192.168.88.120" AnchorPane.leftAnchor="458.0" AnchorPane.topAnchor="212.0" />
+                        <Separator layoutX="465.0" layoutY="182.0" prefHeight="3.0" prefWidth="281.0" AnchorPane.rightAnchor="12.0" />
+                        <TextField fx:id="tf_port_serveur" layoutX="672.0" layoutY="212.0" prefHeight="24.0" prefWidth="76.0" promptText="ex: 3306" AnchorPane.rightAnchor="10.0" AnchorPane.topAnchor="212.0" />
+                        <Label layoutX="387.0" layoutY="216.0" text="Serveur :" AnchorPane.leftAnchor="387.0" />
+                        <Label layoutX="630.0" layoutY="215.0" text="Port :" AnchorPane.rightAnchor="93.0" AnchorPane.topAnchor="215.0" />
+                        <Button layoutX="386.0" layoutY="254.0" mnemonicParsing="false" onAction="#saveConfigurations" style="-fx-background-color: #44cef5;" text="Enregistrer la configuration" textFill="WHITE" AnchorPane.bottomAnchor="16.0" AnchorPane.leftAnchor="386.0">
+                           <font>
+                              <Font name="System Bold" size="13.0" />
+                           </font>
+                        </Button>
+                     </children>
+                  </AnchorPane>
+                  <Label layoutX="15.0" layoutY="1155.0" text="Parametre de stockage" />
                </children>
             </AnchorPane>
         </content>

@@ -7,7 +7,7 @@ package data;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -20,9 +20,8 @@ import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 import java.util.UUID;
 import jakarta.xml.bind.annotation.XmlRootElement;
-import org.hibernate.annotations.UuidGenerator;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -30,57 +29,68 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "abonnement")
- @XmlRootElement 
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Abonnement.findAll", query = "SELECT DISTINCT  a FROM Abonnement a")
-    , @NamedQuery(name = "Abonnement.findByUid", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.uid = :uid")
-    , @NamedQuery(name = "Abonnement.findByNombreOperation", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.nombreOperation = :nombreOperation")
-    , @NamedQuery(name = "Abonnement.findByDateAbonnement", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.dateAbonnement = :dateAbonnement")
-    , @NamedQuery(name = "Abonnement.findByMontant", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.montant = :montant")
-    , @NamedQuery(name = "Abonnement.findByEtat", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.etat = :etat")})
+    @NamedQuery(name = "Abonnement.findAll", query = "SELECT DISTINCT  a FROM Abonnement a"),
+    @NamedQuery(name = "Abonnement.findByUid", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.uid = :uid"),
+    @NamedQuery(name = "Abonnement.findByNombreOperation", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.nombreOperation = :nombreOperation"),
+    @NamedQuery(name = "Abonnement.findByDateAbonnement", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.dateAbonnement = :dateAbonnement"),
+    @NamedQuery(name = "Abonnement.findByMontant", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.montant = :montant"),
+    @NamedQuery(name = "Abonnement.findByEtat", query = "SELECT DISTINCT  a FROM Abonnement a WHERE a.etat = :etat")})
 public class Abonnement extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
-   
+
     @Column(name = "uid", updatable = false, nullable = false)
     private String uid;
     private String typeAbonnement;
     private double nombreOperation;
-    @Temporal(TemporalType.TIMESTAMP)
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    private Date dateAbonnement;
+    private LocalDateTime dateAbonnement;
     private double montant;
     private String devise;
     private String agent;
     private String etat;
-    
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
 
-    
-    
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
     }
-    
 
     public Abonnement() {
-        type=Tables.ABONNEMENT.name();
+        type = Tables.ABONNEMENT.name();
     }
 
     public Abonnement(String uid) {
         this.uid = uid;
-        type=Tables.ABONNEMENT.name();
+        type = Tables.ABONNEMENT.name();
     }
 
-    public Abonnement(String uid, String typeAbonnement, double nombreOperation, Date dateAbonnement, double montant, String devise, String agent) {
+    public Abonnement(String uid, String typeAbonnement, double nombreOperation, LocalDateTime dateAbonnement, double montant, String devise, String agent) {
         this.uid = uid;
         this.typeAbonnement = typeAbonnement;
         this.nombreOperation = nombreOperation;
@@ -88,7 +98,7 @@ public class Abonnement extends BaseModel implements Serializable {
         this.montant = montant;
         this.devise = devise;
         this.agent = agent;
-        type=Tables.ABONNEMENT.name();
+        type = Tables.ABONNEMENT.name();
     }
 
     public String getUid() {
@@ -115,11 +125,11 @@ public class Abonnement extends BaseModel implements Serializable {
         this.nombreOperation = nombreOperation;
     }
 
-    public Date getDateAbonnement() {
+    public LocalDateTime getDateAbonnement() {
         return dateAbonnement;
     }
 
-    public void setDateAbonnement(Date dateAbonnement) {
+    public void setDateAbonnement(LocalDateTime dateAbonnement) {
         this.dateAbonnement = dateAbonnement;
     }
 
@@ -155,7 +165,6 @@ public class Abonnement extends BaseModel implements Serializable {
         this.etat = etat;
     }
 
-   
     @Override
     public int hashCode() {
         int hash = 0;
@@ -176,6 +185,4 @@ public class Abonnement extends BaseModel implements Serializable {
         return true;
     }
 
-
-    
 }

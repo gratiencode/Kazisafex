@@ -5,6 +5,7 @@
  */
 package tools;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 /**
@@ -20,6 +21,7 @@ public class PhysicalInventoryLine {
     private String tailleProduit;
     private String numlot;
     private String mesure;
+    private String devise;
     private double entrees=0;
     private double sorties=0;
     private double stockTheorique=0;
@@ -32,7 +34,7 @@ public class PhysicalInventoryLine {
     private double ecart=0;
     private String localisation;
     private String commentaire;
-    private Date dateExpiration;
+    private LocalDate dateExpiration;
     private String prixDeVente;
     private String region;
 
@@ -183,11 +185,11 @@ public class PhysicalInventoryLine {
         this.commentaire = commentaire;
     }
 
-    public Date getDateExpiration() {
+    public LocalDate getDateExpiration() {
         return dateExpiration;
     }
 
-    public void setDateExpiration(Date dateExpiration) {
+    public void setDateExpiration(LocalDate dateExpiration) {
         this.dateExpiration = dateExpiration;
     }
 
@@ -250,6 +252,14 @@ public class PhysicalInventoryLine {
 
     public void setMultiBatch(boolean multiBatch) {
         this.multiBatch = multiBatch;
+    }
+
+    public String getDevise() {
+        return devise;
+    }
+
+    public void setDevise(String devise) {
+        this.devise = devise;
     }
     
 }

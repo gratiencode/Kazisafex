@@ -5,6 +5,7 @@
  */
 package tools;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Objects;
@@ -16,8 +17,9 @@ import java.util.Objects;
 public class Transaction implements Comparator<Transaction> {
     private String uid;
     private String reference;
-    private Date date;
+    private LocalDateTime date;
     private String libelle;
+    private String region;
     private double debit_usd;
     private double debit_cdf;
     private double credit_usd;
@@ -28,7 +30,7 @@ public class Transaction implements Comparator<Transaction> {
     public Transaction() {
     }
 
-    public Transaction(String uid, String reference, Date date, String libelle, double debit_usd, double debit_cdf, double credit_usd, double credit_cdf, double solde_usd, double solde_cdf) {
+    public Transaction(String uid, String reference, LocalDateTime date, String libelle, double debit_usd, double debit_cdf, double credit_usd, double credit_cdf, double solde_usd, double solde_cdf) {
         this.uid = uid;
         this.reference = reference;
         this.date = date;
@@ -51,11 +53,11 @@ public class Transaction implements Comparator<Transaction> {
         this.solde_cdf = solde_cdf;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDateTime date) {
         this.date = date;
     }
 
@@ -155,6 +157,14 @@ public class Transaction implements Comparator<Transaction> {
     @Override
     public int compare(Transaction o1, Transaction o2) {
         return o1.date.compareTo(o2.date);
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
     }
 
     

@@ -6,11 +6,10 @@
 package delegates;
 
 import IServices.CategoryStorage;
-import static delegates.CategoryDelegate.getCategoryStorage;
 import java.util.List;
 import java.util.Set;
 import data.Category;
-import data.Category;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -70,5 +69,17 @@ public class CategoryDelegate {
     public static List<Category> findCategories(String divers) {
         return getCategoryStorage().findCategories(divers);
     }
+
+    public static List<Category> findUnSyncedCategories(long disconnected_at) {
+         return getCategoryStorage().findUnSyncedCategories(disconnected_at);
+    }
     
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getCategoryStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getCategoryStorage().isExists(uid);
+    }
+
 }

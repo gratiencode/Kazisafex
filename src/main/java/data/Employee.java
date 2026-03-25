@@ -6,16 +6,15 @@
  */
 package data;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
-import java.util.Objects;
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
-import tools.Tables;
 
- @XmlRootElement 
+import java.util.Objects;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+
+@XmlRootElement
 public class Employee
-extends BaseModel implements Serializable {
+        extends BaseModel implements Serializable {
     private String userId;
     private String engagementId;
     private String region;
@@ -24,17 +23,16 @@ extends BaseModel implements Serializable {
     private String nom;
     private String prenom;
     private String phone;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    private Date engagementDate;
+
+    private LocalDate engagementDate;
     private boolean revoquee;
+    private String fingerprintHash;
 
     public Employee() {
     }
 
-    public Employee(String userId, String engagementId, String region, String poste, String entreprise, String nom, String prenom, String phone, Date engagementDate, boolean actif) {
+    public Employee(String userId, String engagementId, String region, String poste,
+            String entreprise, String nom, String prenom, String phone, LocalDate engagementDate, boolean actif) {
         this.userId = userId;
         this.engagementId = engagementId;
         this.region = region;
@@ -119,11 +117,19 @@ extends BaseModel implements Serializable {
         this.phone = phone;
     }
 
-    public Date getEngagementDate() {
+    public String getFingerprintHash() {
+        return fingerprintHash;
+    }
+
+    public void setFingerprintHash(String fingerprintHash) {
+        this.fingerprintHash = fingerprintHash;
+    }
+
+    public LocalDate getEngagementDate() {
         return this.engagementDate;
     }
 
-    public void setEngagementDate(Date engagementDate) {
+    public void setEngagementDate(LocalDate engagementDate) {
         this.engagementDate = engagementDate;
     }
 
@@ -145,7 +151,7 @@ extends BaseModel implements Serializable {
         if (this.getClass() != obj.getClass()) {
             return false;
         }
-        Employee other = (Employee)obj;
+        Employee other = (Employee) obj;
         if (!Objects.equals(this.userId, other.userId)) {
             return false;
         }
@@ -159,7 +165,9 @@ extends BaseModel implements Serializable {
     }
 
     public String toString() {
-        return "Employee{userId=" + this.userId + ", engagementId=" + this.engagementId + ", region=" + this.region + ", poste=" + this.poste + ", entreprise=" + this.entreprise + ", nom=" + this.nom + ", prenom=" + this.prenom + ", phone=" + this.phone + ", engagementDate=" + this.engagementDate + ", actif=" + this.revoquee + '}';
+        return "Employee{userId=" + this.userId + ", engagementId=" + this.engagementId + ", region=" + this.region
+                + ", poste=" + this.poste + ", entreprise=" + this.entreprise + ", nom=" + this.nom + ", prenom="
+                + this.prenom + ", phone=" + this.phone + ", engagementDate=" + this.engagementDate + ", actif="
+                + this.revoquee + '}';
     }
 }
-

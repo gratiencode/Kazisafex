@@ -8,9 +8,10 @@ package delegates;
 import IServices.ClientAppartenirStorage;
 import java.util.List;
 import data.ClientAppartenir;
+import static delegates.AretirerDelegate.getStorage;
 import tools.ServiceLocator;
 import tools.Tables;
-import static delegates.ClientAppartenirDelegate.getStorage;
+import java.time.LocalDateTime;
 
 /**
  *
@@ -55,5 +56,17 @@ public class ClientAppartenirDelegate {
 
     public static Long getCount() {
         return getStorage().getCount();
+    }
+
+    public static List<ClientAppartenir> findUnSyncedClientAppartenirs(long disconnected_at) {
+        return getStorage().findUnSyncedClientAppartenirs(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

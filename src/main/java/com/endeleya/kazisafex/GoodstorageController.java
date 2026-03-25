@@ -5,6 +5,7 @@
  */
 package com.endeleya.kazisafex;
 
+import data.Category;
 import delegates.DestockerDelegate;
 import delegates.FournisseurDelegate;
 import delegates.LigneVenteDelegate;
@@ -14,6 +15,7 @@ import delegates.PrixDeVenteDelegate;
 import delegates.ProduitDelegate;
 import delegates.RecquisitionDelegate;
 import delegates.StockerDelegate;
+import delegates.TraisorerieDelegate;
 import delegates.VenteDelegate;
 import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
@@ -26,7 +28,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +67,7 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -80,10 +82,13 @@ import data.Mesure;
 import data.Produit;
 import data.Recquisition;
 import data.Stocker;
+import data.StockDepotAgregate;
 import data.Livraison;
 import data.PrixDeVente;
 import data.Refresher;
 import data.Vente;
+import data.PermitTo;
+import services.StockDepotAgregateService;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -93,8 +98,15 @@ import tools.MainUI;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
+import tools.NotificationHandler;
 import tools.Constants;
-import data.helpers.Role; import data.network.Kazisafe;
+import data.helpers.Role;
+import data.network.Kazisafe;
+import delegates.CategoryDelegate;
+import delegates.PermissionDelegate;
+import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
+import tools.DataId;
 
 /**
  * FXML Controller class
@@ -229,10 +241,6 @@ public class GoodstorageController implements Initializable {
     CheckBox chk_box_inv_mag_depot;
     @FXML
     Label libelle_inv;
-//    @FXML
-//    private DatePicker dpk_debut_inv;
-//    @FXML
-//    private DatePicker dpk_fin_inv;
     @FXML
     private TextField input_txt_criteres_mens;
     @FXML
@@ -260,13 +268,13 @@ public class GoodstorageController implements Initializable {
     @FXML
     Label curent_path;
 
-    // JpaStorage strongDb;
     ObservableList<Livraison> listlivr;
     ObservableList<Fournisseur> listfourn;
     ObservableList<Stocker> list_stockers;
     ObservableList<Destocker> lisdestocker;
     ObservableList<InventoryItem> lisinvent;
     ObservableList<String> regions;
+    StockDepotAgregateService stockDepotService;
     List<Produit> products;
     List<Stocker> stox;
     List<Destocker> destox;
@@ -337,16 +345,18 @@ public class GoodstorageController implements Initializable {
     }
 
     public void addStocker(Stocker liv) {
-        Stocker l = StockerDelegate.findStocker(liv.getUid());//strongDb.findByUid(Stocker.class, liv.getUid());
+        Stocker l = StockerDelegate.findStocker(liv.getUid());// strongDb.findByUid(Stocker.class, liv.getUid());
         if (l == null) {
-            Livraison z = LivraisonDelegate.findLivraison(liv.getLivraisId().getUid());//strongDb.findByUid(Livraison.class, liv.getLivraisId().getUid());
+            Livraison z = LivraisonDelegate.findLivraison(liv.getLivraisId().getUid());// strongDb.findByUid(Livraison.class,
+                                                                                       // liv.getLivraisId().getUid());
             if (z != null) {
                 StockerDelegate.saveStocker(liv);// strongDb.insertOnly(liv);
             }
         } else {
-            Livraison z = LivraisonDelegate.findLivraison(liv.getLivraisId().getUid());//strongDb.findByUid(Livraison.class, l.getLivraisId().getUid());
+            Livraison z = LivraisonDelegate.findLivraison(liv.getLivraisId().getUid());// strongDb.findByUid(Livraison.class,
+                                                                                       // l.getLivraisId().getUid());
             if (z != null) {
-                StockerDelegate.updateStocker(liv);//strongDb.updateOnly(liv);
+                StockerDelegate.updateStocker(liv);// strongDb.updateOnly(liv);
             }
         }
     }
@@ -361,7 +371,8 @@ public class GoodstorageController implements Initializable {
                     list_stockers.clear();
                     list_stockers.add(s);
                 } else {
-                    Optional<Stocker> match = list_stockers.stream().filter(p -> p.getUid().equals(s.getUid())).findFirst();
+                    Optional<Stocker> match = list_stockers.stream().filter(p -> p.getUid().equals(s.getUid()))
+                            .findFirst();
                     if (match.isPresent()) {
                         list_stockers.set(list_stockers.indexOf(s), s);
                     }
@@ -389,10 +400,22 @@ public class GoodstorageController implements Initializable {
         lisdestocker.add(l);
     }
 
+    private void initPref() {
+        pref = Preferences.userNodeForPackage(SyncEngine.class);
+        if (role == null) {
+            role = pref.get("role", "Trader");
+        }
+        if (region == null) {
+            region = pref.get("region", "Goma");
+        }
+    }
+
     public void populate() {
         list_stockers.clear();
         listfourn.clear();
         listlivr.clear();
+        initPref();
+        DestockerDelegate.removeOrphans();
         if (role.equals(Role.Trader.name())
                 || role.equals(Role.Magazinner_ALL_ACCESS.name())
                 || role.equals(Role.Manager_ALL_ACCESS.name())) {
@@ -400,6 +423,14 @@ public class GoodstorageController implements Initializable {
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
             destox = DestockerDelegate.findDescSortedByDate(offsetd, limis.intValue());
+            if(destox==null)return;
+            List<Destocker> filteredDestox = new ArrayList<>();
+            for(Destocker d : destox) {
+                if(d.getProductId() != null && ProduitDelegate.findProduit(d.getProductId().getUid()) != null) {
+                    filteredDestox.add(d);
+                }
+            }
+            destox = filteredDestox;
             lisdestocker.addAll(destox);
             table1.setItems(lisdestocker);
 
@@ -422,6 +453,14 @@ public class GoodstorageController implements Initializable {
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
             destox = DestockerDelegate.findDescSortedByDate(region, offsetd, limis.intValue());
+            if(destox==null)return;
+            List<Destocker> filteredDestox = new ArrayList<>();
+            for(Destocker d : destox) {
+                if(d.getProductId() != null && ProduitDelegate.findProduit(d.getProductId().getUid()) != null) {
+                    filteredDestox.add(d);
+                }
+            }
+            destox = filteredDestox;
             lisdestocker = FXCollections.observableArrayList(destox);
             table1.setItems(lisdestocker);
             long size = LivraisonDelegate.getCount();
@@ -452,12 +491,15 @@ public class GoodstorageController implements Initializable {
     public void setDatabase(String action) {
         this.action = action;
         kazisafe = KazisafeServiceFactory.createService(token);
+        // Initialize StockDepotAgregateService for aggregate stock management
+        stockDepotService = new StockDepotAgregateService();
         regions = FXCollections.observableArrayList();
         cbx_regions.setItems(regions);
         cbx_regions.setVisible(false);
         stox = new ArrayList<>();
         destox = new ArrayList<>();
         products = ProduitDelegate.findProduits();
+        initPref();
         if (role.equals(Role.Trader.name()) || role.toUpperCase().contains(Role.ALL_ACCESS.name().toUpperCase())) {
             cbx_regions.setVisible(true);
         }
@@ -475,11 +517,13 @@ public class GoodstorageController implements Initializable {
                     Platform.runLater(new Runnable() {
                         @Override
                         public void run() {
-                            setText(item.getNumPiece() + ", " + item.getReference() + " " + item.getTopay() + " " +item.getDateLivr().toString());
+                            setText(item.getNumPiece() + ", " + item.getReference() + " " + item.getTopay() + " "
+                                    + item.getDateLivr().toString());
                             imageView.setFitHeight(28);
                             imageView.setFitWidth(28);
                             imageView.setPreserveRatio(true);
-                            imageView.setImage(new Image(AgentController.class.getResourceAsStream("/icons/add-product(1).png")));
+                            imageView.setImage(
+                                    new Image(AgentController.class.getResourceAsStream("/icons/add-product(1).png")));
                             setGraphic(imageView);
                         }
                     });
@@ -506,7 +550,8 @@ public class GoodstorageController implements Initializable {
                             imageView.setFitHeight(28);
                             imageView.setFitWidth(28);
                             imageView.setPreserveRatio(true);
-                            imageView.setImage(new Image(AgentController.class.getResourceAsStream("/icons/add-user32.png")));
+                            imageView.setImage(
+                                    new Image(AgentController.class.getResourceAsStream("/icons/add-user32.png")));
                             setGraphic(imageView);
                         }
                     });
@@ -525,7 +570,8 @@ public class GoodstorageController implements Initializable {
                 } else {
                     ObservableList<Livraison> rst = FXCollections.observableArrayList();
                     for (Livraison livr : listlivr) {
-                        String term = livr.getNumPiece() + " " + livr.getFournId().getNomFourn() + " " + livr.getLibelle()
+                        String term = livr.getNumPiece() + " " + livr.getFournId().getNomFourn() + " "
+                                + livr.getLibelle()
                                 + " " + livr.getDateLivr().toString();
                         if (term.toUpperCase().contains(newValue.toUpperCase())) {
                             rst.add(livr);
@@ -572,14 +618,6 @@ public class GoodstorageController implements Initializable {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
                 if (newValue) {
-                    //table_livraisonage.setItems(listlivraiz);
-//                    double sumstock = Util.sumUp(listocker, true, rowsDataCount);
-//                    if (role.equals(Role.Trader.name()) || 
-//                            role.equals(Role.Manager.name()) || 
-//                            role.equals(Role.Magazinner.name())) {
-//                        global_achat.setVisible(true);
-//                        global_achat.setText("Achats cumulés: $" + sumstock);
-//                    } 
                 }
 
             }
@@ -623,7 +661,7 @@ public class GoodstorageController implements Initializable {
             }
         });
 
-        kazisafe.getRegions(entr).enqueue(new Callback<List<String>>() {
+        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
             @Override
             public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
                 if (rspns.isSuccessful()) {
@@ -667,7 +705,7 @@ public class GoodstorageController implements Initializable {
     }
 
     public void gotoSuplier(Event e) {
-        MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 355, null, kazisafe, entreprise, null);
+        MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, entreprise, null);
     }
 
     public void gotoDelivery(Event e) {
@@ -747,26 +785,31 @@ public class GoodstorageController implements Initializable {
             Stocker liv = param.getValue();
             String dt = null;
             if (liv != null) {
-                Date dat = liv.getDateStocker();
+                LocalDateTime dat = liv.getDateStocker();
                 if (dat != null) {
-                    dt = tools.Constants.DATE_HEURE_FORMAT.format(dat);
+                    dt = dat.toString();
                 }
             }
             return new SimpleStringProperty(dt == null ? "-" : dt);
         });
-        col_ref_Stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(param.getValue().getLivraisId().getNumPiece()));
+        col_ref_Stocker
+                .setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getLivraisId().getNumPiece()));
         col_nom_produit_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
             Stocker l = param.getValue();
             Produit p = ProduitDelegate.findProduit(l.getProductId().getUid());
-            return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + (p.getTaille() == null ? "" : p.getTaille()));
+            return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
+                    + (p.getTaille() == null ? "" : p.getTaille()));
         });
         col_numlot_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
-            //Fournisseur fss = strongDb.findByUid(Fournisseur.class, param.getValue().getFournId().getUid());
+            // Fournisseur fss = strongDb.findByUid(Fournisseur.class,
+            // param.getValue().getFournId().getUid());
             Stocker l = param.getValue();
             return new SimpleStringProperty(l.getNumlot());
         });
         col_quant_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
-            //Fournisseur fss = strongDb.findByUid(Fournisseur.class, param.getValue().getFournId().getUid());
+            // Fournisseur fss = strongDb.findByUid(Fournisseur.class,
+            // param.getValue().getFournId().getUid());
             Stocker l = param.getValue();
             Mesure fss = l.getMesureId();
             double qt = l.getQuantite();
@@ -778,25 +821,33 @@ public class GoodstorageController implements Initializable {
             return new SimpleDoubleProperty(t == null ? 0 : t);
         });
         col_cout_total_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, Number> param) -> {
-            Double t = param.getValue().getPrixAchatTotal();
-            return new SimpleDoubleProperty(t == null ? 0 : t);
+            Stocker s = param.getValue();
+            return new SimpleDoubleProperty(s.getCoutAchat() * s.getQuantite());
         });
 
         col_date_expir_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
-            Stocker lst = param.getValue();//strongDb.findStockerByLivr(param.getValue().getUid());
+            Stocker lst = param.getValue();// strongDb.findStockerByLivr(param.getValue().getUid());
             String dat;
             if (lst.getDateExpir() == null) {
                 dat = bundle.getString("noperish");
             } else {
-                dat = tools.Constants.DATE_ONLY_FORMAT.format(lst.getDateExpir());
+                dat = lst.getDateExpir().toString();
             }
             return new SimpleStringProperty(dat);
         });
-        col_region_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(param.getValue().getRegion()));
-        col_observ_stocker.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(param.getValue().getObservation()));
-        //destockage
-        col_date_destk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(tools.Constants.DATE_HEURE_FORMAT.format(param.getValue().getDateDestockage())));
-        col_ref_destk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(param.getValue().getReference()));
+        col_region_stocker
+                .setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getRegion()));
+        col_observ_stocker
+                .setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getObservation()));
+        // destockage
+        col_date_destk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getDateDestockage().toString()));
+        col_ref_destk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getReference()));
         col_codebar_destk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> {
             Produit p = Util.findProduit(products, param.getValue().getProductId().getUid());
             if (p == null) {
@@ -809,22 +860,38 @@ public class GoodstorageController implements Initializable {
             if (p == null) {
                 return new SimpleStringProperty();
             }
-            return new SimpleStringProperty(p == null ? "" : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille()));
+            return new SimpleStringProperty(p == null ? ""
+                    : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille()));
         });
         col_quant_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> {
             Mesure mx = param.getValue().getMesureId();
-            // Mesure m = MesureDelegate.findMesure(mx.getUid());//strongDb.findByUid(Mesure.class, mx.getUid());//Util.findMesure(strongDb.findAll(), mx);
+            // Mesure m =
+            // MesureDelegate.findMesure(mx.getUid());//strongDb.findByUid(Mesure.class,
+            // mx.getUid());//Util.findMesure(strongDb.findAll(), mx);
             Destocker ds = param.getValue();
-            return new SimpleStringProperty((ds != null ? ds.getQuantite() : 0) + " " + (mx == null ? "" : mx.getDescription()));
+            return new SimpleStringProperty(
+                    (ds != null ? ds.getQuantite() : 0) + " " + (mx == null ? "" : mx.getDescription()));
         });
-        col_cout_ach_unit_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, Number> param) -> new SimpleDoubleProperty(param.getValue().getCoutAchat()));
-        col_libelle_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(param.getValue().getLibelle()));
-        col_destination_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(param.getValue().getDestination()));
-        col_numlot_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(param.getValue().getNumlot()));
-        col_coutotal_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, Number> param) -> new SimpleDoubleProperty(
-                BigDecimal.valueOf(param.getValue().getCoutAchat() * param.getValue().getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
-        col_region_dstk.setCellValueFactory((TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(param.getValue().getRegion()));
-        //inventaire
+        col_cout_ach_unit_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, Number> param) -> new SimpleDoubleProperty(
+                        param.getValue().getCoutAchat()));
+        col_libelle_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getLibelle()));
+        col_destination_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getDestination()));
+        col_numlot_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getNumlot()));
+        col_coutotal_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, Number> param) -> new SimpleDoubleProperty(
+                        BigDecimal.valueOf(param.getValue().getCoutAchat() * param.getValue().getQuantite())
+                                .setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+        col_region_dstk.setCellValueFactory(
+                (TableColumn.CellDataFeatures<Destocker, String> param) -> new SimpleStringProperty(
+                        param.getValue().getRegion()));
+        // inventaire
         col_codebar_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             Produit p = Util.findProduit(products, param.getValue().getProduit().getUid());
             if (p == null) {
@@ -837,7 +904,8 @@ public class GoodstorageController implements Initializable {
             if (p == null) {
                 return new SimpleStringProperty();
             }
-            return new SimpleStringProperty(p == null ? "Not synced" : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille()));
+            return new SimpleStringProperty(p == null ? "Not synced"
+                    : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille()));
         });
         col_quant_in_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getQuantEntree());
@@ -855,19 +923,23 @@ public class GoodstorageController implements Initializable {
             return new SimpleStringProperty(param.getValue().getStockAlerte());
         });
         col_date_expir_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            Date d = param.getValue().getLastStocker().getDateExpir();
-            return new SimpleStringProperty(d == null ? null : Constants.dateFormater.format(d));
+            LocalDate d = param.getValue().getLastStocker().getDateExpir();
+            return new SimpleStringProperty(d == null ? null : d.toString());
         });
         col_localisation_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getLastStocker().getLocalisation());
         });
+        
         list_livraison.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Livraison>() {
             @Override
-            public void changed(ObservableValue<? extends Livraison> observable, Livraison oldValue, Livraison newValue) {
+            public void changed(ObservableValue<? extends Livraison> observable, Livraison oldValue,
+                    Livraison newValue) {
                 livraison = newValue;
                 if (livraison != null) {
-                    ObservableList<Stocker> stockrs = FXCollections.observableArrayList(StockerDelegate.findStockerByLivraison(livraison.getUid()));
-                    curent_path.setText(livraison.getFournId().getNomFourn() + " : " + livraison.getNumPiece() + ", " + livraison.getDateLivr().toString()+ " (" + stockrs.size() + " articles)");
+                    ObservableList<Stocker> stockrs = FXCollections
+                            .observableArrayList(StockerDelegate.findStockerByLivraison(livraison.getUid()));
+                    curent_path.setText(livraison.getFournId().getNomFourn() + " : " + livraison.getNumPiece() + ", "
+                            + livraison.getDateLivr().toString() + " (" + stockrs.size() + " articles)");
                     table_stockage.setItems(stockrs);
                     count.setText(String.format(bundle.getString("xitems"), stockrs.size()));
                     global_achat.setText("Total : USD " + livraison.getPayed());
@@ -875,9 +947,11 @@ public class GoodstorageController implements Initializable {
                 }
             }
         });
+       
         table1.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Destocker>() {
             @Override
-            public void changed(ObservableValue<? extends Destocker> observable, Destocker oldValue, Destocker newValue) {
+            public void changed(ObservableValue<? extends Destocker> observable, Destocker oldValue,
+                    Destocker newValue) {
                 chdestocker = newValue;
             }
         });
@@ -892,7 +966,8 @@ public class GoodstorageController implements Initializable {
 
         table11.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<InventoryItem>() {
             @Override
-            public void changed(ObservableValue<? extends InventoryItem> observable, InventoryItem oldValue, InventoryItem newValue) {
+            public void changed(ObservableValue<? extends InventoryItem> observable, InventoryItem oldValue,
+                    InventoryItem newValue) {
                 if (newValue != null) {
                     chdestocker = newValue.getLastDestocker();
                     chstocker = newValue.getLastStocker();
@@ -901,125 +976,85 @@ public class GoodstorageController implements Initializable {
         });
     }
 
-    public void loadInventaireDepot(List<Produit> lp, String region) {
-
+    /**
+     * Load inventory data from StockDepotAgregate table
+     * This is the new method that uses StockDepotAgregate as the source of truth
+     */
+    public void loadInventoryFromStockDepotAgregate(List<Produit> lp, String regionFilter) {
         lisinvent.clear();
         valStock = 0;
 
         for (Produit p : lp) {
+            // Get latest stock depot aggregate for this product and region
+            StockDepotAgregate latestStock = stockDepotService.findLatestStockDepotAgregate(p.getUid(),
+                    regionFilter != null ? regionFilter : (region != null ? region : "DEFAULT"));
+
+            if (latestStock == null || latestStock.getQuantite() <= 0) {
+                continue; // Skip products with no stock
+            }
+
             InventoryItem invent = new InventoryItem();
-            List<Stocker> lst;
-            List<Destocker> lsd;
-            if (region == null) {
-
-                lst = StockerDelegate.findStockerByProduit(p.getUid());
-                //strongDb.findAllEquals("productId.uid", p.getUid());
-                // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-                lsd = DestockerDelegate.findByProduit(p.getUid());
-                //strongDb.findAllEquals("productId.uid", p.getUid());
-                //Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
-            } else {
-                HashMap<String, String> kv = new HashMap<>();
-                kv.put("productId.uid", p.getUid());
-                kv.put("region", region);
-                lst = StockerDelegate.findStockerByProduit(p.getUid(), region);//.jpa.findByProduit(Stocker.class, p.getUid(), region);
-                //strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new String[]{p.getUid(), region});
-                //Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-                lsd = DestockerDelegate.findByProduit(p.getUid(), region);//jpa.findByProduit(Destocker.class, p.getUid(), region);
-                //strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new String[]{p.getUid(), region});
-                //Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
-            }
-
             invent.setProduit(p);
-            if (lst.isEmpty()) {
+
+            // Get all stock depot records for this product to calculate totals
+            List<StockDepotAgregate> stockDepotRecords = stockDepotService.findByProduitAndRegion(p.getUid(),
+                    regionFilter != null ? regionFilter : (region != null ? region : "DEFAULT"));
+
+            double totalQuantite = 0;
+            double totalValeur = 0;
+            double coutMoyen = 0;
+
+            for (StockDepotAgregate sd : stockDepotRecords) {
+                totalQuantite += sd.getQuantite();
+                totalValeur += sd.getValeurStock();
+            }
+
+            if (totalQuantite > 0) {
+                coutMoyen = totalValeur / totalQuantite;
+            }
+
+            // Get measure for display
+            List<Mesure> lm = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
+            if (lm.isEmpty()) {
                 continue;
             }
-            Stocker lastStk = Util.findLastStocker(lst);
-            int i = lsd.size() - 1;
-            Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
+            Mesure mx = lm.get(0);
 
-            // List<Mesure> mzx = MesureDelegate.findMesureByProduit(p.getUid());//jpa.findByProduit(Mesure.class, p.getUid());
-            //strongDb.findAllEquals("produitId.uid", p.getUid());
-            Mesure mx = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid()).get(0);
-            System.err.println("last sotck mzure " + lastStk.getMesureId() + " max " + mx);
-            Mesure mzs = lastStk.getMesureId();
+            // Set inventory item properties from StockDepotAgregate
+            invent.setStockAlerte((latestStock.getQuantite() > 0 ? "En stock" : "Rupture") + " " + mx.getDescription());
+            invent.setLastStocker(null); // Not using individual stockers anymore
+            invent.setLastDestocker(null);
 
-            Mesure mxr = MesureDelegate.findMesure(mzs.getUid());
-            //strongDb.findByUid(mzs.getUid());
-            /**
-             * if (!role.equals(Role.Trader.name())) { sorties =
-             * Util.findLigneVenteForProduit(calcvente, calclv, p.getUid(),
-             * region); } else { sorties =
-             * nsligneVente.findAllEquals("productId.uid", p.getUid()); } double
-             * somVal = 0; //en piecement double spc = 0; double epc = 0; for
-             * (Recquisition r : entrees) { Mesure m = r.getMesureId(); double
-             * epcx = r.getQuantite() * m.getQuantContenu(); epc += epcx; double
-             * sumqsort = sumLotPc(sorties, r.getNumlot()); double rst = epcx -
-             * sumqsort; double capc = r.getCoutAchat() / m.getQuantContenu();
-             * somVal += rst * capc; } im.setQuantEntree(epc); for (LigneVente
-             * lv : sorties) { Mesure m = lv.getMesureId(); spc +=
-             * lv.getQuantite() * m.getQuantContenu(); } double rest = (epc -
-             * spc);
-             */
-            if (mx == null) {
-                continue;
-            }
-//            if (mxr == null) {
-//                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-//                //strongDb.findByProduitAsc(Mesure.class,p.getUid(),"quantContenu");, p.getUid(), "quantContenu");
-//                mxr = mesures.get(0);
-//            }
-            //  System.err.println("Entre mezure " + mx + " et last stock " + lastStk + " " + lastStk.getMesureId().getDescription() + " " + mzs.getDescription());
-            invent.setStockAlerte((lastStk.getStockAlerte() + " " + mx.getDescription()));
-            invent.setLastStocker(lastStk);
-            invent.setLastDestocker(lastDstk);
-            double somVal = 0;
-            double in = 0, out = 0;
-            for (Stocker s : lst) {
-                Mesure m = s.getMesureId();
-                Mesure mreel = MesureDelegate.findMesure(m.getUid());
-                //strongDb.findByUid(m.getUid());
-                if (mreel == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());
-                    //strongDb.findByProduitAsc(Mesure.class,p.getUid(),"quantContenu");
-                    mreel = mesures.get(0);
-                }
-                double epcx = s.getQuantite() * (mreel.getQuantContenu());
-                in += epcx;
-                double sumqsort = sumLotPc(lsd, s.getNumlot());
-                double rst = epcx - sumqsort;
-                double capc = s.getCoutAchat() / mreel.getQuantContenu();
-                somVal += rst * capc;
-            }
-
-            for (Destocker d : lsd) {
-                Mesure m = d.getMesureId();
-                Mesure mreel = MesureDelegate.findMesure(m.getUid());//jpa.findByUid(Mesure.class, m.getUid());
-                //strongDb.findByUid(m.getUid());
-                if (mreel == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());
-                    //strongDb.findByProduitAsc(Mesure.class,p.getUid(),"quantContenu");, d.getProductId().getUid(), "quantContenu");
-                    mreel = mesures.get(0);
-                }
-                out += (d.getQuantite() * mreel.getQuantContenu());
-            }
+            // Calculate values based on StockDepotAgregate
+            double in = totalQuantite; // Total quantity in base unit
+            double out = 0; // Already accounted for in aggregate
             double rst = in - out;
+
             Double den = mx.getQuantContenu();
-            System.err.println(" In " + in + " " + mx + " " + invent);
             invent.setQuantEntree((in / (den == null ? 1 : den)) + " " + mx.getDescription());
-            invent.setQuantSortie((out / (den == null ? 1 : den)) + " " + mx.getDescription());
+            invent.setQuantSortie("0 " + mx.getDescription());
             invent.setQuantRest((rst / (den == null ? 1 : den)) + " " + mx.getDescription());
-            invent.setValeurStock(BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+            invent.setValeurStock(
+                    BigDecimal.valueOf(totalValeur).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+
             lisinvent.add(invent);
-            valStock += somVal;
+            valStock += totalValeur;
         }
+
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                table11.setItems(lisinvent);
+                count11.setText(String.format(bundle.getString("xitems"), lisinvent.size()));
             }
         });
+    }
 
+    public void loadInventaireDepot(List<Produit> lp, String region) {
+        // Call the new method that uses StockDepotAgregate as source
+        loadInventoryFromStockDepotAgregate(lp, region);
     }
 
     double sumLotPc(List<Destocker> ls, String numlot) {
@@ -1030,10 +1065,13 @@ public class GoodstorageController implements Initializable {
             }
             if (l.getNumlot().equals(numlot)) {
                 Mesure m = l.getMesureId();
-                Mesure mreel = MesureDelegate.findMesure(m.getUid());//strongDb.findByUid(Mesure.class, m.getUid());
+                Mesure mreel = MesureDelegate.findMesure(m.getUid());// strongDb.findByUid(Mesure.class, m.getUid());
                 if (mreel == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(l.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, l.getProductId().getUid(), "quantContenu");
-                    //strongDb.findByProduitAsc(Mesure.class,p.getUid(),"quantContenu");, p.getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(l.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // l.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
+                    // strongDb.findByProduitAsc(Mesure.class,p.getUid(),"quantContenu");,
+                    // p.getUid(), "quantContenu");
                     mreel = mesures.get(0);
                 }
                 s_qlot += l.getQuantite() * (mreel.getQuantContenu());
@@ -1055,45 +1093,55 @@ public class GoodstorageController implements Initializable {
                 List<Destocker> lsd;
                 if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
 
-                    lst = StockerDelegate.findByDateIntervale(date1, date2);//strongDb.findAllByDateInterval(Stocker.class, tools.Constants.Datetime.toUtilDate(date1), tools.Constants.Datetime.toUtilDate(date2));
-//                .findWhereDateBetween("dateStocker",
-//                        ,
-//                        ,
-//                        "productId.uid", p.getUid());
-                    //.findAllEquals("productId.uid", p.getUid());
+                    lst = StockerDelegate.findByDateIntervale(date1, date2);// strongDb.findAllByDateInterval(Stocker.class,
+                                                                            // tools.Constants.Datetime.toUtilDate(date1),
+                                                                            // tools.Constants.Datetime.toUtilDate(date2));
+                    // .findWhereDateBetween("dateStocker",
+                    // ,
+                    // ,
+                    // "productId.uid", p.getUid());
+                    // .findAllEquals("productId.uid", p.getUid());
                     // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
 
-                    lsd = DestockerDelegate.findByDateIntervale(date1, date2);//strongDb.findAllByDateInterval(Destocker.class, tools.Constants.Datetime.toUtilDate(date1), tools.Constants.Datetime.toUtilDate(date2));
-                    //strongDb.findWhereDateBetween("dateDestockage",
-//                        tools.Constants.Datetime.dateInMillis(date1),
-//                        tools.Constants.Datetime.dateInMillis(date2),
-//                        "productId.uid", p.getUid());
-                    //strongDb.findAllEquals("productId.uid", p.getUid());
-                    //Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
+                    lsd = DestockerDelegate.findByDateIntervale(date1, date2);// strongDb.findAllByDateInterval(Destocker.class,
+                                                                              // tools.Constants.Datetime.toUtilDate(date1),
+                                                                              // tools.Constants.Datetime.toUtilDate(date2));
+                    // strongDb.findWhereDateBetween("dateDestockage",
+                    // tools.Constants.Datetime.dateInMillis(date1),
+                    // tools.Constants.Datetime.dateInMillis(date2),
+                    // "productId.uid", p.getUid());
+                    // strongDb.findAllEquals("productId.uid", p.getUid());
+                    // Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
                 } else {
-                    lst = StockerDelegate.findByDateIntervale(date1, date2, region);// strongDb.findAllByDateIntervalInRegion(Stocker.class, tools.Constants.Datetime.toUtilDate(date1),
+                    lst = StockerDelegate.findByDateIntervale(date1, date2, region);// strongDb.findAllByDateIntervalInRegion(Stocker.class,
+                                                                                    // tools.Constants.Datetime.toUtilDate(date1),
                     // tools.Constants.Datetime.toUtilDate(date2), region);
-//                        strongDb.findWhereDateBetween("dateStocker",
-//                        tools.Constants.Datetime.dateInMillis(date1),
-//                        tools.Constants.Datetime.dateInMillis(date2),
-//                        "productId.uid", p.getUid(), "region", region);
-                    //.findAllEquals("productId.uid", p.getUid());
+                    // strongDb.findWhereDateBetween("dateStocker",
+                    // tools.Constants.Datetime.dateInMillis(date1),
+                    // tools.Constants.Datetime.dateInMillis(date2),
+                    // "productId.uid", p.getUid(), "region", region);
+                    // .findAllEquals("productId.uid", p.getUid());
                     // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
 
-                    lsd = DestockerDelegate.findByDateIntervale(date1, date2, region);//strongDb.findAllByDateIntervalInRegion(Destocker.class, tools.Constants.Datetime.toUtilDate(date1),
-                    //  tools.Constants.Datetime.toUtilDate(date2), region);
-//                        strongDb.findWhereDateBetween("dateDestockage",
-//                        tools.Constants.Datetime.dateInMillis(date1),
-//                        tools.Constants.Datetime.dateInMillis(date2),
-//                        "productId.uid", p.getUid(), "region", region);
+                    lsd = DestockerDelegate.findByDateIntervale(date1, date2, region);// strongDb.findAllByDateIntervalInRegion(Destocker.class,
+                                                                                      // tools.Constants.Datetime.toUtilDate(date1),
+                    // tools.Constants.Datetime.toUtilDate(date2), region);
+                    // strongDb.findWhereDateBetween("dateDestockage",
+                    // tools.Constants.Datetime.dateInMillis(date1),
+                    // tools.Constants.Datetime.dateInMillis(date2),
+                    // "productId.uid", p.getUid(), "region", region);
                 }
-//            if (role.equals(Role.Trader.name())) {
-//                lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid(), d1, d2);
-//                lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid(), d1, d2);
-//            } else {
-//                lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid(), d1, d2);
-//                lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid(), d1, d2);
-//            }
+                // if (role.equals(Role.Trader.name())) {
+                // lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid(),
+                // d1, d2);
+                // lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox),
+                // p.getUid(), d1, d2);
+                // } else {
+                // lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid(),
+                // d1, d2);
+                // lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox),
+                // p.getUid(), d1, d2);
+                // }
 
                 invent.setProduit(p);
                 if (lst.isEmpty()) {
@@ -1102,25 +1150,34 @@ public class GoodstorageController implements Initializable {
                 Stocker lastStk = lst.get(lst.size() - 1);
                 int i = lsd.size() - 1;
                 Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
-                Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class, "quantContenu", p.getUid());
-                //strongDb.findMaxMesure(Mesure.class,"quantContenu", p.getUid());
+                Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class,
+                                                                              // "quantContenu", p.getUid());
+                // strongDb.findMaxMesure(Mesure.class,"quantContenu", p.getUid());
                 invent.setLastStocker(lastStk);
                 invent.setLastDestocker(lastDstk);
                 Mesure mi = lastStk.getMesureId();
-                Mesure mxr = MesureDelegate.findMesure(mi.getUid());//strongDb.findByUid(Mesure.class, mi.getUid());
+                Mesure mxr = MesureDelegate.findMesure(mi.getUid());// strongDb.findByUid(Mesure.class, mi.getUid());
                 if (mxr == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lastStk.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, lastStk.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate
+                            .findAscSortedByQuantWithProduit(lastStk.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                              // lastStk.getProductId().getUid(),
+                                                                                              // "quantContenu");
                     mxr = mesures.get(0);
                 }
                 invent.setStockAlerte((lastStk.getStockAlerte()) + " " + mxr.getDescription());
-                //System.err.println(p.getMarque()+" "+mx.getDescription()+" "+mx.getQuantContenu());
+                // System.err.println(p.getMarque()+" "+mx.getDescription()+"
+                // "+mx.getQuantContenu());
                 double somVal = 0;
                 double in = 0, out = 0;
                 for (Stocker s : lst) {
                     Mesure mir = s.getMesureId();
-                    Mesure m = MesureDelegate.findMesure(mir.getUid());//strongDb.findByUid(Mesure.class, mir.getUid());
+                    Mesure m = MesureDelegate.findMesure(mir.getUid());// strongDb.findByUid(Mesure.class,
+                                                                       // mir.getUid());
                     if (m == null) {
-                        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class, s.getProductId().getUid(), "quantContenu");
+                        List<Mesure> mesures = MesureDelegate
+                                .findAscSortedByQuantWithProduit(s.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                            // s.getProductId().getUid(),
+                                                                                            // "quantContenu");
                         m = mesures.get(0);
                     }
                     double epcx = s.getQuantite() * m.getQuantContenu();
@@ -1133,9 +1190,13 @@ public class GoodstorageController implements Initializable {
 
                 for (Destocker d : lsd) {
                     Mesure mire = d.getMesureId();
-                    Mesure m = MesureDelegate.findMesure(mire.getUid());//strongDb.findByUid(Mesure.class, mire.getUid());
+                    Mesure m = MesureDelegate.findMesure(mire.getUid());// strongDb.findByUid(Mesure.class,
+                                                                        // mire.getUid());
                     if (m == null) {
-                        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, d.getProductId().getUid(), "quantContenu");
+                        List<Mesure> mesures = MesureDelegate
+                                .findAscSortedByQuantWithProduit(d.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                            // d.getProductId().getUid(),
+                                                                                            // "quantContenu");
                         m = mesures.get(0);
                     }
                     out += (d.getQuantite() * m.getQuantContenu());
@@ -1147,7 +1208,8 @@ public class GoodstorageController implements Initializable {
                 invent.setQuantEntree((in / mx.getQuantContenu()) + " " + mx.getDescription());
                 invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
                 invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
-                invent.setValeurStock(BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                invent.setValeurStock(
+                        BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
                 lisinvent.add(invent);
                 valStock += somVal;
             }
@@ -1155,26 +1217,28 @@ public class GoodstorageController implements Initializable {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
     }
 
     List<Stocker> findExpiry(Produit p, int mois) {
         List<Stocker> result = new ArrayList<>();
-        List<Stocker> ss = StockerDelegate.findAscSortedByDateExpir(p.getUid());//strongDb.findByProduitAsc(Stocker.class, p.getUid(), "dateExpir");
-        //strongDb.findFullEqualAsc(new String[]{"productId.uid"}, new String[]{p.getUid()}, "dateExpir");
-        Calendar cExp = Calendar.getInstance();
+        List<Stocker> ss = StockerDelegate.findAscSortedByDateExpir(p.getUid());// strongDb.findByProduitAsc(Stocker.class,
+                                                                                // p.getUid(), "dateExpir");
+        // strongDb.findFullEqualAsc(new String[]{"productId.uid"}, new
+        // String[]{p.getUid()}, "dateExpir");
+
         System.out.println("Time now timex");
 
         for (Stocker s : ss) {
 
-            Date datex = s.getDateExpir();
+            LocalDate datex = s.getDateExpir();
             if (datex == null) {
                 continue;
             }
-            cExp.setTime(datex);
-            long timex = cExp.getTimeInMillis();
+            long timex = Constants.Datetime.dateInMillis(datex);
             long remain = mois * tools.Constants.UN_MOIS;
             long time = System.currentTimeMillis();
             long diff = timex - time;
@@ -1188,17 +1252,20 @@ public class GoodstorageController implements Initializable {
 
     List<Stocker> findExpiry(Produit p, String region, int mois) {
         List<Stocker> result = new ArrayList<>();
-        List<Stocker> ss = StockerDelegate.findAscSortedByDateExpir(p.getUid(), region);//strongDb.findByProduitAsc(Stocker.class, p.getUid(), "dateExpir", region);
-        //strongDb.findFullEqualAsc(new String[]{"productId.uid"}, new String[]{p.getUid()}, "dateExpir");
-        Calendar cExp = Calendar.getInstance();
+        List<Stocker> ss = StockerDelegate.findAscSortedByDateExpir(p.getUid(), region);// strongDb.findByProduitAsc(Stocker.class,
+                                                                                        // p.getUid(), "dateExpir",
+                                                                                        // region);
+        // strongDb.findFullEqualAsc(new String[]{"productId.uid"}, new
+        // String[]{p.getUid()}, "dateExpir");
+
         for (Stocker s : ss) {
 
-            Date datex = s.getDateExpir();
+            LocalDate datex = s.getDateExpir();
             if (datex == null) {
                 continue;
             }
-            cExp.setTime(datex);
-            long timex = cExp.getTimeInMillis();
+
+            long timex = Constants.Datetime.dateInMillis(datex);
             long inter = mois * tools.Constants.UN_MOIS;
             long time = System.currentTimeMillis();
             long comp = timex - time;
@@ -1224,28 +1291,32 @@ public class GoodstorageController implements Initializable {
                 System.out.println("taille azo " + lst.size());
                 // strongDb.findAllEquals("productId.uid", p.getUid());
                 // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-                lsd = DestockerDelegate.findByProduit(p.getUid());//strongDb.findByProduit(Destocker.class, p.getUid());
-                //Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
+                lsd = DestockerDelegate.findByProduit(p.getUid());// strongDb.findByProduit(Destocker.class,
+                                                                  // p.getUid());
+                // Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
             } else {
 
                 lst = findExpiry(p, region, dureeExp);
-                //strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new String[]{p.getUid(), region});
-                //Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-                lsd = DestockerDelegate.findByProduit(p.getUid(), region);//strongDb.findByProduit(Destocker.class, p.getUid(), region);
-                // strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new String[]{p.getUid(), region});
-                //Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
+                // strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new
+                // String[]{p.getUid(), region});
+                // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
+                lsd = DestockerDelegate.findByProduit(p.getUid(), region);// strongDb.findByProduit(Destocker.class,
+                                                                          // p.getUid(), region);
+                // strongDb.findFullEqual(new String[]{"productId.uid", "region"}, new
+                // String[]{p.getUid(), region});
+                // Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
             }
-//            if (role.equals(Role.Trader.name())) {
-//                lst =
-//                        Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-//                lsd = 
-//                        Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
-//            } else {
-//                lst = 
-//                        Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
-//                lsd = 
-//                        Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
-//            }
+            // if (role.equals(Role.Trader.name())) {
+            // lst =
+            // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
+            // lsd =
+            // Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
+            // } else {
+            // lst =
+            // Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
+            // lsd =
+            // Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
+            // }
             invent.setProduit(p);
             if (lst.isEmpty()) {
                 continue;
@@ -1253,24 +1324,30 @@ public class GoodstorageController implements Initializable {
             Stocker lastStk = lst.get(lst.size() - 1);
             int i = lsd.size() - 1;
             Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
-            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class, "quantContenu", p.getUid());
+            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class,
+                                                                          // "quantContenu", p.getUid());
             invent.setLastStocker(lastStk);
             invent.setLastDestocker(lastDstk);
             Mesure mxri = lastStk.getMesureId();
-            Mesure mxr = MesureDelegate.findMesure(mxri.getUid());//strongDb.findByUid(Mesure.class, mxri.getUid());
+            Mesure mxr = MesureDelegate.findMesure(mxri.getUid());// strongDb.findByUid(Mesure.class, mxri.getUid());
             if (mxr == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lastDstk.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, lastDstk.getProductId().getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lastDstk.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                        // lastDstk.getProductId().getUid(),
+                                                                                                                        // "quantContenu");
                 mxr = mesures.get(0);
             }
             invent.setStockAlerte((lastStk.getStockAlerte()) + " " + mxr.getDescription());
-            //System.err.println(p.getMarque()+" "+mx.getDescription()+" "+mx.getQuantContenu());
+            // System.err.println(p.getMarque()+" "+mx.getDescription()+"
+            // "+mx.getQuantContenu());
             double somVal = 0;
             double in = 0, out = 0;
             for (Stocker s : lst) {
                 Mesure mi = s.getMesureId();
                 Mesure m = MesureDelegate.findMesure(mi.getUid());// strongDb.findByUid(Mesure.class, mi.getUid());
                 if (m == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, s.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // s.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
                     m = mesures.get(0);
                 }
                 double epcx = s.getQuantite() * m.getQuantContenu();
@@ -1283,9 +1360,11 @@ public class GoodstorageController implements Initializable {
 
             for (Destocker d : lsd) {
                 Mesure mi = d.getMesureId();
-                Mesure m = MesureDelegate.findMesure(mi.getUid());//strongDb.findByUid(Mesure.class, mi.getUid());
+                Mesure m = MesureDelegate.findMesure(mi.getUid());// strongDb.findByUid(Mesure.class, mi.getUid());
                 if (m == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, d.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // d.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
                     m = mesures.get(0);
                 }
                 out += (d.getQuantite() * m.getQuantContenu());
@@ -1297,14 +1376,16 @@ public class GoodstorageController implements Initializable {
             invent.setQuantEntree((in / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
-            invent.setValeurStock(BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+            invent.setValeurStock(
+                    BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             lisinvent.add(invent);
             valStock += somVal;
         }
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
         table11.setItems(result);
@@ -1312,15 +1393,14 @@ public class GoodstorageController implements Initializable {
 
     public void loadInventaireDejaExpirDepot(List<Produit> lp) {
         ObservableList<InventoryItem> result = FXCollections.observableArrayList();
-        Calendar cExp = Calendar.getInstance();
+
         valStock = 0;
         for (Produit p : lp) {
             InventoryItem invent = new InventoryItem();
             List<Stocker> lst;
             List<Destocker> lsd;
             if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-                lst
-                        = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
+                lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
                 lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
             } else {
                 lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
@@ -1333,29 +1413,35 @@ public class GoodstorageController implements Initializable {
             Stocker lastStk = lst.get(lst.size() - 1);
             int i = lsd.size() - 1;
             Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
-            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());//strongDb.findMaxMesure(Mesure.class, "quantContenu", p.getUid());
-            //strongDb.findMaxMesure(Mesure.class,"quantContenu", p.getUid());
-            Date dt = lastStk.getDateExpir();
+            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class,
+                                                                          // "quantContenu", p.getUid());
+            // strongDb.findMaxMesure(Mesure.class,"quantContenu", p.getUid());
+            LocalDate dt = lastStk.getDateExpir();
             if (dt != null) {
-                cExp.setTime(dt);
+
             }
             invent.setLastStocker(lastStk);
             invent.setLastDestocker(lastDstk);
             Mesure mxri = lastStk.getMesureId();
-            Mesure mxr = MesureDelegate.findMesure(mxri.getUid());//strongDb.findByUid(Mesure.class, mxri.getUid());
+            Mesure mxr = MesureDelegate.findMesure(mxri.getUid());// strongDb.findByUid(Mesure.class, mxri.getUid());
             if (mxr == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lastStk.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, lastStk.getProductId().getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lastStk.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                       // lastStk.getProductId().getUid(),
+                                                                                                                       // "quantContenu");
                 mxr = mesures.get(0);
             }
             invent.setStockAlerte((lastStk.getStockAlerte()) + " " + mxr.getDescription());
-            //System.err.println(p.getMarque()+" "+mx.getDescription()+" "+mx.getQuantContenu());
+            // System.err.println(p.getMarque()+" "+mx.getDescription()+"
+            // "+mx.getQuantContenu());
             double somVal = 0, somQ = 0;
             double in = 0, out = 0;
             for (Stocker s : lst) {
                 Mesure m = s.getMesureId();
                 Mesure rell = MesureDelegate.findMesure(m.getUid());// strongDb.findByUid(Mesure.class, m.getUid());
                 if (rell == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, s.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // s.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
                     rell = mesures.get(0);
                 }
                 in += (s.getQuantite() * rell.getQuantContenu());
@@ -1365,7 +1451,7 @@ public class GoodstorageController implements Initializable {
             double cu = somVal / somQ;
             for (Destocker d : lsd) {
                 Mesure m = d.getMesureId();
-                Mesure mr = MesureDelegate.findMesure(m.getUid());//strongDb.findByUid(Mesure.class, m.getUid());
+                Mesure mr = MesureDelegate.findMesure(m.getUid());// strongDb.findByUid(Mesure.class, m.getUid());
                 if (mr == null) {
                     List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());
                     mr = mesures.get(0);
@@ -1376,9 +1462,10 @@ public class GoodstorageController implements Initializable {
             invent.setQuantEntree((in / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
-            invent.setValeurStock(BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+            invent.setValeurStock(
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             long cts = System.currentTimeMillis();
-            long exp = dt == null ? 0 : cExp.getTimeInMillis();
+            long exp = dt == null ? 0 : Constants.Datetime.dateInMillis(dt);
             long comp = exp - cts;
             if (comp <= 0 && dt != null) {
                 result.add(invent);
@@ -1389,7 +1476,8 @@ public class GoodstorageController implements Initializable {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
         table11.setItems(result);
@@ -1416,24 +1504,30 @@ public class GoodstorageController implements Initializable {
             Stocker lastStk = lst.get(lst.size() - 1);
             int i = lsd.size() - 1;
             Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
-            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());//strongDb.findMaxMesure(Mesure.class, "quantContenu", p.getUid());
+            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class,
+                                                                          // "quantContenu", p.getUid());
             invent.setLastStocker(lastStk);
             invent.setLastDestocker(lastDstk);
             Mesure mxir = lastStk.getMesureId();
-            Mesure mxr = MesureDelegate.findMesure(mxir.getUid());//strongDb.findByUid(Mesure.class, mxir.getUid());
+            Mesure mxr = MesureDelegate.findMesure(mxir.getUid());// strongDb.findByUid(Mesure.class, mxir.getUid());
             if (mxr == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());//strongDb.findByProduitAsc(Mesure.class, p.getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                  // p.getUid(),
+                                                                                                  // "quantContenu");
                 mxr = mesures.get(0);
             }
             invent.setStockAlerte((lastStk.getStockAlerte()) + " " + mxr.getDescription());
-            //System.err.println(p.getMarque()+" "+mx.getDescription()+" "+mx.getQuantContenu());
+            // System.err.println(p.getMarque()+" "+mx.getDescription()+"
+            // "+mx.getQuantContenu());
             double somVal = 0, somQ = 0;
             double in = 0, out = 0;
             for (Stocker s : lst) {
                 Mesure mi = s.getMesureId();
-                Mesure m = MesureDelegate.findMesure(mi.getUid());//strongDb.findByUid(Mesure.class, mi.getUid());
+                Mesure m = MesureDelegate.findMesure(mi.getUid());// strongDb.findByUid(Mesure.class, mi.getUid());
                 if (m == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, s.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // s.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
                     m = mesures.get(0);
                 }
                 in += (s.getQuantite() * m.getQuantContenu());
@@ -1443,9 +1537,11 @@ public class GoodstorageController implements Initializable {
             double cu = somVal / somQ;
             for (Destocker d : lsd) {
                 Mesure mi = d.getMesureId();
-                Mesure m = MesureDelegate.findMesure(mi.getUid());//strongDb.findByUid(Mesure.class, mi.getUid());
+                Mesure m = MesureDelegate.findMesure(mi.getUid());// strongDb.findByUid(Mesure.class, mi.getUid());
                 if (m == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, d.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(d.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                     // d.getProductId().getUid(),
+                                                                                                                     // "quantContenu");
                     m = mesures.get(0);
                 }
                 out += (d.getQuantite() * m.getQuantContenu());
@@ -1454,7 +1550,8 @@ public class GoodstorageController implements Initializable {
             invent.setQuantEntree((in / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
-            invent.setValeurStock(BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+            invent.setValeurStock(
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             double alert = lastStk.getStockAlerte();
             if (rst <= alert) {
                 result.add(invent);
@@ -1464,7 +1561,8 @@ public class GoodstorageController implements Initializable {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
         table11.setItems(result);
@@ -1478,8 +1576,10 @@ public class GoodstorageController implements Initializable {
             List<Stocker> lst;
             List<Destocker> lsd;
             if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-                lst = requisitionToStocker(RecquisitionDelegate.findRecquisitionByProduit(p.getUid()));//strongDb.findByProduit(Recquisition.class, p.getUid()));
-                lsd = ligneVenteToDestocker(LigneVenteDelegate.findByProduit(p.getUid()));//strongDb.findByProduit(LigneVente.class, p.getUid()));
+                lst = requisitionToStocker(RecquisitionDelegate.findRecquisitionByProduit(p.getUid()));// strongDb.findByProduit(Recquisition.class,
+                                                                                                       // p.getUid()));
+                lsd = ligneVenteToDestocker(LigneVenteDelegate.findByProduit(p.getUid()));// strongDb.findByProduit(LigneVente.class,
+                                                                                          // p.getUid()));
             } else {
                 lst = requisitionToStocker(RecquisitionDelegate.findRecquisitionByProduitRegion(p.getUid(), region));
                 lsd = ligneVenteToDestocker(LigneVenteDelegate.findByProduitRegion(p.getUid(), region));
@@ -1491,19 +1591,23 @@ public class GoodstorageController implements Initializable {
             Stocker lastStk = lst.get(lst.size() - 1);
             int i = lsd.size() - 1;
             Destocker lastDstk = i <= 0 ? new Destocker() : lsd.get(i);
-            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());//strongDb.findMaxMesure(Mesure.class, "quantContenu", p.getUid());
+            Mesure mx = MesureDelegate.findMaxMesureByProduit(p.getUid());// strongDb.findMaxMesure(Mesure.class,
+                                                                          // "quantContenu", p.getUid());
             double sa = lastStk.getStockAlerte();
             lastStk.setStockAlerte((sa / mx.getQuantContenu()));
             invent.setLastStocker(lastStk);
             invent.setLastDestocker(lastDstk);
             double somVal = 0, somQ = 0;
-            //System.err.println(p.getMarque()+" "+mx.getDescription()+" "+mx.getQuantContenu());
+            // System.err.println(p.getMarque()+" "+mx.getDescription()+"
+            // "+mx.getQuantContenu());
             double in = 0, out = 0;
             for (Stocker s : lst) {
                 Mesure m = s.getMesureId();
-                Mesure mz = MesureDelegate.findMesure(m.getUid());//strongDb.findByUid(Mesure.class, m.getUid());
+                Mesure mz = MesureDelegate.findMesure(m.getUid());// strongDb.findByUid(Mesure.class, m.getUid());
                 if (mz == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());//strongDb.findByProduitAsc(Mesure.class, p.getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                      // p.getUid(),
+                                                                                                      // "quantContenu");
                     mz = mesures.get(0);
                 }
                 in += (s.getQuantite() * mz.getQuantContenu());
@@ -1515,7 +1619,9 @@ public class GoodstorageController implements Initializable {
                 Mesure m = d.getMesureId();
                 Mesure mr = MesureDelegate.findMesure(m.getUid());// strongDb.findByUid(Mesure.class, m.getUid());
                 if (mr == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());//strongDb.findByProduitAsc(Mesure.class, p.getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                      // p.getUid(),
+                                                                                                      // "quantContenu");
                     mr = mesures.get(0);
                 }
                 out += (d.getQuantite() * mr.getQuantContenu());
@@ -1524,7 +1630,8 @@ public class GoodstorageController implements Initializable {
             invent.setQuantEntree((in / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
-            invent.setValeurStock(BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+            invent.setValeurStock(
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             if (out == 0) {
                 result.add(invent);
             }
@@ -1533,7 +1640,8 @@ public class GoodstorageController implements Initializable {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : " + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
         table11.setItems(result);
@@ -1549,12 +1657,12 @@ public class GoodstorageController implements Initializable {
             s.setDateStocker(r.getDate());
             s.setQuantite(r.getQuantite());
             s.setStockAlerte(r.getStockAlert());
-
             s.setProductId(r.getProductId());
-
             Mesure mzr = MesureDelegate.findMesure(r.getMesureId().getUid());
             if (mzr == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(r.getProductId().getUid());//strongDb.findByProduitAsc(Mesure.class, r.getProductId().getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(r.getProductId().getUid());// strongDb.findByProduitAsc(Mesure.class,
+                                                                                                                 // r.getProductId().getUid(),
+                                                                                                                 // "quantContenu");
                 mzr = mesures.get(0);
             }
             s.setMesureId(mzr);
@@ -1569,15 +1677,16 @@ public class GoodstorageController implements Initializable {
         List<Destocker> lst = new ArrayList<>();
         for (LigneVente r : lvs) {
             Destocker s = new Destocker();
-            Vente v = VenteDelegate.findVente(r.getReference().getUid());//strongDb.findByUid(Vente.class, r.getReference().getUid());
-            //  Util.findVenteByItem(nsvente.findAll(), r.getUid());
+            Vente v = VenteDelegate.findVente(r.getReference().getUid());// strongDb.findByUid(Vente.class,
+                                                                         // r.getReference().getUid());
             if (v == null) {
                 continue;
             }
             s.setDateDestockage(v.getDateVente());
             s.setQuantite(r.getQuantite());
             s.setProductId(r.getProductId());
-            Mesure mzr = MesureDelegate.findMesure(r.getMesureId().getUid());//strongDb.findByUid(Mesure.class, r.getMesureId().getUid());
+            Mesure mzr = MesureDelegate.findMesure(r.getMesureId().getUid());// strongDb.findByUid(Mesure.class,
+                                                                             // r.getMesureId().getUid());
             if (mzr == null) {
                 List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(s.getProductId().getUid());
                 mzr = mesures.get(0);
@@ -1603,8 +1712,8 @@ public class GoodstorageController implements Initializable {
 
             double som = 0;
             for (Stocker liv : stox) {
-                Produit p=liv.getProductId();
-                if(p==null){
+                Produit p = liv.getProductId();
+                if (p == null) {
                     continue;
                 }
                 Produit f = ProduitDelegate.findProduit(p.getUid());
@@ -1614,7 +1723,8 @@ public class GoodstorageController implements Initializable {
                 }
                 String comp = f.getNomProduit() + " " + f.getMarque() + " " + f.getModele() + " " + f.getTaille()
                         + " " + liv.getNumlot() + " " + liv.getLocalisation() + " " + liv.getLivraisId().getReference()
-                        + " " + liv.getStockAlerte() + " " + liv.getLibelle() + " " + liv.getLocalisation() + " " + Constants.dateFormater.format(liv.getDateStocker());
+                        + " " + liv.getStockAlerte() + " " + liv.getLibelle() + " " + liv.getLocalisation() + " "
+                        + liv.getDateStocker().toString();
                 if (comp.toUpperCase().contains(query.toUpperCase())) {
                     rst.add(liv);
                     som += liv.getPrixAchatTotal();
@@ -1643,8 +1753,10 @@ public class GoodstorageController implements Initializable {
                 if (p == null) {
                     continue;
                 }
-                String s = d.getDestination() + " " + p.getCodebar() + " " + p.getMarque() + " " + p.getModele() + " " + p.getNomProduit()
-                        + " " + p.getTaille() + " " + p.getCouleur() + " " + d.getReference() + " " + d.getRegion() + " " + d.getLibelle();
+                String s = d.getDestination() + " " + p.getCodebar() + " " + p.getMarque() + " " + p.getModele() + " "
+                        + p.getNomProduit()
+                        + " " + p.getTaille() + " " + p.getCouleur() + " " + d.getReference() + " " + d.getRegion()
+                        + " " + d.getLibelle();
                 if (s.toUpperCase().contains(query.toUpperCase())) {
                     rst.add(d);
                 }
@@ -1679,32 +1791,37 @@ public class GoodstorageController implements Initializable {
 
     private void configLivCbx() {
 
-        cbx_choose_critere_de_selection.setItems(FXCollections.observableArrayList("Sans destockage", "Stock en Alerte", "Stock à expirer dans :", "Expirés"));
-        cbx_choose_critere_de_selection.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                choosen_criteria = newValue;
-                if (choosen_criteria.equals("Stock en Alerte")) {
-                    loadInventaireAlerte(products);
-                } else if (choosen_criteria.equals("Sans destockage")) {
-                    //filtrage des element non encore desockes
-                    loadInventaire100Destockage(products);
-                } else if (choosen_criteria.equals("Expirés")) {
-                    loadInventaireDejaExpirDepot(products);
-                } else {
-                    table11.setItems(lisinvent);
-                }
-            }
-        });
+        cbx_choose_critere_de_selection.setItems(FXCollections.observableArrayList("Sans destockage", "Stock en Alerte",
+                "Stock à expirer dans :", "Expirés"));
+        cbx_choose_critere_de_selection.getSelectionModel().selectedItemProperty()
+                .addListener(new ChangeListener<String>() {
+                    @Override
+                    public void changed(ObservableValue<? extends String> observable, String oldValue,
+                            String newValue) {
+                        choosen_criteria = newValue;
+                        if (choosen_criteria.equals("Stock en Alerte")) {
+                            loadInventaireAlerte(products);
+                        } else if (choosen_criteria.equals("Sans destockage")) {
+                            // filtrage des element non encore desockes
+                            loadInventaire100Destockage(products);
+                        } else if (choosen_criteria.equals("Expirés")) {
+                            loadInventaireDejaExpirDepot(products);
+                        } else {
+                            table11.setItems(lisinvent);
+                        }
+                    }
+                });
         list_supplier.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Fournisseur>() {
             @Override
-            public void changed(ObservableValue<? extends Fournisseur> observable, Fournisseur oldValue, Fournisseur newValue) {
+            public void changed(ObservableValue<? extends Fournisseur> observable, Fournisseur oldValue,
+                    Fournisseur newValue) {
                 if (newValue != null) {
                     choosenSupply = newValue;
                     Double somm = LivraisonDelegate.sumBySupplier(choosenSupply.getUid());
                     global_achat.setText("Total achat : " + somm);
                     List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
-                    curent_path.setText(choosenSupply.getNomFourn() + ", " + choosenSupply.getAdresse() + " " + choosenSupply.getPhone() + "/ " + livrs.size() + " Livraisons");
+                    curent_path.setText(choosenSupply.getNomFourn() + ", " + choosenSupply.getAdresse() + " "
+                            + choosenSupply.getPhone() + "/ " + livrs.size() + " Livraisons");
 
                 }
             }
@@ -1721,8 +1838,8 @@ public class GoodstorageController implements Initializable {
         configTables();
         MainUI.setPattern(dpk_fin_stk);
         MainUI.setPattern(dpk_debut_stk);
-//        MainUI.setPattern(dpk_fin_inv);
-//        MainUI.setPattern(dpk_debut_inv);
+        // MainUI.setPattern(dpk_fin_inv);
+        // MainUI.setPattern(dpk_debut_inv);
         list_stockers = FXCollections.observableArrayList();
         listlivr = FXCollections.observableArrayList();
         listfourn = FXCollections.observableArrayList();
@@ -1731,6 +1848,7 @@ public class GoodstorageController implements Initializable {
         role = pref.get("priv", null);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
+        applyPermissionUiState();
         pane_wait_import.setVisible(false);
         pagination.setPageFactory(this::createDataPage);
         pagination1.setPageFactory(this::createDataPage);
@@ -1771,21 +1889,23 @@ public class GoodstorageController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 tabs_gs.getSelectionModel().select(tab_livraison);
-                MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, chstocker, tools.Constants.ACTION_CREATE, entreprise, null);
+                MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, chstocker,
+                        tools.Constants.ACTION_CREATE, entreprise, null);
             }
         });
         menuItem3.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
                 tabs_gs.getSelectionModel().select(tab_destock);
-                MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker, tools.Constants.ACTION_CREATE, entreprise);
+                MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker,
+                        tools.Constants.ACTION_CREATE, entreprise);
 
             }
         });
         menuItem1.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
-                //generation de la fiche de stock
+                // generation de la fiche de stock
                 InventoryItem ii = table11.getSelectionModel().getSelectedItem();
                 Produit p = ii.getProduit();
                 MainUI.floatDialog(tools.Constants.FICHESTOCK_DLG, 1165, 665, null, kazisafe, p, entreprise);
@@ -1799,11 +1919,14 @@ public class GoodstorageController implements Initializable {
         ctxtMliv.getItems().add(menuItemliv);
         table_stockage.setContextMenu(ctxtMliv);
         menuItemliv.setOnAction((ActionEvent event) -> {
-              ctxtMliv.hide();
+            ctxtMliv.hide();
             if (chstocker != null) {
                 Livraison lv = chstocker.getLivraisId();
                 String ref = lv.getReference();
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer le stock de " + chstocker.getProductId().getNomProduit() + " ? \nCeci suprimera toutes les transactions de stock ayant cette reference :" + ref, ButtonType.YES, ButtonType.CANCEL);
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Voulez vous vraiment supprimer le stock de " + chstocker.getProductId().getNomProduit()
+                                + " ? \nCeci suprimera toutes les transactions de stock ayant cette reference :" + ref,
+                        ButtonType.YES, ButtonType.CANCEL);
                 alert.setTitle("Attention!");
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -1814,6 +1937,7 @@ public class GoodstorageController implements Initializable {
                             | role.contains(Role.ALL_ACCESS.name())) {
                         StockerDelegate.deleteStocker(chstocker);
                         Produit prod = chstocker.getProductId();
+                        list_stockers.remove(chstocker);
                         List<Destocker> dtks = DestockerDelegate.findByReferenceAndProduit(prod.getUid(), ref);
                         if (!dtks.isEmpty()) {
                             for (Destocker dtk : dtks) {
@@ -1843,15 +1967,20 @@ public class GoodstorageController implements Initializable {
         MenuItem updatef = new MenuItem(bundle.getString("xbtn.update"));
         MenuItem deletef = new MenuItem(bundle.getString("delete"));
         MenuItem livraizf = new MenuItem(bundle.getString("selectdeliv"));
+        MenuItem settleSupplierDebt = new MenuItem("Regler dette fournisseur");
+        MenuItem supplierDebtReport = new MenuItem("Releve dettes fournisseur");
         ctxt.getItems().add(updatef);
         ctxt.getItems().add(deletef);
         ctxt.getItems().add(livraizf);
+        ctxt.getItems().add(settleSupplierDebt);
+        ctxt.getItems().add(supplierDebtReport);
         list_supplier.setContextMenu(ctxt);
         updatef.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
                 if (choosenSupply != null) {
-                    MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 355, null, kazisafe, entreprise, choosenSupply);
+                    MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, entreprise,
+                            choosenSupply);
                 }
             }
         });
@@ -1859,7 +1988,9 @@ public class GoodstorageController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 if (choosenSupply != null) {
-                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer le fournisseur " + choosenSupply.getNomFourn() + " ?", ButtonType.YES, ButtonType.CANCEL);
+                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                            "Voulez vous vraiment supprimer le fournisseur " + choosenSupply.getNomFourn() + " ?",
+                            ButtonType.YES, ButtonType.CANCEL);
                     alert.setTitle("Attention!");
                     alert.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -1873,7 +2004,8 @@ public class GoodstorageController implements Initializable {
                             count_fournisseur.setText(String.format(bundle.getString("xitems"), listfourn.size()));
                             MainUI.notify(null, "Succes", "Fournisseur supprime avec success", 3, "info");
                         } else {
-                            MainUI.notify(null, "Attention", "Vous n'avez pas assez de privileges pour effectuer cette action", 3, "warning");
+                            MainUI.notify(null, "Attention",
+                                    "Vous n'avez pas assez de privileges pour effectuer cette action", 3, "warning");
                         }
                     }
                 }
@@ -1884,7 +2016,7 @@ public class GoodstorageController implements Initializable {
             public void handle(ActionEvent event) {
                 if (choosenSupply != null) {
                     List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
-                    //list_livraison.setItems(FXCollections.observableArrayList(livrs));
+                    // list_livraison.setItems(FXCollections.observableArrayList(livrs));
                     listlivr.clear();
                     listlivr.addAll(livrs);
                     count_livraizon.setText(String.format(bundle.getString("xitems"), livrs.size()));
@@ -1899,20 +2031,50 @@ public class GoodstorageController implements Initializable {
                 }
             }
         });
+        settleSupplierDebt.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                if (choosenSupply == null) {
+                    MainUI.notify(null, "Selection", "Selectionnez d'abord un fournisseur", 3, "warning");
+                    return;
+                }
+                List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+                Livraison target = null;
+                for (Livraison liv : livrs) {
+                    if (safeAmount(liv.getRemained()) > 0d) {
+                        target = liv;
+                        break;
+                    }
+                }
+                if (target == null) {
+                    MainUI.notify(null, "Info", "Ce fournisseur n'a plus de dette restante", 3, "info");
+                    return;
+                }
+                settleSupplierDebt(target);
+            }
+        });
+        supplierDebtReport.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                exportSupplierDebtStatement();
+            }
+        });
 
         ContextMenu ctxtl = new ContextMenu();
         MenuItem updatel = new MenuItem(bundle.getString("updateliv"));
         MenuItem deletel = new MenuItem(bundle.getString("delete"));
         MenuItem additems = new MenuItem(bundle.getString("xaddingitem"));
+        MenuItem settleThisDeliveryDebt = new MenuItem("Regler cette dette fournisseur");
         ctxtl.getItems().add(updatel);
         ctxtl.getItems().add(deletel);
         ctxtl.getItems().add(additems);
+        ctxtl.getItems().add(settleThisDeliveryDebt);
         list_livraison.setContextMenu(ctxtl);
         updatel.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
                 if (livraison != null) {
-                    MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, livraison);
+                    MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, livraison,Constants.STORAGE);
                 }
             }
         });
@@ -1920,7 +2082,9 @@ public class GoodstorageController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 if (livraison != null) {
-                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer la livraison " + livraison.getNumPiece() + " ?", ButtonType.YES, ButtonType.CANCEL);
+                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                            "Voulez vous vraiment supprimer la livraison " + livraison.getNumPiece() + " ?",
+                            ButtonType.YES, ButtonType.CANCEL);
                     alert.setTitle("Attention!");
                     alert.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -1934,7 +2098,8 @@ public class GoodstorageController implements Initializable {
                             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
                             MainUI.notify(null, "Succes", "Livraison supprimee avec success", 3, "info");
                         } else {
-                            MainUI.notify(null, "Attention", "Vous n'avez pas assez de privileges pour effectuer cette action", 3, "warning");
+                            MainUI.notify(null, "Attention",
+                                    "Vous n'avez pas assez de privileges pour effectuer cette action", 3, "warning");
                         }
                     }
                 }
@@ -1944,8 +2109,19 @@ public class GoodstorageController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 if (livraison != null) {
-                    MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, livraison, tools.Constants.ACTION_CREATE, entreprise, null);
+                    MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, livraison,
+                            tools.Constants.ACTION_CREATE, entreprise, null);
                 }
+            }
+        });
+        settleThisDeliveryDebt.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                if (livraison == null) {
+                    MainUI.notify(null, "Selection", "Selectionnez d'abord une livraison", 3, "warning");
+                    return;
+                }
+                settleSupplierDebt(livraison);
             }
         });
 
@@ -1964,22 +2140,67 @@ public class GoodstorageController implements Initializable {
         Tooltip.install(newdelivery, new Tooltip(bundle.getString("xtooltip.newdelivery")));
         Tooltip.install(newitems, new Tooltip(bundle.getString("xtooltip.newitems")));
         Tooltip.install(newsuplier, new Tooltip(bundle.getString("xtooltip.newsupplier")));
-
+        applyPermissionUiState();
+        NotificationHandler.setOnDataSyncListener((model) -> {
+            if (model instanceof Stocker stocker) {
+                if (list_stockers == null)
+                    return;
+                int index = list_stockers.indexOf(stocker);
+                if (index == -1) {
+                    list_stockers.add(stocker);
+                } else {
+                    list_stockers.set(index, stocker);
+                }
+            } else if (model instanceof Fournisseur fr) {
+                if (listfourn == null)
+                    return;
+                int index = listfourn.indexOf(fr);
+                if (index == -1) {
+                    listfourn.add(fr);
+                } else {
+                    listfourn.set(index, fr);
+                }
+            } else if (model instanceof Destocker destocker) {
+                if (lisdestocker == null)
+                    return;
+                int index = lisdestocker.indexOf(destocker);
+                if (index == -1) {
+                    lisdestocker.add(destocker);
+                } else {
+                    lisdestocker.set(index, destocker);
+                }
+            } else if (model instanceof Livraison livr) {
+                if (listlivr == null)
+                    return;
+                int index = listlivr.indexOf(livr);
+                if (index == -1) {
+                    listlivr.add(livr);
+                } else {
+                    listlivr.set(index, livr);
+                }
+            }
+        });
     }
 
     private void updateStock() {
+        if (!hasPermission(PermitTo.UPDATE_STOCKER)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de modifier le stockage", 3, "warning");
+            return;
+        }
         if (chstocker == null) {
             return;
         }
         tabs_gs.getSelectionModel().select(tab_livraison);
         Livraison liv = chstocker.getLivraisId();
-        MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, liv, tools.Constants.ACTION_UPDATE, entreprise, chstocker);
+        MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, liv, tools.Constants.ACTION_UPDATE,
+                entreprise, chstocker);
     }
 
     @FXML
     private void addItems2Livr(MouseEvent event) {
         if (livraison != null) {
-            MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, livraison, tools.Constants.ACTION_CREATE, entreprise, null);
+            MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, livraison,
+                    tools.Constants.ACTION_CREATE, entreprise, null);
         } else {
             MainUI.notify(null, "Erreur", "Selectionnez d'abord une livraison puis reessayer", 3, "error");
         }
@@ -2010,36 +2231,38 @@ public class GoodstorageController implements Initializable {
 
     @FXML
     private void deleteStocker(Event e) {
+        if (!hasPermission(PermitTo.DELETE_STOCKER)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de supprimer ce stockage", 3, "warning");
+            return;
+        }
         if (chstocker == null) {
             MainUI.notify(null, "Erreur", "Veuillez selectionner un element puis reesayer", 3, "error");
             return;
         }
         Livraison lv = chstocker.getLivraisId();
         String ref = lv.getReference();
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer le stock de " + chstocker.getProductId().getNomProduit() + " ? \nCeci suprimera toutes les transactions de stock ayant cette reference :" + ref, ButtonType.YES, ButtonType.CANCEL);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "Voulez vous vraiment supprimer le stock de " + chstocker.getProductId().getNomProduit()
+                        + " ? \nCeci suprimera toutes les transactions de stock ayant cette reference :" + ref,
+                ButtonType.YES, ButtonType.CANCEL);
         alert.setTitle("Attention!");
         alert.setHeaderText(null);
         Optional<ButtonType> showAndWait = alert.showAndWait();
         if (showAndWait.get() == ButtonType.YES) {
-            if (role.equals(Role.Trader.name())
-                    | role.equals(Role.Manager.name())
-                    | role.equals(Role.Magazinner.name())
-                    | role.contains(Role.ALL_ACCESS.name())) {
-                StockerDelegate.deleteStocker(chstocker);
-                List<Destocker> dtks = DestockerDelegate.findByReference(ref);
-                if (!dtks.isEmpty()) {
-                    for (Destocker dtk : dtks) {
-                        DestockerDelegate.deleteDestocker(dtk);
-                    }
+            StockerDelegate.deleteStocker(chstocker);
+            List<Destocker> dtks = DestockerDelegate.findByReference(ref);
+            if (!dtks.isEmpty()) {
+                for (Destocker dtk : dtks) {
+                    DestockerDelegate.deleteDestocker(dtk);
                 }
-                List<Recquisition> rqs = RecquisitionDelegate.findByReference(ref);
-                if (!rqs.isEmpty()) {
-                    for (Recquisition rq : rqs) {
-                        RecquisitionDelegate.deleteRecquisition(rq);
-                        List<PrixDeVente> prices = PrixDeVenteDelegate.findPricesForRecq(rq.getUid());
-                        for (PrixDeVente price : prices) {
-                            PrixDeVenteDelegate.deletePrixDeVente(price);
-                        }
+            }
+            List<Recquisition> rqs = RecquisitionDelegate.findByReference(ref);
+            if (!rqs.isEmpty()) {
+                for (Recquisition rq : rqs) {
+                    RecquisitionDelegate.deleteRecquisition(rq);
+                    List<PrixDeVente> prices = PrixDeVenteDelegate.findPricesForRecq(rq.getUid());
+                    for (PrixDeVente price : prices) {
+                        PrixDeVenteDelegate.deletePrixDeVente(price);
                     }
                 }
             }
@@ -2048,12 +2271,14 @@ public class GoodstorageController implements Initializable {
 
     @FXML
     public void viewStockForm(ActionEvent evt) {
-        MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, chstocker, tools.Constants.ACTION_CREATE, entreprise, null);
+        MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, chstocker,
+                tools.Constants.ACTION_CREATE, entreprise, null);
     }
 
     @FXML
     public void viewDeStockForm(ActionEvent evt) {
-        MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker, tools.Constants.ACTION_CREATE, entreprise);
+        MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker,
+                tools.Constants.ACTION_CREATE, entreprise);
     }
 
     @FXML
@@ -2070,13 +2295,18 @@ public class GoodstorageController implements Initializable {
 
     @FXML
     private void deleteFinAccount(MouseEvent event) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer ce destockage ?", ButtonType.YES, ButtonType.CANCEL);
+        if (!hasPermission(PermitTo.DELETE_DESTOCKER)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de supprimer ce destockage", 3, "warning");
+            return;
+        }
+        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer ce destockage ?",
+                ButtonType.YES, ButtonType.CANCEL);
         alert.setTitle("Attention!");
         alert.setHeaderText(null);
         Optional<ButtonType> showAndWait = alert.showAndWait();
         if (showAndWait.get() == ButtonType.YES) {
             if (chdestocker != null) {
-                DestockerDelegate.deleteDestocker(chdestocker);//strongDb.delete(chdestocker);
+                DestockerDelegate.deleteDestocker(chdestocker);// strongDb.delete(chdestocker);
                 MainUI.notify(null, "Suppression", "Destockage suprimé avec succès", 4, "info");
                 MainuiController.getInstance().switchToStock(event);
                 if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
@@ -2100,7 +2330,167 @@ public class GoodstorageController implements Initializable {
 
     @FXML
     private void updateFinAccount(MouseEvent event) {
-            MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker, tools.Constants.ACTION_UPDATE, entreprise);
+        if (!hasPermission(PermitTo.UPDATE_DESTOCKER)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de modifier ce destockage", 3, "warning");
+            return;
+        }
+        MainUI.floatDialog(tools.Constants.DESTOCKAGE_DLG, 600, 723, null, kazisafe, chdestocker,
+                tools.Constants.ACTION_UPDATE, entreprise);
+    }
+
+    private void applyPermissionUiState() {
+        boolean canUpdateStocker = hasPermission(PermitTo.UPDATE_STOCKER);
+        boolean canDeleteStocker = hasPermission(PermitTo.DELETE_STOCKER);
+        boolean canUpdateDestocker = hasPermission(PermitTo.UPDATE_DESTOCKER);
+        boolean canDeleteDestocker = hasPermission(PermitTo.DELETE_DESTOCKER);
+
+        btn_update.setDisable(!canUpdateStocker);
+        btn_update.setOpacity(canUpdateStocker ? 1d : 0.5d);
+        btn_update.setMouseTransparent(!canUpdateStocker);
+
+        btn_delete.setDisable(!canDeleteStocker);
+        btn_delete.setOpacity(canDeleteStocker ? 1d : 0.5d);
+        btn_delete.setMouseTransparent(!canDeleteStocker);
+
+        btn_update_d.setDisable(!canUpdateDestocker);
+        btn_update_d.setOpacity(canUpdateDestocker ? 1d : 0.5d);
+        btn_update_d.setMouseTransparent(!canUpdateDestocker);
+
+        btn_delete_d.setDisable(!canDeleteDestocker);
+        btn_delete_d.setOpacity(canDeleteDestocker ? 1d : 0.5d);
+        btn_delete_d.setMouseTransparent(!canDeleteDestocker);
+    }
+
+    private boolean hasPermission(PermitTo permit) {
+        return role != null && role.toUpperCase().contains(Role.ALL_ACCESS.name())
+                || role.toUpperCase().equals(Role.Trader.name()) || PermissionDelegate.hasPermission(permit);
+    }
+
+    private void settleSupplierDebt(Livraison target) {
+        if (!hasPermission(PermitTo.UPDATE_LIVRAISON)) {
+            MainUI.notify(null, "Permission", "Vous n'avez pas la permission de regler cette dette", 3, "warning");
+            return;
+        }
+        double remained = safeAmount(target.getRemained());
+        if (remained <= 0d) {
+            MainUI.notify(null, "Info", "Cette livraison est deja reglee", 3, "info");
+            return;
+        }
+        TextInputDialog amountDialog = new TextInputDialog(String.valueOf(remained));
+        amountDialog.setTitle("Reglement dette fournisseur");
+        amountDialog.setHeaderText("Livraison " + target.getNumPiece() + " - dette restante USD " + remained);
+        amountDialog.setContentText("Montant a regler (USD):");
+        Optional<String> amountInput = amountDialog.showAndWait();
+        if (amountInput.isEmpty()) {
+            return;
+        }
+        double amount = safeAmount(amountInput.get());
+        if (amount <= 0d) {
+            MainUI.notify(null, "Validation", "Le montant doit etre superieur a zero", 3, "warning");
+            return;
+        }
+        TextInputDialog recuDialog = new TextInputDialog();
+        recuDialog.setTitle("Numero recu fournisseur");
+        recuDialog.setHeaderText("Enregistrer le numero de recu du fournisseur");
+        recuDialog.setContentText("Numero recu:");
+        Optional<String> recuInput = recuDialog.showAndWait();
+        if (recuInput.isEmpty()) {
+            return;
+        }
+        String recu = recuInput.get().trim();
+        if (recu.isBlank()) {
+            MainUI.notify(null, "Validation", "Le numero de recu est obligatoire", 3, "warning");
+            return;
+        }
+        double applied = Math.min(amount, remained);
+        target.setPayed(safeAmount(target.getPayed()) + applied);
+        double left = Math.max(0d, remained - applied);
+        target.setRemained(left);
+        target.setToreceive(left);
+        String baseObs = target.getObservation() == null ? "" : target.getObservation();
+        String line = " | RECU_FOURNISSEUR=" + recu + " ; MONTANT=" + applied + " ; DATE=" + LocalDateTime.now();
+        target.setObservation((baseObs + line).trim());
+        Livraison saved = LivraisonDelegate.updateLivraison(target);
+        if (saved == null) {
+            MainUI.notify(null, "Erreur", "Echec d'enregistrement local du reglement", 3, "error");
+            return;
+        }
+        Util.sync(saved, Constants.ACTION_UPDATE, Tables.LIVRAISON);
+        syncLivraisonByHttp(saved);
+        int index = listlivr.indexOf(saved);
+        if (index >= 0) {
+            listlivr.set(index, saved);
+        }
+        if (livraison != null && livraison.getUid().equals(saved.getUid())) {
+            livraison = saved;
+            global_achat.setText("Total : USD " + safeAmount(saved.getPayed()));
+        }
+        MainUI.notify(null, "Succes", "Reglement fournisseur enregistre (recu: " + recu + ")", 4, "info");
+    }
+
+    private void exportSupplierDebtStatement() {
+        if (choosenSupply == null) {
+            MainUI.notify(null, "Selection", "Selectionnez d'abord un fournisseur", 3, "warning");
+            return;
+        }
+        List<Livraison> livrs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
+        if (livrs == null || livrs.isEmpty()) {
+            MainUI.notify(null, "Info", "Aucune livraison pour ce fournisseur", 3, "info");
+            return;
+        }
+        new Thread(() -> {
+            File report = Util.exportXlsLivraison(TraisorerieDelegate.findTraisoreries(), livrs, 1d);
+            if (report == null) {
+                MainUI.notify(null, "Erreur", "Echec de generation du releve", 3, "error");
+                return;
+            }
+            try {
+                Desktop.getDesktop().open(report);
+            } catch (IOException ex) {
+                Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }).start();
+    }
+
+    private void syncLivraisonByHttp(Livraison l) {
+        if (kazisafe == null || l == null || l.getFournId() == null) {
+            return;
+        }
+        kazisafe.syncDelivery(l.getUid(),
+                l.getNumPiece(),
+                l.getDateLivr() == null ? LocalDate.now().toString() : l.getDateLivr().toString(),
+                l.getReference(),
+                l.getLibelle(),
+                String.valueOf(safeAmount(l.getReduction())),
+                l.getObservation(),
+                String.valueOf(safeAmount(l.getTopay())),
+                String.valueOf(safeAmount(l.getPayed())),
+                String.valueOf(safeAmount(l.getRemained())),
+                String.valueOf(safeAmount(l.getToreceive())),
+                l.getFournId().getUid())
+                .enqueue(new Callback<Livraison>() {
+                    @Override
+                    public void onResponse(Call<Livraison> call, Response<Livraison> rspns) {
+                        System.out.println("Livraison sync update " + rspns.code());
+                    }
+
+                    @Override
+                    public void onFailure(Call<Livraison> call, Throwable thrwbl) {
+                        System.err.println("Livraison sync update failed " + thrwbl.getMessage());
+                    }
+                });
+    }
+
+    private double safeAmount(Double value) {
+        return value == null ? 0d : value;
+    }
+
+    private double safeAmount(String value) {
+        try {
+            return Double.parseDouble(value == null ? "0" : value.trim());
+        } catch (NumberFormatException e) {
+            return 0d;
+        }
     }
 
     @FXML
@@ -2157,17 +2547,18 @@ public class GoodstorageController implements Initializable {
     private Node createDataPage(int pgindex) {
 
         if (tab_livraison.isSelected()) {
-            //pagination.setPageCount((int) (listlivraiz.size() / rowsDataCount));
+            // pagination.setPageCount((int) (listlivraiz.size() / rowsDataCount));
             try {
-                long size = LivraisonDelegate.getCount();//strongDb.findCount(Livraison.class);
+                long size = LivraisonDelegate.getCount();// strongDb.findCount(Livraison.class);
 
                 int offset = pgindex * rowsDataCount;
                 Long limit = Math.min(offset + rowsDataCount, size);
 
-                List<Stocker> find = StockerDelegate.findStockers(offset, limit.intValue());//strongDb.findAllByAscOrdering(Livraison.class, "dateLivr", offset, Integer.valueOf(String.valueOf(limit)));
+                List<Stocker> find = StockerDelegate.findStockers(offset, limit.intValue());// strongDb.findAllByAscOrdering(Livraison.class,
+                                                                                            // "dateLivr", offset,
+                                                                                            // Integer.valueOf(String.valueOf(limit)));
                 table_stockage.setItems(FXCollections.observableArrayList(
-                        find
-                ));
+                        find));
             } catch (Exception e) {
                 pagination.setPageCount(pgindex);
                 System.out.println("Page suivante non disponible");
@@ -2175,10 +2566,20 @@ public class GoodstorageController implements Initializable {
             return table_stockage;
         } else if (tab_destock.isSelected()) {
             try {
-                long size = DestockerDelegate.getCount();//strongDb.findCount(Destocker.class);
+                long size = DestockerDelegate.getCount();// strongDb.findCount(Destocker.class);
                 int offset = pgindex * rowsDataCount1;
                 Long limit = Math.min(offset + rowsDataCount1, size);
-                List<Destocker> find = DestockerDelegate.findDescSortedByDate(offset, limit.intValue());//strongDb.findAllByDescOrdering(Destocker.class, "dateDestockage", offset, Integer.valueOf(String.valueOf(limit)));
+                List<Destocker> find = DestockerDelegate.findDescSortedByDate(offset, limit.intValue());// strongDb.findAllByDescOrdering(Destocker.class,
+                                                                                                        // "dateDestockage",
+                                                                                                        // offset,
+                                                                                                        // Integer.valueOf(String.valueOf(limit)));
+                List<Destocker> filteredFind = new ArrayList<>();
+                for(Destocker d : find) {
+                    if(d.getProductId() != null && ProduitDelegate.findProduit(d.getProductId().getUid()) != null) {
+                        filteredFind.add(d);
+                    }
+                }
+                find = filteredFind;
                 table1.setItems(FXCollections.observableArrayList(find));
             } catch (Exception e) {
                 pagination1.setPageCount(pgindex);
@@ -2196,6 +2597,453 @@ public class GoodstorageController implements Initializable {
             }
             return table11;
         }
+    }
+
+    @FXML
+    public void refreshLivrByHttp(Event evt) {
+        pane_wait_import.setVisible(true);
+        refreshLivraisonByHttp();
+    }
+
+    @FXML
+    public void refreshDestHttp(Event evt) {
+        refreshDestockerByHttp();
+    }
+
+    private void refreshLivraisonByHttp() {
+        Executors.newCachedThreadPool()
+                .submit(() -> {
+                    try {
+                        Response<List<Livraison>> rsts = kazisafe.refreshLivraison().execute();
+                        System.out.println("Livraiz resp " + rsts);
+                        if (rsts.isSuccessful()) {
+                            List<Livraison> livs = rsts.body();
+                            for (Livraison liv : livs) {
+                                Fournisseur f = liv.getFournId();
+                                System.out.println("incoming supplier " + f);
+
+                                Livraison lf = LivraisonDelegate.findLivraison(liv.getUid());
+                                if (lf == null) {
+                                    Response<Fournisseur> rfs = kazisafe.showSupplier(f.getUid()).execute();
+                                    System.out.println("Response fournisseur " + rfs);
+                                    if (rfs.isSuccessful()) {
+                                        Fournisseur ff = rfs.body();
+                                        List<Fournisseur> found = FournisseurDelegate.findByPhone(ff.getPhone());
+                                        if (found.isEmpty()) {
+                                            FournisseurDelegate.saveFournisseur(ff);
+                                        } else {
+                                            FournisseurDelegate.updateFournisseur(ff);
+                                        }
+                                        liv.setFournId(ff);
+                                        LivraisonDelegate.saveLivraison(liv);
+
+                                    }
+                                    // saveLivraisonForcely(liv, found);
+
+                                } else {
+                                    LivraisonDelegate.updateLivraison(liv);
+                                }
+                                Response<List<Stocker>> repstock = kazisafe.refreshStocksFor(liv.getUid()).execute();
+                                if (repstock.isSuccessful()) {
+                                    List<Stocker> stoxs = repstock.body();
+                                    for (Stocker stox1 : stoxs) {
+                                        Produit p = stox1.getProductId();
+                                        Produit fpro = ProduitDelegate.findProduit(p.getUid());
+                                        if (fpro == null) {
+                                            Response<Produit> rpro = kazisafe.refreshProduit(p.getUid()).execute();
+                                            if (rpro.isSuccessful()) {
+                                                Produit prod = rpro.body();
+                                                Category c = prod.getCategoryId();
+                                                Category cat = CategoryDelegate.findCategory(c.getUid());
+                                                if (cat == null) {
+                                                    CategoryDelegate.saveCategory(c);
+                                                    prod.setCategoryId(c);
+                                                } else {
+                                                    prod.setCategoryId(cat);
+                                                }
+                                                ProduitDelegate.saveProduit(prod);
+
+                                                Response<List<Mesure>> lmr = kazisafe.refreshMesureFor(prod.getUid())
+                                                        .execute();
+                                                if (lmr.isSuccessful()) {
+                                                    List<Mesure> ms = lmr.body();
+                                                    for (Mesure m : ms) {
+                                                        Mesure mf = MesureDelegate.findMesure(m.getUid());
+                                                        if (mf == null) {
+                                                            m.setProduitId(prod);
+                                                            MesureDelegate.saveMesure(m);
+                                                        }
+                                                    }
+                                                }
+                                                stox1.setProductId(prod);
+                                            }
+                                        } else {
+                                            Category c = p.getCategoryId();
+                                            System.out.println("Categox stokage 2 " + c);
+                                            if (c != null) {
+                                                Response<Category> rcat = kazisafe.showCategory(c.getUid()).execute();
+                                                if (rcat.isSuccessful()) {
+                                                    Category categ = rcat.body();
+                                                    Category cat = CategoryDelegate.findCategory(categ.getUid());
+                                                    if (cat == null) {
+                                                        CategoryDelegate.saveCategory(c);
+                                                        p.setCategoryId(c);
+                                                    } else {
+                                                        p.setCategoryId(cat);
+                                                    }
+                                                }
+                                            } else {
+                                                List<Category> lcat = CategoryDelegate.findCategories("Divers");
+                                                if (lcat.isEmpty()) {
+                                                    Category ca = new Category(DataId.generate());
+                                                    ca.setDescritption("Divers");
+                                                    CategoryDelegate.saveCategory(ca);
+                                                    p.setCategoryId(ca);
+                                                } else {
+                                                    p.setCategoryId(lcat.get(0));
+                                                }
+                                            }
+                                            ProduitDelegate.updateProduit(p);
+                                            stox1.setProductId(p);
+                                        }
+                                        Mesure mx = stox1.getMesureId();
+                                        Mesure fm = MesureDelegate.findMesure(mx.getUid());
+                                        if (fm == null || fm.getDescription() == null) {
+                                            Response<Mesure> mez = kazisafe.showMesure(mx.getUid()).execute();
+                                            System.out.println("Mesure out 2 " + mez);
+                                            if (mez.isSuccessful()) {
+                                                Mesure m = mez.body();
+                                                Mesure mm = new Mesure(m.getUid());
+                                                mm.setDescription(m.getDescription());
+                                                mm.setProduitId(p);
+                                                mm.setQuantContenu(m.getQuantContenu());
+                                                Mesure fm2 = MesureDelegate.findMesure(mx.getUid());
+                                                if (fm2 == null) {
+                                                    MesureDelegate.saveMesure(mm);
+                                                } else {
+                                                    MesureDelegate.updateMesure(mm);
+                                                }
+                                                stox1.setMesureId(mm);
+                                            }
+                                        } else {
+                                            stox1.setMesureId(fm);
+                                        }
+                                        Stocker stk = StockerDelegate.findStocker(stox1.getUid());
+                                        stox1.setLivraisId(liv);
+                                        if (stk == null) {
+                                            Livraison ll = stox1.getLivraisId();
+                                            Response<Livraison> rliv = kazisafe.showLivraison(ll.getUid()).execute();
+                                            System.out.println("Response livraison " + rliv);
+                                            if (rliv.isSuccessful()) {
+                                                Livraison l = rliv.body();
+                                                Fournisseur fx = l.getFournId();
+                                                Response<Fournisseur> rfs = kazisafe.showSupplier(fx.getUid())
+                                                        .execute();
+                                                System.out.println("Response fournisseur 2 " + rfs);
+                                                if (rfs.isSuccessful()) {
+                                                    Fournisseur ff = rfs.body();
+                                                    Fournisseur found = FournisseurDelegate
+                                                            .findFournisseur(ff.getUid());
+                                                    if (found == null) {
+                                                        found = FournisseurDelegate.saveFournisseur(ff);
+                                                    } else {
+                                                        found = FournisseurDelegate.updateFournisseur(ff);
+                                                    }
+                                                    l.setFournId(found);
+                                                }
+                                                Livraison fl = LivraisonDelegate.findLivraison(l.getUid());
+                                                Livraison svl;
+                                                if (fl == null) {
+                                                    svl = LivraisonDelegate.saveLivraison(l);
+                                                } else {
+                                                    svl = LivraisonDelegate.updateLivraison(l);
+                                                }
+                                                stox1.setLivraisId(svl);
+                                                StockerDelegate.saveStocker(stox1);
+                                            }
+                                        } else {
+                                            StockerDelegate.updateStocker(stox1);
+                                        }
+                                    }
+                                }
+                            }
+                            Platform.runLater(() -> {
+                                pane_wait_import.setVisible(false);
+                            });
+                            MainUI.notify(null, "Succes", "Livraisons synchronisees", 5, "info");
+                            System.out.println("Rafraishissement livraison termine");
+                        }
+
+                    } catch (IOException ex) {
+                        Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+                        Platform.runLater(() -> {
+                            pane_wait_import.setVisible(false);
+                        });
+                        MainUI.notify(null, "Connexion",
+                                "La connection internet n'est pas stable, vous etes en mode offline ", 5, "warn");
+                    }
+
+                });
+    }
+
+    private void refreshDestockerByHttp() {
+        Executors.newCachedThreadPool()
+                .submit(() -> {
+
+                    try {
+                        Response<List<Destocker>> listdst = kazisafe.refreshDestockers().execute();
+                        if (listdst.isSuccessful()) {
+                            List<Destocker> destoxs = listdst.body();
+                            for (Destocker destox : destoxs) {
+                                Produit p = destox.getProductId();
+                                Produit fpro = ProduitDelegate.findProduit(p.getUid());
+                                if (fpro == null) {
+                                    Response<Produit> rpro = kazisafe.refreshProduit(p.getUid()).execute();
+                                    if (rpro.isSuccessful()) {
+                                        Produit prod = rpro.body();
+                                        Category c = prod.getCategoryId();
+                                        Category cat = CategoryDelegate.findCategory(c.getUid());
+                                        if (cat == null) {
+                                            CategoryDelegate.saveCategory(c);
+                                        }
+                                        ProduitDelegate.saveProduit(prod);
+                                        Response<List<Mesure>> lmr = kazisafe.refreshMesureFor(prod.getUid()).execute();
+                                        if (lmr.isSuccessful()) {
+                                            List<Mesure> ms = lmr.body();
+                                            for (Mesure m : ms) {
+                                                Mesure mf = MesureDelegate.findMesure(m.getUid());
+                                                if (mf == null) {
+                                                    m.setProduitId(prod);
+                                                    MesureDelegate.saveMesure(m);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    ProduitDelegate.updateProduit(p);
+                                    Response<List<Mesure>> lmr = kazisafe.refreshMesureFor(p.getUid()).execute();
+                                    if (lmr.isSuccessful()) {
+                                        List<Mesure> ms = lmr.body();
+                                        for (Mesure m : ms) {
+                                            Mesure mf = MesureDelegate.findMesure(m.getUid());
+                                            if (mf == null) {
+                                                m.setProduitId(p);
+                                                MesureDelegate.saveMesure(m);
+                                            }
+                                        }
+                                    }
+                                }
+                                Destocker dstk = DestockerDelegate.findDestocker(destox.getUid());
+                                if (dstk == null) {
+                                    DestockerDelegate.saveDestocker(destox);
+                                } else {
+                                    DestockerDelegate.updateDestocker(destox);
+                                }
+                            }
+                            System.out.println("Destockers enregistrees");
+                        }
+                    } catch (IOException ex) {
+                        Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+
+                });
+    }
+
+    private void saveLivraisonForcely(Livraison liv, Fournisseur f) {
+        int MAX_RETRY = 5;
+        int attempt = 0;
+        while (attempt < MAX_RETRY) {
+            try {
+                LivraisonDelegate.saveLivraison(liv);
+                break;
+            } catch (java.lang.IllegalStateException e) {
+                FournisseurDelegate.saveFournisseur(f);
+                liv.setFournId(f);
+            }
+            attempt++;
+            try {
+                TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt)); // Delai exponentiel
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+    }
+
+    private void saveStockForcely(Livraison liv, Stocker s, Fournisseur f) {
+        int MAX_RETRY = 5;
+        int attempt = 0;
+        while (attempt < MAX_RETRY) {
+            try {
+                StockerDelegate.saveStocker(s);
+                break;
+            } catch (java.lang.IllegalStateException e) {
+                FournisseurDelegate.saveFournisseur(f);
+                liv.setFournId(f);
+                LivraisonDelegate.saveLivraison(liv);
+                s.setLivraisId(liv);
+            }
+            attempt++;
+            try {
+                TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt)); // Delai exponentiel
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+    }
+
+    /**
+     * Adjust stock based on physical inventory count
+     * If physical count > stock in StockDepotAgregate → register a
+     * destocker
+     * (remove excess)
+     * If physical count < stock in StockDepotAgregate → register a stocker
+     * (add
+     * missing)
+     * If equal → leave unchanged
+     * 
+     * @param product       The product to adjust
+     * @param physicalCount The physical count from inventory
+     * @param mesure        The measure unit for the count
+     * @param region        The region/location
+     * @param date          The date of inventory
+     * @param observation   Notes about the adjustment
+     * @return true if adjustment was made, false if no change needed
+     */
+    public boolean adjustStockForPhysicalInventory(Produit product, double physicalCount,
+            Mesure mesure, String region, LocalDate date, String observation) {
+
+        if (product == null || mesure == null || region == null) {
+            MainUI.notify(null, "Erreur", "Paramètres invalides pour l'ajustement d'inventaire", 4, "error");
+            return false;
+        }
+
+        // Get current stock from StockDepotAgregate aggregate
+        StockDepotAgregate currentStock = stockDepotService.findLatestStockDepotAgregate(product.getUid(), region);
+        double aggregateCount = currentStock != null ? currentStock.getQuantite() : 0.0;
+
+        // Convert physical count to base measure if needed
+        double physicalCountInBase = physicalCount * mesure.getQuantContenu();
+
+        double difference = physicalCountInBase - aggregateCount;
+        double tolerance = 0.001; // Small tolerance for floating point comparison
+
+        if (Math.abs(difference) < tolerance) {
+            // No adjustment needed - counts match
+            MainUI.notify(null, "Info", "Stock déjà correct. Aucun ajustement nécessaire.", 3, "info");
+            return false;
+        }
+
+        String obs = observation != null ? observation : "Ajustement inventaire physique du " + date.toString();
+
+        if (difference > 0) {
+            // Physical count is HIGHER than aggregate
+            // We need to DESTOCK (remove) the excess
+            Destocker destocker = new Destocker(DataId.generate());
+            destocker.setProductId(product);
+            destocker.setQuantite(difference / mesure.getQuantContenu()); // Convert back to measure unit
+            destocker.setMesureId(mesure);
+            destocker.setCoutAchat(currentStock != null ? currentStock.getCoutAchat() : 0.0);
+            destocker.setDateDestockage(date.atStartOfDay());
+            destocker.setRegion(region);
+            destocker.setReference("INV-ADJ-" + System.currentTimeMillis());
+            destocker.setLibelle("Ajustement inventaire: excès déstocké");
+            destocker.setObservation(obs);
+            destocker.setDestination("Ajustement Inventaire");
+            destocker.setNumlot("INV-" + date.toString());
+
+            // Save the destocker
+            Destocker saved = DestockerDelegate.saveDestocker(destocker);
+            if (saved != null) {
+                // Update StockDepotAgregate aggregate
+                stockDepotService.removeStock(saved);
+                MainUI.notify(null, "Succès",
+                        String.format("Excès de %.2f %s déstocké",
+                                difference / mesure.getQuantContenu(), mesure.getDescription()),
+                        4, "info");
+                return true;
+            }
+
+        } else {
+            // Physical count is LOWER than aggregate
+            // We need to STOCK (add) the missing quantity
+            Stocker stocker = new Stocker(DataId.generate());
+            stocker.setProductId(product);
+            stocker.setQuantite(Math.abs(difference) / mesure.getQuantContenu()); // Convert back to measure unit
+            stocker.setMesureId(mesure);
+            stocker.setCoutAchat(currentStock != null ? currentStock.getCoutAchat() : 0.0);
+            stocker.setDateStocker(date.atStartOfDay());
+            stocker.setRegion(region);
+            stocker.setLocalisation("Ajustement Inventaire");
+            stocker.setLibelle("Ajustement inventaire: manquant ajouté");
+            stocker.setObservation(obs);
+            stocker.setNumlot("INV-" + date.toString());
+            stocker.setDateExpir(date.plusYears(1)); // Default 1 year expiry for adjustment
+            stocker.setStockAlerte(0);
+
+            // Save the stocker
+            Stocker saved = StockerDelegate.saveStocker(stocker);
+            if (saved != null) {
+                // Update StockDepotAgregate aggregate
+                stockDepotService.addStock(saved);
+                MainUI.notify(null, "Succès",
+                        String.format("Manquant de %.2f %s ajouté",
+                                Math.abs(difference) / mesure.getQuantContenu(), mesure.getDescription()),
+                        4, "info");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get stock summary for a date range from StockDepotAgregate
+     * Displays total value of stock
+     * 
+     * @param startDate Start of period
+     * @param endDate   End of period
+     * @param region    Optional region filter (null for all regions)
+     */
+    public void displayStockSummaryForPeriod(LocalDate startDate, LocalDate endDate, String region) {
+        StockDepotAgregateService.StockSummary summary = stockDepotService.findByDateRange(startDate, endDate,
+                region);
+
+        String regionText = region != null && !region.isEmpty() ? "Région: " + region : "Toutes régions";
+        String message = String.format(
+                "Période: %s à %s\n%s\n\nNombre de produits: %d\nValeur totale du stock: %.2f USD",
+                startDate.toString(), endDate.toString(), regionText,
+                summary.getStocks().size(), summary.getTotalValue());
+
+        MainUI.notify(null, "Résumé Stock", message, 6, "info");
+
+        // Refresh inventory display if needed
+        if (lisinvent != null && !lisinvent.isEmpty()) {
+            refreshInventoryDisplay(summary.getStocks());
+        }
+    }
+
+    /**
+     * Refresh inventory display with StockDepotAgregate data
+     */
+    private void refreshInventoryDisplay(List<StockDepotAgregate> stockDepotAgregates) {
+        // Convert StockDepotAgregate to InventoryItem for display
+        lisinvent.clear();
+        for (StockDepotAgregate sd : stockDepotAgregates) {
+            InventoryItem item = new InventoryItem();
+            item.setProductId(sd.getProductId().getUid());
+            item.setProductName(sd.getProductId().getNomProduit());
+            item.setQuantite(sd.getQuantite());
+            item.setCoutAchat(sd.getCoutAchat());
+            item.setValeurStock(String.valueOf(sd.getValeurStock()));
+            item.setRegion(sd.getRegion());
+            item.setDate(sd.getDate());
+            lisinvent.add(item);
+        }
+        table11.setItems(lisinvent);
     }
 
 }

@@ -20,7 +20,7 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="627.0" prefWidth="1137.0" style="-fx-background-color: white;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ProduitsController">
+<AnchorPane id="AnchorPane" prefHeight="627.0" prefWidth="1137.0" style="-fx-background-color: white;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ProduitsController">
    <children>
       <AnchorPane layoutX="-3.0" prefHeight="577.0" prefWidth="1165.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
          <children>
@@ -129,7 +129,7 @@
                   </ImageView>
                </children>
             </Pane>
-            <Pane fx:id="pane_select_xlss" layoutX="909.0" layoutY="93.0" prefHeight="61.0" prefWidth="152.0" visible="false">
+            <Pane fx:id="pane_select_xlss" layoutX="909.0" layoutY="93.0" prefHeight="61.0" prefWidth="152.0" visible="false" AnchorPane.rightAnchor="105.0">
                <children>
                   <ImageView fitHeight="61.0" fitWidth="177.0" layoutX="2.0" layoutY="3.0" pickOnBounds="true" preserveRatio="true">
                      <image>
@@ -194,15 +194,12 @@
             </Pane>
             <Hyperlink layoutX="242.0" layoutY="42.0" lineSpacing="1.0" onAction="#downloadProductXls" text="%xlink.tlcharger_xls" underline="true" AnchorPane.leftAnchor="242.0" AnchorPane.topAnchor="42.0" />
             <ProgressIndicator fx:id="progress_downxls" layoutX="494.0" layoutY="36.0" prefHeight="40.0" prefWidth="40.0" progress="1.0" visible="false" />
-            <Pane fx:id="wrapInCatPane" layoutX="330.0" layoutY="318.0" prefHeight="159.0" prefWidth="361.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5;" AnchorPane.leftAnchor="330.0" AnchorPane.rightAnchor="446.0">
-               <effect>
-                  <DropShadow />
-               </effect>
+            <AnchorPane fx:id="wrapInCatPane" layoutX="321.0" layoutY="309.0" prefHeight="166.0" prefWidth="370.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5;" AnchorPane.leftAnchor="330.0" AnchorPane.rightAnchor="446.0">
                <children>
-                  <ComboBox fx:id="cbx_catwrap" editable="true" layoutX="13.0" layoutY="40.0" prefHeight="24.0" prefWidth="333.0" promptText="%choose_cateory" />
-                  <Separator layoutY="78.0" prefHeight="3.0" prefWidth="361.0" />
-                  <TextField fx:id="newCategory" layoutX="14.0" layoutY="90.0" prefHeight="24.0" prefWidth="333.0" promptText="%create_new_cat" />
-                  <ImageView fitHeight="18.0" fitWidth="24.0" layoutX="335.0" layoutY="7.0" onMouseClicked="#closeBox" pickOnBounds="true" preserveRatio="true">
+                  <ComboBox fx:id="cbx_catwrap" editable="true" layoutX="22.0" layoutY="49.0" prefHeight="24.0" prefWidth="333.0" promptText="%choose_cateory" AnchorPane.leftAnchor="22.0" AnchorPane.rightAnchor="15.0" />
+                  <Separator layoutX="-1.0" layoutY="87.0" prefHeight="3.0" prefWidth="371.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                  <TextField fx:id="newCategory" layoutX="23.0" layoutY="99.0" prefHeight="24.0" prefWidth="324.0" promptText="%create_new_cat" AnchorPane.leftAnchor="23.0" AnchorPane.rightAnchor="14.0" />
+                  <ImageView fitHeight="18.0" fitWidth="24.0" layoutX="344.0" layoutY="16.0" onMouseClicked="#closeBox" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="8.0" AnchorPane.topAnchor="16.0">
                      <image>
                         <Image url="@../icons/Cancel_32px_1.png" />
                      </image>
@@ -210,10 +207,13 @@
                         <Cursor fx:constant="HAND" />
                      </cursor>
                   </ImageView>
-                  <Label layoutX="146.0" layoutY="69.0" style="-fx-background-color: #ffffff;" text="%lbel.or_" />
-                  <Button layoutX="194.0" layoutY="123.0" mnemonicParsing="false" onAction="#groupInCategory" style="-fx-background-color: #44cef5;" text="%gorup_incateogey" textFill="WHITE" />
+                  <Label layoutX="155.0" layoutY="78.0" style="-fx-background-color: #ffffff;" text="%lbel.or_" AnchorPane.leftAnchor="155.0" AnchorPane.rightAnchor="146.0" />
+                  <Button layoutX="203.0" layoutY="132.0" mnemonicParsing="false" onAction="#groupInCategory" style="-fx-background-color: #44cef5;" text="%gorup_incateogey" textFill="WHITE" AnchorPane.bottomAnchor="10.0" AnchorPane.rightAnchor="11.0" />
                </children>
-            </Pane>
+               <effect>
+                  <DropShadow />
+               </effect>
+            </AnchorPane>
          </children>
          <effect>
             <DropShadow />

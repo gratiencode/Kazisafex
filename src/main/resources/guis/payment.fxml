@@ -12,6 +12,7 @@
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
@@ -40,27 +41,27 @@
             <Cursor fx:constant="HAND" />
          </cursor>
       </ImageView>
-      <Label layoutX="23.0" layoutY="261.0" text="USD" />
-      <Label layoutX="265.0" layoutY="261.0" text="CDF" />
-      <Label fx:id="txt_eval_sum_usd" layoutX="23.0" layoutY="293.0" prefHeight="25.0" prefWidth="216.0" text="USD.....">
+      <Label fx:id="captionusd" layoutX="23.0" layoutY="282.0" text="USD" />
+      <Label fx:id="captioncdf" layoutX="265.0" layoutY="281.0" text="CDF" />
+      <Label fx:id="txt_eval_sum_usd" layoutX="23.0" layoutY="304.0" prefHeight="25.0" prefWidth="216.0" text="USD.....">
          <font>
             <Font size="20.0" />
          </font>
       </Label>
-      <Label fx:id="txt_eval_sum_cdf" layoutX="265.0" layoutY="293.0" prefHeight="25.0" prefWidth="216.0" text="CDF....">
+      <Label fx:id="txt_eval_sum_cdf" layoutX="265.0" layoutY="304.0" prefHeight="25.0" prefWidth="216.0" text="CDF....">
          <font>
             <Font size="20.0" />
          </font>
       </Label>
-      <TextField fx:id="tf_nominal_recu_usd" layoutX="20.0" layoutY="332.0" prefHeight="33.0" prefWidth="223.0" promptText="%xnominal_recu_usd" />
-      <TextField fx:id="tf_nominal_recu_cdf" layoutX="255.0" layoutY="332.0" prefHeight="33.0" prefWidth="223.0" promptText="%xnominal_recu_cdf" />
+      <TextField fx:id="tf_nominal_recu_usd" layoutX="20.0" layoutY="340.0" prefHeight="33.0" prefWidth="223.0" promptText="%xnominal_recu_usd" />
+      <TextField fx:id="tf_nominal_recu_cdf" layoutX="255.0" layoutY="339.0" prefHeight="33.0" prefWidth="223.0" promptText="%xnominal_recu_cdf" />
       <TextField fx:id="tf_arembourser_cdf" editable="false" layoutX="255.0" layoutY="386.0" prefHeight="33.0" prefWidth="223.0" promptText="%toreturncdf" />
       <TextField fx:id="tf_arembourser_usd" editable="false" layoutX="21.0" layoutY="385.0" prefHeight="33.0" prefWidth="223.0" promptText="%toreturnusd" />
       <Separator layoutX="-2.0" layoutY="576.0" prefHeight="1.0" prefWidth="1090.0" />
-      <Separator layoutX="-1.0" layoutY="208.0" prefHeight="3.0" prefWidth="535.0" />
-      <TextField fx:id="tf_phone_client" layoutX="275.0" layoutY="144.0" prefHeight="33.0" prefWidth="149.0" promptText="%phoneclient" style="-fx-background-radius: 10;" />
+      <Separator layoutX="-1.0" layoutY="230.0" prefHeight="3.0" prefWidth="535.0" />
+      <TextField fx:id="tf_phone_client" layoutX="265.0" layoutY="142.0" prefHeight="33.0" prefWidth="149.0" promptText="%phoneclient" style="-fx-background-radius: 10;" AnchorPane.leftAnchor="265.0" AnchorPane.topAnchor="142.0" />
       <Button layoutX="159.0" layoutY="601.0" mnemonicParsing="false" onAction="#saveVente" prefHeight="43.0" prefWidth="141.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
-      <Button layoutX="429.0" layoutY="102.0" mnemonicParsing="false" onAction="#pickClient" prefHeight="24.0" prefWidth="104.0" style="-fx-background-color: #44cef5;" text="%addclient" textFill="WHITE">
+      <Button layoutX="429.0" layoutY="102.0" mnemonicParsing="false" onAction="#pickClient" prefHeight="24.0" prefWidth="104.0" style="-fx-background-color: #44cef5;" text="%addclient" textFill="WHITE" AnchorPane.topAnchor="102.0">
          <cursor>
             <Cursor fx:constant="HAND" />
          </cursor></Button>
@@ -69,12 +70,12 @@
          <cursor>
             <Cursor fx:constant="HAND" />
          </cursor></Button>
-      <Label fx:id="txt_reference_vente" alignment="CENTER_RIGHT" layoutX="252.0" layoutY="222.0" prefHeight="19.0" prefWidth="234.0" text="#ref">
+      <Label fx:id="txt_reference_vente" alignment="CENTER_RIGHT" layoutX="252.0" layoutY="248.0" prefHeight="19.0" prefWidth="234.0" text="#ref">
          <font>
             <Font size="15.0" />
          </font>
       </Label>
-      <Label layoutX="10.0" layoutY="220.0" text="%invoice">
+      <Label layoutX="10.0" layoutY="246.0" text="%invoice">
          <font>
             <Font size="18.0" />
          </font>
@@ -215,18 +216,21 @@
             <Cursor fx:constant="HAND" />
          </cursor>
       </ImageView>
-      <Label fx:id="txt_print_status" layoutX="768.0" layoutY="648.0" prefHeight="16.0" prefWidth="141.0" text="Etat :" textFill="#39afdd" />
+      <Label fx:id="txt_print_status" layoutX="920.0" layoutY="648.0" prefHeight="16.0" prefWidth="141.0" text="Etat :" textFill="#39afdd" />
       <ComboBox fx:id="cbx_printers" layoutX="689.0" layoutY="616.0" prefHeight="24.0" prefWidth="273.0" promptText="Choisire une imprimente" />
       <Label fx:id="txt_print_status1" layoutX="571.0" layoutY="619.0" prefHeight="16.0" prefWidth="115.0" text="Imprimer avec : " textFill="#5e6365" />
+      <CheckBox fx:id="chbx_bt_search" layoutX="565.0" layoutY="648.0" mnemonicParsing="false" onAction="#onBluetoothSearch" text="Rechercher Bluetooth" />
+      <ProgressIndicator fx:id="pgi_bt_search" layoutX="735.0" layoutY="648.0" prefHeight="20.0" prefWidth="20.0" visible="false" />
+      <Label fx:id="lbl_bt_count" layoutX="765.0" layoutY="650.0" text="0 trouvé" visible="false" />
       <CheckBox fx:id="chbx_print_thermal" layoutX="833.0" layoutY="583.0" mnemonicParsing="false" prefHeight="18.0" prefWidth="210.0" text="Imprimer sur papier A4" />
       <Label fx:id="txt_reduction" alignment="CENTER" contentDisplay="CENTER" layoutX="97.0" layoutY="223.0" prefHeight="16.0" prefWidth="141.0" style="-fx-background-color: #44cef5; -fx-background-radius: 12;" text="Reduction" textAlignment="CENTER" textFill="WHITE" visible="false">
          <opaqueInsets>
             <Insets left="1.0" top="1.0" />
          </opaqueInsets>
       </Label>
-      <ComboBox fx:id="cbx_clients" editable="true" layoutX="116.0" layoutY="98.0" prefHeight="33.0" prefWidth="309.0" promptText="%clientname" />
-      <TextField fx:id="cliname" layoutX="116.0" layoutY="144.0" prefHeight="33.0" prefWidth="149.0" promptText="%clientname" style="-fx-background-radius: 10;" />
-      <CheckBox fx:id="save2favorite" layoutX="119.0" layoutY="185.0" mnemonicParsing="false" text="%addfavo" />
+      <ComboBox fx:id="cbx_clients" editable="true" layoutX="116.0" layoutY="97.0" prefHeight="33.0" prefWidth="309.0" promptText="%clientname" AnchorPane.leftAnchor="116.0" AnchorPane.topAnchor="97.0" />
+      <TextField fx:id="cliname" layoutX="116.0" layoutY="142.0" prefHeight="33.0" prefWidth="141.0" promptText="%clientname" style="-fx-background-radius: 10;" AnchorPane.leftAnchor="116.0" />
+      <CheckBox fx:id="save2favorite" layoutX="126.0" layoutY="183.0" mnemonicParsing="false" text="%addfavo" AnchorPane.leftAnchor="126.0" AnchorPane.topAnchor="183.0" />
       <TextField fx:id="tflibelle" layoutX="96.0" layoutY="433.0" prefHeight="33.0" prefWidth="384.0" promptText="%xlibelle" />
       <Separator layoutX="-3.0" layoutY="424.0" prefHeight="7.0" prefWidth="542.0" />
       <Label layoutX="14.0" layoutY="436.0" text="%xlibelle" />
@@ -237,5 +241,10 @@
             <Image url="@../icons/refresh-buttons(1).png" />
          </image>
       </ImageView>
+      <Label fx:id="txt_ebonus_remained" layoutX="128.0" layoutY="208.0" prefHeight="19.0" prefWidth="404.0" text="Hors ligne..." AnchorPane.leftAnchor="127.0" AnchorPane.topAnchor="207.0">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Label>
    </children>
 </AnchorPane>

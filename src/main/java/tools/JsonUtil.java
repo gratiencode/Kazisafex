@@ -5,15 +5,12 @@
  */
 package tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import utilities.ImageProduit;
 import java.io.StringReader;
-import java.text.ParseException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-//import javax.json.Json;
-//import javax.json.JsonObject;
-//import javax.json.JsonObjectBuilder;
-//import javax.json.JsonReader;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
@@ -43,6 +40,13 @@ import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import data.BaseModel;
+import data.core.KazisafeServiceFactory;
+import jakarta.json.stream.JsonParser;
+import data.Inventaire;
+import data.Compter;
+import java.util.prefs.Preferences;
 
 /**
  *
@@ -137,7 +141,7 @@ public class JsonUtil {
                         .add("quantite", ins.getQuantite())
                         .add("localisation", ins.getLocalisation() == null ? "" : ins.getLocalisation())
                         .add("stockAlerte", ins.getStockAlerte())
-                        .add("dateStocker", Constants.Datetime.format(ins.getDateStocker()))
+                        .add("dateStocker", ins.getDateStocker().toString())
                         .add("livraisId", Json.createObjectBuilder()
                                 .add("uid", ins.getLivraisId().getUid()).build())
                         .add("mesureId", Json.createObjectBuilder()
@@ -159,7 +163,7 @@ public class JsonUtil {
                     .add("region", ins.getRegion())
                     .add("quantite", ins.getQuantite())
                     .add("destination", ins.getDestination())
-                    .add("dateDestockage", Constants.Datetime.format(ins.getDateDestockage()))
+                    .add("dateDestockage", ins.getDateDestockage().toString())
                     .add("mesureId", Json.createObjectBuilder()
                             .add("uid", ins.getMesureId().getUid()).build())
                     .add("productId", Json.createObjectBuilder()
@@ -176,7 +180,7 @@ public class JsonUtil {
                     .add("region", ins.getRegion())
                     .add("quantite", ins.getQuantite())
                     .add("stockAlert", ins.getStockAlert() == null ? 0 : ins.getStockAlert())
-                    .add("date", Constants.Datetime.format(ins.getDate()))
+                    .add("date", ins.getDate().toString())
                     .add("mesureId", Json.createObjectBuilder()
                             .add("uid", ins.getMesureId().getUid()).build())
                     .add("productId", Json.createObjectBuilder()
@@ -184,6 +188,7 @@ public class JsonUtil {
             if (ins.getDateExpiry() != null) {
                 builder.add("dateExpiry", Constants.dateFormater.format(ins.getDateExpiry()));
             }
+
         } else if (obj instanceof PrixDeVente) {
             PrixDeVente ins = (PrixDeVente) obj;
             builder.add("uid", ins.getUid())
@@ -224,7 +229,7 @@ public class JsonUtil {
                     .add("montantUsd", ins.getMontantUsd())
                     .add("payment", ins.getPayment())
                     .add("reference", ins.getReference())
-                    .add("dateVente", Constants.Datetime.format(ins.getDateVente()))
+                    .add("dateVente", ins.getDateVente().toString())
                     .add("deviseDette", ins.getDeviseDette());
             JsonObjectBuilder jsob = Json.createObjectBuilder();
 
@@ -279,7 +284,7 @@ public class JsonUtil {
                     .add("montantUsd", ins.getMontantUsd())
                     .add("reference", ins.getReference())
                     .add("tresorId", Json.createObjectBuilder().add("uid", ins.getTresorId() == null ? "" : ins.getTresorId().getUid()))
-                    .add("date", Constants.Datetime.format(ins.getDate()));
+                    .add("date", ins.getDate().toString());
         } else if (obj instanceof Operation) {
             Operation ins = (Operation) obj;
             builder.add("uid", ins.getUid())
@@ -292,7 +297,7 @@ public class JsonUtil {
                     .add("depenseId", Json.createObjectBuilder().add("uid", ins.getDepenseId() == null ? "" : ins.getDepenseId().getUid()))
                     .add("montantUsd", ins.getMontantUsd())
                     .add("referenceOp", ins.getReferenceOp())
-                    .add("date", Constants.Datetime.format(ins.getDate()))
+                    .add("date", ins.getDate().toString())
                     .add("caisseOpId", Json.createObjectBuilder()
                             .add("uid", ins.getCaisseOpId().getUid())
                             .add("libelle", ins.getCaisseOpId().getLibelle())
@@ -302,7 +307,7 @@ public class JsonUtil {
                             .add("region", ins.getCaisseOpId().getRegion())
                             .add("montantUsd", ins.getCaisseOpId().getMontantUsd())
                             .add("reference", ins.getCaisseOpId().getReference())
-                            .add("date", Constants.Datetime.format(ins.getCaisseOpId().getDate())).build());
+                            .add("date", ins.getCaisseOpId().getDate().toString()).build());
 
         } else if (obj instanceof ImageProduit) {
             ImageProduit image = (ImageProduit) obj;
@@ -317,7 +322,7 @@ public class JsonUtil {
                     .add("referenceVente", oper.getReferenceVente())
                     .add("region", oper.getRegion())
                     .add("status", oper.getStatus())
-                    .add("date", Constants.Datetime.format(oper.getDate()))
+                    .add("date", oper.getDate().toString())
                     .add("clientId", Json.createObjectBuilder().add("uid", oper.getClientId().getUid()).build())
                     .add("ligneVenteId", Json.createObjectBuilder().add("uid", oper.getLigneVenteId().getUid()).build())
                     .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());
@@ -326,7 +331,7 @@ public class JsonUtil {
             ClientAppartenir oper = (ClientAppartenir) obj;
             builder.add("uid", oper.getUid())
                     .add("region", oper.getRegion())
-                    .add("date", Constants.Datetime.format(oper.getDateAppartenir()))
+                    .add("date", oper.getDateAppartenir().toString())
                     .add("clientId", Json.createObjectBuilder().add("uid", oper.getClientId().getUid()).build())
                     .add("clientOrganisationId", Json.createObjectBuilder().add("uid", oper.getClientOrganisationId().getUid()).build());
         } else if (obj instanceof ClientOrganisation) {
@@ -352,7 +357,7 @@ public class JsonUtil {
                     .add("quantite", oper.getQuantite())
                     .add("regionDest", oper.getRegionDest())
                     .add("regionProv", oper.getRegionProv())
-                    .add("date", Constants.Datetime.format(oper.getDate()))
+                    .add("date", oper.getDate().toString())
                     .add("destockerId", Json.createObjectBuilder().add("uid", oper.getDestockerId().getUid()).build())
                     .add("recquisitionId", Json.createObjectBuilder().add("uid", oper.getRecquisitionId().getUid()).build())
                     .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());
@@ -364,7 +369,7 @@ public class JsonUtil {
                     .add("motif", oper.getMotif())
                     .add("region", oper.getRegion())
                     .add("quantite", oper.getQuantite())
-                    .add("date", Constants.Datetime.format(oper.getDate()))
+                    .add("date", oper.getDate().toString())
                     .add("clientId", Json.createObjectBuilder().add("uid", oper.getClientId().getUid()).build())
                     .add("ligneVenteId", Json.createObjectBuilder().add("uid", oper.getLigneVenteId().getUid()).build())
                     .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());
@@ -376,7 +381,7 @@ public class JsonUtil {
                     .add("montant", ab.getMontant())
                     .add("nombreOperation", ab.getNombreOperation())
                     .add("typeAbonnement", ab.getTypeAbonnement())
-                    .add("dateAbonnement", Constants.Datetime.format(ab.getDateAbonnement()));
+                    .add("dateAbonnement", ab.getDateAbonnement().toString());
         } else if (obj instanceof Facture) {
             Facture bill = (Facture) obj;
             builder.add("uid", bill.getUid())
@@ -473,15 +478,11 @@ public class JsonUtil {
             ins.setPrixAchatTotal(json.getJsonNumber("prixAchatTotal").doubleValue());
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setStockAlerte(json.getJsonNumber("stockAlerte").doubleValue());
-            try {
-                if (json.containsKey("dateExpir")) {
-                    String dateE = json.getString("dateExpir");
-                    ins.setDateExpir(dateE == null ? null : Constants.dateFormater.parse(dateE));
-                }
-                ins.setDateStocker(Constants.Datetime.parse(json.getString("dateStocker")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
+            if (json.containsKey("dateExpir")) {
+                String dateE = json.getString("dateExpir");
+                ins.setDateExpir(dateE == null ? null : LocalDate.parse(dateE));
             }
+            ins.setDateStocker(LocalDateTime.parse(json.getString("dateStocker")));
             JsonObject jso1 = json.getJsonObject("livraisId");
             Livraison livr = new Livraison(jso1.getString("uid"));
             ins.setLivraisId(livr);
@@ -503,7 +504,7 @@ public class JsonUtil {
             ins.setRegion(json.getString("region"));
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setDestination(json.getString("destination"));
-            ins.setDateDestockage(Constants.Datetime.parse(json.getString("dateDestockage")));
+            ins.setDateDestockage(LocalDateTime.parse(json.getString("dateDestockage")));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
             mz.setUid(jso1.getString("uid"));
@@ -521,17 +522,13 @@ public class JsonUtil {
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
             ins.setStockAlert(json.getJsonNumber("stockAlert").doubleValue());
-            try {
-                if (json.containsKey("dateExpiry")) {
-                    String dateE = json.getString("dateExpiry");
-                    if (!dateE.isEmpty() && !dateE.equalsIgnoreCase("null")) {
-                        ins.setDateExpiry(Constants.dateFormater.parse(dateE));
-                    }
+            if (json.containsKey("dateExpiry")) {
+                String dateE = json.getString("dateExpiry");
+                if (!dateE.isEmpty() && !dateE.equalsIgnoreCase("null")) {
+                    ins.setDateExpiry(LocalDate.parse(dateE));
                 }
-                ins.setDate(Constants.Datetime.parse(json.getString("date")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
             }
+            ins.setDate(LocalDateTime.parse(json.getString("date")));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
             mz.setUid(jso1.getString("uid"));
@@ -581,14 +578,10 @@ public class JsonUtil {
             ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
             ins.setPayment(json.getString("payment"));
             ins.setReference(json.getString("reference"));
-            try {
-                if (json.containsKey("echeance")) {
-                    ins.setEcheance(Constants.dateFormater.parse(json.getString("echeance")));
-                }
-                ins.setDateVente(Constants.dateFormater.parse(json.getString("dateVente")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
+            if (json.containsKey("echeance")) {
+                ins.setEcheance(LocalDate.parse(json.getString("echeance")));
             }
+            ins.setDateVente(LocalDateTime.parse(json.getString("dateVente")));
             ins.setDeviseDette(json.getString("deviseDette"));
             JsonObject jso = json.getJsonObject("clientId");
             Client clt = new Client();
@@ -639,7 +632,7 @@ public class JsonUtil {
             }
             ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
             ins.setReference(json.getString("reference"));
-            ins.setDate(Constants.Datetime.parse(json.getString("date")));
+            ins.setDate(LocalDateTime.parse(json.getString("date")));
             return ins;
         } else if (json.containsKey("imputation")) {
             Operation ins = new Operation();
@@ -657,7 +650,7 @@ public class JsonUtil {
             if (json.containsKey("depenseId")) {
                 ins.setDepenseId(new Depense(json.getJsonObject("depenseId").getString("uid")));
             }
-            ins.setDate(Constants.Datetime.parse(json.getString("date")));
+            ins.setDate(LocalDateTime.parse(json.getString("date")));
             JsonObject jso = json.getJsonObject("caisseOpId");
             Traisorerie t = new Traisorerie();
             t.setUid(jso.getString("uid"));
@@ -668,7 +661,7 @@ public class JsonUtil {
             t.setRegion(jso.getString("region"));
             t.setMontantUsd(jso.getJsonNumber("montantUsd").doubleValue());
             t.setReference(jso.getString("reference"));
-            t.setDate(Constants.Datetime.parse(jso.getString("date")));
+            t.setDate(LocalDateTime.parse(jso.getString("date")));
             ins.setCaisseOpId(t);
             return ins;
         } else if (json.containsKey("imageBase64")) {
@@ -685,12 +678,7 @@ public class JsonUtil {
             oper.setReferenceVente(json.getString("referenceVente"));
             oper.setRegion(json.getString("region"));
             oper.setStatus(json.getString("status"));
-
-            try {
-                oper.setDate(Constants.dateFormater.parse(json.getString("date")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            oper.setDate(LocalDateTime.parse(json.getString("date")));
             JsonObject jsoc = json.getJsonObject("clientId");
             Client clt = new Client(jsoc.getString("uid"));
             oper.setClientId(clt);
@@ -703,11 +691,9 @@ public class JsonUtil {
             ClientAppartenir oper = new ClientAppartenir();
             oper.setUid(json.getString("uid"));
             oper.setRegion(json.getString("region"));
-            try {
-                oper.setDateAppartenir(Constants.dateFormater.parse(json.getString("date")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+
+            oper.setDateAppartenir(LocalDate.parse(json.getString("date")));
+
             JsonObject jsoc = json.getJsonObject("clientId");
             Client clt = new Client(jsoc.getString("uid"));
             oper.setClientId(clt);
@@ -739,11 +725,7 @@ public class JsonUtil {
             oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
             oper.setRegionDest(json.getString("regionDest"));
             oper.setRegionProv(json.getString("regionProv"));
-            try {
-                oper.setDate(Constants.dateFormater.parse(json.getString("date")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            oper.setDate(LocalDateTime.parse(json.getString("date")));
             JsonObject jo = json.getJsonObject("destockerId");
             oper.setDestockerId(new Destocker(jo.getString("uid")));
             JsonObject job = json.getJsonObject("recquisitionId");
@@ -759,11 +741,7 @@ public class JsonUtil {
             oper.setReferenceVente(json.getString("referenceVente"));
             oper.setMotif(json.getString("motif"));
             oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            try {
-                oper.setDate(Constants.dateFormater.parse(json.getString("date")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            oper.setDate(LocalDateTime.parse(json.getString("date")));
             JsonObject jo = json.getJsonObject("ligneVenteId");
             oper.setLigneVenteId(new LigneVente(jo.getJsonNumber("uid").longValue()));
             JsonObject job = json.getJsonObject("recquisitionId");
@@ -774,11 +752,9 @@ public class JsonUtil {
         } else if (json.containsKey("typeAbonnemnt")) {
             Abonnement ab = new Abonnement();
             ab.setUid(json.getString("uid"));
-            try {
-                ab.setDateAbonnement(Constants.dateFormater.parse(json.getString("dateAbonnement")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+
+            ab.setDateAbonnement(LocalDateTime.parse(json.getString("dateAbonnement")));
+
             ab.setDevise(json.getString("devise"));
             ab.setEtat(json.getString("etat"));
             ab.setMontant(json.getJsonNumber("montant").doubleValue());
@@ -788,12 +764,10 @@ public class JsonUtil {
         } else if (json.containsKey("startDate")) {
             Facture f = new Facture();
             f.setUid(json.getString("uid"));
-            try {
-                f.setStartDate(Constants.dateFormater.parse(json.getString("startDate")));
-                f.setStartDate(Constants.dateFormater.parse(json.getString("endDate")));
-            } catch (ParseException ex) {
-                Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
-            }
+
+            f.setStartDate(LocalDate.parse(json.getString("startDate")));
+            f.setStartDate(LocalDate.parse(json.getString("endDate")));
+
             f.setNumero(json.getString("numero"));
             f.setOrganisId(new ClientOrganisation(json.getJsonObject("organisId").getString("uid")));
             f.setPayedamount(json.getJsonNumber("payedamount").doubleValue());
@@ -816,8 +790,130 @@ public class JsonUtil {
             bill.setTypeCompte(json.getString("typeCompte"));
             return bill;
         }
-            
+
         return null;
     }
 
+    public static BaseModel toBaseModelObject(String s) {
+        System.out.println("incoming "+s);
+        String type = readType(s);
+        System.out.println("Type result : "+type);
+        try {
+            if (type != null) {
+                Tables table = Tables.valueOf(type);
+                ObjectMapper mapper = KazisafeServiceFactory.mapper();
+                switch (table) {
+                    case CATEGORY -> {
+                        Category rstc = mapper.readValue(s, Category.class);
+                        System.out.println("Category recu et bien deserialized "+rstc.getDescritption());
+                        return rstc;
+
+                    }
+                    case PRODUIT -> {
+                        Produit p = mapper.readValue(s, Produit.class);
+                        System.out.println("Deserialization de produit reussi : "+p.getNomProduit());
+                        return p;
+                    }
+                    case MESURE -> {
+                        Mesure m = mapper.readValue(s, Mesure.class);
+                        return m;
+                    }
+                    case FOURNISSEUR -> {
+                        Fournisseur ins = mapper.readValue(s, Fournisseur.class);
+                        return ins;
+                    }
+                    case LIVRAISON -> {
+                        Livraison livrz = mapper.readValue(s,Livraison.class);
+                        return livrz;
+                    }
+                    case STOCKER -> {
+                        Stocker stok = mapper.readValue(s, Stocker.class);
+                        return stok;
+                    }
+                    case DESTOCKER -> {
+                        Destocker destok = mapper.readValue(s, Destocker.class);
+                        return destok;
+                    }
+                    case RECQUISITION -> {
+                        Recquisition recq = mapper.readValue(s, Recquisition.class);
+                        return recq;
+                    }
+                    case PRIXDEVENTE -> {
+                        PrixDeVente pxv = mapper.readValue(s, PrixDeVente.class);
+                        return pxv;
+                    }
+                    case CLIENT -> {
+                        Client client = mapper.readValue(s, Client.class);
+                        return client;
+                    }
+                    case VENTE -> {
+                        Vente vente = mapper.readValue(s, Vente.class);
+                        return vente;
+                    }
+                    case LIGNEVENTE -> {
+                        LigneVente lignv = mapper.readValue(s, LigneVente.class);
+                        return lignv;
+                    }
+                    case ARETIRER -> {
+                        Aretirer aretir = mapper.readValue(s, Aretirer.class);
+                        return aretir;
+                    }
+                    case COMPTETRESOR -> {
+                        CompteTresor bill = mapper.readValue(s, CompteTresor.class);
+                        return bill;
+                    }
+                    case TRAISORERIE -> {
+                        Traisorerie tres = mapper.readValue(s,Traisorerie.class);
+                        return tres;
+                    }
+                    case DEPENSE -> {
+                        Depense dep = mapper.readValue(s, Depense.class);
+                        return dep;
+                    }
+                    case OPERATION -> {
+                        Operation operation =mapper.readValue(s,Operation.class);
+                        return operation;
+                    }
+                    case INVENTORY -> {
+                        Inventaire inventaire =mapper.readValue(s,Inventaire.class);
+                        System.out.println("Inventaire from jsonUtil "+inventaire);
+                        return inventaire;
+                    }
+                    case COMPTER -> {
+                        Compter compter =mapper.readValue(s,Compter.class);
+                        return compter;
+                    }
+
+                }
+
+            }
+        } catch (JsonProcessingException ex) {
+            Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
+            
+        }return null;
+    }
+
+    private static boolean isObject(String obj) {
+        StringReader sreader = new StringReader(obj);
+        JsonParser parser = Json.createParser(sreader);
+        if (parser.hasNext()) {
+            JsonParser.Event evt = parser.next();
+            if (evt == JsonParser.Event.START_OBJECT) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static String readType(String message) {
+        if (isObject(message)) {
+            JsonReader reader = Json.createReader(new StringReader(message));
+            JsonObject json = reader.readObject();
+            if (json.containsKey("type")) {
+                return json.getString("type");
+            }
+        }
+        return null;
+    }
+   
 }

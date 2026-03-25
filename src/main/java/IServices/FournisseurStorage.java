@@ -5,7 +5,9 @@
  */
 package IServices;
 
+import data.Entreprise;
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Set;
 import data.Fournisseur;
 import data.Fournisseur;
@@ -31,5 +33,16 @@ public interface FournisseurStorage {
     public List<Fournisseur> findFournisseurs(int start, int max);
 
     public List<Fournisseur> findByPhone(String text);
-     public List<Fournisseur> mergeSet(Set<Fournisseur> bulk);
+
+    public List<Fournisseur> mergeSet(Set<Fournisseur> bulk);
+
+    public List<Fournisseur> findUnSyncedFournisseurs(long disconnected_at);
+
+    public Fournisseur findOrCreate(Entreprise entreprise);
+
+    public boolean isExists(String uid);
+
+    public boolean isExists(String uid, LocalDateTime atime);
+
+    public double getTotalDebt();
 }

@@ -48,7 +48,7 @@ public class VenteEncoder implements Encoder.Text<Vente> {
                 .add("payload", ins.getPayload())
                 .add("priority", ins.getPriority())
                 .add("counter", ins.getCounter())
-                .add("dateVente", tools.Constants.Datetime.format(ins.getDateVente()))
+                .add("dateVente", ins.getDateVente().toString())
                 .add("deviseDette", ins.getDeviseDette());
         JsonObjectBuilder jsob = Json.createObjectBuilder();
 
@@ -58,12 +58,11 @@ public class VenteEncoder implements Encoder.Text<Vente> {
                 .add("typeClient", ins.getClientId().getTypeClient())
                 .add("nomClient", ins.getClientId().getNomClient())
                 .add("phone", ins.getClientId().getPhone());
-
         Client c = ins.getClientId().getParentId();
         if (c == null) {
             jsob.add("parentId", Json.createObjectBuilder().add("uid", ins.getClientId().getUid()).build());
         } else {
-            jsob.add("parentId", Json.createObjectBuilder().add("uid", c.getUid()).build());
+            jsob.add("parentId", Json.createObjectBuilder().add("uid", c.getUid()).build()); 
         }
         JsonObject sobj = jsob.build();
         builder.add("clientId", sobj);

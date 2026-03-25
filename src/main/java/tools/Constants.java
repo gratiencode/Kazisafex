@@ -25,7 +25,7 @@ import java.util.prefs.Preferences;
  */
 public class Constants {
 
-    public static final String APP_VERSION = "1.2.2-ZR";
+    public static final String APP_VERSION = "2.0.26-build1";
     public static final String LOGIN_SCREEN = "keti_UI.fxml";
     public static final String MAIN_SCREEN = "mainuix.fxml";
     public static final String STORAGE_VIEW = "Goodstorage.fxml";
@@ -33,6 +33,8 @@ public class Constants {
     public static final String REPPORT_VIEW = "repport.fxml";
     public static final String AGENTS_VIEW = "agent.fxml";
     public static final String PRODUITS_VIEW = "produits.fxml";
+    public static final String PRODUCTION_VIEW = "production.fxml";
+    public static final String IMMOBILISATION_VIEW = "immobilisation.fxml";
     public static final String PARAMETRE_VIEW = "parametre.fxml";
     public static final String POS_VIEW = "Pos.fxml";
     public static final String CAISSE_VIEW = "tresorerie.fxml";
@@ -43,6 +45,8 @@ public class Constants {
     public static final String CLIENTS = "clients-ui";
     public static final String STORAGE = "storage-ui";
     public static final String PRODUIT = "produit-ui";
+    public static final String PRODUCTION = "production-ui";
+    public static final String IMMOBILISATIONS = "immobilisation-ui";
     public static final String AGENTS = "agents-ui";
     public static final String PARAMETRES = "parametre-ui";
     public static final String ENTREPRISE = "retrait-ui";
@@ -81,8 +85,10 @@ public class Constants {
     public static final String MESURE_DLG = "Mezure.fxml";
     public static final String DELIVERY_DLG = "Delivery.fxml";
     public static final String RECQ_DLG = "recq.fxml";
+    public static final String CLOTURE_DLG = "cloture.fxml";
     public static final String CLIENT_DLG = "client.fxml";
     public static final String RELEVEE_DLG = "relevee.fxml";
+    public static final String ASSISTANT_DLG = "Iassistant.fxml";
     public static final String FOURNISSEUR_DLG = "suppliers.fxml";
     public static final String PANIER_DLG = "panierappender.fxml";
 
@@ -101,7 +107,7 @@ public class Constants {
     public static final String ACTION_UPDATE = "update";
     public static final String ACTION_DELETE = "delete";
     public static final String ACTION_SYNC = "sync";
-    public static final String LAST_SESSION_ENDS = "last_time_session";
+    public static final String SYNC_ELLAPSED_TIME = "_last_sync_happenedAt0_";
     public static final long ABONNEMENT_MESUEL = 86400000 * 30;
     public static final String ABONNEMENT_BONUS = "Ab-Bonus";
     public static final String COMP_ENTITY = "loyal_id";
@@ -124,6 +130,11 @@ public class Constants {
     public static final String SUBSCRIPTION_RECEIVED = "En consommation";
     public static final String SUBSCRIPTION_OPEN = "OPEN";
     public static final String SUBSCRIPTION_CLOSE = "CLOSE";
+    public static final String COMPTE_CLOTURE = "cloture";
+    public static final String COMPTE_OUVERT = "ouvert";
+    public static final String PERIODE_JOURNALIERE = "journaliere";
+    public static final String PERIODE_MENSUELLE = "mensuelle";
+    public static final String PERIODE_ANNUELLE = "annuelle";
     public static final String SUSPENDU = "Suspendu";
     public static final boolean OPERATIONNEL = false;
     public static final String DATA_AVAILABLE = "data-exists";
@@ -160,10 +171,18 @@ public class Constants {
     public static final String BONUS_MENS = "Bonus mensuel";
     public static final String BONUS_JOURN = "Bonus journalier";
     public static final String ETAT_SUBSCRIPTION_EXPIRY = "Expiree";
-    public static final String ETAT_SUBSCRIPTION_NEW = "Valide";
+    public static final String ETAT_SUBSCRIPTION_VALID = "Valide";
+    public static final String ETAT_SUBSCRIPTION_EN_CONSOMMATION="En consommation";
+    public static final String SUBSCRIPTION_PRO="PRO";
     public static final String SYNC_STATUS_SYNCED = "SYNCED";
     public static final String SYNC_STATUS_NEW = "NEW";
     public static final String SYNC_STATUS_DELETE = "DELETE";
+    public static final String MANUFACTURING_LEVEL_RAW_MATERIAL = "MP";
+    public static final String MANUFACTURING_LEVEL_MADE_PRODUCT = "PF";
+    public static final String DEPT_PRODUCTION = "Production";
+    public static final String DEPT_DISTRIBUTION = "Distribution";
+    public static final String DEPT_APPROVISIONEMENT = "Approvisionement";
+    public static final String DEPT_ADMINFIN = "Admin. et Finance";
 
     /**
      * Millisecond in one month
@@ -175,6 +194,7 @@ public class Constants {
     public static final String DATE = "today";
     public static final String ACTION_READ = "read";
     public static SimpleDateFormat dateFormater = new SimpleDateFormat("yyyy-MM-dd");
+    public static String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";
 
     public static class Datetime {
 
@@ -185,8 +205,7 @@ public class Constants {
 
         public static Date toDate(Date d) {
             DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
-            Date datesL;
-            datesL = Date.from(LocalDateTime.parse(d.toString(), df).atOffset(ZoneOffset.UTC).toInstant());
+            Date datesL = Date.from(LocalDateTime.parse(d.toString(), df).atOffset(ZoneOffset.UTC).toInstant());
             return datesL;
         }
 
@@ -265,9 +284,13 @@ public class Constants {
         }
 
     }
-    
-    public static String getStringPref(String key,String def){
-        Preferences pref=Preferences.userNodeForPackage(SyncEngine.class);
+
+    public static String getStringPref(String key, String def) {
+        Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
         return pref.get(key, def);
+    }
+
+    public static String dateTodayRef(LocalDate date) {
+        return date.toString().replace("-", "");
     }
 }

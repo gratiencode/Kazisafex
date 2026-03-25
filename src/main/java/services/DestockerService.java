@@ -6,7 +6,9 @@
 package services;
 
 import IServices.DestockerStorage;
+import data.Category;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -17,9 +19,12 @@ import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import jakarta.persistence.TemporalType;
 import data.Destocker;
+import jakarta.persistence.EntityNotFoundException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Date;
-import org.eclipse.persistence.expressions.ExpressionOperator;
+import tools.Tables;
 
 /**
  *
@@ -27,21 +32,44 @@ import org.eclipse.persistence.expressions.ExpressionOperator;
  */
 public class DestockerService implements DestockerStorage {
 
-    EntityManager em;
+    @Override
+    public boolean isExists(String uid) {
+        String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
+                + "FROM Destocker c WHERE c.uid = :id";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+                    .setParameter("id", uid)
+                    .getSingleResult());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createQuery(jpql, Boolean.class)
+                .setParameter("id", uid)
+                .getSingleResult();
+    }
 
     public DestockerService() {
-        em = JpaUtil.getEntityManagerFactory().createEntityManager();
+        // initializing...
     }
 
     @Override
     public Destocker createDestocker(Destocker cat) {
-        Destocker ss = findCustomised(cat.getProductId().getUid(), cat.getNumlot(), cat.getReference(), cat.getDateDestockage());
-        if (ss!=null) {
-            EntityTransaction tx = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.persist(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getReference() + " enregistree");
+            });
+            return cat;
+        }
+        Destocker ss = findCustomised(cat.getProductId().getUid(), cat.getNumlot(), cat.getReference(),
+                cat.getDateDestockage());
+        if (ss == null) {
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
             if (!tx.isActive()) {
                 tx.begin();
             }
-            em.persist(cat);
+            ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
         }
         return cat;
@@ -49,11 +77,20 @@ public class DestockerService implements DestockerStorage {
 
     @Override
     public Destocker updateDestocker(Destocker cat) {
-        EntityTransaction tx = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getReference() + " enregistree");
+            });
+            return cat;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!tx.isActive()) {
             tx.begin();
         }
-        em.merge(cat);
+        ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
 
         return cat;
@@ -61,23 +98,41 @@ public class DestockerService implements DestockerStorage {
 
     @Override
     public void deleteDestocker(Destocker cat) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getReference() + " enregistree");
+            });
+            return;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        em.remove(em.merge(cat));
+        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
     }
 
     @Override
     public Destocker findDestocker(String catId) {
-        return em.find(Destocker.class, catId);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.find(Destocker.class, catId));
+        }
+        return ManagedSessionFactory.getEntityManager().find(Destocker.class, catId);
     }
 
     @Override
     public List<Destocker> findDestockers() {
         try {
-            Query query = em.createNamedQuery("Destocker.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Destocker.findAll");
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Destocker.findAll");
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
@@ -89,12 +144,19 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, objId);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, objId);
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
-        }  //To change body of generated methods, choose Tools | Templates.
+        } // To change body of generated methods, choose Tools | Templates.
     }
 
     /**
@@ -107,8 +169,16 @@ public class DestockerService implements DestockerStorage {
     public Double sumDestockerByProduit(String prodId) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT SUM(d.quantite*m.quant_contenu) q FROM destocker d, mesure m WHERE d.product_id = ? AND d.mesure_id = m.uid");
-            Query query = em.createNativeQuery(sb.toString());
+            sb.append(
+                    "SELECT SUM(d.quantite*m.quantcontenu) q FROM destocker d, mesure m WHERE d.product_id = ? AND d.mesure_id = m.uid");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString());
+                    query.setParameter(1, prodId);
+                    return (Double) query.getSingleResult();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, prodId);
             return (Double) query.getSingleResult();
         } catch (NoResultException e) {
@@ -121,7 +191,12 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM destocker");
-            return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+                });
+            }
+            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
         } catch (NoResultException e) {
             return 0L;
         }
@@ -130,11 +205,19 @@ public class DestockerService implements DestockerStorage {
     @Override
     public List<Destocker> findDestockers(int start, int max) {
         try {
-            Query query = em.createNamedQuery("Destocker.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Destocker.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Destocker.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (EntityNotFoundException e) {
             return null;
         }
     }
@@ -142,28 +225,75 @@ public class DestockerService implements DestockerStorage {
     @Override
     public List<Destocker> findDescSortedByDate(String region, int start, int max) {
         try {
-            Query query = em.createNamedQuery("Destocker.findByRegion");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Destocker.findByRegion");
+                    query.setParameter("region", region);
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Destocker.findByRegion");
             query.setParameter("region", region);
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (EntityNotFoundException e) {
             return null;
-        } //To change body of generated methods, choose Tools | Templates.
+        } // To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public List<Destocker> findDescSortedByDate(int start, int max) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM destocker ORDER BY dateDestockage DESC ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            sb.append("SELECT * FROM destocker WHERE product_id IN (SELECT uid FROM produit) ORDER BY dateDestockage DESC ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (EntityNotFoundException e) {
             return null;
-        } //To change body of generated methods, choose Tools | Templates.
+        } // To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void removeOrphans() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM destocker WHERE product_id NOT IN (SELECT uid FROM produit) ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                List<Destocker> lsd = ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    return query.getResultList();
+                });
+                lsd.forEach(e -> {
+                    ManagedSessionFactory.submitWrite(em -> {
+                        em.remove(em.merge(e));
+                        return e;
+                    }).thenAccept(t -> {
+                        System.out.println("Element " + e.getUid() + " supprimee");
+                    });
+                });
+                return;
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+            List<Destocker> lsd = query.getResultList();
+            lsd.forEach(e -> {
+                ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(e));
+            });
+        } catch (EntityNotFoundException e) {
+            
+        } //
     }
 
     @Override
@@ -171,9 +301,17 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE dateDestockage BETWEEN ? AND ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
-            query.setParameter(1, java.util.Date.from(date1.atStartOfDay().toInstant(ZoneOffset.of("+2"))), TemporalType.DATE);
-            query.setParameter(2, java.util.Date.from(date2.atStartOfDay().toInstant(ZoneOffset.of("+2"))), TemporalType.DATE);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, date1.atStartOfDay());
+                    query.setParameter(2, date2.atTime(23, 59, 59));
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+            query.setParameter(1, date1.atStartOfDay());
+            query.setParameter(2, date2.atTime(23, 59, 59));
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
@@ -185,14 +323,27 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE dateDestockage BETWEEN ? AND ? AND region = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
-            query.setParameter(1, java.util.Date.from(date1.atStartOfDay().toInstant(ZoneOffset.of("+2"))), TemporalType.DATE);
-            query.setParameter(2, java.util.Date.from(date2.atStartOfDay().toInstant(ZoneOffset.of("+2"))), TemporalType.DATE);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, java.util.Date.from(date1.atStartOfDay().toInstant(ZoneOffset.of("+2"))),
+                            TemporalType.DATE);
+                    query.setParameter(2, java.util.Date.from(date2.atStartOfDay().toInstant(ZoneOffset.of("+2"))),
+                            TemporalType.DATE);
+                    query.setParameter(3, region);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+            query.setParameter(1, java.util.Date.from(date1.atStartOfDay().toInstant(ZoneOffset.of("+2"))),
+                    TemporalType.DATE);
+            query.setParameter(2, java.util.Date.from(date2.atStartOfDay().toInstant(ZoneOffset.of("+2"))),
+                    TemporalType.DATE);
             query.setParameter(3, region);
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
-        }  //To change body of generated methods, choose Tools | Templates.
+        } // To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
@@ -200,7 +351,15 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ? AND region = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, region);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, region);
             return query.getResultList();
@@ -214,7 +373,15 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ? AND numlot = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, nlot);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, nlot);
             return query.getResultList();
@@ -228,7 +395,15 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE reference = ? AND region = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, ref);
+                    query.setParameter(2, region);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, ref);
             query.setParameter(2, region);
             return query.getResultList();
@@ -242,7 +417,14 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE reference = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, ref);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, ref);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -255,7 +437,15 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ?  AND reference = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, ref);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, ref);
             return query.getResultList();
@@ -269,7 +459,14 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ?  ORDER BY datedestockage ASC ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -279,7 +476,18 @@ public class DestockerService implements DestockerStorage {
 
     @Override
     public List<Destocker> mergeSet(Set<Destocker> bulk) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                for (Destocker lj : bulk) {
+                    em.merge(lj);
+                }
+                return bulk;
+            }).thenAccept(e -> {
+                System.out.println("Bulk Destocker merged");
+            });
+            return new ArrayList<>(bulk);
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
@@ -287,11 +495,11 @@ public class DestockerService implements DestockerStorage {
         int i = 0;
         for (Destocker lj : bulk) {
             i++;
-            em.merge(lj);
+            ManagedSessionFactory.getEntityManager().merge(lj);
             if (i % 16 == 0) {
                 etr.commit();
-                em.clear();
-                EntityTransaction etr2 = em.getTransaction();
+                ManagedSessionFactory.getEntityManager().clear();
+                EntityTransaction etr2 = ManagedSessionFactory.getEntityManager().getTransaction();
                 if (!etr2.isActive()) {
                     etr2.begin();
                 }
@@ -307,7 +515,16 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ? AND numlot = ? AND datedestockage = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, numlot);
+                    query.setParameter(3, date, TemporalType.DATE);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, numlot);
             query.setParameter(3, date, TemporalType.DATE);
@@ -321,7 +538,16 @@ public class DestockerService implements DestockerStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM destocker WHERE product_id = ? AND numlot = ? AND reference = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, numlot);
+                    query.setParameter(3, ref);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, numlot);
             query.setParameter(3, ref);
@@ -340,8 +566,17 @@ public class DestockerService implements DestockerStorage {
     public double sum(String uid) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT SUM((d.quantite*m.quant_contenu)) q FROM destocker d,mesure m WHERE d.product_id = ? AND d.mesure_id=m.uid ");
-            Query query = em.createNativeQuery(sb.toString());
+            sb.append("SELECT SUM((d.quantite*m.quantContenu)) q FROM destocker d,mesure m "
+                    + "WHERE d.product_id = ? AND d.mesure_id=m.uid ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    query.setParameter(1, uid);
+                    Double d = (Double) query.getSingleResult();
+                    return d == null ? 0 : d;
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, uid);
             Double d = (Double) query.getSingleResult();
             return d == null ? 0 : d;
@@ -351,17 +586,32 @@ public class DestockerService implements DestockerStorage {
     }
 
     @Override
-    public Destocker findCustomised(String uid, String numlot, String ref, Date dateStocker) {
+    public Destocker findCustomised(String uid, String numlot, String ref, LocalDateTime dateStocker) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM destocker WHERE product_id = ? AND numlot = ? AND reference = ? AND datedestockage = ?");
-            Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+            sb.append(
+                    "SELECT * FROM destocker WHERE product_id = ? AND numlot = ? AND reference = ? AND datedestockage = ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, numlot);
+                    query.setParameter(3, ref);
+                    query.setParameter(4, dateStocker);
+                    List<Destocker> dtks = query.getResultList();
+                    if (dtks.isEmpty()) {
+                        return null;
+                    }
+                    return dtks.get(0);
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, uid);
             query.setParameter(2, numlot);
             query.setParameter(3, ref);
-            query.setParameter(4, dateStocker, TemporalType.DATE);
+            query.setParameter(4, dateStocker);
             List<Destocker> dtks = query.getResultList();
-            if(dtks.isEmpty()){
+            if (dtks.isEmpty()) {
                 return null;
             }
             return dtks.get(0);
@@ -370,4 +620,62 @@ public class DestockerService implements DestockerStorage {
         }
     }
 
+    public static List<Destocker> getDestockers() {
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Destocker.findAll");
+                return query.getResultList();
+            });
+        }
+        EntityManager mem = ManagedSessionFactory.getEntityManager();
+        try {
+            Query query = mem.createNamedQuery("Destocker.findAll");
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public List<Destocker> findUnSyncedDestockers(long disconnected_at) {
+        try {
+            Timestamp offline = new Timestamp(disconnected_at);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM destocker p WHERE p.updated_at >= ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                    query.setParameter(1, offline);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+            query.setParameter(1, offline);
+
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isExists(String uid, LocalDateTime atime) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM destocker p WHERE p.uid = ? AND p.updated_at = ?");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, atime);
+                List<Destocker> result = query.getResultList();
+                return !result.isEmpty();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+        query.setParameter(1, uid);
+        query.setParameter(2, atime);
+        List<Destocker> result = query.getResultList();
+        return !result.isEmpty();
+    }
 }

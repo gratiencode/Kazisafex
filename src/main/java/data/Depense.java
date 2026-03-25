@@ -4,17 +4,12 @@
  * and open the template in the editor.
  */
 package data;
-
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
@@ -24,7 +19,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
-import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -33,28 +29,37 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "depense")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
     @NamedQuery(name = "Depense.findAll", query = "SELECT DISTINCT  d FROM Depense d"),
     @NamedQuery(name = "Depense.findByUid", query = "SELECT DISTINCT  d FROM Depense d WHERE d.uid = :uid"),
     @NamedQuery(name = "Depense.findByNomDepense", query = "SELECT DISTINCT  d FROM Depense d WHERE d.nomDepense = :nomDepense"),
     @NamedQuery(name = "Depense.findByRegion", query = "SELECT DISTINCT  d FROM Depense d WHERE d.region = :region")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+
 public class Depense extends BaseModel implements Serializable {
 
     private String nomDepense;
+    @Column(name = "frequence")
+    private String frequence;
+    @Column(name = "devise")
+    private String devise;
+    @Column(name = "montant")
+    private Double montant = 0d;
     @Column(name = "region")
     private String region;
-    @JsonManagedReference
+    @JsonBackReference("dep-ops")
     @OneToMany(mappedBy = "depenseId")
     private List<Operation> operationList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+     private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     private static final long serialVersionUID = 1L;
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-   
     private String uid;
 
     public Depense() {
@@ -62,11 +67,16 @@ public class Depense extends BaseModel implements Serializable {
     }
 
     @PrePersist
-    @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
+    }
+ 
+    @PreUpdate
+    protected void onUpdate() {
+       this.updatedAt = LocalDateTime.now();
     }
 
     public Depense(String uid) {
@@ -123,7 +133,7 @@ public class Depense extends BaseModel implements Serializable {
         this.region = region;
     }
 
-    @JsonbTransient
+    
     public List<Operation> getOperationList() {
         return operationList;
     }
@@ -131,5 +141,52 @@ public class Depense extends BaseModel implements Serializable {
     public void setOperationList(List<Operation> operationList) {
         this.operationList = operationList;
     }
+
+    public String getFrequence() {
+        return frequence;
+    }
+
+    public void setFrequence(String frequence) {
+        this.frequence = frequence;
+    }
+
+    public String getDevise() {
+        return devise;
+    }
+
+    public void setDevise(String devise) {
+        this.devise = devise;
+    }
+
+    public Double getMontant() {
+        return montant;
+    }
+
+    public void setMontant(Double montant) {
+        this.montant = montant;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+
+   public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+   
+
+ 
+ 
+  
 
 }

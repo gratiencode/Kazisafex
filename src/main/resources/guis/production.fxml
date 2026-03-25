@@ -1,0 +1,780 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Pagination?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.effect.Light.Distant?>
+<?import javafx.scene.effect.Lighting?>
+<?import javafx.scene.effect.Reflection?>
+<?import javafx.scene.effect.Shadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.TilePane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane id="AnchorPane" prefHeight="702.0" prefWidth="1128.0" style="-fx-background-color: #ffffff; -fx-background-radius: 12; -fx-border-radius: 12;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ProductionController">
+   <children>
+      <TabPane fx:id="tabpn_produktion" layoutX="177.0" layoutY="122.0" prefHeight="679.0" prefWidth="1128.0" style="-fx-background-radius: 12;" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="23.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+        <tabs>
+          <Tab text="Intrants">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" style="-fx-background-color: white;">
+                     <children>
+                        <TabPane fx:id="tabpn_entreposer_in_stock" layoutX="-1.0" layoutY="457.0" prefHeight="347.0" prefWidth="1128.0" style="-fx-background-color: white;" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="324.0">
+                          <tabs>
+                            <Tab text="Donnees">
+                              <content>
+                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                                       <children>
+                                          <Pagination fx:id="pgnation_tbl_entreposage" layoutX="14.0" layoutY="14.0" maxPageIndicatorCount="6" prefHeight="292.0" prefWidth="1128.0" style="-fx-border-color: #44cef5;" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0" />
+                                          <TableView fx:id="tbl_entreposage" layoutX="35.0" layoutY="14.0" prefHeight="234.0" prefWidth="1120.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="51.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="4.0" AnchorPane.topAnchor="4.0">
+                                            <columns>
+                                              <TableColumn fx:id="col_date_intrapos" prefWidth="75.0" text="Date" />
+                                              <TableColumn fx:id="col_livraison_intrapos" prefWidth="75.0" text="Livraison" />
+                                                <TableColumn fx:id="col_matiere_intrapos" prefWidth="75.0" text="Matiere" />
+                                                <TableColumn fx:id="col_type_intrapos" prefWidth="75.0" text="Type" />
+                                                <TableColumn fx:id="col_quant_intrapos" prefWidth="75.0" text="Quantite" />
+                                                <TableColumn fx:id="col_cout_unitr_intrapos" prefWidth="75.0" text="Cout unitaire" />
+                                                <TableColumn fx:id="col_total_intrapos" prefWidth="75.0" text="Total" />
+                                                <TableColumn fx:id="col_lot_intrapos" prefWidth="75.0" text="Lot" />
+                                                <TableColumn fx:id="col_peremption_intrapos" prefWidth="75.0" text="Peremption" />
+                                                <TableColumn fx:id="col_depot_intrapos" prefWidth="75.0" text="Depot" />
+                                                <TableColumn fx:id="col_region_intrapos" prefWidth="75.0" text="Region" />
+                                            </columns>
+                                             <columnResizePolicy>
+                                                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                             </columnResizePolicy>
+                                          </TableView>
+                                       </children>
+                                    </AnchorPane>
+                              </content>
+                            </Tab>
+                            <Tab text="Stock">
+                              <content>
+                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                                       <children>
+                                          <TableView fx:id="tbl_stock_entreposage" layoutX="14.0" layoutY="31.0" prefHeight="259.0" prefWidth="1120.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="3.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="4.0" AnchorPane.topAnchor="0.0">
+                                            <columns>
+                                              <TableColumn fx:id="col_nom_intrant_stock" prefWidth="75.0" text="Designation " />
+                                              <TableColumn fx:id="col_type_intrant_stock" prefWidth="75.0" text="Type" />
+                                                <TableColumn fx:id="col_depot_intrant_stock" prefWidth="75.0" text="Depot" />
+                                                <TableColumn fx:id="col_entree_intrant_stock" prefWidth="75.0" text="Entrees" />
+                                                <TableColumn fx:id="col_sortie_intrant_stock" prefWidth="75.0" text="Sorties" />
+                                                <TableColumn fx:id="col_stock_intrant_stock" prefWidth="75.0" text="Stock" />
+                                                <TableColumn fx:id="col_cout_intrant_stock" prefWidth="75.0" text="C.U" />
+                                                <TableColumn fx:id="col_total_value_intrant_stock" prefWidth="75.0" text="Total" />
+                                                <TableColumn fx:id="col_lot_intrant_stock" prefWidth="75.0" text="Lot" />
+                                                <TableColumn fx:id="col_peremption_intrant_stock" prefWidth="75.0" text="Peremption" />
+                                                <TableColumn fx:id="col_region_intrant_stock" prefWidth="75.0" text="Region" />
+                                            </columns>
+                                             <columnResizePolicy>
+                                                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                             </columnResizePolicy>
+                                          </TableView>
+                                       </children></AnchorPane>
+                              </content>
+                            </Tab>
+                          </tabs>
+                        </TabPane>
+                        <Label layoutX="14.0" layoutY="11.0" text="Entreposages" AnchorPane.leftAnchor="14.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutY="43.0" prefHeight="0.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <ComboBox fx:id="cbx_livraison_intraposage" editable="true" layoutX="7.0" layoutY="56.0" prefHeight="28.0" prefWidth="424.0" promptText="Livraiosons" AnchorPane.leftAnchor="7.0" />
+                        <TextField fx:id="tf_quantite_intrapos" layoutX="10.0" layoutY="136.0" prefHeight="30.0" prefWidth="248.0" promptText="Quantite" AnchorPane.leftAnchor="7.0" />
+                        <TextField fx:id="tf_coutach_intrapos" layoutX="9.0" layoutY="178.0" prefHeight="30.0" prefWidth="248.0" promptText="cout d'achat unitaire" AnchorPane.leftAnchor="7.0" />
+                        <ComboBox fx:id="cbx_sku_intrapos" layoutX="264.0" layoutY="137.0" prefHeight="28.0" prefWidth="170.0" promptText="SKU" AnchorPane.leftAnchor="264.0" />
+                        <ComboBox fx:id="cbx_devise_intrapos" layoutX="263.0" layoutY="178.0" prefHeight="28.0" prefWidth="172.0" promptText="devise" AnchorPane.leftAnchor="264.0" />
+                        <ComboBox fx:id="cbx_region_intraposage" layoutX="806.0" layoutY="8.0" prefHeight="28.0" prefWidth="130.0" promptText="Region" AnchorPane.rightAnchor="192.0" />
+                        <DatePicker fx:id="dpk_dateexp_intrapos" layoutX="262.0" layoutY="220.0" prefHeight="29.0" prefWidth="173.0" promptText="Expiration(facultatif)" AnchorPane.leftAnchor="262.0" />
+                        <TextField fx:id="tf_numlot_intrapos" layoutX="10.0" layoutY="219.0" prefHeight="30.0" prefWidth="248.0" promptText="numero de lot" AnchorPane.leftAnchor="7.0" />
+                        <DatePicker fx:id="dpk_date_intraposage" layoutX="948.0" layoutY="7.0" prefHeight="29.0" prefWidth="170.0" promptText="Date" AnchorPane.rightAnchor="10.0" />
+                        <ComboBox fx:id="cbx_depot_intrapos" layoutX="724.0" layoutY="55.0" prefHeight="28.0" prefWidth="354.0" promptText="Depot" AnchorPane.leftAnchor="724.0" AnchorPane.rightAnchor="50.0" />
+                        <ComboBox fx:id="cbx_matiere_intraposage" editable="true" layoutX="9.0" layoutY="95.0" prefHeight="28.0" prefWidth="423.0" promptText="Matiere" AnchorPane.leftAnchor="7.0" />
+                        <ImageView fitHeight="37.0" fitWidth="30.0" layoutX="440.0" layoutY="93.0" onMouseClicked="#showIntradepotAnchorpane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="440.0">
+                           <image>
+                              <Image url="@../icons/edit(2).png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <TextArea fx:id="txtarea_comment_intrapos" layoutX="723.0" layoutY="102.0" prefHeight="111.0" prefWidth="396.0" promptText="Commentaire (facultatif)" AnchorPane.leftAnchor="723.0" AnchorPane.rightAnchor="9.0" />
+                        <Separator layoutX="686.0" layoutY="56.0" orientation="VERTICAL" prefHeight="187.0" prefWidth="6.0" AnchorPane.leftAnchor="686.0" />
+                        <Separator layoutX="1.0" layoutY="265.0" prefHeight="0.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <AnchorPane layoutX="1040.0" layoutY="277.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="48.0">
+                           <children>
+                              <ImageView fitHeight="35.0" fitWidth="28.0" layoutX="7.0" layoutY="7.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#updateEntreposage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/edit32.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <AnchorPane layoutX="1084.0" layoutY="277.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="4.0">
+                           <children>
+                              <ImageView fitHeight="39.0" fitWidth="32.0" layoutX="4.0" layoutY="5.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#deleteEntreposage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/delete_1.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <AnchorPane layoutX="995.0" layoutY="277.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="93.0">
+                           <children>
+                              <ImageView fitHeight="35.0" fitWidth="28.0" layoutX="7.0" layoutY="10.0" onMouseClicked="#refreshEntreposage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/refresh32.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <Button layoutX="27.0" layoutY="274.0" mnemonicParsing="false" onAction="#saveEntreposage" prefHeight="39.0" prefWidth="152.0" style="-fx-background-color: #44CEF5;" text="ENREGISTRER" textFill="WHITE" />
+                        <ImageView fitHeight="37.0" fitWidth="30.0" layoutX="441.0" layoutY="55.0" onMouseClicked="#manageLivraison" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/edit(2).png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Label fx:id="txt_type_matiere_intrapos" layoutX="485.0" layoutY="99.0" prefHeight="18.0" prefWidth="162.0" text="type de matiere" AnchorPane.leftAnchor="485.0">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                        <ImageView fitHeight="37.0" fitWidth="30.0" layoutX="1088.0" layoutY="53.0" onMouseClicked="#showIntradepotAnchorpane2" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="10.0">
+                           <image>
+                              <Image url="@../icons/edit(2).png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <DatePicker fx:id="dpk_start_period_entrepo" layoutX="410.0" layoutY="291.0" onAction="#sortByDate" prefHeight="24.0" prefWidth="146.0" AnchorPane.rightAnchor="572.0" />
+                        <DatePicker fx:id="dpk_end_period_entrepo" layoutX="605.0" layoutY="292.0" onAction="#sortByDate" prefHeight="24.0" prefWidth="140.0" AnchorPane.rightAnchor="383.0" />
+                        <Separator layoutX="567.0" layoutY="305.0" prefHeight="0.0" prefWidth="28.0" style="-fx-background-color: #44cef5;" AnchorPane.rightAnchor="533.0" />
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+          <Tab text="Production">
+               <content>
+                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" style="-fx-background-color: white;">
+                     <children>
+                        <Label layoutX="17.0" layoutY="15.0" text="Programe de production" AnchorPane.leftAnchor="17.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutY="45.0" prefHeight="0.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <ComboBox fx:id="cbx_region_prod" layoutX="797.0" layoutY="11.0" prefHeight="28.0" prefWidth="130.0" promptText="Region" AnchorPane.rightAnchor="201.0" />
+                        <DatePicker fx:id="dpk_now_prod" layoutX="945.0" layoutY="11.0" prefHeight="29.0" prefWidth="170.0" promptText="Date" AnchorPane.rightAnchor="13.0" />
+                        <SplitPane dividerPositions="0.4" layoutX="3.0" layoutY="146.0" prefHeight="500.0" prefWidth="1128.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="2.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="146.0">
+                          <items>
+                            <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="496.0" prefWidth="341.0">
+                                 <children>
+                                    <Label layoutX="2.0" layoutY="12.0" text="Productions" AnchorPane.leftAnchor="2.0" AnchorPane.topAnchor="12.0">
+                                       <font>
+                                          <Font size="18.0" />
+                                       </font>
+                                    </Label>
+                                    <TableView fx:id="tbl_productions" layoutX="4.0" layoutY="35.0" prefHeight="446.0" prefWidth="443.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="2.0" AnchorPane.leftAnchor="2.0" AnchorPane.rightAnchor="2.0" AnchorPane.topAnchor="48.0">
+                                      <columns>
+                                        <TableColumn fx:id="col_produit_prod" prefWidth="320.0" text="Produits" />
+                                        <TableColumn fx:id="col_lot_produit_prod" prefWidth="75.0" text="Lot" />
+                                          <TableColumn fx:id="col_exp_produit_prod" prefWidth="75.0" text="Expiration" />
+                                          <TableColumn fx:id="col_date_start_prod" prefWidth="75.0" text="Debut" />
+                                          <TableColumn fx:id="col_date_end_prod" prefWidth="75.0" text="Fin" />
+                                          <TableColumn fx:id="col_quantite_prod" prefWidth="75.0" text="Quantite" />
+                                          <TableColumn fx:id="col_qualite_prod" prefWidth="75.0" text="Qualite" />
+                                          <TableColumn fx:id="col_etat_prod" prefWidth="75.0" text="Etat" />
+                                          <TableColumn fx:id="col_region_prod" prefWidth="75.0" text="Region" />
+                                      </columns>
+                                       <columnResizePolicy>
+                                          <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                       </columnResizePolicy>
+                                    </TableView>
+                                    <TextField fx:id="tf_search_production" layoutX="122.0" layoutY="11.0" prefHeight="26.0" prefWidth="309.0" promptText="Rechercher une production" style="-fx-background-radius: 20;" AnchorPane.leftAnchor="122.0" AnchorPane.rightAnchor="16.0" AnchorPane.topAnchor="11.0" />
+                                 </children></AnchorPane>
+                            <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="160.0" prefWidth="100.0">
+                                 <children>
+                                    <SplitPane dividerPositions="0.6" layoutX="-4.0" orientation="VERTICAL" prefHeight="241.0" prefWidth="209.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+                                      <items>
+                                        <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="100.0" prefWidth="160.0" style="-fx-background-color: #ffffff;">
+                                             <children>
+                                                <ComboBox fx:id="cbx_matiere_to_prod" editable="true" layoutX="5.0" layoutY="6.0" prefHeight="34.0" prefWidth="156.0" promptText="Matiere premiere" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="508.0" AnchorPane.topAnchor="6.0" />
+                                                <Label fx:id="txt_stock_matiere_to_prod" layoutX="248.0" layoutY="6.0" prefHeight="34.0" prefWidth="79.0" style="-fx-border-color: #44cef5;" text="Stock" AnchorPane.rightAnchor="342.0" AnchorPane.topAnchor="6.0">
+                                                   <font>
+                                                      <Font size="14.0" />
+                                                   </font>
+                                                </Label>
+                                                <TextField fx:id="tf_qte_reparti_matiere_prod" layoutX="330.0" layoutY="6.0" prefHeight="34.0" prefWidth="79.0" promptText="Quantite" AnchorPane.rightAnchor="260.0" AnchorPane.topAnchor="6.0" />
+                                                <ComboBox fx:id="cbx_sku_matiere_to_prod" layoutX="415.0" layoutY="6.0" prefHeight="34.0" prefWidth="111.0" promptText="SKU" AnchorPane.rightAnchor="143.0" AnchorPane.topAnchor="6.0" />
+                                                <Label fx:id="txt_sum_choosen_matiere_to_prod" alignment="CENTER_RIGHT" layoutX="614.0" layoutY="6.0" prefHeight="34.0" prefWidth="94.0" style="-fx-border-color: #44cef5;" text="0 USD" AnchorPane.rightAnchor="43.0" AnchorPane.topAnchor="6.0">
+                                                   <font>
+                                                      <Font size="16.0" />
+                                                   </font>
+                                                </Label>
+                                                <Button layoutX="745.0" layoutY="5.0" mnemonicParsing="false" onAction="#addNewRepartir" prefHeight="34.0" prefWidth="33.0" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="6.0" />
+                                                <TableView fx:id="tbl_matiere_affected_to_prod" layoutX="8.0" layoutY="47.0" prefHeight="214.0" prefWidth="659.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="32.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="47.0">
+                                                  <columns>
+                                                      <TableColumn fx:id="col_date_mat_aff_to_prod" prefWidth="75.0" text="Date" />
+                                                    <TableColumn fx:id="col_mat_aff_to_prod" prefWidth="75.0" text="Matiere" />
+                                                    <TableColumn fx:id="col_type_mat_aff_to_prod" prefWidth="75.0" text="Type" />
+                                                      <TableColumn fx:id="col_lot_mat_aff_to_prod" prefWidth="75.0" text="Lot" />
+                                                      <TableColumn fx:id="col_expir_mat_aff_to_prod" prefWidth="75.0" text="Peremption" />
+                                                      <TableColumn fx:id="col_qte_mat_aff_to_prod" prefWidth="75.0" text="Quantite" />
+                                                      <TableColumn fx:id="col_cout_mat_aff_to_prod" prefWidth="75.0" text="Cout Unit" />
+                                                      <TableColumn fx:id="col_tot_mat_aff_to_prod" prefWidth="75.0" text="Cout Total" />
+                                                  </columns>
+                                                   <columnResizePolicy>
+                                                      <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                   </columnResizePolicy>
+                                                </TableView>
+                                                <Label fx:id="txt_total_mat_aff_to_prod" alignment="CENTER_RIGHT" layoutX="578.0" layoutY="256.0" prefHeight="26.0" prefWidth="197.0" text="Total : -" AnchorPane.bottomAnchor="1.0" AnchorPane.rightAnchor="9.0">
+                                                   <font>
+                                                      <Font size="18.0" />
+                                                   </font>
+                                                </Label>
+                                                <TextField fx:id="tf_search_repartir" layoutX="5.0" layoutY="265.0" prefHeight="26.0" prefWidth="309.0" promptText="Rechercher dans les intrants repartis" style="-fx-background-radius: 20;" AnchorPane.bottomAnchor="2.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="355.0" />
+                                                <Label fx:id="txt_matlot_to_prod" layoutX="165.0" layoutY="15.0" prefHeight="16.0" prefWidth="79.0" text="Lot:" AnchorPane.rightAnchor="425.0" AnchorPane.topAnchor="15.0" />
+                                             </children></AnchorPane>
+                                        <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="100.0" prefWidth="160.0" style="-fx-background-color: #ffffff;">
+                                             <children>
+                                                <ComboBox fx:id="cbx_charge_aff_to_prod" editable="true" layoutX="64.0" layoutY="2.0" prefHeight="34.0" prefWidth="166.0" promptText="Charges" AnchorPane.leftAnchor="64.0" AnchorPane.rightAnchor="439.0" AnchorPane.topAnchor="3.0" />
+                                                <Label fx:id="txt_sum_charg_aff_to_prod" alignment="CENTER_RIGHT" layoutX="348.0" layoutY="3.0" prefHeight="34.0" prefWidth="85.0" style="-fx-border-color: #44cef5;" text="0. :USD" AnchorPane.rightAnchor="351.0" AnchorPane.topAnchor="3.0">
+                                                   <font>
+                                                      <Font size="14.0" />
+                                                   </font>
+                                                </Label>
+                                                <TextField fx:id="tf_quot_charg_aff_to_prod" layoutX="431.0" layoutY="3.0" prefHeight="34.0" prefWidth="128.0" promptText="Quotite" AnchorPane.rightAnchor="219.0" AnchorPane.topAnchor="3.0" />
+                                                <ComboBox fx:id="cbx_deviz_charg_aff_to_prod" layoutX="454.0" layoutY="3.0" prefHeight="34.0" prefWidth="96.0" promptText="Devise" AnchorPane.rightAnchor="119.0" AnchorPane.topAnchor="3.0" />
+                                                <Button layoutX="739.0" layoutY="4.0" mnemonicParsing="false" onAction="#addNewImputer" prefHeight="34.0" prefWidth="33.0" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="3.0" />
+                                                <TableView fx:id="tbl_charges_prod" layoutX="4.0" layoutY="43.0" prefHeight="121.0" prefWidth="659.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="31.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="43.0">
+                                                   <columns>
+                                                      <TableColumn fx:id="col_date_charg_aff_to_prod" prefWidth="75.0" text="Date" />
+                                                      <TableColumn fx:id="col_depense_charg_aff_to_prod" prefWidth="75.0" text="Depense" />
+                                                      <TableColumn fx:id="col_sumquot_charg_aff_to_prod" prefWidth="75.0" text="Quotite" />
+                                                      <TableColumn fx:id="col_percent_charg_aff_to_prod" prefWidth="75.0" text="en %" />
+                                                   </columns>
+                                                   <columnResizePolicy>
+                                                      <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                   </columnResizePolicy>
+                                                </TableView>
+                                                <Label fx:id="txtl_total_charg_aff_to_prod" alignment="CENTER_RIGHT" layoutX="585.0" layoutY="168.0" prefHeight="26.0" prefWidth="197.0" text="Total : -" AnchorPane.bottomAnchor="1.0" AnchorPane.rightAnchor="5.0">
+                                                   <font>
+                                                      <Font size="18.0" />
+                                                   </font>
+                                                </Label>
+                                                <TextField fx:id="tf_search_charge" layoutX="5.0" layoutY="167.0" prefHeight="26.0" prefWidth="309.0" promptText="Rechercher dans les charges affectees" style="-fx-background-radius: 20;" AnchorPane.bottomAnchor="2.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="355.0" />
+                                                <Label layoutX="5.0" layoutY="12.0" text="Directes" AnchorPane.leftAnchor="5.0" />
+                                             </children></AnchorPane>
+                                      </items>
+                                    </SplitPane>
+                                 </children>
+                              </AnchorPane>
+                          </items>
+                        </SplitPane>
+                        <TextField fx:id="tf_lot_to_prod" layoutX="239.0" layoutY="54.0" prefHeight="34.0" prefWidth="110.0" promptText="Lot a produire" AnchorPane.leftAnchor="239.0" />
+                        <TextField fx:id="tf_quant_to_prod" layoutX="14.0" layoutY="54.0" prefHeight="34.0" prefWidth="108.0" promptText="Quantite prevue" AnchorPane.leftAnchor="14.0" />
+                        <ComboBox fx:id="cbx_state_prod" editable="true" layoutX="525.0" layoutY="95.0" prefHeight="34.0" prefWidth="112.0" promptText="Etat d'avancement" AnchorPane.rightAnchor="491.0" />
+                        <TextArea fx:id="txtArea_comment_prod" layoutX="528.0" layoutY="50.0" prefHeight="38.0" prefWidth="431.0" promptText="Commentaire (facultatif)" AnchorPane.leftAnchor="528.0" AnchorPane.rightAnchor="169.0" />
+                        <ComboBox fx:id="cbx_quality_to_prod" editable="true" layoutX="406.0" layoutY="95.0" prefHeight="34.0" prefWidth="110.0" promptText="Qualite prevue" AnchorPane.rightAnchor="612.0" />
+                        <DatePicker fx:id="dpk_start_prod" layoutX="642.0" layoutY="95.0" prefHeight="34.0" prefWidth="156.0" promptText="Debut de production" AnchorPane.rightAnchor="330.0" />
+                        <DatePicker fx:id="dpk_end_prod" layoutX="804.0" layoutY="95.0" prefHeight="34.0" prefWidth="153.0" promptText="Fin de production" AnchorPane.rightAnchor="171.0" />
+                        <ComboBox fx:id="cbx_mesure_to_prod" layoutX="130.0" layoutY="54.0" prefHeight="34.0" prefWidth="104.0" promptText="Mesure" AnchorPane.leftAnchor="130.0" />
+                        <Separator layoutX="-1.0" layoutY="140.0" prefHeight="0.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <ComboBox fx:id="cbx_produits_prod" editable="true" layoutX="12.0" layoutY="96.0" prefHeight="34.0" prefWidth="337.0" promptText="Produit" AnchorPane.leftAnchor="12.0" AnchorPane.rightAnchor="779.0" />
+                        <Button layoutX="970.0" layoutY="50.0" mnemonicParsing="false" onAction="#saveProduction" prefHeight="34.0" prefWidth="144.0" style="-fx-background-color: #44CEF5;" text="ENREGISTRER" textFill="WHITE" AnchorPane.rightAnchor="14.0" />
+                        <AnchorPane layoutX="976.0" layoutY="100.0" prefHeight="34.0" prefWidth="37.0" style="-fx-border-color: #44CEF5;" AnchorPane.rightAnchor="115.0">
+                           <children>
+                              <ImageView fitHeight="34.0" fitWidth="30.0" layoutX="4.0" layoutY="4.0" onMouseClicked="#refreshProduction" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/refresh-buttons(1).png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <AnchorPane layoutX="1028.0" layoutY="98.0" prefHeight="34.0" prefWidth="37.0" style="-fx-border-color: #44CEF5;" AnchorPane.rightAnchor="63.0">
+                           <children>
+                              <ImageView fitHeight="34.0" fitWidth="30.0" layoutX="4.0" layoutY="4.0" onMouseClicked="#updateProduction" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/edit32.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <AnchorPane layoutX="1077.0" layoutY="99.0" prefHeight="34.0" prefWidth="37.0" style="-fx-border-color: #44CEF5;" AnchorPane.rightAnchor="14.0">
+                           <children>
+                              <ImageView fitHeight="34.0" fitWidth="30.0" layoutX="4.0" layoutY="4.0" onMouseClicked="#deleteProduction" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/delete_1.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                        <DatePicker fx:id="dpk_expir_to_prod" layoutX="405.0" layoutY="54.0" prefHeight="34.0" prefWidth="112.0" promptText="Expiration" AnchorPane.leftAnchor="405.0" />
+                        <Button layoutX="362.0" layoutY="95.0" mnemonicParsing="false" onAction="#addNewProduct" prefHeight="34.0" prefWidth="33.0" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" AnchorPane.rightAnchor="733.0" />
+                     </children>
+                  </AnchorPane>
+               </content>
+          </Tab>
+            <Tab text="Produits finis">
+               <content>
+                  <AnchorPane fx:id="tab_produit_fini" minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <Label layoutX="14.0" layoutY="14.0" text="Entreposage de la production" AnchorPane.leftAnchor="14.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutY="52.0" prefHeight="6.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <ComboBox fx:id="cbx_production_terminees" layoutX="16.0" layoutY="64.0" prefHeight="34.0" prefWidth="357.0" promptText="Productions terminees" AnchorPane.leftAnchor="16.0" />
+                        <ComboBox fx:id="cbx_avancement_deprod" layoutX="964.0" layoutY="112.0" prefHeight="34.0" prefWidth="145.0" promptText="Etat d'avancement" AnchorPane.leftAnchor="964.0" AnchorPane.rightAnchor="19.0" />
+                        <ComboBox fx:id="cbx_region_deprod" layoutX="954.0" layoutY="8.0" prefHeight="34.0" prefWidth="200.0" promptText="Region" AnchorPane.rightAnchor="19.0" AnchorPane.topAnchor="8.0" />
+                        <Label fx:id="txt_cout_tot_deprod" layoutX="16.0" layoutY="128.0" text="Cout de production Total" AnchorPane.leftAnchor="16.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <TextField fx:id="tf_quant_deprod" layoutX="400.0" layoutY="111.0" prefHeight="34.0" prefWidth="98.0" promptText="quantite produite" AnchorPane.leftAnchor="400.0" />
+                        <Label fx:id="txt_de_prodUnit_prevu_deprod" layoutX="16.0" layoutY="207.0" text="Cout de production unitaire" AnchorPane.leftAnchor="16.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutX="-2.0" layoutY="276.0" prefHeight="6.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <TabPane layoutY="281.0" prefHeight="367.0" prefWidth="1128.0" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="281.0">
+                          <tabs>
+                            <Tab text="Production terminees">
+                              <content>
+                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                                       <children>
+                                          <TableView fx:id="tbl_prod_deposees" layoutX="3.0" layoutY="2.0" prefHeight="333.0" prefWidth="1122.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="1.0" AnchorPane.leftAnchor="3.0" AnchorPane.rightAnchor="3.0" AnchorPane.topAnchor="2.0">
+                                            <columns>
+                                              <TableColumn fx:id="col_date_prodeposee" prefWidth="75.0" text="Date" />
+                                                <TableColumn fx:id="col_prod8_deposees" prefWidth="75.0" text="Produit" />
+                                                <TableColumn fx:id="cout_unit_deposees" prefWidth="75.0" text="Cout" />
+                                                <TableColumn fx:id="col_qte_deposees" prefWidth="75.0" text="Quantite" />
+                                                <TableColumn fx:id="col_coutotal_deposees" prefWidth="75.0" text="Cout total" />
+                                                <TableColumn fx:id="col_debut_deposees" prefWidth="75.0" text="Debut" />
+                                                <TableColumn fx:id="col_fin_deposees" prefWidth="75.0" text="Fin" />
+                                                <TableColumn fx:id="col_etat_deposee" prefWidth="75.0" text="Niv. de Fabric" />
+                                                <TableColumn fx:id="col_lot_deposees" prefWidth="75.0" text="Lot" />
+                                                <TableColumn fx:id="col_expir_deposee" prefWidth="75.0" text="Expiration" />
+                                                <TableColumn fx:id="col_depot_deposees" prefWidth="75.0" text="Depot" />
+                                                <TableColumn fx:id="col_region_deposees" prefWidth="75.0" text="Region" />
+                                            </columns>
+                                             <columnResizePolicy>
+                                                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                             </columnResizePolicy>
+                                          </TableView>
+                                       </children></AnchorPane>
+                              </content>
+                            </Tab>
+                          </tabs>
+                        </TabPane>
+                        <ComboBox fx:id="cbx_region_dest_deprod" layoutX="964.0" layoutY="65.0" prefHeight="34.0" prefWidth="200.0" promptText="Region destinataire" AnchorPane.rightAnchor="19.0" />
+                        <ComboBox fx:id="cbx_mesure_deprod" layoutX="506.0" layoutY="111.0" prefHeight="34.0" prefWidth="99.0" promptText="Mesure" AnchorPane.leftAnchor="506.0" />
+                        <Button layoutX="907.0" layoutY="228.0" mnemonicParsing="false" onAction="#storePf" prefHeight="34.0" prefWidth="113.0" style="-fx-background-color: #44cef5;" text="STOCKER" textFill="WHITE" AnchorPane.rightAnchor="108.0" AnchorPane.topAnchor="228.0" />
+                        <Separator layoutX="382.0" layoutY="64.0" orientation="VERTICAL" prefHeight="200.0" AnchorPane.leftAnchor="382.0" />
+                        <ImageView fitHeight="56.0" fitWidth="46.0" layoutX="310.0" layoutY="164.0" onMouseClicked="#transfererProdtoStock" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="310.0">
+                           <image>
+                              <Image url="@../icons/next.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                           <effect>
+                              <Lighting>
+                                 <bumpInput>
+                                    <Shadow />
+                                 </bumpInput>
+                                 <light>
+                                    <Light.Distant />
+                                 </light>
+                              </Lighting>
+                           </effect>
+                        </ImageView>
+                        <Label fx:id="txt_quant_prevu_deprod" layoutX="17.0" layoutY="167.0" text="Quantite prevue" AnchorPane.leftAnchor="16.0">
+                           <font>
+                              <Font size="18.0" />
+                           </font>
+                        </Label>
+                        <Label fx:id="txt_produit_deprod" layoutX="470.0" layoutY="72.0" prefHeight="20.0" prefWidth="316.0" style="-fx-border-color: #44cef5;" text="Produit : ..." AnchorPane.leftAnchor="470.0" AnchorPane.rightAnchor="342.0">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                        <Label fx:id="txt_cout_proUnit_deprod" layoutX="400.0" layoutY="169.0" prefHeight="18.0" prefWidth="297.0" text="Cout de Prod unitaire" AnchorPane.leftAnchor="400.0">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                        <ImageView fitHeight="34.0" fitWidth="32.0" layoutX="1030.0" layoutY="230.0" onMouseClicked="#updatePfStorage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="66.0" AnchorPane.topAnchor="230.0">
+                           <image>
+                              <Image url="@../icons/edit32.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                           <effect>
+                              <Lighting>
+                                 <bumpInput>
+                                    <Shadow />
+                                 </bumpInput>
+                                 <light>
+                                    <Light.Distant />
+                                 </light>
+                              </Lighting>
+                           </effect>
+                        </ImageView>
+                        <ImageView fitHeight="34.0" fitWidth="34.0" layoutX="1074.0" layoutY="229.0" onMouseClicked="#deletePfStorage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="20.0" AnchorPane.topAnchor="230.0">
+                           <image>
+                              <Image url="@../icons/delete_1.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                           <effect>
+                              <Lighting>
+                                 <bumpInput>
+                                    <Shadow />
+                                 </bumpInput>
+                                 <light>
+                                    <Light.Distant />
+                                 </light>
+                              </Lighting>
+                           </effect>
+                        </ImageView>
+                        <DatePicker fx:id="dpk_expiry_deprod" layoutX="701.0" layoutY="111.0" prefHeight="34.0" prefWidth="125.0" promptText="Expiration" AnchorPane.leftAnchor="701.0" />
+                        <Label fx:id="txt_lot_deprod" layoutX="620.0" layoutY="119.0" prefHeight="18.0" prefWidth="65.0" text="Lot :..." AnchorPane.leftAnchor="620.0">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                        <ComboBox fx:id="cbx_quality_deprod" editable="true" layoutX="838.0" layoutY="111.0" prefHeight="34.0" prefWidth="116.0" promptText="Qualite" AnchorPane.leftAnchor="838.0" />
+                        <TextArea fx:id="txtArea_comment_deprod" layoutX="397.0" layoutY="207.0" prefHeight="62.0" prefWidth="489.0" promptText="Commentaire (facultatif)" AnchorPane.leftAnchor="397.0" AnchorPane.rightAnchor="242.0" AnchorPane.topAnchor="207.0" />
+                        <ComboBox fx:id="cbx_depot_deprod" layoutX="705.0" layoutY="161.0" prefHeight="34.0" prefWidth="405.0" promptText="Depot" AnchorPane.leftAnchor="705.0" AnchorPane.rightAnchor="18.0" />
+                        <CheckBox fx:id="chbx_to_sale_deprod" layoutX="796.0" layoutY="72.0" mnemonicParsing="false" prefHeight="18.0" prefWidth="103.0" text="Vendable" AnchorPane.rightAnchor="229.0" />
+                        <Label layoutX="397.0" layoutY="72.0" text="Stocker :" AnchorPane.leftAnchor="397.0">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                     </children></AnchorPane>
+               </content>
+            </Tab>
+            <Tab text="Charges indirectes">
+              <content>
+                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <ComboBox fx:id="cbx_charge_indir" editable="true" layoutX="18.0" layoutY="81.0" prefHeight="34.0" prefWidth="548.0" promptText="Charges indirectes" AnchorPane.leftAnchor="18.0" AnchorPane.rightAnchor="562.0" />
+                        <Label layoutX="18.0" layoutY="14.0" text="Charges Indirectes" AnchorPane.leftAnchor="18.0" AnchorPane.topAnchor="14.0">
+                           <font>
+                              <Font size="25.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutY="56.0" prefHeight="3.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <Label fx:id="txt_sumcharge_indir" layoutX="585.0" layoutY="83.0" prefHeight="29.0" prefWidth="168.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" text="0.00 USD" AnchorPane.rightAnchor="375.0">
+                           <font>
+                              <Font name="System Bold" size="23.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutX="-1.0" layoutY="133.0" prefHeight="3.0" prefWidth="1128.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                        <DatePicker fx:id="dpk_dujour_indir" layoutX="900.0" layoutY="11.0" prefHeight="34.0" prefWidth="205.0" promptText="Aujourd'hui" AnchorPane.rightAnchor="23.0" AnchorPane.topAnchor="11.0" />
+                        <SplitPane dividerPositions="0.5" layoutX="14.0" layoutY="141.0" orientation="VERTICAL" prefHeight="498.0" prefWidth="1105.0" AnchorPane.bottomAnchor="9.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="141.0">
+                          <items>
+                            <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="100.0" prefWidth="160.0">
+                                 <children>
+                                    <TableView fx:id="tbl_affectation_indir" editable="true" layoutX="6.0" layoutY="9.0" prefHeight="184.0" prefWidth="1088.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="55.0" AnchorPane.leftAnchor="6.0" AnchorPane.rightAnchor="6.0" AnchorPane.topAnchor="6.0">
+                                      <columns>
+                                        <TableColumn fx:id="col_prodaff_indir" prefWidth="75.0" text="Production" />
+                                        <TableColumn fx:id="col_lotaff_indir" prefWidth="75.0" text="Lot" />
+                                          <TableColumn fx:id="col_debutaff_indir" prefWidth="75.0" text="Date debut" />
+                                          <TableColumn fx:id="col_findaff_indir" prefWidth="75.0" text="Date Fin" />
+                                          <TableColumn fx:id="col_quantaff_indir" prefWidth="75.0" text="Quantite" />
+                                          <TableColumn fx:id="col_coutaff_indir" prefWidth="75.0" text="Cout actuel" />
+                                          <TableColumn fx:id="col_coutotaff_indir" prefWidth="75.0" text="Cout Total actuel" />
+                                          <TableColumn fx:id="col_quotaff_indir" prefWidth="75.0" text="Quote part de charge" />
+                                          <TableColumn fx:id="col_regionaff_indir" prefWidth="75.0" text="Region" />
+                                      </columns>
+                                       <columnResizePolicy>
+                                          <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                       </columnResizePolicy>
+                                    </TableView>
+                                    <Label fx:id="txt_sumaffect_indir" layoutX="753.0" layoutY="204.0" prefHeight="29.0" prefWidth="168.0" text="0.00 USD" AnchorPane.bottomAnchor="12.0" AnchorPane.rightAnchor="205.0">
+                                       <font>
+                                          <Font name="System Bold" size="23.0" />
+                                       </font>
+                                    </Label>
+                                    <Button layoutX="963.0" layoutY="201.0" mnemonicParsing="false" onAction="#saveAffectation" prefHeight="34.0" prefWidth="119.0" style="-fx-background-color: #44CEF5;" text="ENREGISTRER" textFill="WHITE" AnchorPane.bottomAnchor="10.0" AnchorPane.rightAnchor="21.0" />
+                                 </children>
+                              </AnchorPane>
+                            <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="100.0" prefWidth="160.0">
+                                 <children>
+                                    <TableView fx:id="tbl_savedaffefct_indir" layoutX="6.0" layoutY="59.0" prefHeight="180.0" prefWidth="1089.0" AnchorPane.bottomAnchor="6.0" AnchorPane.leftAnchor="6.0" AnchorPane.rightAnchor="6.0" AnchorPane.topAnchor="59.0">
+                                       <columns>
+                                          <TableColumn fx:id="col_savedaffprod_indir" prefWidth="75.0" text="Production" />
+                                          <TableColumn fx:id="col_savedafflot_indir" prefWidth="75.0" text="Lot" />
+                                          <TableColumn fx:id="col_savedaffdebut_indir" prefWidth="75.0" text="Date debut" />
+                                          <TableColumn fx:id="col_savedafffin_indir" prefWidth="75.0" text="Date Fin" />
+                                          <TableColumn fx:id="col_savedaffquant_indir" prefWidth="75.0" text="Quantite" />
+                                          <TableColumn fx:id="col_savedaffcout_indir" prefWidth="75.0" text="Cout" />
+                                          <TableColumn fx:id="col_savedaffcoutotaff_indir" prefWidth="75.0" text="Cout Total actuel" />
+                                          <TableColumn fx:id="col_savednomcharg_indir" prefWidth="75.0" text="Charge" />
+                                          <TableColumn fx:id="col_savedaffquot_indir" prefWidth="75.0" text="Quote part de charge" />
+                                          <TableColumn fx:id="col_savedaffregion_indir" prefWidth="75.0" text="Region" />
+                                       </columns>
+                                       <columnResizePolicy>
+                                          <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                       </columnResizePolicy>
+                                    </TableView>
+                                    <ImageView fitHeight="34.0" fitWidth="36.0" layoutX="1048.0" layoutY="14.0" onMouseClicked="#deleteSavedAffectation" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="21.0">
+                                       <image>
+                                          <Image url="@../icons/delete_1.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </AnchorPane>
+                          </items>
+                        </SplitPane>
+                        <DatePicker fx:id="dpk_end_indir" layoutX="963.0" layoutY="80.0" onAction="#filterToDate" prefHeight="34.0" prefWidth="134.0" promptText="Date fin" AnchorPane.rightAnchor="31.0" />
+                        <DatePicker fx:id="dpk_start_indir" layoutX="779.0" layoutY="81.0" onAction="#filterToDate" prefHeight="34.0" prefWidth="142.0" promptText="Date debut" AnchorPane.rightAnchor="207.0" />
+                        <Label layoutX="936.0" layoutY="89.0" text="--" AnchorPane.rightAnchor="182.0" />
+                     </children></AnchorPane>
+              </content>
+            </Tab>
+        </tabs>
+      </TabPane>
+      <AnchorPane fx:id="anchorpn_depot_intrant" prefHeight="541.0" prefWidth="768.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" visible="false" AnchorPane.bottomAnchor="125.0" AnchorPane.leftAnchor="198.0" AnchorPane.rightAnchor="162.0" AnchorPane.topAnchor="5.0">
+         <effect>
+            <DropShadow />
+         </effect>
+         <children>
+            <TabPane fx:id="tabpn_intrant_depot" layoutX="3.0" layoutY="3.0" prefHeight="505.0" prefWidth="764.0" style="-fx-background-color: white;" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="34.0" AnchorPane.leftAnchor="2.0" AnchorPane.rightAnchor="2.0" AnchorPane.topAnchor="2.0">
+              <tabs>
+                <Tab text="Intrants">
+                  <content>
+                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="460.0" prefWidth="766.0">
+                           <children>
+                              <TextField fx:id="tf_nom_intrant" layoutX="12.0" layoutY="61.0" prefHeight="33.0" prefWidth="409.0" promptText="Designation de la matiere" AnchorPane.leftAnchor="12.0" AnchorPane.rightAnchor="345.0" />
+                              <ComboBox fx:id="cbx_type_intrant" editable="true" layoutX="435.0" layoutY="60.0" prefHeight="34.0" prefWidth="180.0" promptText="Type" AnchorPane.rightAnchor="151.0" />
+                              <ComboBox fx:id="cbx_region_intrant" layoutX="615.0" layoutY="13.0" prefHeight="24.0" prefWidth="137.0" promptText="region" AnchorPane.rightAnchor="14.0" />
+                              <Label layoutX="14.0" layoutY="17.0" text="Creer un intrant">
+                                 <font>
+                                    <Font size="18.0" />
+                                 </font>
+                              </Label>
+                              <Separator layoutX="14.0" layoutY="51.0" prefHeight="0.0" prefWidth="751.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <ComboBox fx:id="cbx_sku_intrant" editable="true" layoutX="14.0" layoutY="108.0" prefHeight="35.0" prefWidth="189.0" promptText="Unite de stockage" AnchorPane.leftAnchor="14.0">
+                                 <tooltip>
+                                    <Tooltip text="Unite de stockage exemple DZN" />
+                                 </tooltip>
+                              </ComboBox>
+                              <TextField fx:id="tf_quant_sku_intrant" layoutX="212.0" layoutY="107.0" prefHeight="37.0" prefWidth="116.0" promptText="quantite contenu en unite" AnchorPane.leftAnchor="212.0">
+                                 <tooltip>
+                                    <Tooltip text="Quantite en unite. exemple : 12, pour une douzaine" />
+                                 </tooltip>
+                              </TextField>
+                              <Separator layoutY="157.0" prefHeight="0.0" prefWidth="751.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <Button layoutX="337.0" layoutY="108.0" mnemonicParsing="false" onAction="#ajouterSku" prefHeight="34.0" prefWidth="37.0" style="-fx-background-color: #44CEF5;" text="+" textFill="WHITE" AnchorPane.leftAnchor="337.0" />
+                              <CheckBox fx:id="chbx_perissable_intrant" layoutX="647.0" layoutY="68.0" mnemonicParsing="false" text="Perissable ?" AnchorPane.rightAnchor="14.0" />
+                              <TextField fx:id="tf_search_intrant" layoutX="14.0" layoutY="169.0" prefHeight="37.0" prefWidth="323.0" promptText="rechercher" style="-fx-background-radius: 30;" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="429.0" />
+                              <TilePane fx:id="tilepn_list_sku_intrant" layoutX="432.0" layoutY="110.0" prefHeight="34.0" prefWidth="316.0" style="-fx-border-color: #44cef5;" AnchorPane.leftAnchor="432.0" AnchorPane.rightAnchor="14.0" AnchorPane.topAnchor="110.0">
+                                 <padding>
+                                    <Insets bottom="4.0" left="4.0" right="4.0" top="4.0" />
+                                 </padding></TilePane>
+                              <AnchorPane layoutX="668.0" layoutY="168.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="58.0">
+                                 <children>
+                                    <ImageView fitHeight="35.0" fitWidth="28.0" layoutX="7.0" layoutY="7.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#updateIntrant" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                       <image>
+                                          <Image url="@../icons/edit32.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </AnchorPane>
+                              <AnchorPane layoutX="712.0" layoutY="168.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="14.0">
+                                 <children>
+                                    <ImageView fitHeight="39.0" fitWidth="32.0" layoutX="4.0" layoutY="5.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#deleteIntrant" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                       <image>
+                                          <Image url="@../icons/delete_1.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </AnchorPane>
+                              <Button layoutX="344.0" layoutY="170.0" mnemonicParsing="false" onAction="#saveIntrant" prefHeight="34.0" prefWidth="144.0" style="-fx-background-color: #44CEF5;" text="ENREGISTRER" textFill="WHITE" AnchorPane.rightAnchor="278.0" />
+                              <TableView fx:id="tbl_intrant" layoutX="14.0" layoutY="231.0" prefHeight="253.0" prefWidth="762.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="219.0">
+                                <columns>
+                                  <TableColumn fx:id="col_designation_intrant" prefWidth="75.0" text="Designation" />
+                                  <TableColumn fx:id="col_type_intrant" prefWidth="75.0" text="Type" />
+                                    <TableColumn fx:id="col_perissable_intrant" prefWidth="75.0" text="Perissables" />
+                                    <TableColumn fx:id="col_lessku_intrant" prefWidth="75.0" text="Mesures" />
+                                    <TableColumn fx:id="col_region_intrant" prefWidth="75.0" text="Region" />
+                                </columns>
+                                 <columnResizePolicy>
+                                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                 </columnResizePolicy>
+                              </TableView>
+                              <ImageView fitHeight="34.0" fitWidth="40.0" layoutX="384.0" layoutY="109.0" onMouseClicked="#updateSku" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="384.0">
+                                 <image>
+                                    <Image url="@../icons/edit32.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                                 <effect>
+                                    <Reflection />
+                                 </effect>
+                              </ImageView>
+                           </children>
+                        </AnchorPane>
+                  </content>
+                </Tab>
+                <Tab text="Depots">
+                  <content>
+                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                           <children>
+                              <TextField fx:id="tf_nom_depot" layoutX="16.0" layoutY="60.0" prefHeight="33.0" prefWidth="310.0" promptText="Nom du depot" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="436.0">
+                                 <tooltip>
+                                    <Tooltip text="Nom du depot" />
+                                 </tooltip>
+                              </TextField>
+                              <ComboBox fx:id="cbx_region_depot" layoutX="615.0" layoutY="9.0" prefHeight="24.0" prefWidth="137.0" promptText="region" AnchorPane.rightAnchor="13.0" />
+                              <Label layoutX="14.0" layoutY="11.0" text="Creer un entrepot" AnchorPane.leftAnchor="14.0">
+                                 <font>
+                                    <Font size="18.0" />
+                                 </font>
+                              </Label>
+                              <Separator layoutY="43.0" prefHeight="0.0" prefWidth="751.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <TextField fx:id="tf_dimens_depot" layoutX="499.0" layoutY="60.0" prefHeight="33.0" prefWidth="110.0" promptText="Dimension(facultatif)" AnchorPane.rightAnchor="153.0">
+                                 <tooltip>
+                                    <Tooltip text="Dimension (facultatif) exemple: 8x12M" />
+                                 </tooltip>
+                              </TextField>
+                              <ComboBox fx:id="cbx_type_depot" editable="true" layoutX="333.0" layoutY="59.0" prefHeight="34.0" prefWidth="157.0" promptText="Type du depot" AnchorPane.rightAnchor="272.0" />
+                              <Button layoutX="620.0" layoutY="57.0" mnemonicParsing="false" onAction="#saveDepot" prefHeight="39.0" prefWidth="127.0" style="-fx-background-color: #44CEF5;" text="ENREGISTRER" textFill="WHITE" AnchorPane.rightAnchor="13.0" />
+                              <Separator layoutX="10.0" layoutY="106.0" prefHeight="0.0" prefWidth="751.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <TextField fx:id="tf_search_depot" layoutX="16.0" layoutY="122.0" prefHeight="33.0" prefWidth="435.0" promptText="Rechercher" style="-fx-background-radius: 30;" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="311.0">
+                                 <tooltip>
+                                    <Tooltip text="Rechercher" />
+                                 </tooltip>
+                              </TextField>
+                              <AnchorPane layoutX="665.0" layoutY="119.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="57.0">
+                                 <children>
+                                    <ImageView fitHeight="35.0" fitWidth="28.0" layoutX="7.0" layoutY="7.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#updateDepot" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                       <image>
+                                          <Image url="@../icons/edit32.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </AnchorPane>
+                              <AnchorPane layoutX="709.0" layoutY="119.0" prefHeight="41.0" prefWidth="40.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" AnchorPane.rightAnchor="13.0">
+                                 <children>
+                                    <ImageView fitHeight="39.0" fitWidth="32.0" layoutX="4.0" layoutY="5.0" nodeOrientation="RIGHT_TO_LEFT" onMouseClicked="#deleteDepot" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                       <image>
+                                          <Image url="@../icons/delete_1.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </AnchorPane>
+                              <TableView fx:id="tbl_depot" layoutX="16.0" layoutY="170.0" prefHeight="302.0" prefWidth="762.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="170.0">
+                                <columns>
+                                  <TableColumn fx:id="col_nom_depot" prefWidth="75.0" text="Designation" />
+                                  <TableColumn fx:id="col_type_depot" prefWidth="75.0" text="Type" />
+                                    <TableColumn fx:id="col_dimension_depot" prefWidth="75.0" text="Dimension" />
+                                    <TableColumn fx:id="col_region_depot" prefWidth="75.0" text="Region" />
+                                </columns>
+                                 <columnResizePolicy>
+                                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                 </columnResizePolicy>
+                              </TableView>
+                           </children>
+                        </AnchorPane>
+                  </content>
+                </Tab>
+              </tabs>
+            </TabPane>
+            <ToolBar layoutX="2.0" layoutY="507.0" nodeOrientation="RIGHT_TO_LEFT" prefHeight="28.0" prefWidth="766.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
+              <items>
+                <Button mnemonicParsing="false" onAction="#closeIntranFloatingForm" style="-fx-background-color: #cccccc;" text="Fermer" textFill="WHITE">
+                     <cursor>
+                        <Cursor fx:constant="HAND" />
+                     </cursor>
+                  </Button>
+                  <Label fx:id="txt_count_intrant" text="0 elements">
+                     <font>
+                        <Font size="14.0" />
+                     </font>
+                  </Label>
+              </items>
+            </ToolBar>
+         </children>
+      </AnchorPane>
+      <ToolBar layoutX="190.0" layoutY="673.0" nodeOrientation="RIGHT_TO_LEFT" prefHeight="26.0" prefWidth="931.0" style="-fx-background-radius: 12;" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
+        <items>
+            <Label fx:id="txt_count_intraprod" text="0 element" />
+            <Separator orientation="VERTICAL" prefHeight="0.0" prefWidth="0.0" />
+            <Label fx:id="txt_valeur_global_intraprod" text="Valeur stock : 0 USD" />
+            <Separator layoutX="121.0" layoutY="10.0" orientation="VERTICAL" prefHeight="0.0" prefWidth="0.0" />
+            <Label fx:id="txt_toolbar_etat_prod" text="..." />
+        </items>
+      </ToolBar>
+   </children>
+   <effect>
+      <DropShadow />
+   </effect>
+</AnchorPane>

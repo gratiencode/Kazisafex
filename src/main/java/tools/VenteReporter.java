@@ -4,8 +4,7 @@
  * and open the template in the editor.
  */
 package tools;
-
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.Objects;
 import data.Category;
 import data.Client;
@@ -18,22 +17,29 @@ import data.Mesure;
 public class VenteReporter {
     private Category category;
     private Client client;
-    private Date date;
+    private LocalDate date;
     private String produit;
     private String codebar;
     private double chiffre;
-    private double quantite;
+    private double quantiteVendu;
     private double sommeTotal;
     private Mesure mesure;
-
+    private double stockInitial;
+    private double entrees;
+    private double stockFinal;
+    private double ecart;
+    private double retour;
+    private double coutAchat;
+    private double marge;
+  
     public VenteReporter() {
     }
 
-    public Date getDate() {
+    public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDate date) {
         this.date = date;
     }
 
@@ -92,12 +98,12 @@ public class VenteReporter {
         return "VentePerProduct{" + "date=" + date + ", produit=" + produit + ", codebar=" + codebar + ", chiffre=" + chiffre + '}';
     }
 
-    public double getQuantite() {
-        return quantite;
+    public double getQuantiteVendu() {
+        return quantiteVendu;
     }
 
-    public void setQuantite(double quantite) {
-        this.quantite = quantite;
+    public void setQuantiteVendu(double quantite) {
+        this.quantiteVendu = quantite;
     }
 
     public Mesure getMesure() {
@@ -130,6 +136,62 @@ public class VenteReporter {
 
     public void setClient(Client client) {
         this.client = client;
+    }
+
+    public double getStockInitial() {
+        return stockInitial;
+    }
+
+    public void setStockInitial(double stockInitial) {
+        this.stockInitial = stockInitial;
+    }
+
+    public double getEntrees() {
+        return entrees;
+    }
+
+    public void setEntrees(double entrees) {
+        this.entrees = entrees;
+    }
+
+    public double getStockFinal() {
+        return stockFinal;
+    }
+
+    public void setStockFinal(double stockFinal) {
+        this.stockFinal = stockFinal;
+    }
+
+    public double getEcart() {
+        return ecart;
+    }
+
+    public void setEcart(double ecart) {
+        this.ecart = ecart;
+    }
+
+    public double getRetour() {
+        return retour;
+    }
+
+    public void setRetour(double retour) {
+        this.retour = retour;
+    }
+
+    public double getCoutAchat() {
+        return coutAchat;
+    }
+
+    public void setCoutAchat(double coutAchat) {
+        this.coutAchat = coutAchat;
+    }
+
+    public double getMarge() {
+        return marge;
+    }
+
+    public void setMarge(double marge) {
+        this.marge = marge;
     }
     
     

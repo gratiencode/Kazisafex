@@ -6,6 +6,7 @@
 package IServices;
 
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Set;
 import data.ClientAppartenir;
 
@@ -24,5 +25,7 @@ public interface ClientAppartenirStorage {
     public List<ClientAppartenir> findClientAppartenirByClient(String clientId);
     public List<ClientAppartenir> findClientAppartenirByOrganisation(String orgId);
      public List<ClientAppartenir> mergeSet(Set<ClientAppartenir> bulk);
+     public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
+    public List<ClientAppartenir> findUnSyncedClientAppartenirs(long disconnected_at);
 
 }

@@ -5,8 +5,25 @@
  */
 package tools;
 
+import data.Presence;
+import data.CompteTresor;
+import data.finance.BilanReport;
+import data.finance.CompteResultatReport;
 import com.endeleya.kazisafex.MainuiController;
 import com.endeleya.kazisafex.ProduitsController;
+import tools.FileUtils;
+import java.time.LocalTime;
+import utilities.PDFUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import data.Entreprise;
+import java.awt.Color;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -15,8 +32,6 @@ import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.property.TextAlignment;
 import com.itextpdf.layout.property.UnitValue;
-
-import delegates.JournalDelegate;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -28,12 +43,12 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Format;
-import java.text.ParseException;
+import delegates.ProduitDelegate;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
+import tools.ComptageItem;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -57,17 +72,29 @@ import data.Category;
 import data.Client;
 import data.Destocker;
 import data.Fournisseur;
-import data.Journal;
+import javafx.stage.FileChooser;
+import java.awt.Desktop;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.Cell;
+import java.util.UUID;
 import data.LigneVente;
 import data.Livraison;
 import data.Mesure;
 import data.Operation;
+import data.Periode;
 import data.PrixDeVente;
 import data.Produit;
 import data.Recquisition;
 import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
+import data.Immobilisation;
 import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
@@ -89,15 +116,25 @@ import org.apache.poi.util.IOUtils;
 import org.apache.poi.util.StringUtil;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
+import org.apache.poi.xssf.usermodel.DefaultIndexedColorMap;
 import org.apache.poi.xssf.usermodel.XSSFCreationHelper;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import data.helpers.Mouvment;
+import data.PermitTo;
 import data.helpers.TypeTraisorerie;
+import delegates.StockerDelegate;
+import delegates.PermissionDelegate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Map;
+import services.PlatformUtil;
 import utilities.ImageProduit;
+import utilities.Peremption;
 import utilities.Relevee;
 
 /**
@@ -105,7 +142,6 @@ import utilities.Relevee;
  * @author eroot
  */
 public class Util {
-//private static Font catFont = new Font(Font.FontFamily.TIMES_ROMAN, 18,Font.BOLD);
 
     static Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
 
@@ -116,102 +152,13 @@ public class Util {
         syncModel(bm, act);
     }
 
-    public static void journalize(String uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal((long) (Math.random() * 10000000009832l));
-        j.setStringUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-
-        JournalDelegate.saveJournal(j);
-    }
-
-    public static Journal createJournal(String uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(System.currentTimeMillis());
-        j.setStringUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
-    public static Journal createJournal(int uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(System.currentTimeMillis());
-        j.setIntUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
-    public static Journal createJournal(long uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(System.currentTimeMillis());
-        j.setLongUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
-    public static void journalize(int uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(System.currentTimeMillis());
-        j.setIntUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        JournalDelegate.saveJournal(j);
-    }
-
-    public static void journalize(long uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(System.currentTimeMillis());
-        j.setLongUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        JournalDelegate.saveJournal(j);
-    }
-
-    public static Journal createJournalWithId(Long id, String uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(id);
-        j.setStringUid(uid);
-        j.setSyncTime(new Date());
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
-    public static Journal createJournalWithId(long id, int uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(id);
-        j.setIntUid(uid);
-        j.setSyncTime(new Date());
-        j.setStringUid("SAVED");
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
-    public static Journal createJournalWithId(long id, long uid, BaseModel bm, boolean isSynced) {
-        Journal j = new Journal(id);
-        j.setLongUid(uid);
-        j.setSyncTime(new Date());
-        j.setStringUid("SAVED");
-        j.setSynced(isSynced);
-        j.setTableName(bm.getType());
-        j.setActionName(bm.getAction());
-        return j;
-    }
-
     public static void sendText(String text) {
         SyncEndpoint endp = SyncEndpoint.getInstance();
-        endp.sendMessage(text);
+        // endp.sendMessage(text);
+    }
+
+    public static String toPlain(double number) {
+        return BigDecimal.valueOf(number).toPlainString();
     }
 
     public static void syncModel(final BaseModel bm, final String action) {
@@ -238,7 +185,7 @@ public class Util {
     public static void syncList(List objs) {
         SyncEndpoint endp = SyncEndpoint.getInstance();
         if (endp != null) {
-            endp.sendListObject(objs);
+            // endp.sendListObject(objs);
         }
     }
 
@@ -251,7 +198,7 @@ public class Util {
         bm.setCount(1);
         bm.setCounter(1);
         if (endp != null) {
-            endp.async(bm);
+            // endp.async(bm);
         }
     }
 
@@ -363,24 +310,24 @@ public class Util {
         for (T t : ltr) {
             if (t instanceof Vente) {
                 Vente v = (Vente) t;
-                int ann = LocalDate.from(v.getDateVente().toInstant()).getYear();
-                int moi = LocalDate.from(v.getDateVente().toInstant()).getMonthValue();
+                int ann = v.getDateVente().getYear();
+                int moi = v.getDateVente().getMonthValue();
                 String mnf = ann + "-" + moi;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Operation) {
                 Operation o = (Operation) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
-                int moi = LocalDate.from(o.getDate().toInstant()).getMonthValue();
+                int ann = o.getDate().getYear();
+                int moi = o.getDate().getMonthValue();
                 String mnf = ann + "-" + moi;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Traisorerie) {
                 Traisorerie o = (Traisorerie) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
-                int moi = LocalDate.from(o.getDate().toInstant()).getMonthValue();
+                int ann = o.getDate().getYear();
+                int moi = o.getDate().getMonthValue();
                 String mnf = ann + "-" + moi;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
@@ -396,21 +343,21 @@ public class Util {
         for (T t : ltr) {
             if (t instanceof Vente) {
                 Vente v = (Vente) t;
-                int ann = LocalDate.from(v.getDateVente().toInstant()).getYear();
+                int ann = v.getDateVente().getYear();
                 String mnf = String.valueOf(ann);
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Operation) {
                 Operation o = (Operation) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
+                int ann = o.getDate().getYear();
                 String mnf = String.valueOf(ann);
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Traisorerie) {
                 Traisorerie o = (Traisorerie) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
+                int ann = o.getDate().getYear();
                 String mnf = String.valueOf(ann);
                 if (!result.contains(mnf)) {
                     result.add(mnf);
@@ -467,27 +414,27 @@ public class Util {
         for (T t : ltr) {
             if (t instanceof Vente) {
                 Vente v = (Vente) t;
-                int ann = LocalDate.from(v.getDateVente().toInstant()).getYear();
-                int moi = LocalDate.from(v.getDateVente().toInstant()).getMonthValue();
-                int jrs = LocalDate.from(v.getDateVente().toInstant()).getDayOfMonth();
+                int ann = v.getDateVente().getYear();
+                int moi = v.getDateVente().getMonthValue();
+                int jrs = v.getDateVente().getDayOfMonth();
                 String mnf = ann + "-" + moi + "-" + jrs;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Operation) {
                 Operation o = (Operation) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
-                int moi = LocalDate.from(o.getDate().toInstant()).getMonthValue();
-                int jrs = LocalDate.from(o.getDate().toInstant()).getDayOfMonth();
+                int ann = o.getDate().getYear();
+                int moi = o.getDate().getMonthValue();
+                int jrs = o.getDate().getDayOfMonth();
                 String mnf = ann + "-" + moi + "-" + jrs;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
                 }
             } else if (t instanceof Traisorerie) {
                 Traisorerie o = (Traisorerie) t;
-                int ann = LocalDate.from(o.getDate().toInstant()).getYear();
-                int moi = LocalDate.from(o.getDate().toInstant()).getMonthValue();
-                int jrs = LocalDate.from(o.getDate().toInstant()).getDayOfMonth();
+                int ann = o.getDate().getYear();
+                int moi = o.getDate().getMonthValue();
+                int jrs = o.getDate().getDayOfMonth();
                 String mnf = ann + "-" + moi + "-" + jrs;
                 if (!result.contains(mnf)) {
                     result.add(mnf);
@@ -498,121 +445,30 @@ public class Util {
         return result;
     }
 
-    public static <X> List<X> getByDay(List<X> lx, Date date) {
-        List<X> result = new ArrayList<>();
-        for (X x : lx) {
-            if (x instanceof Vente) {
-                Vente vente = (Vente) x;
-                Calendar cv = Calendar.getInstance();
-                cv.setTime(vente.getDateVente());
-                cv.set(Calendar.HOUR, 0);
-                cv.set(Calendar.MINUTE, 0);
-                cv.set(Calendar.SECOND, 0);
-                cv.set(Calendar.MILLISECOND, 0);
-                Date vdate = cv.getTime();
-                Calendar cd = Calendar.getInstance();
-                cd.setTime(date);
-                cd.set(Calendar.HOUR, 0);
-                cd.set(Calendar.MINUTE, 0);
-                cd.set(Calendar.SECOND, 0);
-                cd.set(Calendar.MILLISECOND, 0);
-                Date ddate = cd.getTime();
-                if (vdate.equals(ddate)) {
-                    result.add(x);
-                }
-            } else if (x instanceof Stocker) {
-                Stocker s = (Stocker) x;
-                Calendar cv = Calendar.getInstance();
-                if (s.getDateExpir() == null) {
-                    continue;
-                }
-                cv.setTime(s.getDateExpir());
-                cv.set(Calendar.HOUR, 0);
-                cv.set(Calendar.MINUTE, 0);
-                cv.set(Calendar.SECOND, 0);
-                cv.set(Calendar.MILLISECOND, 0);
-                Date vdateExp = cv.getTime();
-                Calendar cd = Calendar.getInstance();
-                cd.setTime(date);
-                cd.set(Calendar.HOUR, 23);
-                cd.set(Calendar.MINUTE, 59);
-                cd.set(Calendar.SECOND, 59);
-                cd.set(Calendar.MILLISECOND, 0);
-                Date ddate = cd.getTime();
-                if (ddate.after(vdateExp)) {
-                    result.add(x);
-                }
-            } else if (x instanceof Recquisition) {
-                Recquisition recq = (Recquisition) x;
-                Calendar cv = Calendar.getInstance();
-                if (recq.getDateExpiry() == null) {
-                    continue;
-                }
-                cv.setTime(recq.getDateExpiry());
-                cv.set(Calendar.HOUR, 0);
-                cv.set(Calendar.MINUTE, 0);
-                cv.set(Calendar.SECOND, 0);
-                cv.set(Calendar.MILLISECOND, 0);
-                Date vdateExp = cv.getTime();
-                Calendar cd = Calendar.getInstance();
-                cd.setTime(date);
-                cd.set(Calendar.HOUR, 23);
-                cd.set(Calendar.MINUTE, 59);
-                cd.set(Calendar.SECOND, 59);
-                cd.set(Calendar.MILLISECOND, 0);
-                Date ddate = cd.getTime();
-                if (ddate.after(vdateExp)) {
-                    result.add(x);
-                }
-            }
-            if (x instanceof Operation) {
-                Operation oper = (Operation) x;
-                Calendar co = Calendar.getInstance();
-                co.setTime(oper.getDate());
-                co.set(Calendar.HOUR, 0);
-                co.set(Calendar.MINUTE, 0);
-                co.set(Calendar.SECOND, 0);
-                co.set(Calendar.MILLISECOND, 0);
-                Date odate = co.getTime();
-                Calendar cd = Calendar.getInstance();
-                cd.setTime(date);
-                cd.set(Calendar.HOUR, 0);
-                cd.set(Calendar.MINUTE, 0);
-                cd.set(Calendar.SECOND, 0);
-                cd.set(Calendar.MILLISECOND, 0);
-                Date ddate = cd.getTime();
-                if (odate.equals(ddate)) {
-                    result.add(x);
-                }
-            }
-        }
-        return result;
-    }
-
     /**
      *
-     * @param <X> type de donnee a filtree
-     * @param lx liste de donnee a filtrer
+     * @param <X>   type de donnee a filtree
+     * @param lx    liste de donnee a filtrer
      * @param debut date du debut de filtre
-     * @param fin date de fin filtre
+     * @param fin   date de fin filtre
      * @return
      */
-    public static <X> List<X> getDataBetween(List<X> lx, Date debut, Date fin) {
+    public static <X> List<X> getDataBetween(List<X> lx, LocalDate debut, LocalDate fin) {
         List<X> result = new ArrayList<>();
         lx.forEach((x) -> {
             if (x instanceof Vente) {
                 Vente vente = (Vente) x;
-                if (isDateBetween(debut, fin, vente.getDateVente())) {
+                if (isDateBetween(debut, fin, vente.getDateVente().toLocalDate())) {
                     result.add(x);
                 }
             } else if (x instanceof Operation) {
                 Operation oper = (Operation) x;
-                if (isDateBetween(debut, fin, oper.getDate())) {
+                if (isDateBetween(debut, fin, oper.getDate().toLocalDate())) {
                     result.add(x);
                 }
             } else if (x instanceof Traisorerie) {
                 Traisorerie trz = (Traisorerie) x;
-                if (isDateBetween(debut, fin, trz.getDate())) {
+                if (isDateBetween(debut, fin, trz.getDate().toLocalDate())) {
                     result.add(x);
                 }
             }
@@ -620,7 +476,7 @@ public class Util {
         return result;
     }
 
-    public static <X> List<X> getDataBetween(List<X> lx, Date debut, Date fin, String region) {
+    public static <X> List<X> getDataBetween(List<X> lx, LocalDate debut, LocalDate fin, String region) {
         List<X> result = new ArrayList<>();
         for (X x : lx) {
             if (x instanceof Vente) {
@@ -629,7 +485,7 @@ public class Util {
                     continue;
                 }
                 if (vente.getRegion().equals(region)) {
-                    if (isDateBetween(debut, fin, vente.getDateVente())) {
+                    if (isDateBetween(debut, fin, vente.getDateVente().toLocalDate())) {
                         result.add(x);
                     }
                 }
@@ -639,7 +495,7 @@ public class Util {
                     continue;
                 }
                 if (oper.getRegion().equals(region)) {
-                    if (isDateBetween(debut, fin, oper.getDate())) {
+                    if (isDateBetween(debut, fin, oper.getDate().toLocalDate())) {
                         result.add(x);
                     }
                 }
@@ -649,7 +505,7 @@ public class Util {
                     continue;
                 }
                 if (trz.getRegion().equals(region)) {
-                    if (isDateBetween(debut, fin, trz.getDate())) {
+                    if (isDateBetween(debut, fin, trz.getDate().toLocalDate())) {
                         result.add(x);
                     }
                 }
@@ -662,297 +518,313 @@ public class Util {
      * Cette function groupe les vente selon une critere autre que celles de
      * temps et retourne les ventes deja groupee
      *
-     * @param <X> Type de donee a traiter
+     * @param <X>      Type de donee a traiter
      * @param db
-     * @param ldata liste triee de donnee soit vente, operation ou traisorerie
+     * @param ldata    liste triee de donnee soit vente, operation ou traisorerie
      * @param criteria critere de groupement detaille, par categorie ou par
      *
-     * @param taux taux de change actuel dollars franc
+     * @param taux     taux de change actuel dollars franc
      * @return
      */
-//    public static <X> List<List<ChartItem>> getGrouped(Kazisafe ksf, Entreprise e, Nitrite db, List<X> ldata, String criteria, double taux) {
-//        List<List<ChartItem>> result = new ArrayList<>();
-//        List<ChartItem> preresult = new ArrayList<>();
-//
-//        if (criteria.equalsIgnoreCase("Détaillé")) {
-//            for (X x : ldata) {
-//                if (x instanceof Vente) {
-//                    Vente vent = (Vente) x;
-//                    ChartItem chartItem = new ChartItem();
-//                    chartItem.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
-//                    chartItem.setAmmount(vent.getMontantUsd() + (vent.getMontantCdf() / taux) + (vent.getMontantDette() == null ? 0 : vent.getMontantDette()));
-//                    chartItem.setDate(vent.getDateVente());
-//                    chartItem.setSerieName("Vente");
-//                    preresult.add(chartItem);
-//                } else if (x instanceof Operation) {
-//                    Operation ops = (Operation) x;
-//                    ChartItem chartItem = new ChartItem(Constants.DATE_HEURE_FORMAT.format(ops.getDate()), ops.getDate(), ops.getMontantUsd() + (ops.getMontantCdf() / taux), "Depense");
-//                    preresult.add(chartItem);
-//                } else if (x instanceof Traisorerie) {
-//                    Traisorerie trz = (Traisorerie) x;
-//                    ChartItem chartItem = new ChartItem(Constants.DATE_HEURE_FORMAT.format(trz.getDate()), trz.getDate(), trz.getMontantUsd() + (trz.getMontantCdf() / taux), "Depense+");
-//                    preresult.add(chartItem);
-//                }
-//            }
-//            result.add(preresult);
-//            return result;
-//        }
-//        switch (criteria) {
-//            case "Par catégorie":
-//                for (X x : ldata) {
-//                    if (x instanceof Vente) {
-//                        Vente vent = (Vente) x;
-//                        System.err.println(">>>>>> venete  " + vent.getUid());
-//                        NitriteStorage<LigneVente> nslnvent = new NitriteStorage<>(e, ksf, db, LigneVente.class);
-//                        List<LigneVente> lvs = vent.getLigneVenteList() != null ? vent.getLigneVenteList()
-//                                : nslnvent.findAllEquals("reference", String.valueOf(vent.getUid()));
-//                        System.err.println("Ligne v " + lvs.size());
-//                        List<ChartItem> presult = new ArrayList<>();
-//                        for (LigneVente lv : lvs) {
-//                            Produit pr = lv.getProductId();
-//                            Category c = pr.getCategoryId();
-//                            ChartItem ci = new ChartItem();
-//                            double sumCat = 0;
-//                            for (LigneVente l : lvs) {
-//                                Produit p = l.getProductId();
-//                                Category cat = p.getCategoryId();
-//                                if (cat.getUid().equalsIgnoreCase(c.getUid())) {
-//                                    sumCat += l.getMontantUsd();
-//                                }
-//                            }
-//
-//                            ci.setSerieName(c.getDescritption());
-//                            ci.setDate(vent.getDateVente());
-//                            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
-//                            ci.setAmmount(sumCat);
-//                            if (findItem(presult, ci) == null) {
-//                                System.err.println(">>>>>>>. somme cat " + sumCat + " cat " + c.getDescritption() + " " + ci.getAbsices());
-//                                presult.add(ci);
-//                            }
-//                        }
-//                        System.err.println("Presult size || = " + presult.size());
-//                        preresult.addAll(presult);
-//                    }
-//                }
-//                System.err.println("Preresult + " + preresult.size());
-//                List<String> cats = filterCat(preresult);
-//                for (String sc : cats) {
-//                    List<ChartItem> filted = filterSeries(preresult, sc);
-//                    result.add(filted);
-//                }
-//                break;
-//            case "Par région":
-//                List<String> regions = filter(ldata, 2);
-//                for (String regs : regions) {
-//                    X i = ldata.get(0);
-//                    if (i instanceof Vente) {
-//                        List<Vente> v4reg = getForRegion(ldata, regs);
-//                        List<ChartItem> serie = new ArrayList<>();
-//                        for (Vente v : v4reg) {
-//                            ChartItem ci = new ChartItem();
-//                            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//                            double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 : v.getMontantDette()) + (v.getMontantCdf() / taux);
-//                            ci.setAmmount(sum);
-//                            ci.setDate(v.getDateVente());
-//                            ci.setSerieName(regs);
-//                            serie.add(ci);
-//                        }
-//                        result.add(serie);
-//                    } else if (i instanceof Operation) {
-//
-//                        List<Operation> opers = getForRegionOps(ldata, regs);
-//                        System.out.println("Opersize " + opers.size() + " reg = " + regs);
-//                        List<ChartItem> serie = new ArrayList<>();
-//                        for (Operation oper : opers) {
-//                            ChartItem ci = new ChartItem();
-//                            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
-//                            ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
-//                            ci.setDate(oper.getDate());
-//                            ci.setSerieName(oper.getRegion());
-//                            serie.add(ci);
-//                        }
-//                        result.add(serie);
-//                    }
-//
-//                }
-//                break;
-//            case "Par produit":
-//                for (X x : ldata) {
-//                    if (x instanceof Vente) {
-//                        Vente vent = (Vente) x;
-//                        NitriteStorage<LigneVente> nslnv = new NitriteStorage<>(e, ksf, db, LigneVente.class);
-//                        List<LigneVente> lvx = vent.getLigneVenteList() != null ? vent.getLigneVenteList()
-//                                : nslnv.findAllEquals("reference", String.valueOf(vent.getUid()));
-//                        List<ChartItem> presultat = new ArrayList<>();
-//                        for (LigneVente lv : lvx) {
-//                            Produit pr = lv.getProductId();
-//                            ChartItem ci = new ChartItem();
-//                            double sumPro = 0;
-//                            for (LigneVente l : lvx) {
-//                                Produit p = l.getProductId();
-//                                if (p.getUid().equals(pr.getUid())) {
-//                                    sumPro += l.getMontantUsd();
-//                                }
-//                            }
-//                            ci.setSerieName(pr.getMarque() + " " + pr.getModele() + " " + (pr.getTaille() == null ? "" : pr.getTaille()));
-//                            ci.setDate(vent.getDateVente());
-//                            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
-//                            ci.setAmmount(sumPro);
-//                            if (!presultat.contains(ci)) {
-//                                presultat.add(ci);
-//                            }
-//                        }
-//                        preresult.addAll(presultat);
-//                    }
-//                }
-//                System.err.println("Preresult + " + preresult.size());
-//                List<String> catx = filterCat(preresult);
-//                for (String sc : catx) {
-//                    List<ChartItem> filted = filterSeries(preresult, sc);
-//                    result.add(filted);
-//                }
-//                break;
-//            case "Par fonction":
-//                List<ChartItem> chis = toChartItems(ldata, taux);
-//                List<String> lfunc = filter(chis, 1);
-//                for (String function : lfunc) {
-//                    List<Operation> opers = getForDepartment(ldata, function);
-//                    List<ChartItem> serie = new ArrayList<>();
-//                    for (Operation oper : opers) {
-//                        ChartItem ci = new ChartItem();
-//                        ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
-//                        ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
-//                        ci.setDate(oper.getDate());
-//                        ci.setSerieName(oper.getImputation());
-//                        serie.add(ci);
-//                    }
-//                    result.add(serie);
-//                }
-//
-//                break;
-//        }
-//
-//        return result;
-//    }
+    // public static <X> List<List<ChartItem>> getGrouped(Kazisafe ksf, Entreprise
+    // e, Nitrite db, List<X> ldata, String criteria, double taux) {
+    // List<List<ChartItem>> result = new ArrayList<>();
+    // List<ChartItem> preresult = new ArrayList<>();
+    //
+    // if (criteria.equalsIgnoreCase("Détaillé")) {
+    // for (X x : ldata) {
+    // if (x instanceof Vente) {
+    // Vente vent = (Vente) x;
+    // ChartItem chartItem = new ChartItem();
+    // chartItem.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
+    // chartItem.setAmmount(vent.getMontantUsd() + (vent.getMontantCdf() / taux) +
+    // (vent.getMontantDette() == null ? 0 : vent.getMontantDette()));
+    // chartItem.setDate(vent.getDateVente());
+    // chartItem.setSerieName("Vente");
+    // preresult.add(chartItem);
+    // } else if (x instanceof Operation) {
+    // Operation ops = (Operation) x;
+    // ChartItem chartItem = new
+    // ChartItem(Constants.DATE_HEURE_FORMAT.format(ops.getDate()), ops.getDate(),
+    // ops.getMontantUsd() + (ops.getMontantCdf() / taux), "Depense");
+    // preresult.add(chartItem);
+    // } else if (x instanceof Traisorerie) {
+    // Traisorerie trz = (Traisorerie) x;
+    // ChartItem chartItem = new
+    // ChartItem(Constants.DATE_HEURE_FORMAT.format(trz.getDate()), trz.getDate(),
+    // trz.getMontantUsd() + (trz.getMontantCdf() / taux), "Depense+");
+    // preresult.add(chartItem);
+    // }
+    // }
+    // result.add(preresult);
+    // return result;
+    // }
+    // switch (criteria) {
+    // case "Par catégorie":
+    // for (X x : ldata) {
+    // if (x instanceof Vente) {
+    // Vente vent = (Vente) x;
+    // System.err.println(">>>>>> venete " + vent.getUid());
+    // NitriteStorage<LigneVente> nslnvent = new NitriteStorage<>(e, ksf, db,
+    // LigneVente.class);
+    // List<LigneVente> lvs = vent.getLigneVenteList() != null ?
+    // vent.getLigneVenteList()
+    // : nslnvent.findAllEquals("reference", String.valueOf(vent.getUid()));
+    // System.err.println("Ligne v " + lvs.size());
+    // List<ChartItem> presult = new ArrayList<>();
+    // for (LigneVente lv : lvs) {
+    // Produit pr = lv.getProductId();
+    // Category c = pr.getCategoryId();
+    // ChartItem ci = new ChartItem();
+    // double sumCat = 0;
+    // for (LigneVente l : lvs) {
+    // Produit p = l.getProductId();
+    // Category cat = p.getCategoryId();
+    // if (cat.getUid().equalsIgnoreCase(c.getUid())) {
+    // sumCat += l.getMontantUsd();
+    // }
+    // }
+    //
+    // ci.setSerieName(c.getDescritption());
+    // ci.setDate(vent.getDateVente());
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
+    // ci.setAmmount(sumCat);
+    // if (findItem(presult, ci) == null) {
+    // System.err.println(">>>>>>>. somme cat " + sumCat + " cat " +
+    // c.getDescritption() + " " + ci.getAbsices());
+    // presult.add(ci);
+    // }
+    // }
+    // System.err.println("Presult size || = " + presult.size());
+    // preresult.addAll(presult);
+    // }
+    // }
+    // System.err.println("Preresult + " + preresult.size());
+    // List<String> cats = filterCat(preresult);
+    // for (String sc : cats) {
+    // List<ChartItem> filted = filterSeries(preresult, sc);
+    // result.add(filted);
+    // }
+    // break;
+    // case "Par région":
+    // List<String> regions = filter(ldata, 2);
+    // for (String regs : regions) {
+    // X i = ldata.get(0);
+    // if (i instanceof Vente) {
+    // List<Vente> v4reg = getForRegion(ldata, regs);
+    // List<ChartItem> serie = new ArrayList<>();
+    // for (Vente v : v4reg) {
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 :
+    // v.getMontantDette()) + (v.getMontantCdf() / taux);
+    // ci.setAmmount(sum);
+    // ci.setDate(v.getDateVente());
+    // ci.setSerieName(regs);
+    // serie.add(ci);
+    // }
+    // result.add(serie);
+    // } else if (i instanceof Operation) {
+    //
+    // List<Operation> opers = getForRegionOps(ldata, regs);
+    // System.out.println("Opersize " + opers.size() + " reg = " + regs);
+    // List<ChartItem> serie = new ArrayList<>();
+    // for (Operation oper : opers) {
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
+    // ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
+    // ci.setDate(oper.getDate());
+    // ci.setSerieName(oper.getRegion());
+    // serie.add(ci);
+    // }
+    // result.add(serie);
+    // }
+    //
+    // }
+    // break;
+    // case "Par produit":
+    // for (X x : ldata) {
+    // if (x instanceof Vente) {
+    // Vente vent = (Vente) x;
+    // NitriteStorage<LigneVente> nslnv = new NitriteStorage<>(e, ksf, db,
+    // LigneVente.class);
+    // List<LigneVente> lvx = vent.getLigneVenteList() != null ?
+    // vent.getLigneVenteList()
+    // : nslnv.findAllEquals("reference", String.valueOf(vent.getUid()));
+    // List<ChartItem> presultat = new ArrayList<>();
+    // for (LigneVente lv : lvx) {
+    // Produit pr = lv.getProductId();
+    // ChartItem ci = new ChartItem();
+    // double sumPro = 0;
+    // for (LigneVente l : lvx) {
+    // Produit p = l.getProductId();
+    // if (p.getUid().equals(pr.getUid())) {
+    // sumPro += l.getMontantUsd();
+    // }
+    // }
+    // ci.setSerieName(pr.getMarque() + " " + pr.getModele() + " " + (pr.getTaille()
+    // == null ? "" : pr.getTaille()));
+    // ci.setDate(vent.getDateVente());
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(vent.getDateVente()));
+    // ci.setAmmount(sumPro);
+    // if (!presultat.contains(ci)) {
+    // presultat.add(ci);
+    // }
+    // }
+    // preresult.addAll(presultat);
+    // }
+    // }
+    // System.err.println("Preresult + " + preresult.size());
+    // List<String> catx = filterCat(preresult);
+    // for (String sc : catx) {
+    // List<ChartItem> filted = filterSeries(preresult, sc);
+    // result.add(filted);
+    // }
+    // break;
+    // case "Par fonction":
+    // List<ChartItem> chis = toChartItems(ldata, taux);
+    // List<String> lfunc = filter(chis, 1);
+    // for (String function : lfunc) {
+    // List<Operation> opers = getForDepartment(ldata, function);
+    // List<ChartItem> serie = new ArrayList<>();
+    // for (Operation oper : opers) {
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
+    // ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
+    // ci.setDate(oper.getDate());
+    // ci.setSerieName(oper.getImputation());
+    // serie.add(ci);
+    // }
+    // result.add(serie);
+    // }
+    //
+    // break;
+    // }
+    //
+    // return result;
+    // }
     /**
      * Cette fonction calcul le resultat se basant sur le prix de revient total
      * pour une entity
      *
-     * @param <X> type de donnee
-     * @param db source de donnee NO2
-     * @param ldep liste de depense
+     * @param <X>    type de donnee
+     * @param db     source de donnee NO2
+     * @param ldep   liste de depense
      * @param lvente liste de vente
      * @param region region
-     * @param taux taux de change
+     * @param taux   taux de change
      * @return la liste de serie graphique a afficher
      */
-//    public static <X, Y> List<List<ChartItem>> getGroupedForResult(Nitrite db, List<X> ldep, List<Y> lvente, String region, double taux) {
-//        List<List<ChartItem>> resultat = new ArrayList<>();
-//        if (region == null) {
-//            //PR tot
-//            //vente progress
-//
-//            List<ChartItem> serie = new ArrayList<>();
-//            double depsum = 0;
-//            for (X e : ldep) {
-//                if (e instanceof Operation) {
-//                    Operation oper = (Operation) e;
-//                    ChartItem ci = new ChartItem();
-//                    ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
-//                    ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
-//                    ci.setDate(oper.getDate());
-//                    ci.setSerieName("Depenses");
-//                    depsum += ci.getAmmount();
-//                    serie.add(ci);
-//                }
-//            }
-//
-//            System.out.println("SUM EXPENSES  = " + depsum);
-//            List<ChartItem> seriev = new ArrayList<>();
-//            List<ChartItem> serier = new ArrayList<>();
-//            double ventsum = 0;
-//            for (Y e : lvente) {
-//                if (e instanceof Vente) {
-//                    Vente v = (Vente) e;
-//                    ChartItem ci = new ChartItem();
-//                    ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//                    double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 : v.getMontantDette()) + (v.getMontantCdf() / taux);
-//                    ci.setAmmount(sum);
-//                    ci.setDate(v.getDateVente());
-//                    ci.setSerieName("Vente");
-//                    seriev.add(ci);
-//                    ventsum += sum;
-//                    double rst = ventsum - depsum;
-//                    System.out.println("SUM result = " + ventsum + " - " + depsum + " = " + rst);
-//                    ChartItem cx = new ChartItem();
-//                    cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//                    cx.setAmmount(rst);
-//                    cx.setDate(v.getDateVente());
-//                    cx.setSerieName("Marge");
-//                    serier.add(cx);
-//                }
-//            }
-//            Collections.sort(serie, new ChartItem());
-//            resultat.add(serie);
-//            Collections.sort(serier, new ChartItem());
-//            resultat.add(seriev);
-//            resultat.add(serier);
-//            return resultat;
-//        }
-//
-//        List<Operation> opers = getForRegionOps(ldep, region);
-//        System.out.println("Opersize " + opers.size());
-//        List<ChartItem> serie = new ArrayList<>();
-//        double depsum = 0;
-//        for (Operation oper : opers) {
-//            ChartItem ci = new ChartItem();
-//            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
-//            ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
-//            ci.setDate(oper.getDate());
-//            ci.setSerieName("Depenses");
-//            depsum += ci.getAmmount();
-//            serie.add(ci);
-//        }
-//        resultat.add(serie);
-//        System.out.println("Montant depense = " + depsum);
-//        List<Vente> v4reg = getForRegion(lvente, region);
-//        List<ChartItem> seriev = new ArrayList<>();
-//        List<ChartItem> serier = new ArrayList<>();
-//        double ventsum = 0;
-//        for (Vente v : v4reg) {
-//            ChartItem ci = new ChartItem();
-//            ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//            double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 : v.getMontantDette()) + (v.getMontantCdf() / taux);
-//            ci.setAmmount(sum);
-//            ci.setDate(v.getDateVente());
-//            ci.setSerieName("Vente");
-//            seriev.add(ci);
-//            ventsum += sum;
-//
-//            double rst = ventsum - depsum;
-//
-//            ChartItem cx = new ChartItem();
-//            cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//            cx.setAmmount(rst);
-//            cx.setDate(v.getDateVente());
-//            cx.setSerieName("Marge");
-//            serier.add(cx);
-//        }
-//        for (Vente v : v4reg) {
-//            double rst = ventsum - depsum;
-//            System.out.println("SUM result = " + rst + " " + ventsum);
-//            ChartItem cx = new ChartItem();
-//            cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
-//            cx.setAmmount(rst);
-//            cx.setDate(v.getDateVente());
-//            cx.setSerieName("Marge");
-//            serier.add(cx);
-//
-//        }
-//        resultat.add(seriev);
-//        resultat.add(serier);
-//        return resultat;
-//    }
+    // public static <X, Y> List<List<ChartItem>> getGroupedForResult(Nitrite db,
+    // List<X> ldep, List<Y> lvente, String region, double taux) {
+    // List<List<ChartItem>> resultat = new ArrayList<>();
+    // if (region == null) {
+    // //PR tot
+    // //vente progress
+    //
+    // List<ChartItem> serie = new ArrayList<>();
+    // double depsum = 0;
+    // for (X e : ldep) {
+    // if (e instanceof Operation) {
+    // Operation oper = (Operation) e;
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
+    // ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
+    // ci.setDate(oper.getDate());
+    // ci.setSerieName("Depenses");
+    // depsum += ci.getAmmount();
+    // serie.add(ci);
+    // }
+    // }
+    //
+    // System.out.println("SUM EXPENSES = " + depsum);
+    // List<ChartItem> seriev = new ArrayList<>();
+    // List<ChartItem> serier = new ArrayList<>();
+    // double ventsum = 0;
+    // for (Y e : lvente) {
+    // if (e instanceof Vente) {
+    // Vente v = (Vente) e;
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 :
+    // v.getMontantDette()) + (v.getMontantCdf() / taux);
+    // ci.setAmmount(sum);
+    // ci.setDate(v.getDateVente());
+    // ci.setSerieName("Vente");
+    // seriev.add(ci);
+    // ventsum += sum;
+    // double rst = ventsum - depsum;
+    // System.out.println("SUM result = " + ventsum + " - " + depsum + " = " + rst);
+    // ChartItem cx = new ChartItem();
+    // cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // cx.setAmmount(rst);
+    // cx.setDate(v.getDateVente());
+    // cx.setSerieName("Marge");
+    // serier.add(cx);
+    // }
+    // }
+    // Collections.sort(serie, new ChartItem());
+    // resultat.add(serie);
+    // Collections.sort(serier, new ChartItem());
+    // resultat.add(seriev);
+    // resultat.add(serier);
+    // return resultat;
+    // }
+    //
+    // List<Operation> opers = getForRegionOps(ldep, region);
+    // System.out.println("Opersize " + opers.size());
+    // List<ChartItem> serie = new ArrayList<>();
+    // double depsum = 0;
+    // for (Operation oper : opers) {
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(oper.getDate()));
+    // ci.setAmmount(((oper.getMontantCdf() / taux) + oper.getMontantUsd()));
+    // ci.setDate(oper.getDate());
+    // ci.setSerieName("Depenses");
+    // depsum += ci.getAmmount();
+    // serie.add(ci);
+    // }
+    // resultat.add(serie);
+    // System.out.println("Montant depense = " + depsum);
+    // List<Vente> v4reg = getForRegion(lvente, region);
+    // List<ChartItem> seriev = new ArrayList<>();
+    // List<ChartItem> serier = new ArrayList<>();
+    // double ventsum = 0;
+    // for (Vente v : v4reg) {
+    // ChartItem ci = new ChartItem();
+    // ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // double sum = v.getMontantUsd() + (v.getMontantDette() == null ? 0 :
+    // v.getMontantDette()) + (v.getMontantCdf() / taux);
+    // ci.setAmmount(sum);
+    // ci.setDate(v.getDateVente());
+    // ci.setSerieName("Vente");
+    // seriev.add(ci);
+    // ventsum += sum;
+    //
+    // double rst = ventsum - depsum;
+    //
+    // ChartItem cx = new ChartItem();
+    // cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // cx.setAmmount(rst);
+    // cx.setDate(v.getDateVente());
+    // cx.setSerieName("Marge");
+    // serier.add(cx);
+    // }
+    // for (Vente v : v4reg) {
+    // double rst = ventsum - depsum;
+    // System.out.println("SUM result = " + rst + " " + ventsum);
+    // ChartItem cx = new ChartItem();
+    // cx.setAbsices(Constants.DATE_HEURE_FORMAT.format(v.getDateVente()));
+    // cx.setAmmount(rst);
+    // cx.setDate(v.getDateVente());
+    // cx.setSerieName("Marge");
+    // serier.add(cx);
+    //
+    // }
+    // resultat.add(seriev);
+    // resultat.add(serier);
+    // return resultat;
+    // }
     private static List<String> filterCat(List<ChartItem> ci) {
         List<String> result = new ArrayList<>();
         for (ChartItem c : ci) {
@@ -965,6 +837,22 @@ public class Util {
             }
         }
         return result;
+    }
+
+    public static String dbPath(String dbname) {
+        String path, fpath = null;
+        if (PlatformUtil.isWindows()) {
+            path = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + "datastore";
+            fpath = path + File.separator + dbname;
+        } else if (PlatformUtil.isLinux()) {
+            path = "/home/" + System.getProperty("user.name") + "/Kazisafe/datastore";
+            fpath = path + File.separator + dbname;
+        } else if (PlatformUtil.isMac()) {
+            path = "/Users" + File.separator + System.getProperty("user.name") + File.separator + "Kazisafe"
+                    + File.separator + "datastore";
+            fpath = path + File.separator + dbname;
+        }
+        return fpath;
     }
 
     private static ChartItem findItemByAbsice(List<ChartItem> li, String x) {
@@ -1085,7 +973,7 @@ public class Util {
                 ChartItem ci = new ChartItem();
                 ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(o.getDate()));
                 ci.setAmmount((o.getMontantCdf() / tx) + o.getMontantUsd());
-                ci.setDate(o.getDate());
+                ci.setDate(o.getDate().toLocalDate());
                 ci.setSerieName(o.getImputation());
                 result.add(ci);
             }
@@ -1173,8 +1061,7 @@ public class Util {
     public static List<String> extractDates(List<Vente> lvs) {
         List<String> datex = new ArrayList<>();
         for (Vente v : lvs) {
-            Date d = v.getDateVente();
-            String date = Constants.DATE_ONLY_FORMAT.format(d);
+            String date = v.getDateVente().toLocalDate().toString();
             if (!datex.contains(date)) {
                 datex.add(date);
             }
@@ -1182,21 +1069,19 @@ public class Util {
         return datex;
     }
 
-    public static List<String> extractDates(List<Vente> lvs, String region) {
-        List<String> datex = new ArrayList<>();
+    public static List<LocalDate> extractDates(List<Vente> lvs, String region) {
+        List<LocalDate> datex = new ArrayList<>();
         for (Vente v : lvs) {
             if (v.getRegion() == null) {
                 continue;
             }
             if (region == null) {
-                Date d = v.getDateVente();
-                String date = Constants.USER_READABLE_FORMAT.format(d);
+                LocalDate date = v.getDateVente().toLocalDate();
                 if (!datex.contains(date)) {
                     datex.add(date);
                 }
             } else {
-                Date d = v.getDateVente();
-                String date = Constants.USER_READABLE_FORMAT.format(d);
+                LocalDate date = v.getDateVente().toLocalDate();
                 if (!datex.contains(date) && v.getRegion().equals(region)) {
                     datex.add(date);
                 }
@@ -1294,13 +1179,17 @@ public class Util {
         return ci;
     }
 
-    public static Quintuplet<Date, List<SaleItem>, Double, Double, Double> findByDate(List<SaleItem> lsi, String date) {
-        Quintuplet<Date, List<SaleItem>, Double, Double, Double> quint = new Quintuplet<>();
+    public static Quintuplet<LocalDate, List<SaleItem>, Double, Double, Double> findByDate(List<SaleItem> lsi,
+            LocalDate date) {
+        Quintuplet<LocalDate, List<SaleItem>, Double, Double, Double> quint = new Quintuplet<>();
         List<SaleItem> ventesDuJour = new ArrayList<>();
         double montantusd = 0, montantcdf = 0, dette = 0;
         for (SaleItem si : lsi) {
-            String d = Constants.USER_READABLE_FORMAT.format(si.getDate());
-            if (d.equals(date)) {
+            if (si.getDateDeVente() == null) {
+                continue;
+            }
+            LocalDate d = si.getDateDeVente();
+            if (date.toString().contains(d.toString())) {
                 if (!ventesDuJour.contains(si)) {
                     montantusd += si.getSaleAmountUsd();
                     montantcdf += si.getSaleAmountCdf();
@@ -1310,9 +1199,12 @@ public class Util {
             }
         }
         try {
-            quint.setV(Constants.USER_READABLE_FORMAT.parse(date));
-        } catch (ParseException ex) {
-            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+            quint.setV(date);
+        } catch (Exception e) {
+            try {
+                quint.setV(date);
+            } catch (Exception ex) {
+            }
         }
         quint.setW(ventesDuJour);
         quint.setX(montantusd);
@@ -1331,11 +1223,11 @@ public class Util {
         return last;
     }
 
-    public static boolean isDateBetween(Date date1, Date date2, Date compared) {
-        //date1<=compared && date2>=compared
-        long datemin = date1.getTime();
-        long datemax = date2.getTime();
-        long comp = compared.getTime();
+    public static boolean isDateBetween(LocalDate date1, LocalDate date2, LocalDate compared) {
+        // date1<=compared && date2>=compared
+        long datemin = date1.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long datemax = date2.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long comp = compared.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         return datemin <= comp && datemax >= comp;
     }
 
@@ -1424,7 +1316,8 @@ public class Util {
         return result.isEmpty() ? list : result;
     }
 
-    public static List<PhysicalInventoryLine> importInventoryFromExcel(File f, String region) throws IllegalStateException {
+    public static List<PhysicalInventoryLine> importInventoryFromExcelFile(File f, String region)
+            throws IllegalStateException {
         List<PhysicalInventoryLine> result = new ArrayList<>();
         try {
             FileInputStream fis = new FileInputStream(f);
@@ -1433,7 +1326,7 @@ public class Util {
             Iterator<Row> rowIterator = sheet.iterator();
             StringBuilder sb = new StringBuilder();
             String regIn = null;
-rowsloop:   while (rowIterator.hasNext()) {
+            rowsloop: while (rowIterator.hasNext()) {
                 Row r1 = rowIterator.next();
                 if (isRowEmpty(r1)) {
                     continue;
@@ -1454,142 +1347,201 @@ rowsloop:   while (rowIterator.hasNext()) {
                     while (cellIterator.hasNext()) {
                         Cell m = cellIterator.next();
                         switch (m.getColumnIndex()) {
-                            case 0:
+                            case 0 -> {
                                 if (!isCellEmpty(m)) {
                                     if (!m.getCellType().equals(CellType.STRING)) {
-                                        MainUI.notify(null, "Erreur", "La collone codebar doit etre en texte a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "La collone codebar doit etre en texte a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
                                         return null;
                                     }
                                     String codebar = m.getStringCellValue();
                                     inventoryItem.setCodebarr(codebar);
                                 }
-                                break;
-                            case 1:
+                            }
+                            case 1 -> {
                                 if (!isCellEmpty(m)) {
                                     if (!m.getCellType().equals(CellType.STRING)) {
-                                        MainUI.notify(null, "Erreur", "La nom du produit doit etre en texte a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur", "La nom du produit doit etre en texte a la ligne "
+                                                + (m.getRowIndex() + 1), 8, "error");
                                         return null;
                                     }
                                     inventoryItem.setNomProduit(m.getStringCellValue());
                                 }
-                                break;
-                            case 2:
+                            }
+                            case 2 -> {
                                 if (!isCellEmpty(m)) {
                                     if (!m.getCellType().equals(CellType.STRING)) {
-                                        MainUI.notify(null, "Erreur", "La collone marque ou fabriquant doit etre en texte a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "La collone marque ou fabriquant doit etre en texte a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
                                         return null;
                                     }
                                     inventoryItem.setMarqueProduit(m.getStringCellValue());
                                 }
-                                break;
-                            case 3:
+                            }
+                            case 3 -> {
                                 if (!isCellEmpty(m)) {
                                     if (!m.getCellType().equals(CellType.STRING)) {
-                                        MainUI.notify(null, "Erreur", "La collone modele ou forme doit etre en texte a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "La collone modele ou forme doit etre en texte a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
                                         return null;
                                     }
                                     inventoryItem.setModeleProduit(m.getStringCellValue());
                                 }
-                                break;
-                            case 4:
+                            }
+                            case 4 -> {
                                 if (!isCellEmpty(m)) {
                                     if (!m.getCellType().equals(CellType.STRING)) {
-                                        MainUI.notify(null, "Erreur", "La collone taille ou concentration doit etre en texte a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "La collone taille ou concentration doit etre en texte a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
                                         return null;
                                     }
                                     inventoryItem.setTailleProduit(m.getStringCellValue());
                                 }
-                                break;
-                            case 5:
+                            }
+                            case 5 -> {
                                 if (m.getCellType().equals(CellType.STRING)) {
                                     inventoryItem.setNumlot(m.getStringCellValue());
                                 }
-                                break;
-                            case 6:
+                            }
+                            case 6 -> {
                                 if (m.getCellType().equals(CellType.STRING)) {
                                     inventoryItem.setMesure(m.getStringCellValue());
                                 }
-                                break;
-                            case 7:
+                            }
+                            case 7 -> {
                                 if (m.getCellType().equals(CellType.NUMERIC)) {
                                     inventoryItem.setEntrees(m.getNumericCellValue());
                                 }
-                                break;
-                            case 8:
+                            }
+                            case 8 -> {
                                 if (m.getCellType().equals(CellType.NUMERIC)) {
                                     inventoryItem.setSorties(m.getNumericCellValue());
                                 }
-                                break;
-                            case 9:
+                            }
+                            case 9 -> {
                                 if (!isCellEmpty(m)) {
                                     if (m.getCellType().equals(CellType.NUMERIC)) {
                                         inventoryItem.setStockTheorique(m.getNumericCellValue());
                                     }
                                 }
-                                break;
-                            case 10:
+                            }
+                            case 10 -> {
                                 if (!isCellEmpty(m)) {
                                     if (m.getCellType().equals(CellType.NUMERIC)) {
                                         inventoryItem.setStockPhysique(m.getNumericCellValue());
                                     } else {
-                                        MainUI.notify(null, "Erreur", "Le stock physique doit etre en numerique a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "Le stock physique doit etre en numerique a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
                                         return null;
                                     }
                                 } else {
-                                    MainUI.notify(null, "Erreur", "Le stock physique ne doit pas etre vide a la ligne " + (m.getRowIndex() + 1), 4, "error");
+                                    MainUI.notify(null, "Erreur", "Le stock physique ne doit pas etre vide a la ligne "
+                                            + (m.getRowIndex() + 1), 8, "error");
                                     return null;
                                 }
-                                break;
-                            case 11:
-                                //alert
+                            }
+                            case 11 -> {
+                                // alert
                                 if (!isCellEmpty(m)) {
                                     Double d = m.getNumericCellValue();
                                     inventoryItem.setStockAlerte(d == null ? 0 : d);
                                 }
-                                break;
-                            case 12:
-                                inventoryItem.setCoutAchat(m.getNumericCellValue());
-                                break;
-                            case 14:
+                            }
+                            case 12 -> {
+                                if (!isCellEmpty(m)) {
+                                    if (m.getCellType().equals(CellType.NUMERIC)) {
+                                        inventoryItem.setCoutAchat(m.getNumericCellValue());
+                                    } else {
+                                        MainUI.notify(null, "Erreur",
+                                                "Le cout d'achat doit etre en numerique a la ligne "
+                                                        + (m.getRowIndex() + 1),
+                                                8, "error");
+                                        return null;
+                                    }
+                                }
+                            }
+                            case 14 -> {
                                 if (!isCellEmpty(m)) {
                                     inventoryItem.setLocalisation(m.getStringCellValue());
                                 } else {
                                     inventoryItem.setLocalisation(region);
                                 }
-                                break;
-                            case 15:
+                            }
+                            case 15 -> {
                                 if (m.getCellType().equals(CellType.NUMERIC)) {
-                                    Date datexp = m.getDateCellValue();
+                                    LocalDate datexp = m.getLocalDateTimeCellValue().toLocalDate();
                                     if (datexp != null) {
                                         inventoryItem.setDateExpiration(datexp);
                                     }
                                 }
-                                break;
-                            case 16:
+                            }
+                            case 16 -> {
                                 if (!isCellEmpty(m)) {
                                     if (m.getCellType().equals(CellType.STRING)) {
                                         inventoryItem.setPrixDeVente(m.getStringCellValue());
                                     } else {
-                                        MainUI.notify(null, "Erreur", "Le prix de vente a la ligne " + (m.getRowIndex() + 1) + " doit etre un nombre en format text ou en notation Kazisafe", 5, "error");
+                                        MainUI.notify(null, "Erreur", "Le prix de vente a la ligne "
+                                                + (m.getRowIndex() + 1)
+                                                + " doit etre un nombre en format text sous la notation Kazisafe", 5,
+                                                "error");
                                         return null;
                                     }
                                 }
-                                break;
-                            case 17:
+                            }
+                            case 17 -> {
+                                if (!isCellEmpty(m)) {
+                                    if (m.getCellType().equals(CellType.STRING)) {
+                                        inventoryItem.setDevise(m.getStringCellValue());
+                                    } else {
+                                        MainUI.notify(null, "Erreur",
+                                                "L'indication de la devise est erronee a la ligne "
+                                                        + (m.getRowIndex() + 1)
+                                                        + " et doit etre en format text USD/CDF ",
+                                                8, "error");
+                                        return null;
+                                    }
+                                } else {
+                                    MainUI.notify(null, "Erreur",
+                                            "L'indication multibatch ne doit pas etre null a la ligne "
+                                                    + (m.getRowIndex() + 1)
+                                                    + " et doit etre en format text de valeur OUI ou NON ",
+                                            8, "error");
+                                    return null;
+                                }
+                            }
+                            case 18 -> {
                                 if (!isCellEmpty(m)) {
                                     if (m.getCellType().equals(CellType.STRING)) {
                                         inventoryItem.setMultiBatch(m.getStringCellValue().equals("OUI"));
                                     } else {
-                                        MainUI.notify(null, "Erreur", "L'indication multibatch ne doit pas etre null a la ligne " + (m.getRowIndex() + 1) + " et doit etre en format text de valeur OUI ou NON ", 5, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "L'indication multibatch ne doit pas etre null a la ligne "
+                                                        + (m.getRowIndex() + 1)
+                                                        + " et doit etre en format text de valeur OUI ou NON ",
+                                                8, "error");
                                         return null;
                                     }
                                 } else {
-                                    MainUI.notify(null, "Erreur", "L'indication multibatch ne doit pas etre null a la ligne " + (m.getRowIndex() + 1) + " et doit etre en format text de valeur OUI ou NON ", 5, "error");
+                                    MainUI.notify(null, "Erreur",
+                                            "L'indication multibatch ne doit pas etre null a la ligne "
+                                                    + (m.getRowIndex() + 1)
+                                                    + " et doit etre en format text de valeur OUI ou NON ",
+                                            8, "error");
                                     return null;
                                 }
-                                break;
-                            default:
-                                break;
+                            }
+                            default -> {
+                            }
                         }
                     }
                     System.err.println("IMPORT INV " + (r1.getRowNum() + 1));
@@ -1597,7 +1549,7 @@ rowsloop:   while (rowIterator.hasNext()) {
                 }
             }
             if (sb.length() > 0) {
-                MainUI.notify(null, "Avertissement", sb.toString(), 4, "warn");
+                MainUI.notify(null, "Avertissement", sb.toString(), 8, "warn");
             }
             return result;
         } catch (FileNotFoundException ex) {
@@ -1608,20 +1560,22 @@ rowsloop:   while (rowIterator.hasNext()) {
         return null;
     }
 
-    public static List<DataImporter> importFromExcel(File f, List<Produit> lprods, String region, boolean conv) throws IllegalStateException {
+    public static List<DataImporter> importFromExcel(File f, List<Produit> lprods, String region, boolean conv)
+            throws IllegalStateException {
         List<DataImporter> result = new ArrayList<>();
         try {
             FileInputStream fis = new FileInputStream(f);
             HSSFWorkbook workbook = new HSSFWorkbook(fis);
             HSSFSheet sheet = workbook.getSheetAt(0);
             if (!sheet.getSheetName().equals("Detaillant")) {
-                MainUI.notify(null, "Erreur", "La premiere feuile du fichier doit porter ne nom [Detaillant]", 3, "error");
+                MainUI.notify(null, "Erreur", "La premiere feuile du fichier doit porter ne nom [Detaillant]", 8,
+                        "error");
                 return null;
             }
             Iterator<Row> rowIterator = sheet.iterator();
             System.out.println("Importation en cours....");
             boolean doublon = false;
-rowsloop:   while (rowIterator.hasNext()) {
+            rowsloop: while (rowIterator.hasNext()) {
 
                 Row r1 = rowIterator.next();
                 if (isRowEmpty(r1)) {
@@ -1634,28 +1588,29 @@ rowsloop:   while (rowIterator.hasNext()) {
                     DataImporter data = new DataImporter();
                     Produit produit = new Produit(DataId.generate());
                     Stocker stock = new Stocker(DataId.generate());
-                    stock.setDateStocker(new Date());
+                    stock.setDateStocker(LocalDateTime.now());
                     stock.setRegion(region);
                     Destocker destock = new Destocker(DataId.generate());
-                    destock.setDateDestockage(new Date());
+                    destock.setDateDestockage(LocalDateTime.now());
                     destock.setRegion(region);
                     Recquisition recq = new Recquisition(DataId.generate());
-                    recq.setDate(new Date());
+                    recq.setDate(LocalDateTime.now());
                     recq.setRegion(region);
                     PrixDeVente price = new PrixDeVente(DataId.generate());
-//                    InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-//                    byte[] img = FileUtils.readAllBytes(is);
-//                    //produit.setImage(img);
+                    // InputStream is =
+                    // MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                    // byte[] img = FileUtils.readAllBytes(is);
+                    // //produit.setImage(img);
                     System.out.println("Rowing:::" + r1.getRowNum());
-                    produit.setDateCreation(new Date());
+                    produit.setDateCreation(LocalDateTime.now());
                     while (cellIterator.hasNext()) {
                         Cell m = cellIterator.next();
                         switch (m.getColumnIndex()) {
                             case 0:
                                 String codebar = m.getStringCellValue();
-//                                if(codebar==null){
-//                                    continue rowsloop;
-//                                }
+                                // if(codebar==null){
+                                // continue rowsloop;
+                                // }
                                 produit.setCodebar(conv ? Util.numfyFrenchChars(codebar) : codebar);
                                 Produit prox = Util.findProduitByCodebar(lprods, codebar);
                                 if (prox != null) {
@@ -1701,8 +1656,8 @@ rowsloop:   while (rowIterator.hasNext()) {
                             case 11:
                                 Date datexp = m.getDateCellValue();
                                 if (datexp != null) {
-                                    stock.setDateExpir(datexp);
-                                    recq.setDateExpiry(datexp);
+                                    stock.setDateExpir(Constants.Datetime.toLocalDate(datexp));
+                                    recq.setDateExpiry(Constants.Datetime.toLocalDate(datexp));
                                 } else {
                                     stock.setDateExpir(null);
                                     recq.setDateExpiry(null);
@@ -1732,13 +1687,15 @@ rowsloop:   while (rowIterator.hasNext()) {
                     data.setStock(stock);
                     System.err.println("IMPORT stock.pro = " + data.getStock().getProductId() + ""
                             + " destock.pro : " + data.getDestockage().getProductId() + " "
-                            + " Recquis.pro : " + data.getRecquisition().getProductId() + " PODUCIT : " + data.getProduct());
+                            + " Recquis.pro : " + data.getRecquisition().getProductId() + " PODUCIT : "
+                            + data.getProduct());
                     result.add(data);
                 }
             }
             if (doublon) {
                 doublon = false;
-                MainUI.notify(null, "Doublon !", "Certains codebar existent déjà et n'ont pas pû être importés", 5, "warn");
+                MainUI.notify(null, "Doublon !", "Certains codebar existent déjà et n'ont pas pû être importés", 5,
+                        "warn");
             }
             return result;
         } catch (FileNotFoundException ex) {
@@ -1749,17 +1706,17 @@ rowsloop:   while (rowIterator.hasNext()) {
         return null;
     }
 
-    private static LigneImport proceedImport(Row row, Produit produit, List<Produit> lprods, boolean conv, String region, String ref, String meth) {
+    private static LigneImport proceedImport(Row row, Produit produit, List<Produit> lprods, boolean conv,
+            String region, String ref, String meth) {
 
         Stocker stocker = new Stocker(DataId.generate());
         Recquisition recq = new Recquisition(DataId.generate());
         Destocker destock = new Destocker(DataId.generate());
         Mesure mesure = new Mesure(DataId.generate());
         LigneImport importer = new LigneImport();
-        produit.setDateCreation(new Date());
+        produit.setDateCreation(LocalDateTime.now());
         Iterator<Cell> cellIterator = row.cellIterator();
-productloop:
-        while (cellIterator.hasNext()) {
+        productloop: while (cellIterator.hasNext()) {
             Cell cellule = cellIterator.next();
             int index = cellule.getColumnIndex();
 
@@ -1780,13 +1737,16 @@ productloop:
                                     produit.setUid(prox.getUid());
                                 }
                             } else {
-                                MainUI.notify(null, "Erreur", "Le codebar est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                MainUI.notify(null, "Erreur",
+                                        "Le codebar est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7,
+                                        "error");
                                 return null;
 
                             }
                         }
                     } catch (IllegalStateException e) {
-                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone codebarr", 5, "error");
+                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone codebarr", 5,
+                                "error");
                     }
                     break;
                 case 1:
@@ -1795,12 +1755,15 @@ productloop:
                         if (!isCellEmpty(cellule)) {
                             produit.setNomProduit(m2);
                         } else {
-                            MainUI.notify(null, "Erreur", "La nom du produit est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                            MainUI.notify(null, "Erreur",
+                                    "La nom du produit est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7,
+                                    "error");
                             return null;
 
                         }
                     } catch (IllegalStateException e) {
-                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone nom du produit", 5, "error");
+                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone nom du produit", 5,
+                                "error");
                     }
                     break;
                 case 2:
@@ -1831,7 +1794,8 @@ productloop:
                             produit.setTaille(m5);
                         }
                     } catch (IllegalStateException e) {
-                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone taille/concentration", 5, "error");
+                        MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone taille/concentration",
+                                5, "error");
                     }
                     break;
                 case 5:
@@ -1876,7 +1840,8 @@ productloop:
                             mesure.setDescription(mzc[0]);
                             System.out.println("Mezimport " + mzc[0] + " " + produit);
                             if (mzc.length < 2) {
-                                MainUI.notify(null, "Erreur", "La notation de la mesure est incomplete, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                MainUI.notify(null, "Erreur", "La notation de la mesure est incomplete, pour la ligne "
+                                        + (row.getRowNum() + 1), 7, "error");
                                 return null;
                             }
                             mesure.setQuantContenu(Double.parseDouble(mzc[1]));
@@ -1887,7 +1852,10 @@ productloop:
                             MainUI.notify(null, "Error", "Erreur mesure " + e.getMessage(), 5, "error");
                         }
                     } else {
-                        MainUI.notify(null, "Erreur", "Le mesurage d'unite est toujours obligatoire, il est absent a la ligne " + (row.getRowNum() + 1), 7, "error");
+                        MainUI.notify(null, "Erreur",
+                                "Le mesurage d'unite est toujours obligatoire, il est absent a la ligne "
+                                        + (row.getRowNum() + 1),
+                                7, "error");
                         return null;
                     }
                     break;
@@ -1913,7 +1881,9 @@ productloop:
                             recq.setStockAlert(value);
                         }
                     } else {
-                        MainUI.notify(null, "Erreur", "Le stock d'alerte est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                        MainUI.notify(null, "Erreur",
+                                "Le stock d'alerte est obligatoire, pour la ligne " + (row.getRowNum() + 1), 7,
+                                "error");
                         return null;
                     }
                     break;
@@ -1938,8 +1908,8 @@ productloop:
                         if (cellule.getCellType().equals(CellType.NUMERIC)) {
                             if (DateUtil.isCellDateFormatted(cellule)) {
                                 Date exp = cellule.getDateCellValue();
-                                stocker.setDateExpir(exp);
-                                recq.setDateExpiry(exp);
+                                stocker.setDateExpir(Constants.Datetime.toLocalDate(exp));
+                                recq.setDateExpiry(Constants.Datetime.toLocalDate(exp));
                             }
                         }
                     }
@@ -1948,11 +1918,17 @@ productloop:
                     if (!isCellEmpty(cellule)) {
                         String priz = cellule.getStringCellValue();
                         if (!priz.startsWith("[")) {
-                            MainUI.notify(null, "Erreur", "La notation du prix incorrecte symbole [ manquant au debut, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                            MainUI.notify(null, "Erreur",
+                                    "La notation du prix incorrecte symbole [ manquant au debut, pour la ligne "
+                                            + (row.getRowNum() + 1),
+                                    7, "error");
                             return null;
                         }
                         if (!priz.endsWith("]")) {
-                            MainUI.notify(null, "Erreur", "La notation du prix incorrecte symbole ] manquant a la fin, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                            MainUI.notify(null, "Erreur",
+                                    "La notation du prix incorrecte symbole ] manquant a la fin, pour la ligne "
+                                            + (row.getRowNum() + 1),
+                                    7, "error");
                             return null;
                         }
 
@@ -1964,13 +1940,17 @@ productloop:
                                 String prix = prixs[i];
                                 if (prix != null) {
                                     if (!prix.contains(":")) {
-                                        MainUI.notify(null, "Erreur", "A l'indice [" + i + "] la notation du prix incorrecte symbole : manquant entre le prix unitaire et quantités, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                        MainUI.notify(null, "Erreur", "A l'indice [" + i
+                                                + "] la notation du prix incorrecte symbole : manquant entre le prix unitaire et quantités, pour la ligne "
+                                                + (row.getRowNum() + 1), 7, "error");
                                         return null;
                                     }
                                     String prixz[] = prix.split(":");
                                     String quants = prixz[0];
                                     if (!quants.contains("-")) {
-                                        MainUI.notify(null, "Erreur", "A l'indice [" + i + "] la notation du prix incorrecte symbole - manquant entre Qmin et Qmax, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                        MainUI.notify(null, "Erreur", "A l'indice [" + i
+                                                + "] la notation du prix incorrecte symbole - manquant entre Qmin et Qmax, pour la ligne "
+                                                + (row.getRowNum() + 1), 7, "error");
                                         return null;
                                     }
                                     String qmin = quants.split("-")[0];
@@ -1983,7 +1963,10 @@ productloop:
                                     double min = Double.parseDouble(qmin);
                                     pv.setPrixUnitaire(Double.parseDouble(pvs));
                                     if (min == max) {
-                                        MainUI.notify(null, "Erreur", "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale [" + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1), 7, "error");
+                                        MainUI.notify(null, "Erreur",
+                                                "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale ["
+                                                        + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
+                                                7, "error");
                                         return null;
                                     }
                                     pv.setQmin(min);
@@ -1996,13 +1979,19 @@ productloop:
                             String prix = priz;
 
                             if (!prix.contains(":")) {
-                                MainUI.notify(null, "Erreur", "La notation du prix incorrecte symbole : manquant entre le prix unitaire et quantités, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                MainUI.notify(null, "Erreur",
+                                        "La notation du prix incorrecte symbole : manquant entre le prix unitaire et quantités, pour la ligne "
+                                                + (row.getRowNum() + 1),
+                                        7, "error");
                                 return null;
                             }
                             String prixz[] = prix.split(":");
                             String quants = prixz[0];
                             if (!quants.contains("-")) {
-                                MainUI.notify(null, "Erreur", "La notation du prix incorrecte symbole - manquant entre Qmin et Qmax, pour la ligne " + (row.getRowNum() + 1), 7, "error");
+                                MainUI.notify(null, "Erreur",
+                                        "La notation du prix incorrecte symbole - manquant entre Qmin et Qmax, pour la ligne "
+                                                + (row.getRowNum() + 1),
+                                        7, "error");
                                 return null;
                             }
                             String qmin = quants.split("-")[0];
@@ -2015,7 +2004,10 @@ productloop:
                             double min = Double.parseDouble(qmin);
                             pv.setPrixUnitaire(Double.parseDouble(pvs));
                             if (min == max) {
-                                MainUI.notify(null, "Erreur", "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale [" + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1), 7, "error");
+                                MainUI.notify(null, "Erreur",
+                                        "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale ["
+                                                + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
+                                        7, "error");
                                 return null;
                             }
                             pv.setQmin(min);
@@ -2033,9 +2025,9 @@ productloop:
 
             }
         }
-        destock.setDateDestockage(new Date());
-        stocker.setDateStocker(new Date());
-        recq.setDate(new Date());
+        destock.setDateDestockage(LocalDateTime.now());
+        stocker.setDateStocker(LocalDateTime.now());
+        recq.setDate(LocalDateTime.now());
         destock.setDestination(region);
         stocker.setRegion(region);
         recq.setRegion(region);
@@ -2073,7 +2065,8 @@ productloop:
         return null;
     }
 
-    private static List<LigneImport> help(File f, List<Produit> lprods, String region, boolean conv, String ref, String meth) {
+    private static List<LigneImport> help(File f, List<Produit> lprods, String region, boolean conv, String ref,
+            String meth) {
         List<LigneImport> llis = new ArrayList<>();
         try {
             FileInputStream fis = new FileInputStream(f);
@@ -2081,7 +2074,8 @@ productloop:
 
             HSSFSheet sheet = workbook.getSheetAt(0);
             if (!sheet.getSheetName().equals("Grossiste")) {
-                MainUI.notify(null, "Erreur", "La premiere feuile du fichier doit porter ne nom [Grossiste]", 3, "error");
+                MainUI.notify(null, "Erreur", "La premiere feuile du fichier doit porter ne nom [Grossiste]", 3,
+                        "error");
                 return null;
             }
             System.out.println("in the function ");
@@ -2090,7 +2084,8 @@ productloop:
                 Row r1 = rowIterator.next();
                 if (isRowEmpty(r1)) {
                     if (r1.getRowNum() == 1) {
-                        MainUI.notify(null, "Erreur", "La premiere ligne de la feuille ne doit pas etre vide", 7, "error");
+                        MainUI.notify(null, "Erreur", "La premiere ligne de la feuille ne doit pas etre vide", 7,
+                                "error");
                     }
                     break;
                 }
@@ -2108,7 +2103,8 @@ productloop:
                         Produit produit = new Produit(DataId.generate());
                         LigneImport impo = proceedImport(r1, produit, lprods, conv, region, ref, meth);
                         if (impo == null) {
-                            MainUI.notify(null, "Attention !", "Certains elements n'ont pas pû être importés", 5, "warn");
+                            MainUI.notify(null, "Attention !", "Certains elements n'ont pas pû être importés", 5,
+                                    "warn");
                             break;
                         }
                         llis.add(impo);
@@ -2116,7 +2112,8 @@ productloop:
                         Produit produit = imp.getProduit();
                         LigneImport li = proceedImport(r1, produit, lprods, conv, region, ref, meth);
                         if (li == null) {
-                            MainUI.notify(null, "Attention !", "Certains elements n'ont pas pû être importés", 5, "warn");
+                            MainUI.notify(null, "Attention !", "Certains elements n'ont pas pû être importés", 5,
+                                    "warn");
                             break;
                         }
                         llis.add(li);
@@ -2133,7 +2130,8 @@ productloop:
         return llis;
     }
 
-    public static List<LigneImport> importGrosFromExcel(File f, List<Produit> lprods, String region, boolean conv, String ref, String meth) throws IllegalStateException {
+    public static List<LigneImport> importGrosFromExcel(File f, List<Produit> lprods, String region, boolean conv,
+            String ref, String meth) throws IllegalStateException {
         return help(f, lprods, region, conv, ref, meth);
     }
 
@@ -2176,7 +2174,7 @@ productloop:
                     InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
                     byte[] img = FileUtils.readAllBytes(is);
                     produit.setImage(img);
-                    produit.setDateCreation(new Date());
+                    produit.setDateCreation(LocalDateTime.now());
                     while (cellIterator.hasNext()) {
                         Cell m = cellIterator.next();
                         switch (m.getColumnIndex()) {
@@ -2253,10 +2251,10 @@ productloop:
         for (Recquisition r : lreq) {
             RequestHelper rh = new RequestHelper();
             rh.setCoutAchat(r.getCoutAchat());
-            rh.setDateReq(r.getDate());
+            rh.setDateReq(Constants.Datetime.toUtilDate(r.getDate().toLocalDate()));
             rh.setMesureId(r.getMesureId());
             rh.setStockAlerte(r.getStockAlert());
-            rh.setDateExpiry(r.getDateExpiry());
+            rh.setDateExpiry(Constants.Datetime.toUtilDate(r.getDateExpiry()));
             rh.setProductId(r.getProductId());
             rh.setQuantite(r.getQuantite());
             rh.setRequid(r.getUid());
@@ -2269,10 +2267,11 @@ productloop:
         Collections.sort(arange, new RequestHelper());
         for (RequestHelper rh : arange) {
 
-            RequestHelper oneRh = unify(lmz, findForProduct(arange, rh.getProductId().getUid()), rh.getProductId().getUid());
+            RequestHelper oneRh = unify(lmz, findForProduct(arange, rh.getProductId().getUid()),
+                    rh.getProductId().getUid());
             if (!result.contains(oneRh)) {
-//                double qpc = sumQForProduct(arange, lmz, rh.getProductId().getUid());
-//                rh.setQuantite(qpc);
+                // double qpc = sumQForProduct(arange, lmz, rh.getProductId().getUid());
+                // rh.setQuantiteVendu(qpc);
                 result.add(oneRh);
             }
         }
@@ -2284,10 +2283,10 @@ productloop:
         for (Recquisition r : lreq) {
             RequestHelper rh = new RequestHelper();
             rh.setCoutAchat(r.getCoutAchat());
-            rh.setDateReq(r.getDate());
+            rh.setDateReq(Constants.Datetime.toUtilDate(r.getDate().toLocalDate()));
             rh.setMesureId(r.getMesureId());
             rh.setStockAlerte(r.getStockAlert() == null ? 0d : r.getStockAlert());
-            rh.setDateExpiry(r.getDateExpiry());
+            rh.setDateExpiry(Constants.Datetime.toUtilDate(r.getDateExpiry()));
             rh.setProductId(r.getProductId());
             rh.setQuantite(r.getQuantite());
             rh.setRequid(r.getUid());
@@ -2304,10 +2303,10 @@ productloop:
         for (Recquisition r : lreq) {
             RequestHelper rh = new RequestHelper();
             rh.setCoutAchat(r.getCoutAchat());
-            rh.setDateReq(r.getDate());
+            rh.setDateReq(Constants.Datetime.toUtilDate(r.getDate().toLocalDate()));
             rh.setMesureId(r.getMesureId());
             rh.setStockAlerte(r.getStockAlert());
-            rh.setDateExpiry(r.getDateExpiry());
+            rh.setDateExpiry(Constants.Datetime.toUtilDate(r.getDateExpiry()));
             rh.setProductId(r.getProductId());
             rh.setQuantite(r.getQuantite());
             rh.setRequid(r.getUid());
@@ -2356,8 +2355,8 @@ productloop:
     public static PrixDeVente findAvailablePrice(List<PrixDeVente> ps) {
         for (PrixDeVente p : ps) {
             if (p != null) {
-                double pr = p.getPrixUnitaire() == null ? 0 : p.getPrixUnitaire();
-                double qmin = p.getQmin() == null ? 0 : p.getQmin();
+                double pr = p.getPrixUnitaire();
+                double qmin = p.getQmin();
                 if (pr > 0 || qmin > 0) {
                     return p;
                 }
@@ -2506,7 +2505,8 @@ productloop:
     public static Stocker findLastStocker(List<Stocker> lstk) {
         List<StockerComparator> stpool = new ArrayList<>();
         for (Stocker stk : lstk) {
-            StockerComparator stc = new StockerComparator(stk.getDateStocker(), stk.getUid(), stk.getMesureId().getUid(), stk.getProductId().getUid());
+            StockerComparator stc = new StockerComparator(stk.getDateStocker(),
+                    stk.getUid(), stk.getMesureId().getUid(), stk.getProductId().getUid());
             stpool.add(stc);
         }
         Collections.sort(stpool, new StockerComparator());
@@ -2604,7 +2604,7 @@ productloop:
         }
         double c = quants == 0 ? 0 : (values / quants);
         System.err.println("valeur " + c);
-        double rst = BigDecimal.valueOf(c).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double rst = BigDecimal.valueOf(c).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
         return values == 0 ? 0 : rst * (mz == null ? 1 : mz.getQuantContenu());
     }
 
@@ -2654,7 +2654,8 @@ productloop:
     public static List<Fournisseur> findFournisseur(List<Fournisseur> fourniseur, String query) {
         List<Fournisseur> result = new ArrayList<>();
         for (Fournisseur four : fourniseur) {
-            String v = four.getAdresse() + " " + four.getIdentification() + " " + four.getNomFourn() + " " + four.getPhone();
+            String v = four.getAdresse() + " " + four.getIdentification() + " " + four.getNomFourn() + " "
+                    + four.getPhone();
             if (v.toUpperCase().contains(query.toUpperCase())) {
                 result.add(four);
             }
@@ -2695,7 +2696,7 @@ productloop:
             } else if (obj instanceof LigneVente) {
                 LigneVente ligneVente = (LigneVente) obj;
                 Mesure m = ligneVente.getMesureId();
-                Double qin = m.getQuantContenu();
+                Double qin = (m == null) ? 1 : m.getQuantContenu();
                 sum += ligneVente.getQuantite() * (qin == null ? 0 : qin);
             } else if (obj instanceof Stocker) {
                 Stocker stocker = (Stocker) obj;
@@ -2821,7 +2822,7 @@ productloop:
     public static List<Stocker> findStockersForProduit(List<Stocker> allStk, String prod, long d1, long d2) {
         List<Stocker> result = new ArrayList<>();
         for (Stocker s : allStk) {
-            long d = s.getDateStocker().getTime();
+            long d = s.getDateStocker().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             Produit p = s.getProductId();
             if (p == null) {
                 continue;
@@ -2836,7 +2837,7 @@ productloop:
     public static List<Stocker> findStockersInterval(List<Stocker> allStk, long d1, long d2) {
         List<Stocker> result = new ArrayList<>();
         for (Stocker s : allStk) {
-            long d = s.getDateStocker().getTime();
+            long d = s.getDateStocker().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             if ((d >= d1 && d <= d2)) {
                 result.add(s);
             }
@@ -2946,7 +2947,7 @@ productloop:
     public static List<Destocker> findDestockersForProduit(List<Destocker> allStk, String prod, long d1, long d2) {
         List<Destocker> result = new ArrayList<>();
         for (Destocker s : allStk) {
-            long d = s.getDateDestockage().getTime();
+            long d = s.getDateDestockage().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             Produit p = s.getProductId();
             if (p == null) {
                 continue;
@@ -3003,10 +3004,11 @@ productloop:
         return result;
     }
 
-    public static List<Recquisition> findRequisitionForProduit(List<Recquisition> allStk, String prod, long d1, long d2) {
+    public static List<Recquisition> findRequisitionForProduit(List<Recquisition> allStk, String prod, long d1,
+            long d2) {
         List<Recquisition> result = new ArrayList<>();
         for (Recquisition s : allStk) {
-            long d = s.getDate().getTime();
+            long d = s.getDate().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             Produit p = s.getProductId();
             if (p == null) {
                 continue;
@@ -3060,7 +3062,8 @@ productloop:
         return result;
     }
 
-    public static List<LigneVente> findLigneVenteForProduit(List<Vente> allStk, List<LigneVente> allv, String prod, String region) {
+    public static List<LigneVente> findLigneVenteForProduit(List<Vente> allStk, List<LigneVente> allv, String prod,
+            String region) {
         List<LigneVente> result = new ArrayList<>();
         List<LigneVente> result0 = new ArrayList<>();
         List<Vente> lventes = getVenteForRegion(allStk, region);
@@ -3193,7 +3196,7 @@ productloop:
         double total = (sommeCash + sommeDt);
         System.out.println("cash = " + sommeCash + " dette = " + sommeDt);
 
-        //cash
+        // cash
         Vente cash = new Vente();
         cash.setUid((int) (Math.random() * 10000000));
         cash.setClientId(vente.getClientId());
@@ -3306,11 +3309,12 @@ productloop:
         return (usd + (cdf / taux));
     }
 
-    public static List<LigneVente> findLigneVenteForProduit(List<Vente> lvts, List<LigneVente> allStk, String prod, long d1, long d2) {
+    public static List<LigneVente> findLigneVenteForProduit(List<Vente> lvts, List<LigneVente> allStk, String prod,
+            long d1, long d2) {
         List<LigneVente> result = new ArrayList<>();
         for (LigneVente s : allStk) {
             Vente v = getVente(lvts, s.getReference().getUid());
-            long d = v.getDateVente().getTime();
+            long d = v.getDateVente().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             Produit p = s.getProductId();
             if (p == null) {
                 continue;
@@ -3374,10 +3378,10 @@ productloop:
             File file = new File(path + "/ksf-inv" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Inventaire global");
             int rowid = 0;
-            //les entetes des colones
+            // les entetes des colones
             HSSFRow row0 = feuil.createRow(rowid);
             Cell codebar = row0.createCell(0);
             codebar.setCellValue("CODEBAR");
@@ -3414,8 +3418,8 @@ productloop:
                 Cell stock_alerte1 = row0.createCell(5);
                 stock_alerte1.setCellValue(ii.getStockAlerte());
                 Cell dexpir = row0.createCell(6);
-                Date dexp = ii.getLastStocker().getDateExpir();
-                dexpir.setCellValue(dexp == null ? "Non perissable" : Constants.DATE_HEURE_FORMAT.format(dexp));
+                LocalDate dexp = ii.getLastStocker().getDateExpir();
+                dexpir.setCellValue(dexp == null ? "Non perissable" : dexp.toString());
                 Cell localisation = row0.createCell(7);
                 localisation.setCellValue(ii.getLastStocker().getLocalisation());
             }
@@ -3435,10 +3439,10 @@ productloop:
             File file = new File(path + "/ksf-inv" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Inventaire global");
             int rowid = 0;
-            //les entetes des colones
+            // les entetes des colones
             HSSFRow row0 = feuil.createRow(rowid);
             Cell codebar = row0.createCell(0);
             codebar.setCellValue("DATE");
@@ -3457,7 +3461,7 @@ productloop:
             for (Recquisition ii : lisinvent) {
                 row0 = feuil.createRow(++rowid);
                 Cell codebar1 = row0.createCell(0);
-                codebar1.setCellValue(Constants.USER_READABLE_FORMAT.format(ii.getDate()));
+                codebar1.setCellValue(ii.getDate());
                 Cell ref = row0.createCell(1);
                 ref.setCellValue(ii.getReference());
                 Cell nom_prod = row0.createCell(2);
@@ -3471,8 +3475,8 @@ productloop:
                 Cell quant_out = row0.createCell(4);
                 quant_out.setCellValue(ii.getStockAlert() + " " + ii.getMesureId().getDescription());
                 Cell dexpir = row0.createCell(5);
-                Date dexp = ii.getDateExpiry();
-                dexpir.setCellValue(dexp == null ? "Non perissable" : Constants.DATE_HEURE_FORMAT.format(dexp));
+                LocalDate dexp = ii.getDateExpiry();
+                dexpir.setCellValue(dexp == null ? "Non perissable" : dexp.toString());
                 Cell localisation = row0.createCell(6);
                 localisation.setCellValue(ii.getObservation());
             }
@@ -3485,55 +3489,233 @@ productloop:
         return null;
     }
 
-    public static File exportXlsTransactions(List<Transaction> transaction) {
+    public static File exportXlsTransactions(List<Transaction> transaction, CompteTresor account, double balanceUsd,
+            double balanceCdf) {
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
             File file = new File(path + "/ksf-Tresoreries" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Tresorerie");
             int rowid = 0;
-            //les entetes des colones
-            HSSFRow row0 = feuil.createRow(rowid);
-            Cell codebar = row0.createCell(0);
-            codebar.setCellValue("DATE");
-            Cell nom_produit = row0.createCell(1);
-            nom_produit.setCellValue("LIBELLE");
-            Cell quantite_entree = row0.createCell(2);
-            quantite_entree.setCellValue("DEBIT USD");
-            Cell quantite_sortie = row0.createCell(3);
-            quantite_sortie.setCellValue("DEBIT CDF");
-            Cell stock_alerte = row0.createCell(4);
-            stock_alerte.setCellValue("CREDIT USD");
-            Cell date_expir = row0.createCell(5);
-            date_expir.setCellValue("CREDIT CDF");
-            Cell soldeUsd = row0.createCell(6);
-            soldeUsd.setCellValue("SOLDE USD");
-            Cell soldeCdf = row0.createCell(7);
-            soldeCdf.setCellValue("SOLDE CDF");
+
+            // Account Info Header
+            HSSFRow headerRow1 = feuil.createRow(rowid++);
+            Cell accountLabel = headerRow1.createCell(0);
+            accountLabel.setCellValue("COMPTE TRESOR:");
+            Cell accountVal = headerRow1.createCell(1);
+            accountVal.setCellValue(account != null ? (account.getIntitule() + " - " + account.getBankName()) : "-");
+
+            HSSFRow headerRow2 = feuil.createRow(rowid++);
+            Cell numLabel = headerRow2.createCell(0);
+            numLabel.setCellValue("NUMERO:");
+            Cell numVal = headerRow2.createCell(1);
+            numVal.setCellValue(account != null ? account.getNumeroCompte() : "-");
+
+            HSSFRow headerRow3 = feuil.createRow(rowid++);
+            Cell balUsdLabel = headerRow3.createCell(0);
+            balUsdLabel.setCellValue("SOLDE USD:");
+            Cell balUsdVal = headerRow3.createCell(1);
+            balUsdVal.setCellValue(balanceUsd);
+
+            HSSFRow headerRow4 = feuil.createRow(rowid++);
+            Cell balCdfLabel = headerRow4.createCell(0);
+            balCdfLabel.setCellValue("SOLDE CDF:");
+            Cell balCdfVal = headerRow4.createCell(1);
+            balCdfVal.setCellValue(balanceCdf);
+
+            rowid++; // Spacer
+
+            // Column Headers
+            HSSFRow rowHeaders = feuil.createRow(rowid++);
+            rowHeaders.createCell(0).setCellValue("DATE");
+            rowHeaders.createCell(1).setCellValue("REFERENCE");
+            rowHeaders.createCell(2).setCellValue("REGION");
+            rowHeaders.createCell(3).setCellValue("LIBELLE");
+            rowHeaders.createCell(4).setCellValue("DEBIT USD");
+            rowHeaders.createCell(5).setCellValue("DEBIT CDF");
+            rowHeaders.createCell(6).setCellValue("CREDIT USD");
+            rowHeaders.createCell(7).setCellValue("CREDIT CDF");
+            rowHeaders.createCell(8).setCellValue("SOLDE USD");
+            rowHeaders.createCell(9).setCellValue("SOLDE CDF");
+
+            double totalDebitUsd = 0, totalDebitCdf = 0, totalCreditUsd = 0, totalCreditCdf = 0;
+
             for (Transaction ii : transaction) {
-                row0 = feuil.createRow(++rowid);
-                Cell codebar1 = row0.createCell(0);
-                codebar1.setCellValue(Constants.USER_READABLE_FORMAT.format(ii.getDate()));
-                Cell ref = row0.createCell(1);
-                ref.setCellValue(ii.getLibelle());
-                Cell nom_prod = row0.createCell(2);
-                nom_prod.setCellValue(ii.getDebit_usd());
-                Cell quant_in = row0.createCell(3);
-                quant_in.setCellValue(ii.getDebit_cdf());
-                Cell quant_out = row0.createCell(4);
-                quant_out.setCellValue(ii.getCredit_usd());
-                Cell dexpir = row0.createCell(5);
-                dexpir.setCellValue(ii.getCredit_cdf());
-                Cell susd = row0.createCell(6);
-                susd.setCellValue(ii.getSolde_usd());
-                Cell scdf = row0.createCell(7);
-                scdf.setCellValue(ii.getSolde_cdf());
+                HSSFRow row = feuil.createRow(rowid++);
+                row.createCell(0).setCellValue(ii.getDate().toLocalDate().toString());
+                row.createCell(1).setCellValue(ii.getReference());
+                row.createCell(2).setCellValue(ii.getRegion());
+                row.createCell(3).setCellValue(ii.getLibelle());
+                row.createCell(4).setCellValue(ii.getDebit_usd());
+                row.createCell(5).setCellValue(ii.getDebit_cdf());
+                row.createCell(6).setCellValue(ii.getCredit_usd());
+                row.createCell(7).setCellValue(ii.getCredit_cdf());
+                row.createCell(8).setCellValue(ii.getSolde_usd());
+                row.createCell(9).setCellValue(ii.getSolde_cdf());
+
+                totalDebitUsd += ii.getDebit_usd();
+                totalDebitCdf += ii.getDebit_cdf();
+                totalCreditUsd += ii.getCredit_usd();
+                totalCreditCdf += ii.getCredit_cdf();
             }
+
+            // Totals Row
+            HSSFRow totalsRow = feuil.createRow(rowid++);
+            totalsRow.createCell(3).setCellValue("TOTAL:");
+            totalsRow.createCell(4).setCellValue(totalDebitUsd);
+            totalsRow.createCell(5).setCellValue(totalDebitCdf);
+            totalsRow.createCell(6).setCellValue(totalCreditUsd);
+            totalsRow.createCell(7).setCellValue(totalCreditCdf);
+
+            for (int i = 0; i < 10; i++) {
+                feuil.autoSizeColumn(i);
+            }
+
             hsswb.write(fos);
             fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsDepensesRealisees(List<data.DepenseAgregate> depensesRealisees) {
+        FileOutputStream fos = null;
+        try {
+            String path = MainUI.cPath("/Media/reports");
+            File file = new File(
+                    path + "/ksf-depenses_realisees_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            fos = new FileOutputStream(file);
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            Font headerFont = workbook.createFont();
+            headerFont.setColor(IndexedColors.DARK_BLUE.index);
+            headerFont.setBold(true);
+
+            XSSFSheet feuil = workbook.createSheet("Dépenses Réalisées");
+            feuil.setColumnWidth(1, 25 * 300);
+            feuil.setColumnWidth(2, 25 * 300);
+
+            CellStyle headerCellStyle = feuil.getWorkbook().createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.SKY_BLUE.index);
+            headerCellStyle.setFillPattern(FillPatternType.DIAMONDS);
+            headerCellStyle.setFont(headerFont);
+
+            int rowid = 0;
+            XSSFRow row0 = feuil.createRow(rowid++);
+
+            XSSFCell dateT = row0.createCell(0);
+            dateT.setCellStyle(headerCellStyle);
+            dateT.setCellValue("DATE");
+
+            XSSFCell ref = row0.createCell(1);
+            ref.setCellStyle(headerCellStyle);
+            ref.setCellValue("IMPUTATION");
+
+            XSSFCell cat = row0.createCell(2);
+            cat.setCellStyle(headerCellStyle);
+            cat.setCellValue("NOM DE LA DEPENSE");
+
+            XSSFCell usd = row0.createCell(3);
+            usd.setCellStyle(headerCellStyle);
+            usd.setCellValue("MONTANT USD");
+
+            XSSFCell cdf = row0.createCell(4);
+            cdf.setCellStyle(headerCellStyle);
+            cdf.setCellValue("MONTANT CDF");
+
+            double sumCdf = 0, sumUsd = 0;
+            for (data.DepenseAgregate dep : depensesRealisees) {
+                row0 = feuil.createRow(rowid++);
+                row0.createCell(0).setCellValue(
+                        Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(dep.getDate())));
+                row0.createCell(1).setCellValue(dep.getImputation());
+                row0.createCell(2).setCellValue(dep.getDepenseId() != null ? dep.getDepenseId().getNomDepense() : "");
+                row0.createCell(3).setCellValue(dep.getMontantUsd());
+                row0.createCell(4).setCellValue(dep.getMontantCdf() == null ? 0.0 : dep.getMontantCdf());
+
+                sumUsd += dep.getMontantUsd();
+                sumCdf += (dep.getMontantCdf() == null ? 0.0 : dep.getMontantCdf());
+            }
+
+            row0 = feuil.createRow(rowid++);
+            row0.createCell(2).setCellValue("TOTAL");
+            row0.createCell(3).setCellValue(sumUsd);
+            row0.createCell(4).setCellValue(sumCdf);
+
+            workbook.write(fos);
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+        return null;
+    }
+
+    public static File exportXlsAgregatedDepenses(Map<String, double[]> aggregatedData) {
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-DepensesAgregees" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            try (Workbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+                Sheet sheet = workbook.createSheet("Depenses Agregees");
+                CellStyle headerCellStyle = workbook.createCellStyle();
+                headerCellStyle.setFillForegroundColor(
+                        new XSSFColor(new java.awt.Color(0x44, 0xce, 0xf5), new DefaultIndexedColorMap()));
+                headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerCellStyle.setFont(headerFont);
+
+                Row header = sheet.createRow(0);
+                String[] columns = { "CATEGORIE DE DEPENSE", "TOTAL USD", "TOTAL CDF" };
+                for (int i = 0; i < columns.length; i++) {
+                    Cell cell = header.createCell(i);
+                    cell.setCellValue(columns[i]);
+                    cell.setCellStyle(headerCellStyle);
+                }
+
+                int rowid = 1;
+                double totalUsd = 0d;
+                double totalCdf = 0d;
+                List<Map.Entry<String, double[]>> entries = new ArrayList<>(aggregatedData.entrySet());
+                entries.sort(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
+                for (Map.Entry<String, double[]> entry : entries) {
+                    double[] values = entry.getValue() == null ? new double[] { 0d, 0d } : entry.getValue();
+                    Row row = sheet.createRow(rowid++);
+                    row.createCell(0).setCellValue(entry.getKey());
+                    row.createCell(1).setCellValue(values[0]);
+                    row.createCell(2).setCellValue(values[1]);
+                    totalUsd += values[0];
+                    totalCdf += values[1];
+                }
+
+                Row totalRow = sheet.createRow(rowid);
+                Cell label = totalRow.createCell(0);
+                label.setCellValue("TOTAL");
+                label.setCellStyle(headerCellStyle);
+                Cell usd = totalRow.createCell(1);
+                usd.setCellValue(totalUsd);
+                usd.setCellStyle(headerCellStyle);
+                Cell cdf = totalRow.createCell(2);
+                cdf.setCellValue(totalCdf);
+                cdf.setCellStyle(headerCellStyle);
+
+                for (int i = 0; i < columns.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+                workbook.write(fos);
+            }
             return file;
         } catch (Exception e) {
             e.printStackTrace();
@@ -3544,7 +3726,8 @@ productloop:
     public static List<Livraison> searchLivraison(List<Livraison> livraisons, String critere) {
         List<Livraison> result = new ArrayList<>();
         for (Livraison livr : livraisons) {
-            String value = (Constants.DATE_HEURE_FORMAT.format(new Date()) + " " + livr.getLibelle() + " " + livr.getNumPiece() + " "
+            String value = (Constants.DATE_HEURE_FORMAT.format(new Date()) + " " + livr.getLibelle() + " "
+                    + livr.getNumPiece() + " "
                     + "" + livr.getObservation() + " " + livr.getReference()
                     + " " + livr.getFournId().getNomFourn() + " " + livr.getFournId().getPhone());
             if (value.toUpperCase().contains(critere.toUpperCase())) {
@@ -3561,10 +3744,10 @@ productloop:
             File file = new File(path + "/ksf-Livraisons" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Livraison");
             int rowid = 0;
-            //les entetes des colones
+            // les entetes des colones
             HSSFRow row0 = feuil.createRow(rowid);
             Cell codebar = row0.createCell(0);
             codebar.setCellValue("DATE");
@@ -3674,16 +3857,6 @@ productloop:
         return null;
     }
 
-    public static List<Traisorerie> filterTransactionByDate(List<Traisorerie> lt, Date d1, Date d2) {
-        List<Traisorerie> result = new ArrayList<>();
-        for (Traisorerie t : lt) {
-            if (isDateBetween(d1, d2, t.getDate())) {
-                result.add(t);
-            }
-        }
-        return result;
-    }
-
     public static double sumify(List<Traisorerie> listr, double taux) {
         double result = 0;
         for (Traisorerie tr : listr) {
@@ -3693,87 +3866,105 @@ productloop:
     }
 
     public static File exportXlsSales(List<TreeItem<SaleItem>> listSales) {
-        FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-ventes_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
-            fos = new FileOutputStream(file);
-            HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
-            HSSFSheet feuil = hsswb.createSheet("ventes");
-            int rowid = 0;
-            //les entetes des colones
-            HSSFRow row0 = feuil.createRow(rowid);
-            Cell codebar = row0.createCell(0);
-            codebar.setCellValue("Date");
-            Cell nom_produit = row0.createCell(1);
-            nom_produit.setCellValue("Factures");
-            Cell quantite_entree = row0.createCell(2);
-            quantite_entree.setCellValue("Nombre d'article");
-            Cell quantite_sortie = row0.createCell(3);
-            quantite_sortie.setCellValue("Cash USD");
-            Cell quantite_restant = row0.createCell(4);
-            quantite_restant.setCellValue("Cash CDF");
-            Cell stock_alerte = row0.createCell(5);
-            stock_alerte.setCellValue("Dette");
-            Cell date_expir = row0.createCell(6);
-            date_expir.setCellValue("Echeance");
-            Cell localistion = row0.createCell(7);
-            localistion.setCellValue("Client");
-            double totusd = 0, totcdf = 0;
-            int r = 1;
-            for (TreeItem<SaleItem> tis : listSales) {
-                SaleItem ii = tis.getValue();
-                row0 = feuil.createRow(r);
+            File file = new File(path + "/ksf-ventes_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            try (Workbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+                Sheet sheet = workbook.createSheet("ventes");
+                CellStyle headerCellStyle = workbook.createCellStyle();
+                headerCellStyle.setFillForegroundColor(
+                        new XSSFColor(new java.awt.Color(0x44, 0xce, 0xf5), new DefaultIndexedColorMap()));
+                headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerCellStyle.setFont(headerFont);
 
-                Date d = ii.getDate();
-                Cell date = row0.createCell(0);
-                date.setCellValue(d == null ? "" : Constants.USER_READABLE_FORMAT.format(d));
-                Cell factures = row0.createCell(1);
-                factures.setCellValue(ii.getFacture());
-                Cell stot = row0.createCell(2);
-                stot.setCellValue("SOUS TOTAUX : ");
-                Cell sumd = row0.createCell(3);
-                sumd.setCellValue(ii.getSaleAmountUsd());
-                Cell sumf = row0.createCell(4);
-                sumf.setCellValue(ii.getSaleAmountCdf());
-                totusd += ii.getSaleAmountUsd();
-                totcdf += ii.getSaleAmountCdf();
-                r++;
-                row0 = feuil.createRow(r);
-                List<TreeItem<SaleItem>> ltise = tis.getChildren();
-//                List<SaleItem> lsi = getSaleItemWithDate(listSales, (d == null ? "" : Constants.USER_READABLE_FORMAT.format(d)));
-                for (TreeItem<SaleItem> psi : ltise) {
-                    SaleItem si = psi.getValue();
-                    Cell date1 = row0.createCell(0);
-                    date1.setCellValue(Constants.DATE_HEURE_FORMAT.format(si.getDate()));
-                    Cell nbill = row0.createCell(1);
-                    nbill.setCellValue(si.getFacture());
-                    Cell nart = row0.createCell(2);
-                    nart.setCellValue(psi.getChildren().size() + " articles");
-                    Cell cashusd = row0.createCell(3);
-                    cashusd.setCellValue(si.getSaleAmountUsd());
-                    Cell cashcdf = row0.createCell(4);
-                    cashcdf.setCellValue(si.getSaleAmountCdf());
-                    Cell dette = row0.createCell(5);
-                    dette.setCellValue(si.getSaleAmountCredit());
-                    Cell echeance = row0.createCell(6);
-                    echeance.setCellValue(si.getDateEcheance() == null ? "" : Constants.USER_READABLE_FORMAT.format(si.getDateEcheance()));
-                    Cell clt = row0.createCell(7);
-                    clt.setCellValue(si.getClient().getPhone());
-                    r++;
-                    row0 = feuil.createRow(r);
+                Row header = sheet.createRow(0);
+                String[] columns = { "Date", "Factures", "Details/Nombre d'articles", "Cash USD", "Cash CDF", "Dette",
+                        "Echeance", "Client" };
+                for (int i = 0; i < columns.length; i++) {
+                    Cell cell = header.createCell(i);
+                    cell.setCellValue(columns[i]);
+                    cell.setCellStyle(headerCellStyle);
                 }
+
+                double totusd = 0, totcdf = 0;
+                int r = 1;
+                for (TreeItem<SaleItem> dayNode : listSales) {
+                    if (dayNode == null || dayNode.getValue() == null) {
+                        continue;
+                    }
+                    SaleItem day = dayNode.getValue();
+                    Row dayRow = sheet.createRow(r++);
+                    dayRow.createCell(0)
+                            .setCellValue(day.getDateDeVente() == null ? "" : day.getDateDeVente().toString());
+                    dayRow.createCell(1).setCellValue(day.getFacture() == null ? "" : day.getFacture());
+                    dayRow.createCell(2).setCellValue("SOUS TOTAUX : ");
+                    dayRow.createCell(3).setCellValue(day.getSaleAmountUsd());
+                    dayRow.createCell(4).setCellValue(day.getSaleAmountCdf());
+                    dayRow.createCell(5).setCellValue(day.getSaleAmountCredit());
+                    totusd += day.getSaleAmountUsd();
+                    totcdf += day.getSaleAmountCdf();
+
+                    if (!dayNode.isExpanded()) {
+                        continue;
+                    }
+                    for (TreeItem<SaleItem> saleNode : dayNode.getChildren()) {
+                        if (saleNode == null || saleNode.getValue() == null) {
+                            continue;
+                        }
+                        SaleItem sale = saleNode.getValue();
+                        Row saleRow = sheet.createRow(r++);
+                        saleRow.createCell(0).setCellValue(sale.getDateHeureVente() == null ? ""
+                                : Constants.DATE_HEURE_USER_READABLE_FORMAT.format(sale.getDateHeureVente()));
+                        saleRow.createCell(1).setCellValue(sale.getFacture() == null ? "" : sale.getFacture());
+                        saleRow.createCell(2).setCellValue(sale.getProduitName() == null ? "" : sale.getProduitName());
+                        saleRow.createCell(3).setCellValue(sale.getSaleAmountUsd());
+                        saleRow.createCell(4).setCellValue(sale.getSaleAmountCdf());
+                        saleRow.createCell(5).setCellValue(sale.getSaleAmountCredit());
+                        saleRow.createCell(6)
+                                .setCellValue(sale.getDatEcheance() == null ? "" : sale.getDatEcheance().toString());
+                        saleRow.createCell(7).setCellValue(
+                                (sale.getClient() != null && sale.getClient().getPhone() != null)
+                                        ? sale.getClient().getPhone()
+                                        : "");
+
+                        if (!saleNode.isExpanded()) {
+                            continue;
+                        }
+                        for (TreeItem<SaleItem> lineNode : saleNode.getChildren()) {
+                            if (lineNode == null || lineNode.getValue() == null) {
+                                continue;
+                            }
+                            SaleItem line = lineNode.getValue();
+                            Row lineRow = sheet.createRow(r++);
+                            lineRow.createCell(2).setCellValue(
+                                    line.getQuantite() + " " + (line.getMesure() == null ? "" : line.getMesure()) + " "
+                                            + (line.getProduitName() == null ? "" : line.getProduitName()));
+                            lineRow.createCell(3).setCellValue(line.getSaleAmountUsd());
+                            lineRow.createCell(4).setCellValue(line.getSaleAmountCdf());
+                            lineRow.createCell(1).setCellValue(line.getFacture() == null ? "" : line.getFacture());
+                        }
+                    }
+                }
+
+                Row totalRow = sheet.createRow(r);
+                Cell totalLabel = totalRow.createCell(0);
+                totalLabel.setCellValue("TOTAUX");
+                totalLabel.setCellStyle(headerCellStyle);
+                Cell totalUsd = totalRow.createCell(3);
+                totalUsd.setCellValue(totusd);
+                totalUsd.setCellStyle(headerCellStyle);
+                Cell totalCdf = totalRow.createCell(4);
+                totalCdf.setCellValue(totcdf);
+                totalCdf.setCellStyle(headerCellStyle);
+
+                for (int i = 0; i < columns.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+                workbook.write(fos);
             }
-            row0 = feuil.createRow(++r);
-            Cell conc1 = row0.createCell(0);
-            conc1.setCellValue("TOTAUX ");
-            Cell conc2 = row0.createCell(3);
-            conc2.setCellValue(totusd);
-            Cell conc4 = row0.createCell(4);
-            conc4.setCellValue(totcdf);
-            hsswb.write(fos);
-            fos.close();
             return file;
         } catch (Exception e) {
             e.printStackTrace();
@@ -3786,10 +3977,11 @@ productloop:
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-Rapport_" + criteria.replace(" ", "-") + "_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            File file = new File(path + "/ksf-Rapport_" + criteria.replace(" ", "-") + "_"
+                    + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet(criteria + "-" + time);
             int rowid = 0;
             int col = 1;
@@ -3797,7 +3989,7 @@ productloop:
             double charge = 0;
             List<String> absices = mergeAbsices(itemss, time);
             for (List<ChartItem> elements : itemss) {
-                //headers
+                // headers
                 if (elements.isEmpty()) {
                     continue;
                 }
@@ -3907,65 +4099,73 @@ productloop:
         return null;
     }
 
-    public static File exportXlsSalePerProductReports(List<VenteReporter> items) {
+    public static File exportXlsSalePerProductReports(List<SaleReport> items, Periode periode) {
 
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-Rapport_sales_products_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            File file = new File(
+                    path + "/ksf-Rapport_sales_products_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Sales");
             int rowid = 0;
-            double sum = 0;
+            double sum = 0, ben = 0, cv = 0;
+            HSSFRow row_1 = feuil.createRow(rowid);
+            row_1.createCell(0).setCellValue("Rapport de " + periode.getComment() + "/" + periode.getRegion() + ""
+                    + " allant du " + periode.getDateDebut().toString()
+                    + " au " + periode.getDateFin().toString());
+            row_1.createCell(2).setCellValue("Fait a " + periode.getRegion() + ", le " + LocalDate.now());
+            rowid += 2;
             HSSFRow row0 = feuil.createRow(rowid);
             Cell date = row0.createCell(0);
-            date.setCellValue("Date");
+            date.setCellValue("Codebar");
             Cell produit = row0.createCell(1);
             produit.setCellValue("Product");
             Cell q = row0.createCell(2);
-            q.setCellValue("Quantity");
+            q.setCellValue("Quatite");
             Cell u = row0.createCell(3);
-            u.setCellValue("Unit");
-            Cell montant = row0.createCell(4);
-            montant.setCellValue("Amount");
-            Cell percent = row0.createCell(5);
-            percent.setCellValue("Percentage");
-            for (VenteReporter item : items) {
-                //headers
+            u.setCellValue("Unite");
+            Cell ventes = row0.createCell(4);
+            ventes.setCellValue("Ventes");
+            Cell cout = row0.createCell(5);
+            cout.setCellValue("Cout-Achat");
+            Cell marge = row0.createCell(6);
+            marge.setCellValue("Marge");
+            Cell montant1 = row0.createCell(7);
+            montant1.setCellValue("Pourcentage");
+
+            for (SaleReport item : items) {
+                // headers
                 rowid++;
                 row0 = feuil.createRow(rowid);
-                Cell date1 = row0.createCell(0);
-                date1.setCellValue(Constants.DATE_ONLY_FORMAT.format(item.getDate()));
-                Cell produit1 = row0.createCell(1);
-                produit1.setCellValue(item.getProduit());
-
-                Mesure m = item.getMesure();
-                double qu = (item.getQuantite() / m.getQuantContenu());
-                double w = BigDecimal.valueOf(qu).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
-                Cell q1 = row0.createCell(2);
-                q1.setCellValue(w);
-                Cell u1 = row0.createCell(3);
-                u1.setCellValue(m.getDescription());
-                Cell montant1 = row0.createCell(4);
-                double mon = item.getChiffre();
-                montant1.setCellValue(mon);
-                Cell percent1 = row0.createCell(5);
-                double pr = mon / item.getSommeTotal();
+                row0.createCell(0).setCellValue(item.codebar());
+                row0.createCell(1).setCellValue(item.produit());
+                row0.createCell(2).setCellValue(item.quantite());
+                row0.createCell(3).setCellValue(item.unite());
+                row0.createCell(4).setCellValue(item.vente());
+                row0.createCell(5).setCellValue(item.coutAchat());
+                row0.createCell(6).setCellValue(item.marge());
+                double pr = item.percentMarge();
                 double perc = BigDecimal.valueOf(pr).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
-                percent1.setCellValue((perc * 100) + "%");
-                sum += item.getChiffre();
+                row0.createCell(7).setCellValue((perc) + "%");
+                sum += item.vente();
+                ben += item.marge();
+                cv += item.coutAchat();
             }
+            rowid++;
             rowid++;
             row0 = feuil.createRow(rowid);
             Cell date1 = row0.createCell(0);
-            date1.setCellValue("TOTAL USD");
+            date1.setCellValue("TOTAUX");
 
             Cell produit1 = row0.createCell(1);
             produit1.setCellValue(" - ");
-            Cell montant1 = row0.createCell(2);
-            montant1.setCellValue(sum);
+            row0.createCell(4).setCellValue(sum);
+            row0.createCell(5).setCellValue(cv);
+            row0.createCell(6).setCellValue(ben);
+            row0.createCell(7).setCellValue("100%");
             hsswb.write(fos);
             fos.close();
             return file;
@@ -3975,15 +4175,16 @@ productloop:
         return null;
     }
 
-    public static File exportXlsSalePerCategory(List<VenteReporter> items) {
+    public static File exportXlsSalePerCategory(List<SaleReport> items) {
 
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-Rapport_sales_per_Category_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            File file = new File(path + "/ksf-Rapport_sales_per_Category_"
+                    + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Sales");
             int rowid = 0;
             double sum = 0;
@@ -3994,22 +4195,20 @@ productloop:
             montant.setCellValue("Amount");
             Cell percent = row0.createCell(2);
             percent.setCellValue("Percentage");
-            for (VenteReporter item : items) {
-                //headers
+            for (SaleReport item : items) {
+                // headers
                 rowid++;
                 row0 = feuil.createRow(rowid);
                 Cell date1 = row0.createCell(0);
-                Category cat = item.getCategory();
-                date1.setCellValue(cat.getDescritption());
-
+                date1.setCellValue(item.category());
                 Cell montant1 = row0.createCell(1);
-                double mon = item.getChiffre();
+                double mon = item.vente();
                 montant1.setCellValue(mon);
                 Cell percent1 = row0.createCell(2);
-                double pr = mon / item.getSommeTotal();
+                double pr = mon / items.stream().mapToDouble(s -> s.vente()).sum();
                 double perc = BigDecimal.valueOf((pr * 100)).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
                 percent1.setCellValue(perc + "%");
-                sum += item.getChiffre();
+                sum += item.vente();
             }
             rowid++;
             row0 = feuil.createRow(rowid);
@@ -4034,10 +4233,11 @@ productloop:
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-Rapport_sales_per_Client_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            File file = new File(
+                    path + "/ksf-Rapport_sales_per_Client_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
             fos = new FileOutputStream(file);
             HSSFWorkbook hsswb = new HSSFWorkbook();
-            //creation de la feuil
+            // creation de la feuil
             HSSFSheet feuil = hsswb.createSheet("Sales");
             int rowid = 0;
             double sum = 0;
@@ -4053,7 +4253,7 @@ productloop:
             Cell percent = row0.createCell(4);
             percent.setCellValue("Percentage");
             for (VenteReporter item : items) {
-                //headers
+                // headers
                 rowid++;
                 row0 = feuil.createRow(rowid);
                 Cell date1 = row0.createCell(0);
@@ -4063,8 +4263,9 @@ productloop:
                 produit1.setCellValue(c.getNomClient());
                 String typecli = c.getTypeClient().equals("#0") ? bundle.getString("consumer")
                         : c.getTypeClient().equals("#1") ? bundle.getString("wholesaler")
-                        : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
-                        : c.getTypeClient().equals("#3") ? bundle.getString("subscriber") : bundle.getString("consumer");
+                                : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
+                                        : c.getTypeClient().equals("#3") ? bundle.getString("subscriber")
+                                                : bundle.getString("consumer");
                 Cell q1 = row0.createCell(2);
                 q1.setCellValue(typecli);
                 Cell montant1 = row0.createCell(3);
@@ -4151,7 +4352,11 @@ productloop:
     public static List<Traisorerie> collectPaidDebt(List<Traisorerie> lt) {
         List<Traisorerie> result = new ArrayList<>();
         for (Traisorerie t : lt) {
-            if (t.getLibelle().startsWith("Recouvrement dette ")) {
+            String libelle = t.getLibelle();
+            if (libelle == null) {
+                continue;
+            }
+            if (libelle.startsWith("Recouvrement dette ")) {
                 result.add(t);
             }
         }
@@ -4234,7 +4439,7 @@ productloop:
                     List<Traisorerie> lpy = getPayment(lts, v.getReference());
                     double paid = sumUp(lpy, false, taux);
                     double reste = v.getMontantDette() - paid;
-                    item.setDate(v.getDateVente());
+                    item.setDate(v.getDateVente().toLocalDate());
                     item.setFacture(v.getReference());
                     item.setMontantDette(v.getMontantDette());
                     item.setMontantPaye(paid);
@@ -4264,44 +4469,32 @@ productloop:
             if (out != null) {
                 outputs.add(out);
             } else {
-                try {
-                    ChartItem ci = new ChartItem();
-                    ci.setAbsices(date);
-                    ci.setAmmount(0);
-                    ci.setDate(Constants.DATE_HEURE_FORMAT.parse(date));
-                    ci.setSerieName("Depenses");
-                    outputs.add(ci);
-                } catch (ParseException ex) {
-                    Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
-                }
+                ChartItem ci = new ChartItem();
+                ci.setAbsices(date);
+                ci.setAmmount(0);
+                ci.setDate(LocalDate.parse(date));
+                ci.setSerieName("Depenses");
+                outputs.add(ci);
             }
             if (in != null) {
                 inputs.add(in);
             } else {
-                try {
-                    ChartItem ci = new ChartItem();
-                    ci.setAbsices(date);
-                    ci.setAmmount(0);
-                    ci.setDate(Constants.DATE_HEURE_FORMAT.parse(date));
-                    ci.setSerieName("Ventes");
-                    inputs.add(ci);
-                } catch (ParseException ex) {
-                    Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
-                }
+                ChartItem ci = new ChartItem();
+                ci.setAbsices(date);
+                ci.setAmmount(0);
+                ci.setDate(LocalDate.parse(date));
+                ci.setSerieName("Ventes");
+                inputs.add(ci);
             }
             if (dif != null) {
                 diff.add(dif);
             } else {
-                try {
-                    ChartItem ci = new ChartItem();
-                    ci.setAbsices(date);
-                    ci.setAmmount(0);
-                    ci.setDate(Constants.DATE_HEURE_FORMAT.parse(date));
-                    ci.setSerieName("Marge");
-                    diff.add(ci);
-                } catch (ParseException ex) {
-                    Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
-                }
+                ChartItem ci = new ChartItem();
+                ci.setAbsices(date);
+                ci.setAmmount(0);
+                ci.setDate(LocalDate.parse(date));
+                ci.setSerieName("Marge");
+                diff.add(ci);
             }
         }
         result.add(outputs);
@@ -4454,18 +4647,18 @@ productloop:
         return sum;
     }
 
-    public static List<SaleItem> getSaleItemWithDate(List<SaleItem> sales, String date) {
-        List<SaleItem> rst = new ArrayList<>();
-        for (SaleItem s : sales) {
-            String d = Constants.DATE_HEURE_FORMAT.format(s.getDate());
-            date = date.replace("00:00:00", "");
-            if (d.toUpperCase().startsWith(date)) {
-                rst.add(s);
-            }
-        }
-        return rst;
-    }
-
+    // public static List<SaleItem> getSaleItemWithDate(List<SaleItem> sales, String
+    // date) {
+    // List<SaleItem> rst = new ArrayList<>();
+    // for (SaleItem s : sales) {
+    // String d = Constants.DATE_HEURE_FORMAT.format(s.getDate());
+    // date = date.replace("00:00:00", "");
+    // if (d.toUpperCase().startsWith(date)) {
+    // rst.add(s);
+    // }
+    // }
+    // return rst;
+    // }
     public static void installTooltip(Node node, String title) {
         Tooltip thome = new Tooltip();
         thome.setText(title);
@@ -4475,7 +4668,8 @@ productloop:
         Tooltip.install(node, thome);
     }
 
-    public static File exportXlsInventoryMagasin(HashMap<String, String> bundleData, List<InventoryMagasin> lisinvent) {
+    public static File exportXlsInventoryMagasin(HashMap<String, String> bundleData, List<InventoryMagasin> lisinvent,
+            String dev) {
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/inventories");
@@ -4490,7 +4684,7 @@ productloop:
             headertitle.setColor(IndexedColors.SKY_BLUE.index);
             headertitle.setBold(true);
 
-            //creation de la feuil
+            // creation de la feuil
             XSSFSheet feuil = workbook.createSheet("Inventaire magasin");
             feuil.setColumnWidth(1, 25 * 400);
 
@@ -4504,7 +4698,7 @@ productloop:
             headerCellStyle.setFillPattern(FillPatternType.DIAMONDS);
             headerCellStyle.setFont(headerFont);
             int rowid = 0;
-            //les entetes des colones
+            // les entetes des colones
             Format df = new SimpleDateFormat("dd/MM/yyyy");
             String leo = df.format(new Date());
             XSSFRow row0 = feuil.createRow(rowid++);
@@ -4532,7 +4726,7 @@ productloop:
             enttop.setCellValue("Operateur : " + bundleData.get("operateur"));
             row0 = feuil.createRow(rowid++);
             XSSFCell enttdev = row0.createCell(10);
-            enttdev.setCellValue("Devise : USD ");
+            enttdev.setCellValue("Devise : " + dev);
 
             row0 = feuil.createRow(rowid += 2);
             XSSFCell enttvalue = row0.createCell(10);
@@ -4553,7 +4747,7 @@ productloop:
             is.close();
             XSSFCreationHelper helper = workbook.getCreationHelper();
             Drawing drawing = feuil.createDrawingPatriarch();
-            //add a picture shape
+            // add a picture shape
             XSSFClientAnchor anchor = helper.createClientAnchor();
             anchor.setCol1(0);
             anchor.setRow1(0);
@@ -4617,7 +4811,10 @@ productloop:
             XSSFCell prixdevente = row0.createCell(16);
             prixdevente.setCellStyle(headerCellStyle);
             prixdevente.setCellValue("PRIX-VENTE");
-            XSSFCell multibatch = row0.createCell(17);
+            XSSFCell devise = row0.createCell(17);
+            devise.setCellStyle(headerCellStyle);
+            devise.setCellValue("DEVISE");
+            XSSFCell multibatch = row0.createCell(18);
             multibatch.setCellStyle(headerCellStyle);
             multibatch.setCellValue("MULTI-LOT");
             for (InventoryMagasin ii : lisinvent) {
@@ -4654,14 +4851,185 @@ productloop:
                 XSSFCell loc = row0.createCell(14);
                 loc.setCellValue(ii.getLocalisation());
                 XSSFCell dexpir = row0.createCell(15);
-                Date dexp = ii.getExpiry();
-                dexpir.setCellValue(dexp == null ? null : dexp);
+                LocalDate dexp = ii.getExpiry();
+                dexpir.setCellValue(dexp == null ? "" : dexp.toString());
                 XSSFCell vprice = row0.createCell(16);
                 vprice.setCellValue(ii.getPrixDeVente());
-                XSSFCell vmultibatch = row0.createCell(17);
+                XSSFCell devisevalue = row0.createCell(17);
+                devisevalue.setCellValue(ii.getDevise());
+                XSSFCell vmultibatch = row0.createCell(18);
                 vmultibatch.setCellValue("NON");
             }
             enttvaluen.setCellValue(somme);
+            workbook.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private static String getLocation(String idpro) {
+        List<Stocker> loc = StockerDelegate.findDescSortedByDateStock(idpro);
+        if (loc.isEmpty()) {
+            return null;
+        }
+        return loc.get(0).getLocalisation();
+    }
+
+    public static File exportXlsPhysicalInventory(HashMap<String, String> bundleData, List<ComptageItem> lisinvent,
+            String dev) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/inventories");
+            File file = new File(path + "/ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            fos = new FileOutputStream(file);
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            Font headerFont = workbook.createFont();
+            headerFont.setColor(IndexedColors.DARK_BLUE.index);
+            headerFont.setBold(true);
+
+            Font headertitle = workbook.createFont();
+            headertitle.setColor(IndexedColors.SKY_BLUE.index);
+            headertitle.setBold(true);
+
+            // creation de la feuil
+            XSSFSheet feuil = workbook.createSheet("Inventaire magasin");
+            feuil.setColumnWidth(1, 25 * 400);
+
+            CellStyle headerCelltitle = feuil.getWorkbook().createCellStyle();
+            headerCelltitle.setFont(headertitle);
+
+            CellStyle headerCellStyle = feuil.getWorkbook().createCellStyle();
+            // fill foreground color ...
+            headerCellStyle.setFillForegroundColor(IndexedColors.SKY_BLUE.index);
+            // and solid fill pattern produces solid grey cell fill
+            headerCellStyle.setFillPattern(FillPatternType.DIAMONDS);
+            headerCellStyle.setFont(headerFont);
+            int rowid = 0;
+            // les entetes des colones
+            ComptageItem ci = lisinvent.getFirst();
+            Format df = new SimpleDateFormat("dd/MM/yyyy");
+            String leo = df.format(new Date());
+            XSSFRow row0 = feuil.createRow(rowid++);
+
+            XSSFCell enttx = row0.createCell(1);
+            enttx.setCellValue(bundleData.get("entrep"));
+
+            XSSFCell enttdate = row0.createCell(10);
+            enttdate.setCellValue("Fait le : " + leo);
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttrcm = row0.createCell(1);
+            enttrcm.setCellValue(bundleData.get("rccm"));
+
+            XSSFCell entdebut = row0.createCell(8);
+            entdebut.setCellValue("Debut : " + ci.getDebutInventair().toString());
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttreg = row0.createCell(1);
+            enttreg.setCellValue(bundleData.get("region"));
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttop = row0.createCell(8);
+            enttop.setCellValue("Operateur : " + bundleData.get("operateur"));
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttdev = row0.createCell(8);
+            enttdev.setCellValue("Devise : " + dev);
+
+            row0 = feuil.createRow(rowid += 2);
+            XSSFCell enttvalue = row0.createCell(8);
+            enttvalue.setCellValue("Valeur : ");
+            XSSFCell enttvaluen = row0.createCell(9);
+
+            String entrep = bundleData.get("eUid");
+            File f = FileUtils.pointFile(entrep + ".png");
+            InputStream is;
+            if (!f.exists()) {
+                is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                f = FileUtils.streamTofile(is);
+            }
+            is = new FileInputStream(f);
+
+            byte[] bytes = IOUtils.toByteArray(is);
+            int pictureIdx = workbook.addPicture(bytes, Workbook.PICTURE_TYPE_PNG);
+            is.close();
+            XSSFCreationHelper helper = workbook.getCreationHelper();
+            Drawing drawing = feuil.createDrawingPatriarch();
+            // add a picture shape
+            XSSFClientAnchor anchor = helper.createClientAnchor();
+            anchor.setCol1(0);
+            anchor.setRow1(0);
+            Picture pict = drawing.createPicture(anchor, pictureIdx);
+            pict.resize();
+            row0 = feuil.createRow(rowid += 2);
+            XSSFCell enttitle = row0.createCell(5);
+
+            enttitle.setCellValue("INVENTAIRE DE STOCK DU POINT DE VENTE ");
+            enttitle.setCellStyle(headerCelltitle);
+            row0 = feuil.createRow(rowid += 2);
+
+            XSSFCell codebar = row0.createCell(0);
+            codebar.setCellStyle(headerCellStyle);
+            codebar.setCellValue("CODE");
+            XSSFCell nom_produit = row0.createCell(1);
+            nom_produit.setCellStyle(headerCellStyle);
+            nom_produit.setCellValue("PRODUIT");
+            XSSFCell marque = row0.createCell(2);
+            marque.setCellStyle(headerCellStyle);
+            marque.setCellValue("MARQUE");
+            XSSFCell modele = row0.createCell(3);
+            modele.setCellStyle(headerCellStyle);
+            modele.setCellValue("MODELE/FORME");
+            XSSFCell taille = row0.createCell(4);
+            taille.setCellStyle(headerCellStyle);
+            taille.setCellValue("COCENTRATION/TAILLE");
+            XSSFCell lot = row0.createCell(5);
+            lot.setCellStyle(headerCellStyle);
+            lot.setCellValue("LOT");
+            XSSFCell mesure = row0.createCell(6);
+            mesure.setCellStyle(headerCellStyle);
+            mesure.setCellValue("QUANTITE");
+            XSSFCell entree = row0.createCell(7);
+            entree.setCellStyle(headerCellStyle);
+            entree.setCellValue("MESURE");
+            XSSFCell pau_usd = row0.createCell(8);
+            pau_usd.setCellStyle(headerCellStyle);
+            pau_usd.setCellValue("P.A. UNIT");
+            XSSFCell valeur_total = row0.createCell(9);
+            valeur_total.setCellStyle(headerCellStyle);
+            valeur_total.setCellValue("VALEUR STOCK");
+            XSSFCell devise = row0.createCell(10);
+            devise.setCellStyle(headerCellStyle);
+            devise.setCellValue("DEVISE");
+            XSSFCell local = row0.createCell(11);
+            local.setCellStyle(headerCellStyle);
+            local.setCellValue("LOCALISATION");
+            XSSFCell date_expir = row0.createCell(12);
+            date_expir.setCellStyle(headerCellStyle);
+            date_expir.setCellValue("DATE EXP.");
+
+            for (ComptageItem ii : lisinvent) {
+                row0 = feuil.createRow(++rowid);
+                String localisation = getLocation(ii.getProduit().getUid());
+                row0.createCell(0).setCellValue(ii.getProduit().getCodebar());
+                row0.createCell(1).setCellValue(ii.getProduit().getNomProduit());
+                row0.createCell(2).setCellValue(ii.getProduit().getMarque());
+                row0.createCell(3).setCellValue(ii.getProduit().getModele());
+                row0.createCell(4)
+                        .setCellValue((ii.getProduit().getTaille() == null ? "" : ii.getProduit().getTaille()));
+                row0.createCell(5).setCellValue(ii.getNumlot());
+                row0.createCell(6).setCellValue(ii.getQuantite());
+                row0.createCell(7).setCellValue(ii.getMesure().getDescription());
+                row0.createCell(8).setCellValue(ii.getCoutAchat());
+                row0.createCell(9).setCellValue(ii.getCoutTotal());
+                row0.createCell(10).setCellValue(dev);
+                row0.createCell(11).setCellValue(localisation);
+                row0.createCell(12).setCellValue(ii.getDateExpiration());
+            }
+            enttvaluen.setCellValue(lisinvent.stream().mapToDouble(c -> c.getCoutTotal()).sum());
             workbook.write(fos);
             fos.close();
             return file;
@@ -4684,7 +5052,9 @@ productloop:
             doc.add(new Paragraph("______________"));
             doc.setTextAlignment(TextAlignment.LEFT);
             doc.add(new Paragraph("Codebar : " + p.getCodebar()));
-            doc.add(new Paragraph("Produit  : " + p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + (p.getTaille() == null ? "" : p.getTaille()) + " " + (p.getCouleur() == null ? "" : p.getCouleur())));
+            doc.add(new Paragraph("Produit  : " + p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
+                    + (p.getTaille() == null ? "" : p.getTaille()) + " "
+                    + (p.getCouleur() == null ? "" : p.getCouleur())));
             doc.add(new Paragraph("Mesure en " + m.getDescription() + " et devise en USD "));
             Table table = new Table(12);
             table.setFontSize(13);
@@ -4769,7 +5139,8 @@ productloop:
                 data12.add(new Paragraph(f.getDestination() == null ? "" : f.getDestination()));
                 table.addCell(data12);
                 row++;
-                System.out.println("E = " + f.getQuantiteEntree() + " S = " + f.getQuantiteSortie() + " a " + f.getCoutUnitaireSortie() + " R =" + f.getQuantiteRestant());
+                System.out.println("E = " + f.getQuantiteEntree() + " S = " + f.getQuantiteSortie() + " a "
+                        + f.getCoutUnitaireSortie() + " R =" + f.getQuantiteRestant());
             }
             doc.add(table);
             doc.close();
@@ -4783,7 +5154,8 @@ productloop:
     public static File exportPDFicheDebiteurs(List<DebtItem> datas) {
         try {
             String path = MainUI.cPath("/Media/autres");
-            File file = new File(path + "/ksf-fiche-recouvrement_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
+            File file = new File(
+                    path + "/ksf-fiche-recouvrement_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
             PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
             Document doc = new Document(pdfDoc, PageSize.A4.rotate());
             doc.setFontSize(18);
@@ -4859,6 +5231,47 @@ productloop:
         return null;
     }
 
+    public static File exportPDFRecouvrementClient(String numeroRecu, LocalDateTime datePaiement, String client,
+            String referenceDette,
+            String compte, double montantUsd, double montantCdf, double soldeRestantUsd, String observation) {
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-recu-recouvrement_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
+            PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
+            Document doc = new Document(pdfDoc, PageSize.A4);
+            doc.setFontSize(16);
+            doc.setBold();
+            doc.setTextAlignment(TextAlignment.CENTER);
+            doc.add(new Paragraph("RECU DE REGLEMENT CLIENT"));
+            doc.add(new Paragraph("________________________________"));
+            doc.setTextAlignment(TextAlignment.LEFT);
+            doc.setFontSize(11);
+            doc.setBold();
+            doc.add(new Paragraph("Numero recu : " + (numeroRecu == null ? "-" : numeroRecu)));
+            doc.add(new Paragraph("Date : " + (datePaiement == null ? "-" : datePaiement.toString())));
+            doc.add(new Paragraph("Client : " + (client == null ? "-" : client)));
+            doc.add(new Paragraph("Reference dette : " + (referenceDette == null ? "-" : referenceDette)));
+            doc.add(new Paragraph("Compte de reception : " + (compte == null ? "-" : compte)));
+            doc.add(new Paragraph(
+                    "Montant recu (USD) : " + BigDecimal.valueOf(montantUsd).setScale(2, RoundingMode.HALF_EVEN)));
+            doc.add(new Paragraph(
+                    "Montant recu (CDF) : " + BigDecimal.valueOf(montantCdf).setScale(2, RoundingMode.HALF_EVEN)));
+            doc.add(new Paragraph("Solde restant (USD) : "
+                    + BigDecimal.valueOf(soldeRestantUsd).setScale(2, RoundingMode.HALF_EVEN)));
+            doc.add(new Paragraph(
+                    "Observation : " + (observation == null || observation.isBlank() ? "-" : observation)));
+            doc.add(new Paragraph(""));
+            doc.add(new Paragraph("Signature caisse : ___________________________"));
+            doc.add(new Paragraph("Signature client : ___________________________"));
+            doc.close();
+            return file;
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
+
     private static List<FicheItem> merge(List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld, Produit p) {
         List<FicheItem> result = new ArrayList<>();
         List<Stocker> calc = new ArrayList<>();
@@ -4869,15 +5282,15 @@ productloop:
             double q = s.getQuantite() * m.getQuantContenu();
             FicheItem fi = new FicheItem();
             fi.setLibelles(s.getLibelle());
-            fi.setDate(s.getDateStocker());
+            fi.setDate(Constants.Datetime.toUtilDate(s.getDateStocker().toLocalDate()));
             fi.setMesure(m);
             fi.setPrixUnitEntree(s.getCoutAchat() / m.getQuantContenu());
             fi.setQuantiteEntree(q);
             fi.setCoutTotalEntree(((s.getCoutAchat() / m.getQuantContenu()) * q));
             fi.setUidRef(s.getUid());
             fi.setUidProduit(p.getUid());
-//            cump = getCump(lmzr, m, calc, p);
-//            fi.setCoutUnitRestant(cump);
+            // cump = getCump(lmzr, m, calc, p);
+            // fi.setCoutUnitRestant(cump);
             result.add(fi);
         }
 
@@ -4886,7 +5299,7 @@ productloop:
             double q = d.getQuantite() * m.getQuantContenu();
             FicheItem fi = new FicheItem();
             fi.setCoutUnitaireSortie(d.getCoutAchat() / m.getQuantContenu());
-            fi.setDate(d.getDateDestockage());
+            fi.setDate(Constants.Datetime.toUtilDate(d.getDateDestockage().toLocalDate()));
             fi.setMesure(m);
             fi.setLibelles(d.getLibelle());
             fi.setQuantiteSortie(q);
@@ -4920,7 +5333,8 @@ productloop:
         return r;
     }
 
-    public static List<FicheItem> findFicheDeStock(Mesure m, List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld, Produit p) {
+    public static List<FicheItem> findFicheDeStock(Mesure m, List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld,
+            Produit p) {
         List<FicheItem> result = new ArrayList<>();
         List<FicheItem> fii = calculerFicheDeStock(lmzr, ls, ld, p);
 
@@ -4932,19 +5346,20 @@ productloop:
             double qr = fi.getQuantiteRestant() / (m == null ? 1 : m.getQuantContenu());
             double cumpr = fi.getCoutUnitRestant() * (m == null ? 1 : m.getQuantContenu());
             double ctr = cumpr * qr;
-            fi.setCoutUnitaireSortie(BigDecimal.valueOf(cump).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setPrixUnitEntree(BigDecimal.valueOf(pue).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteEntree(BigDecimal.valueOf(qe).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteSortie(BigDecimal.valueOf(qs).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteRestant(BigDecimal.valueOf(qr).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setCoutUnitRestant(BigDecimal.valueOf(cumpr).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setCoutTotalRestant(BigDecimal.valueOf(ctr).setScale(3, RoundingMode.HALF_UP).doubleValue());
+            fi.setCoutUnitaireSortie(BigDecimal.valueOf(cump).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setPrixUnitEntree(BigDecimal.valueOf(pue).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteEntree(BigDecimal.valueOf(qe).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteSortie(BigDecimal.valueOf(qs).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteRestant(BigDecimal.valueOf(qr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutUnitRestant(BigDecimal.valueOf(cumpr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutTotalRestant(BigDecimal.valueOf(ctr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
             result.add(fi);
         }
         return result;
     }
 
-    public static List<FicheItem> findFicheDeStock(Mesure m, List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld, Produit p, long debut, long fin) {
+    public static List<FicheItem> findFicheDeStock(Mesure m, List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld,
+            Produit p, long debut, long fin) {
         List<FicheItem> result = new ArrayList<>();
         System.err.println(" debut " + debut + " fin " + fin);
         List<FicheItem> fii = calculerFicheDeStock(lmzr, ls, ld, p);
@@ -4956,13 +5371,13 @@ productloop:
             double qr = fi.getQuantiteRestant() / (m == null ? 1 : m.getQuantContenu());
             double cumpr = fi.getCoutUnitRestant() * (m == null ? 1 : m.getQuantContenu());
             double ctr = cumpr * qr;
-            fi.setCoutUnitaireSortie(BigDecimal.valueOf(cump).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setPrixUnitEntree(BigDecimal.valueOf(pue).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteEntree(BigDecimal.valueOf(qe).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteSortie(BigDecimal.valueOf(qs).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setQuantiteRestant(BigDecimal.valueOf(qr).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setCoutUnitRestant(BigDecimal.valueOf(cumpr).setScale(3, RoundingMode.HALF_UP).doubleValue());
-            fi.setCoutTotalRestant(BigDecimal.valueOf(ctr).setScale(3, RoundingMode.HALF_UP).doubleValue());
+            fi.setCoutUnitaireSortie(BigDecimal.valueOf(cump).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setPrixUnitEntree(BigDecimal.valueOf(pue).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteEntree(BigDecimal.valueOf(qe).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteSortie(BigDecimal.valueOf(qs).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteRestant(BigDecimal.valueOf(qr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutUnitRestant(BigDecimal.valueOf(cumpr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutTotalRestant(BigDecimal.valueOf(ctr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
             long date = fi.getDate().getTime();
             if (date >= debut && date <= fin) {
                 result.add(fi);
@@ -4971,7 +5386,8 @@ productloop:
         return result;
     }
 
-    private static List<FicheItem> calculerFicheDeStock(List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld, Produit p) {
+    private static List<FicheItem> calculerFicheDeStock(List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld,
+            Produit p) {
         List<FicheItem> fis = merge(lmzr, ls, ld, p);
         List<FicheItem> result = new ArrayList<>();
         fis = sort(fis);
@@ -5034,11 +5450,11 @@ productloop:
 
                 fos = new FileOutputStream(file);
                 HSSFWorkbook hsswb = new HSSFWorkbook();
-                //creation de la feuil
+                // creation de la feuil
                 HSSFSheet feuil = hsswb.createSheet("Relevee");
                 int rowid = 0;
                 double som = 0;
-                //les entetes des colones
+                // les entetes des colones
                 HSSFRow row0 = feuil.createRow(rowid);
                 Cell codebar = row0.createCell(0);
                 codebar.setCellValue("DATES");
@@ -5171,6 +5587,929 @@ productloop:
             }
         }
         return null;
+    }
+
+    public static File exportPerimees(HashMap<String, String> bundleData, ObservableList<Peremption> items, String dev,
+            LocalDate d1, LocalDate d2, int dec_flag) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/inventories");
+            File file = new File(
+                    path + "/ksf-inv_expiree_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            fos = new FileOutputStream(file);
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            Font headerFont = workbook.createFont();
+            headerFont.setColor(IndexedColors.DARK_BLUE.index);
+            headerFont.setBold(true);
+
+            Font headertitle = workbook.createFont();
+            headertitle.setColor(IndexedColors.SKY_BLUE.index);
+            headertitle.setBold(true);
+
+            // creation de la feuil
+            XSSFSheet feuil = workbook.createSheet("Inventaire des expirees ");
+            feuil.setColumnWidth(1, 25 * 400);
+
+            CellStyle headerCelltitle = feuil.getWorkbook().createCellStyle();
+            headerCelltitle.setFont(headertitle);
+
+            CellStyle headerCellStyle = feuil.getWorkbook().createCellStyle();
+            // fill foreground color ...
+            headerCellStyle.setFillForegroundColor(IndexedColors.SKY_BLUE.index);
+            // and solid fill pattern produces solid grey cell fill
+            headerCellStyle.setFillPattern(FillPatternType.DIAMONDS);
+            headerCellStyle.setFont(headerFont);
+            int rowid = 0;
+            // les entetes des colones
+
+            Format df = new SimpleDateFormat("dd/MM/yyyy");
+            String leo = df.format(new Date());
+            XSSFRow row0 = feuil.createRow(rowid++);
+
+            XSSFCell enttx = row0.createCell(1);
+            enttx.setCellValue(bundleData.get("entrep"));
+
+            XSSFCell enttdate = row0.createCell(10);
+            enttdate.setCellValue("Fait le : " + leo);
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttrcm = row0.createCell(1);
+            enttrcm.setCellValue(bundleData.get("rccm"));
+
+            XSSFCell entdebut = row0.createCell(8);
+            entdebut.setCellValue("Date : " + LocalDate.now());
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttreg = row0.createCell(1);
+            enttreg.setCellValue(bundleData.get("region"));
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttop = row0.createCell(8);
+            enttop.setCellValue("Operateur : " + bundleData.get("operateur"));
+
+            row0 = feuil.createRow(rowid++);
+            XSSFCell enttdev = row0.createCell(8);
+            enttdev.setCellValue("Devise : " + dev);
+
+            row0 = feuil.createRow(rowid += 2);
+            XSSFCell enttvalue = row0.createCell(8);
+            enttvalue.setCellValue("Valeur : ");
+            XSSFCell enttvaluen = row0.createCell(9);
+
+            String entrep = bundleData.get("eUid");
+            File f = FileUtils.pointFile(entrep + ".png");
+            InputStream is;
+            if (!f.exists()) {
+                is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                f = FileUtils.streamTofile(is);
+            }
+            is = new FileInputStream(f);
+
+            byte[] bytes = IOUtils.toByteArray(is);
+            int pictureIdx = workbook.addPicture(bytes, Workbook.PICTURE_TYPE_PNG);
+            is.close();
+            XSSFCreationHelper helper = workbook.getCreationHelper();
+            Drawing drawing = feuil.createDrawingPatriarch();
+            // add a picture shape
+            XSSFClientAnchor anchor = helper.createClientAnchor();
+            anchor.setCol1(0);
+            anchor.setRow1(0);
+            Picture pict = drawing.createPicture(anchor, pictureIdx);
+            pict.resize();
+            row0 = feuil.createRow(rowid += 2);
+            XSSFCell enttitle = row0.createCell(2);
+
+            enttitle.setCellValue(
+                    "INVENTAIRE DE STOCK DES EXPIREES EN PERIODE DE " + d1.toString() + " AU " + d2.toString());
+            enttitle.setCellStyle(headerCelltitle);
+            row0 = feuil.createRow(rowid += 2);
+
+            XSSFCell codebar = row0.createCell(0);
+            codebar.setCellStyle(headerCellStyle);
+            codebar.setCellValue("CODE");
+            XSSFCell nom_produit = row0.createCell(1);
+            nom_produit.setCellStyle(headerCellStyle);
+            nom_produit.setCellValue("PRODUIT");
+            XSSFCell marque = row0.createCell(2);
+            marque.setCellStyle(headerCellStyle);
+            marque.setCellValue("MARQUE");
+            XSSFCell modele = row0.createCell(3);
+            modele.setCellStyle(headerCellStyle);
+            modele.setCellValue("MODELE/FORME");
+            XSSFCell taille = row0.createCell(4);
+            taille.setCellStyle(headerCellStyle);
+            taille.setCellValue("COCENTRATION/TAILLE");
+            XSSFCell lot = row0.createCell(5);
+            lot.setCellStyle(headerCellStyle);
+            lot.setCellValue("LOT");
+            XSSFCell mesure = row0.createCell(6);
+            mesure.setCellStyle(headerCellStyle);
+            mesure.setCellValue("QUANTITE");
+            XSSFCell entree = row0.createCell(7);
+            entree.setCellStyle(headerCellStyle);
+            entree.setCellValue("MESURE");
+            XSSFCell pau_usd = row0.createCell(8);
+            pau_usd.setCellStyle(headerCellStyle);
+            pau_usd.setCellValue("P.A. UNIT");
+            XSSFCell valeur_total = row0.createCell(9);
+            valeur_total.setCellStyle(headerCellStyle);
+            valeur_total.setCellValue("VALEUR STOCK");
+            XSSFCell devise = row0.createCell(10);
+            devise.setCellStyle(headerCellStyle);
+            devise.setCellValue("DEVISE");
+            XSSFCell local = row0.createCell(11);
+            local.setCellStyle(headerCellStyle);
+            local.setCellValue("LOCALISATION");
+            XSSFCell date_expir = row0.createCell(12);
+            date_expir.setCellStyle(headerCellStyle);
+            date_expir.setCellValue("DATE EXP.");
+            XSSFCell decflag = row0.createCell(13);
+            decflag.setCellStyle(headerCellStyle);
+            decflag.setCellValue("DECLASSE");
+
+            for (Peremption ii : items) {
+                row0 = feuil.createRow(++rowid);
+                Produit p = ProduitDelegate.findProduit(ii.getProduitUid());
+                String localisation = getLocation(ii.getProduitUid());
+                row0.createCell(0).setCellValue(p.getCodebar());
+                row0.createCell(1).setCellValue(p.getNomProduit());
+                row0.createCell(2).setCellValue(p.getMarque());
+                row0.createCell(3).setCellValue(p.getModele());
+                row0.createCell(4).setCellValue((p.getTaille() == null ? "" : p.getTaille()));
+                row0.createCell(5).setCellValue(ii.getLot());
+                row0.createCell(6).setCellValue(ii.getQuantite());
+                row0.createCell(7).setCellValue(ii.getMesure());
+                row0.createCell(8).setCellValue(ii.getCoutAchat());
+                row0.createCell(9).setCellValue(ii.getValeur());
+                row0.createCell(10).setCellValue(dev);
+                row0.createCell(11).setCellValue(localisation);
+                row0.createCell(12).setCellValue(ii.getDateExpiry());
+                row0.createCell(13).setCellValue(dec_flag == 1 ? "OUI" : "NON");
+            }
+            enttvaluen.setCellValue(items.stream().mapToDouble(c -> c.getValeur()).sum());
+            workbook.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static HashMap<String, Boolean> checkAccess() {
+        HashMap<String, Boolean> toActivate = new HashMap<>();
+        HashMap<String, List<PermitTo>> hashPerms = new HashMap<>();
+        hashPerms.put(Constants.AGENTS, List.of(PermitTo.CREATE_ENGAGEMENT,
+                PermitTo.UPDATE_ENGAGEMENT, PermitTo.DELETE_ENGAGEMENT));
+        b1: for (Map.Entry<String, List<PermitTo>> entry : hashPerms.entrySet()) {
+            for (PermitTo permitTo : entry.getValue()) {
+                if (PermissionDelegate.hasPermission(permitTo)) {
+                    toActivate.put(entry.getKey(), Boolean.TRUE);
+                    continue b1;
+                }
+            }
+        }
+        return toActivate;
+    }
+
+    public static void exportXlsAmortissement(List<Immobilisation> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        try (Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Tableau d'amortissement");
+
+            String[] columns = { "UID", "Libellé", "Catégorie", "Date Acquisition", "Valeur Origine (USD)",
+                    "Valeur Résiduelle (USD)", "Durée (Mois)", "Dotation Mensuelle (USD)", "Amortissement Cumulé (USD)",
+                    "Valeur Nette (USD)" };
+            Row headerRow = sheet.createRow(0);
+
+            org.apache.poi.ss.usermodel.CellStyle headerCellStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+
+            for (int i = 0; i < columns.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 1;
+            java.time.LocalDate now = java.time.LocalDate.now();
+            for (Immobilisation imm : list) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(imm.getUid());
+                row.createCell(1).setCellValue(imm.getLibelle());
+                row.createCell(2).setCellValue(imm.getCategorie());
+                row.createCell(3)
+                        .setCellValue(imm.getDateAcquisition() != null ? imm.getDateAcquisition().toString() : "");
+                row.createCell(4).setCellValue(imm.getValeurOrigineUsd());
+                row.createCell(5).setCellValue(imm.getValeurResiduelleUsd());
+                row.createCell(6).setCellValue(imm.getDureeAmortissementMois());
+                row.createCell(7).setCellValue(imm.dotationMensuelleUsd());
+                row.createCell(8).setCellValue(imm.amortissementCumulUsd(now));
+                row.createCell(9).setCellValue(imm.valeurNetteUsd(now));
+            }
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Enregistrer le tableau d'amortissement");
+            fileChooser.setInitialFileName("Tableau_Amortissement_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsSuppliersDebt(List<Fournisseur> list) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Dettes Fournisseurs");
+            String[] columns = { "UID", "Nom Fournisseur", "Adresse", "Téléphone", "Dette Totale (USD)" };
+
+            Row headerRow = sheet.createRow(0);
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 1;
+            for (Fournisseur f : list) {
+                double totalDebt = f.getLivraisonList() == null ? 0d
+                        : f.getLivraisonList().stream().mapToDouble(l -> l.getRemained()).sum();
+                if (totalDebt > 0) {
+                    Row row = sheet.createRow(rowNum++);
+                    row.createCell(0).setCellValue(f.getUid());
+                    row.createCell(1).setCellValue(f.getNomFourn());
+                    row.createCell(2).setCellValue(f.getAdresse());
+                    row.createCell(3).setCellValue(f.getPhone());
+                    row.createCell(4).setCellValue(totalDebt);
+                }
+            }
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Exporter les dettes fournisseurs");
+            fileChooser.setInitialFileName("Dettes_Fournisseurs_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsSupplierStatement(Fournisseur f, List<Livraison> debts) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Relevé de Dette - " + f.getNomFourn());
+
+            // Header Info
+            Row r0 = sheet.createRow(0);
+            r0.createCell(0).setCellValue("Fournisseur:");
+            r0.createCell(1).setCellValue(f.getNomFourn());
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("Téléphone:");
+            r1.createCell(1).setCellValue(f.getPhone());
+
+            Row r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue("Date du Relevé:");
+            r2.createCell(1).setCellValue(LocalDate.now().toString());
+
+            String[] columns = { "Date", "Num Pièce", "Libellé", "Montant Facturé (USD)", "Montant Payé (USD)",
+                    "Reste à Payer (USD)" };
+
+            Row headerRow = sheet.createRow(4);
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 5;
+            double totalDebt = 0;
+            for (Livraison l : debts) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(l.getDateLivr() != null ? l.getDateLivr().toString() : "");
+                row.createCell(1).setCellValue(l.getNumPiece());
+                row.createCell(2).setCellValue(l.getLibelle());
+                row.createCell(3).setCellValue(l.getTopay() != null ? l.getTopay() : 0d);
+                row.createCell(4).setCellValue(l.getPayed() != null ? l.getPayed() : 0d);
+                row.createCell(5).setCellValue(l.getRemained() != null ? l.getRemained() : 0d);
+                totalDebt += (l.getRemained() != null ? l.getRemained() : 0d);
+            }
+
+            Row footRow = sheet.createRow(rowNum + 1);
+            Cell footCellLabel = footRow.createCell(4);
+            footCellLabel.setCellValue("TOTAL DETTE:");
+            CellStyle footStyle = workbook.createCellStyle();
+            Font footFont = workbook.createFont();
+            footFont.setBold(true);
+            footStyle.setFont(footFont);
+            footCellLabel.setCellStyle(footStyle);
+
+            Cell footCellVal = footRow.createCell(5);
+            footCellVal.setCellValue(totalDebt);
+            footCellVal.setCellStyle(footStyle);
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Exporter le relevé du fournisseur");
+            fileChooser.setInitialFileName(
+                    "Releve_" + f.getNomFourn().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsExpiredStock(List<utilities.Peremption> list) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Produits Expirés");
+            String[] columns = { "Codebar", "Produit", "Lot", "Localisation", "Région", "Mesure", "Quantité",
+                    "Cout Achat", "Valeur Total", "Date Expiration" };
+
+            Row headerRow = sheet.createRow(0);
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 1;
+            for (utilities.Peremption p : list) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(p.getCodebar());
+                row.createCell(1).setCellValue(p.getProduit());
+                row.createCell(2).setCellValue(p.getLot());
+                row.createCell(3).setCellValue(p.getLocalisation());
+                row.createCell(4).setCellValue(p.getRegion());
+                row.createCell(5).setCellValue(p.getMesure());
+                row.createCell(6).setCellValue(p.getQuantite());
+                row.createCell(7).setCellValue(p.getCoutAchat());
+                row.createCell(8).setCellValue(p.getValeur());
+                row.createCell(9).setCellValue(p.getDateExpiry() != null ? p.getDateExpiry().toString() : "");
+            }
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Exporter les produits expirés");
+            fileChooser.setInitialFileName("Produits_Expirés_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsFinancialStates(data.finance.BilanReport bilan, data.finance.CompteResultatReport cr,
+            double chargesInd, String entrepriseName) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            // Sheet 1: Bilan
+            org.apache.poi.ss.usermodel.Sheet sheet1 = workbook.createSheet("Bilan");
+            String[] bilanCols = { "Rubrique", "Montant (USD)" };
+            Row header1 = sheet1.createRow(0);
+            for (int i = 0; i < bilanCols.length; i++) {
+                header1.createCell(i).setCellValue(bilanCols[i]);
+            }
+
+            int r1 = 1;
+            sheet1.createRow(r1++).createCell(0).setCellValue("ACTIF NON COURANT");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getActifNonCourant());
+            sheet1.createRow(r1++).createCell(0).setCellValue("ACTIF COURANT");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getActifCourant());
+            sheet1.createRow(r1++).createCell(0).setCellValue("TOTAL ACTIF");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getTotalActif());
+            sheet1.createRow(r1++).createCell(0).setCellValue("");
+            sheet1.createRow(r1++).createCell(0).setCellValue("CAPITAUX PROPRES");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getCapitauxPropres());
+            sheet1.createRow(r1++).createCell(0).setCellValue("DETTES (COURANT + NON COURANT)");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getPassifCourant() + bilan.getPassifNonCourant());
+            sheet1.createRow(r1++).createCell(0).setCellValue("TOTAL PASSIF");
+            sheet1.getRow(r1 - 1).createCell(1).setCellValue(bilan.getTotalPassif());
+
+            // Sheet 2: Compte de Résultat
+            org.apache.poi.ss.usermodel.Sheet sheet2 = workbook.createSheet("Compte de Résultat");
+            String[] crCols = { "Poste", "Valeur (USD)" };
+            Row header2 = sheet2.createRow(0);
+            for (int i = 0; i < crCols.length; i++) {
+                header2.createCell(i).setCellValue(crCols[i]);
+            }
+
+            int r2 = 1;
+            sheet2.createRow(r2++).createCell(0).setCellValue("CHIFFRE D'AFFAIRES");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getChiffreAffaires());
+            sheet2.createRow(r2++).createCell(0).setCellValue("COUT DES VENTES");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getCoutDesVentes());
+            sheet2.createRow(r2++).createCell(0).setCellValue("MARGE BRUTE");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getMargeBrute());
+            sheet2.createRow(r2++).createCell(0).setCellValue("DEPENSES OPERATIONNELLES");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getDepensesOperationnelles());
+            sheet2.createRow(r2++).createCell(0).setCellValue("AMORTISSEMENTS");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getAmortissements());
+            sheet2.createRow(r2++).createCell(0).setCellValue("VARIATION DE STOCK");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getVariationStock());
+            sheet2.createRow(r2++).createCell(0).setCellValue("RESULTAT D'EXPLOITATION");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getResultatExploitation());
+            sheet2.createRow(r2++).createCell(0).setCellValue("IMPOTS ESTIMES");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getImpotsEstimes());
+            sheet2.createRow(r2++).createCell(0).setCellValue("RESULTAT NET");
+            sheet2.getRow(r2 - 1).createCell(1).setCellValue(cr.getResultatNet());
+
+            // Sheet 3: Flux de Trésorerie
+            org.apache.poi.ss.usermodel.Sheet sheet3 = workbook.createSheet("Flux de Trésorerie");
+            String[] fluxCols = { "Libellé", "Montant (USD)" };
+            Row header3 = sheet3.createRow(0);
+            for (int i = 0; i < fluxCols.length; i++) {
+                header3.createCell(i).setCellValue(fluxCols[i]);
+            }
+
+            double encaissement = cr.getChiffreAffaires();
+            double decaissement = Math.max(0d, cr.getCoutDesVentes()) + Math.max(0d, cr.getDepensesOperationnelles())
+                    + Math.max(0d, cr.getAmortissements()) + Math.max(0d, chargesInd);
+            double fluxNet = encaissement - decaissement;
+
+            int r3 = 1;
+            sheet3.createRow(r3++).createCell(0).setCellValue("ENCAISSEMENTS");
+            sheet3.getRow(r3 - 1).createCell(1).setCellValue(encaissement);
+            sheet3.createRow(r3++).createCell(0).setCellValue("DECAISSEMENTS");
+            sheet3.getRow(r3 - 1).createCell(1).setCellValue(decaissement);
+            sheet3.createRow(r3++).createCell(0).setCellValue("FLUX NET DE TRESORERIE");
+            sheet3.getRow(r3 - 1).createCell(1).setCellValue(fluxNet);
+
+            for (int i = 0; i < 2; i++) {
+                sheet1.autoSizeColumn(i);
+                sheet2.autoSizeColumn(i);
+                sheet3.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Exporter les états financiers");
+            fileChooser.setInitialFileName(
+                    "etat_financier_" + entrepriseName.replace(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsAttendance(List<Presence> presences, String entrepriseName) {
+        try {
+            Workbook workbook = new XSSFWorkbook();
+            Sheet sheet = workbook.createSheet("Présences Agent");
+
+            String[] columns = { "Date/Heure", "Agent ID", "Nom", "Prénom", "Type", "Région", "Empreinte (Hash)" };
+
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.BLUE.getIndex());
+
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFont(headerFont);
+
+            Row headerRow = sheet.createRow(0);
+
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 1;
+            for (Presence p : presences) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(p.getTimestamp() != null ? p.getTimestamp().toString() : "");
+                row.createCell(1).setCellValue(p.getAgentId());
+                row.createCell(2).setCellValue(p.getAgentNom());
+                row.createCell(3).setCellValue(p.getAgentPrenom());
+                row.createCell(4).setCellValue(p.getTypePresence());
+                row.createCell(5).setCellValue(p.getRegion());
+                row.createCell(6).setCellValue(p.getFingerprintHash());
+            }
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Enregistrer le rapport de présence");
+            fileChooser.setInitialFileName(
+                    "presenceagents_" + entrepriseName.toLowerCase().replaceAll(" ", "_") + ".xlsx");
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
+
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fileOut = new FileOutputStream(file)) {
+                    workbook.write(fileOut);
+                }
+                Desktop.getDesktop().open(file);
+            }
+            workbook.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportXlsClientStatement(Client c, List<Vente> debts) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Relevé de Dette - " + c.getNomClient());
+
+            Row r0 = sheet.createRow(0);
+            r0.createCell(0).setCellValue("Client:");
+            r0.createCell(1).setCellValue(c.getNomClient());
+
+            Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("Téléphone:");
+            r1.createCell(1).setCellValue(c.getPhone());
+
+            Row r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue("Adresse:");
+            r2.createCell(1).setCellValue(c.getAdresse());
+
+            Row r3 = sheet.createRow(3);
+            r3.createCell(0).setCellValue("Date du Relevé:");
+            r3.createCell(1).setCellValue(LocalDate.now().toString());
+
+            String[] columns = { "Date", "Num Facture", "Libellé", "Net à Payer (USD)", "Déjà Payé (USD)",
+                    "Reste (USD)" };
+
+            Row headerRow = sheet.createRow(5);
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+
+            int rowNum = 6;
+            double totalDebt = 0;
+            for (Vente v : debts) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0)
+                        .setCellValue(v.getDateVente() != null ? v.getDateVente().toLocalDate().toString() : "");
+                row.createCell(1).setCellValue(v.getReference());
+                row.createCell(2).setCellValue(v.getLibelle());
+                row.createCell(3).setCellValue(v.getMontantUsd());
+                double payed = v.getMontantUsd() - v.getMontantDette();
+                row.createCell(4).setCellValue(payed);
+                row.createCell(5).setCellValue(v.getMontantDette());
+                totalDebt += v.getMontantDette();
+            }
+
+            Row footRow = sheet.createRow(rowNum + 1);
+            Cell footLabel = footRow.createCell(4);
+            footLabel.setCellValue("TOTAL DETTE:");
+            CellStyle footStyle = workbook.createCellStyle();
+            Font footFont = workbook.createFont();
+            footFont.setBold(true);
+            footStyle.setFont(footFont);
+            footLabel.setCellStyle(footStyle);
+            Cell footVal = footRow.createCell(5);
+            footVal.setCellValue(totalDebt);
+            footVal.setCellStyle(footStyle);
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+            fileChooser.setTitle("Exporter le relevé client");
+            fileChooser.setInitialFileName(
+                    "Releve_" + c.getNomClient().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+            fileChooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
+            File file = fileChooser.showSaveDialog(null);
+            if (file != null) {
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    workbook.write(fos);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static File exportPdfClientStatement(Client c, List<Vente> debts, Entreprise entrep) {
+        try {
+            double taux_dechange = pref.getDouble("taux2change", 2350);
+            String devise_symbole = pref.get("mainCur", "USD");
+            String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File file = new File(path + "/Etat_Dette_Client_" + c.getNomClient().replaceAll(" ", "_") + "_"
+                    + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
+            System.out.println("file = " + file.getAbsolutePath());
+            try (PDDocument document = new PDDocument()) {
+                PDPage fPage = new PDPage(PDRectangle.A4);
+                document.addPage(fPage);
+
+                int pageW = (int) PDRectangle.A4.getWidth();
+                int pageH = (int) PDRectangle.A4.getHeight();
+
+                try (PDPageContentStream contentStream = new PDPageContentStream(document, fPage)) {
+                    PDFUtils pdf = new PDFUtils(document, contentStream);
+
+                    PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                    PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+                    java.awt.Color endeleya = new java.awt.Color(68, 206, 245);
+                    java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+                    // Logo optimization
+                    try {
+                        File flogo = FileUtils.pointFile(entrep.getUid() + ".png");
+                        PDImageXObject logo = null;
+                        if (flogo.exists()) {
+                            logo = PDImageXObject.createFromFile(flogo.getPath(), document);
+                        } else {
+                            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                            if (is != null) {
+                                byte[] bytes = IOUtils.toByteArray(is);
+                                logo = PDImageXObject.createFromByteArray(document, bytes, "logo");
+                            }
+                        }
+                        if (logo != null) {
+                            contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
+                        }
+                    } catch (Exception e) {
+                        // Silent logo failure
+                    }
+                    System.out.println("file apres le try = " + file.getAbsolutePath());
+
+                    pdf.addTextLine("Etat de Dette Client", 25, pageH - 98, hbold, 30, java.awt.Color.DARK_GRAY);
+
+                    contentStream.setStrokingColor(endeleya);
+                    contentStream.setLineWidth(2);
+                    contentStream.moveTo(25, pageH - 120);
+                    contentStream.lineTo(pageW - 25, pageH - 120);
+                    contentStream.stroke();
+
+                    // Business Info
+                    pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
+                    pdf.addTextLine(new String[] {
+                            "Adresse : " + entrep.getAdresse(),
+                            "RCCM : " + entrep.getIdentification(),
+                            entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                            entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
+                    }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
+                    System.out.println("ou est ce qu ca freeze ");
+
+                    // Client Info
+                    pdf.addTextLine("Client : " + c.getNomClient(), 25, pageH - 240, hbold, 14, java.awt.Color.BLACK);
+                    pdf.addTextLine(new String[] {
+                            "Téléphone : " + c.getPhone(),
+                            "Adresse : " + c.getAdresse()
+                    }, 15, 25, pageH - 255, hnormal, 11, java.awt.Color.BLACK);
+
+                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
+                            pageH - 240, hnormal, 11, java.awt.Color.BLACK);
+
+                    // Table Header
+                    int table[] = { 80, 100, 130, 80, 80, 80 };
+                    pdf.addTable(table, 25, 25, pageH - 320);
+                    pdf.setFont(hbold, 10, java.awt.Color.WHITE);
+                    pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+
+                    pdf.addCell("Date", endeleya);
+                    pdf.addCell("N# Facture", endeleya);
+                    pdf.addCell("Libellé", endeleya);
+                    pdf.addCell("Net à Payer", endeleya);
+                    pdf.addCell("Déjà Payé", endeleya);
+                    pdf.addCell("Reste", endeleya);
+
+                    // Table Body
+                    pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                    double totalDebt = 0;
+                    for (Vente v : debts) {
+                        pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                        pdf.addCell(v.getDateVente().toLocalDate().toString(), egray);
+                        pdf.addCell(v.getReference(), egray);
+                        pdf.addCell(v.getLibelle(), egray);
+                        double topay = devise_symbole.equals("USD")
+                                ? (v.getMontantUsd() + (v.getMontantCdf() / taux_dechange))
+                                : ((v.getMontantUsd() * taux_dechange) + v.getMontantCdf());
+                        topay = topay + v.getMontantDette();
+                        pdf.addCell(String.format("%.2f", topay), egray);
+                        double payed = devise_symbole.equals("USD")
+                                ? (v.getMontantUsd() + (v.getMontantCdf() / taux_dechange))
+                                : ((v.getMontantUsd() * taux_dechange) + v.getMontantCdf());
+                        payed = BigDecimal.valueOf(payed)
+                                .setScale(2, BigDecimal.ROUND_HALF_EVEN).doubleValue();
+                        pdf.addCell(String.format("%.2f", payed), egray);
+                        pdf.addCell(String.format("%.2f", v.getMontantDette()), egray);
+                        totalDebt += v.getMontantDette();
+                    }
+
+                    // Summary
+                    pdf.addCell("", null);
+                    pdf.addCell("", null);
+                    pdf.addCell("TOTAL", endeleya);
+                    pdf.addCell("", endeleya);
+                    pdf.addCell("", endeleya);
+                    pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                }
+                document.save(file);
+            }
+            return file;
+        } catch (Exception e) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
+            return null;
+        }
+    }
+
+    public static File exportPdfSupplierStatement(Fournisseur f, List<Livraison> debts, Entreprise entrep) {
+        try {
+            String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File file = new File(path + "/Etat_Dette_Fournisseur_" + f.getNomFourn().replaceAll(" ", "_") + "_"
+                    + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
+
+            try (PDDocument document = new PDDocument()) {
+                PDPage fPage = new PDPage(PDRectangle.A4);
+                document.addPage(fPage);
+
+                int pageW = (int) PDRectangle.A4.getWidth();
+                int pageH = (int) PDRectangle.A4.getHeight();
+
+                try (PDPageContentStream contentStream = new PDPageContentStream(document, fPage)) {
+                    PDFUtils pdf = new PDFUtils(document, contentStream);
+
+                    PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                    PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+                    java.awt.Color endeleya = new java.awt.Color(68, 206, 245);
+                    java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+                    // Logo optimization
+                    try {
+                        File flogo = FileUtils.pointFile(entrep.getUid() + ".png");
+                        PDImageXObject logo = null;
+                        if (flogo.exists()) {
+                            logo = PDImageXObject.createFromFile(flogo.getPath(), document);
+                        } else {
+                            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                            if (is != null) {
+                                byte[] bytes = IOUtils.toByteArray(is);
+                                logo = PDImageXObject.createFromByteArray(document, bytes, "logo");
+                            }
+                        }
+                        if (logo != null) {
+                            contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
+                        }
+                    } catch (Exception e) {
+                        // Silent logo failure
+                    }
+
+                    pdf.addTextLine("Etat de Dette Fournisseur", 25, pageH - 98, hbold, 30, java.awt.Color.DARK_GRAY);
+
+                    contentStream.setStrokingColor(endeleya);
+                    contentStream.setLineWidth(2);
+                    contentStream.moveTo(25, pageH - 120);
+                    contentStream.lineTo(pageW - 25, pageH - 120);
+                    contentStream.stroke();
+
+                    // Business Info
+                    pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
+                    pdf.addTextLine(new String[] {
+                            "Adresse : " + entrep.getAdresse(),
+                            "RCCM : " + entrep.getIdentification(),
+                            entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                            entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
+                    }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
+
+                    // Supplier Info
+                    pdf.addTextLine("Fournisseur : " + f.getNomFourn(), 25, pageH - 240, hbold, 14,
+                            java.awt.Color.BLACK);
+                    pdf.addTextLine(new String[] {
+                            "Téléphone : " + f.getPhone(),
+                            "Adresse : " + f.getAdresse()
+                    }, 15, 25, pageH - 255, hnormal, 11, java.awt.Color.BLACK);
+
+                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
+                            pageH - 240, hnormal, 11, java.awt.Color.BLACK);
+
+                    // Table Header
+                    int table[] = { 80, 100, 130, 80, 80, 80 };
+                    pdf.addTable(table, 25, 25, pageH - 320);
+                    pdf.setFont(hbold, 10, java.awt.Color.WHITE);
+                    pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+
+                    pdf.addCell("Date", endeleya);
+                    pdf.addCell("Num Piece", endeleya);
+                    pdf.addCell("Libellé", endeleya);
+                    pdf.addCell("Facturé", endeleya);
+                    pdf.addCell("Déjà Payé", endeleya);
+                    pdf.addCell("Reste", endeleya);
+
+                    // Table Body
+                    pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                    double totalDebt = 0;
+                    for (Livraison v : debts) {
+                        pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                        pdf.addCell(v.getDateLivr().toString(), egray);
+                        pdf.addCell(v.getNumPiece(), egray);
+                        pdf.addCell(v.getLibelle(), egray);
+                        pdf.addCell(String.format("%.2f", v.getTopay()), egray);
+                        pdf.addCell(String.format("%.2f", v.getPayed()), egray);
+                        pdf.addCell(String.format("%.2f", v.getRemained()), egray);
+                        totalDebt += v.getRemained();
+                    }
+
+                    // Summary
+                    pdf.addCell("", null);
+                    pdf.addCell("", null);
+                    pdf.addCell("TOTAL", endeleya);
+                    pdf.addCell("", endeleya);
+                    pdf.addCell("", endeleya);
+                    pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                }
+                document.save(file);
+            }
+            return file;
+        } catch (Exception e) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
+            return null;
+        }
     }
 
 }

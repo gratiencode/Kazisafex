@@ -4,17 +4,10 @@
  * and open the template in the editor.
  */
 package data;
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.util.Date;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -28,15 +21,12 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
-
- import org.hibernate.annotations.UuidGenerator;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -44,20 +34,20 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "recquisition")
- @XmlRootElement 
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Recquisition.findAll", query = "SELECT DISTINCT  r FROM Recquisition r ORDER BY r.date DESC")
-    , @NamedQuery(name = "Recquisition.findByUid", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.uid = :uid")
-    , @NamedQuery(name = "Recquisition.findByDate", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.date = :date")
-    , @NamedQuery(name = "Recquisition.findByObservation", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.observation = :observation")
-    , @NamedQuery(name = "Recquisition.findByReference", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.reference = :reference")
-    , @NamedQuery(name = "Recquisition.findByQuantite", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.quantite = :quantite")
-    , @NamedQuery(name = "Recquisition.findByCoutAchat", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.coutAchat = :coutAchat")
-    , @NamedQuery(name = "Recquisition.findByRegion", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.region = :region")
-    , @NamedQuery(name = "Recquisition.findByDateExpiry", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.dateExpiry = :dateExpiry")
-    , @NamedQuery(name = "Recquisition.findByStockAlert", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.stockAlert = :stockAlert")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+    @NamedQuery(name = "Recquisition.findAll", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.productId.uid IN (SELECT p.uid FROM Produit p) ORDER BY r.date DESC"),
+    @NamedQuery(name = "Recquisition.findByUid", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.uid = :uid"),
+    @NamedQuery(name = "Recquisition.findByDate", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.date = :date"),
+    @NamedQuery(name = "Recquisition.findByObservation", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.observation = :observation"),
+    @NamedQuery(name = "Recquisition.findByReference", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.reference = :reference"),
+    @NamedQuery(name = "Recquisition.findByQuantite", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.quantite = :quantite"),
+    @NamedQuery(name = "Recquisition.findByCoutAchat", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.coutAchat = :coutAchat"),
+    @NamedQuery(name = "Recquisition.findByRegion", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.region = :region"),
+    @NamedQuery(name = "Recquisition.findByDateExpiry", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.dateExpiry = :dateExpiry"),
+    @NamedQuery(name = "Recquisition.findByStockAlert", query = "SELECT DISTINCT  r FROM Recquisition r WHERE r.stockAlert = :stockAlert")})
+
 public class Recquisition extends BaseModel implements Serializable {
 
     private String observation;
@@ -69,57 +59,54 @@ public class Recquisition extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
-  
     private String uid;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-  
-    @Column(columnDefinition = "TIMESTAMP")
-    private Date date;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd"
-    )
-    @Temporal(TemporalType.DATE)
-    private Date dateExpiry;
+    @Column(name = "date", columnDefinition = "DATETIME")
+    private LocalDateTime date;
+    @JsonFormat(pattern="yyyy-MM-dd")
+    @Column(name="dateexpiry",columnDefinition = "DATE")
+    private LocalDate dateExpiry;
     private Double stockAlert;
-    @OneToMany(mappedBy = "recquisitionId", cascade = {CascadeType.PERSIST,CascadeType.REMOVE})
-    @JsonIgnore
-    @JsonManagedReference
+    @OneToMany(mappedBy = "recquisitionId", cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
+    @JsonBackReference(value = "req-pv")
     private List<PrixDeVente> prixDeVenteList;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Mesure mesureId;
     @JoinColumn(name = "product_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Produit productId;
-    
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Recquisition() {
-        this.type=Tables.RECQUISITION.name();
+        this.type = Tables.RECQUISITION.name();
     }
 
     public Recquisition(String uid) {
         this.uid = uid;
-         this.type=Tables.RECQUISITION.name();
+        this.type = Tables.RECQUISITION.name();
     }
 
     public Recquisition(String uid, double quantite, double coutAchat) {
         this.uid = uid;
         this.quantite = quantite;
         this.coutAchat = coutAchat;
-         this.type=Tables.RECQUISITION.name();
+        this.type = Tables.RECQUISITION.name();
     }
 
     public String getUid() {
@@ -130,14 +117,13 @@ public class Recquisition extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDateTime date) {
         this.date = date;
     }
-
 
     public String getReference() {
         return reference;
@@ -147,7 +133,6 @@ public class Recquisition extends BaseModel implements Serializable {
         this.reference = reference;
     }
 
-
     public double getCoutAchat() {
         return coutAchat;
     }
@@ -156,12 +141,11 @@ public class Recquisition extends BaseModel implements Serializable {
         this.coutAchat = coutAchat;
     }
 
-
-    public Date getDateExpiry() {
+    public LocalDate getDateExpiry() {
         return dateExpiry;
     }
 
-    public void setDateExpiry(Date dateExpiry) {
+    public void setDateExpiry(LocalDate dateExpiry) {
         this.dateExpiry = dateExpiry;
     }
 
@@ -174,8 +158,7 @@ public class Recquisition extends BaseModel implements Serializable {
     }
 
     
-     @JsonbTransient 
-     public List<PrixDeVente> getPrixDeVenteList() {
+    public List<PrixDeVente> getPrixDeVenteList() {
         return prixDeVenteList;
     }
 
@@ -183,8 +166,6 @@ public class Recquisition extends BaseModel implements Serializable {
         this.prixDeVenteList = prixDeVenteList;
     }
 
-   
- 
     public Mesure getMesureId() {
         return mesureId;
     }
@@ -234,7 +215,6 @@ public class Recquisition extends BaseModel implements Serializable {
         this.observation = observation;
     }
 
-
     public double getQuantite() {
         return quantite;
     }
@@ -258,5 +238,17 @@ public class Recquisition extends BaseModel implements Serializable {
     public void setNumlot(String numlot) {
         this.numlot = numlot;
     }
-    
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
+    }
+
 }

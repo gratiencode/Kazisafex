@@ -5,10 +5,14 @@
  */
 package data;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import jakarta.persistence.Column;
 import java.io.Serializable;
-import java.util.Date;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -18,11 +22,11 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -34,25 +38,22 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Stocker.findAll", query = "SELECT DISTINCT  s FROM Stocker s ORDER BY s.dateStocker DESC"),
-    @NamedQuery(name = "Stocker.findByUid", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.uid = :uid"),
-    @NamedQuery(name = "Stocker.findByRegion", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.region = :region"),
-    @NamedQuery(name = "Stocker.findByDateStocker", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.dateStocker = :dateStocker"),
-    @NamedQuery(name = "Stocker.findByCoutAchat", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.coutAchat = :coutAchat"),
-    @NamedQuery(name = "Stocker.findByReduction", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.reduction = :reduction"),
-    @NamedQuery(name = "Stocker.findByDateExpir", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.dateExpir = :dateExpir"),
-    @NamedQuery(name = "Stocker.findByStockAlerte", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.stockAlerte = :stockAlerte"),
-    @NamedQuery(name = "Stocker.findByQuantite", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.quantite = :quantite"),
-    @NamedQuery(name = "Stocker.findByPrixAchatTotal", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.prixAchatTotal = :prixAchatTotal")})
+        @NamedQuery(name = "Stocker.findAll", query = "SELECT DISTINCT  s FROM Stocker s ORDER BY s.dateStocker DESC"),
+        @NamedQuery(name = "Stocker.findByUid", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.uid = :uid"),
+        @NamedQuery(name = "Stocker.findByRegion", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.region = :region"),
+        @NamedQuery(name = "Stocker.findByDateStocker", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.dateStocker = :dateStocker"),
+        @NamedQuery(name = "Stocker.findByCoutAchat", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.coutAchat = :coutAchat"),
+        @NamedQuery(name = "Stocker.findByReduction", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.reduction = :reduction"),
+        @NamedQuery(name = "Stocker.findByDateExpir", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.dateExpir = :dateExpir"),
+        @NamedQuery(name = "Stocker.findByStockAlerte", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.stockAlerte = :stockAlerte"),
+        @NamedQuery(name = "Stocker.findByQuantite", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.quantite = :quantite"),
+        @NamedQuery(name = "Stocker.findByPrixAchatTotal", query = "SELECT DISTINCT  s FROM Stocker s WHERE s.prixAchatTotal = :prixAchatTotal") })
+
 public class Stocker extends BaseModel implements Serializable {
 
     private String region;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateStocker;
+
+    private LocalDateTime dateStocker;
     private double coutAchat;
     private double reduction;
     private String numlot;
@@ -61,29 +62,27 @@ public class Stocker extends BaseModel implements Serializable {
     private String libelle;
     private String localisation;
     private double prixAchatTotal;
+    private double prixVenteEstime = 0.0;
     private String observation;
 
     private static final long serialVersionUID = 1L;
     @Id
-
     private String uid;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd"
-    )
-    @Temporal(TemporalType.DATE)
-    private Date dateExpir;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate dateExpir;
+    @JoinColumn(name = "livraisId_uid", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Livraison livraisId;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Mesure mesureId;
     @JoinColumn(name = "product_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Produit productId;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     @PrePersist
     @PreUpdate
@@ -91,6 +90,11 @@ public class Stocker extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
     }
 
     public Stocker() {
@@ -102,7 +106,8 @@ public class Stocker extends BaseModel implements Serializable {
         this.type = Tables.STOCKER.name();
     }
 
-    public Stocker(String uid, Date dateStocker, double coutAchat, double reduction, double stockAlerte, double quantite, double prixAchatTotal) {
+    public Stocker(String uid, LocalDateTime dateStocker, double coutAchat, double reduction, double stockAlerte,
+            double quantite, double prixAchatTotal) {
         this.uid = uid;
         this.dateStocker = dateStocker;
         this.coutAchat = coutAchat;
@@ -121,11 +126,11 @@ public class Stocker extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Date getDateStocker() {
+    public LocalDateTime getDateStocker() {
         return dateStocker;
     }
 
-    public void setDateStocker(Date dateStocker) {
+    public void setDateStocker(LocalDateTime dateStocker) {
         this.dateStocker = dateStocker;
     }
 
@@ -137,11 +142,11 @@ public class Stocker extends BaseModel implements Serializable {
         this.coutAchat = coutAchat;
     }
 
-    public Date getDateExpir() {
+    public LocalDate getDateExpir() {
         return dateExpir;
     }
 
-    public void setDateExpir(Date dateExpir) {
+    public void setDateExpir(LocalDate dateExpir) {
         this.dateExpir = dateExpir;
     }
 
@@ -159,6 +164,14 @@ public class Stocker extends BaseModel implements Serializable {
 
     public void setPrixAchatTotal(double prixAchatTotal) {
         this.prixAchatTotal = prixAchatTotal;
+    }
+
+    public double getPrixVenteEstime() {
+        return prixVenteEstime;
+    }
+
+    public void setPrixVenteEstime(double prixVenteEstime) {
+        this.prixVenteEstime = prixVenteEstime;
     }
 
     public Livraison getLivraisId() {
@@ -264,6 +277,18 @@ public class Stocker extends BaseModel implements Serializable {
 
     public void setObservation(String observation) {
         this.observation = observation;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
     }
 
 }

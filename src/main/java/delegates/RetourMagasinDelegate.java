@@ -6,9 +6,9 @@
 package delegates;
 
 import IServices.RetourMagasinStorage;
-import static delegates.RetourMagasinDelegate.getRetourMagasinStorage;
 import java.util.List;
 import data.RetourMagasin;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -59,5 +59,13 @@ public class RetourMagasinDelegate {
 
     public static List<RetourMagasin> findByLigneVente(Long uid) {
        return getRetourMagasinStorage().findByLigneVente(uid);
+    }
+
+    public static List<RetourMagasin> findUnSyncedRetourMagasins(long disconnected_at) {
+    return getRetourMagasinStorage().findUnSyncedRetourMagasins(disconnected_at);
+    }
+    
+    public static boolean isExists(String uid,LocalDateTime attime){
+        return getRetourMagasinStorage().isExists(uid, attime);
     }
 }

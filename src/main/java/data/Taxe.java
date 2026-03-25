@@ -3,12 +3,14 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -36,6 +38,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
     , @NamedQuery(name = "Taxe.findByDescription", query = "SELECT DISTINCT  t FROM Taxe t WHERE t.description = :description")
     , @NamedQuery(name = "Taxe.findByTaux", query = "SELECT DISTINCT  t FROM Taxe t WHERE t.taux = :taux")
     , @NamedQuery(name = "Taxe.findByResumee", query = "SELECT DISTINCT  t FROM Taxe t WHERE t.resumee = :resumee")})
+
 public class Taxe extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -46,7 +49,7 @@ public class Taxe extends BaseModel implements Serializable {
     private double taux;
     private String resumee;
     @OneToMany(mappedBy = "taxeId")
-    @JsonManagedReference
+    
     private List<Taxer> taxerList;
     
      
@@ -97,7 +100,8 @@ public class Taxe extends BaseModel implements Serializable {
     }
 
     
-     @JsonbTransient public List<Taxer> getTaxerList() {
+      
+     public List<Taxer> getTaxerList() {
         return taxerList;
     }
 

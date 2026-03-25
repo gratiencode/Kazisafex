@@ -44,7 +44,7 @@ public class RetourDepotEncoder implements Encoder.Text<RetourDepot> {
                 .add("quantite", oper.getQuantite())
                 .add("regionDest", oper.getRegionDest())
                 .add("regionProv", oper.getRegionProv())
-                .add("date", tools.Constants.Datetime.format(oper.getDate()))
+                .add("date", oper.getDate().toString())
                 .add("destockerId", Json.createObjectBuilder().add("uid", oper.getDestockerId().getUid()).build())
                 .add("recquisitionId", Json.createObjectBuilder().add("uid", oper.getRecquisitionId().getUid()).build())
                 .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());

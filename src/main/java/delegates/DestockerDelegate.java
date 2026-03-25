@@ -12,8 +12,9 @@ import data.Destocker;
 import tools.ServiceLocator;
 import tools.Tables;
 import static delegates.DestockerDelegate.getStorage;
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.Set;
+import services.DestockerService;
 
 /**
  *
@@ -63,6 +64,10 @@ public class DestockerDelegate {
     public static List<Destocker> findDescSortedByDate(int offsetd, int intValue) {
         return getStorage().findDescSortedByDate(offsetd,intValue);
     }
+    
+    public static void removeOrphans(){
+        getStorage().removeOrphans();
+    }
 
     public static List<Destocker> findByDateIntervale(LocalDate date1, LocalDate date2) {
          return getStorage().findByDateIntervale(date1,date2);
@@ -111,8 +116,24 @@ public class DestockerDelegate {
     public static double sum(String uid) {
        return getStorage().sum(uid);
     }
+    
+    public static List<Destocker> getDestockers(){
+        return DestockerService.getDestockers();
+    }
 
-    public static Destocker findCustomised(String uid, String numlot, String ref, Date dateStocker) {
+    public static Destocker findCustomised(String uid, String numlot, String ref, LocalDateTime dateStocker) { 
       return getStorage().findCustomised(uid,numlot,ref,dateStocker);
+    }
+
+    public static List<Destocker> findUnSyncedDestockers(long disconnected_at) {
+       return getStorage().findUnSyncedDestockers(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

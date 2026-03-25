@@ -5,11 +5,14 @@
  */
 package data;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import jakarta.persistence.CascadeType;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import jakarta.persistence.Column;
-  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -20,7 +23,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
- import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -29,7 +33,7 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "prix_de_vente")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
     @NamedQuery(name = "PrixDeVente.findAll", query = "SELECT DISTINCT  p FROM PrixDeVente p"),
@@ -40,6 +44,7 @@ import tools.Tables;
     @NamedQuery(name = "PrixDeVente.findByQuantiteInterval", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmin <= :quantiteInterval AND p.qmax >= :quantiteInterval"),
     @NamedQuery(name = "PrixDeVente.findByDevise", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.devise = :devise"),
     @NamedQuery(name = "PrixDeVente.findByPourcentParCunit", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.pourcentParCunit = :pourcentParCunit")})
+
 public class PrixDeVente extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -48,40 +53,42 @@ public class PrixDeVente extends BaseModel implements Serializable {
     private String uid;
     // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
     @Column(name = "q_min")
-    private Double qmin;
+    private double qmin;
     @Column(name = "q_max")
-    private Double qmax;
+    private double qmax;
     @Column(name = "prix_unitaire")
-    private Double prixUnitaire;
-
+    private double prixUnitaire;
     @Column(name = "devise")
     private String devise;
     @Column(name = "pourcent_par_cunit")
     private Double pourcentParCunit;
     @JoinColumn(name = "mesureid_uid", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Mesure mesureId;
     @JoinColumn(name = "recquisition_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Recquisition recquisitionId;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
 
     public PrixDeVente() {
-         this.type=Tables.PRIXDEVENTE.name();
+        this.type = Tables.PRIXDEVENTE.name();
     }
 
     public PrixDeVente(String uid) {
         this.uid = uid;
-        this.type=Tables.PRIXDEVENTE.name();
+        this.type = Tables.PRIXDEVENTE.name();
     }
 
     public String getUid() {
@@ -92,27 +99,27 @@ public class PrixDeVente extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Double getQmin() {
+    public double getQmin() {
         return this.qmin;
     }
 
-    public void setQmin(Double qMin) {
+    public void setQmin(double qMin) {
         this.qmin = qMin;
     }
 
-    public Double getQmax() {
+    public double getQmax() {
         return this.qmax;
     }
 
-    public void setQmax(Double qMax) {
+    public void setQmax(double qMax) {
         this.qmax = qMax;
     }
 
-    public Double getPrixUnitaire() {
+    public double getPrixUnitaire() {
         return prixUnitaire;
     }
 
-    public void setPrixUnitaire(Double prixUnitaire) {
+    public void setPrixUnitaire(double prixUnitaire) {
         this.prixUnitaire = prixUnitaire;
     }
 
@@ -171,6 +178,22 @@ public class PrixDeVente extends BaseModel implements Serializable {
     @Override
     public String toString() {
         return "entities.PrixDeVente[ uid=" + uid + " ]";
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
     }
 
 }

@@ -5,15 +5,16 @@
  */
 package tools;
 
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.UUID;
+
 /**
  *
  * @author eroot
@@ -24,12 +25,23 @@ public class DataId {
         UUID uuid = UUID.randomUUID();//UuidCreator.getTimeBased();
         return uuid.toString().replace("-", "").toLowerCase();
     }
-    
-    public static int generateInt() {
-        return ((int)(Math.random()*1000000000));
+
+    public static int from(LocalDate date) {
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyyMM");
+        if (date == null) {
+            date = LocalDate.now();
+        }
+        String dae = date.format(format);
+        int io = Integer.parseInt(dae);
+        return io;
     }
+
+    public static int generateInt() {
+        return ((int) (Math.random() * (Math.PI * 1001)));
+    }
+
     public static long generateLong() {
-        return ((long)(Math.random()*10000000000000l));
+        return ((long) (Math.random() * 10000000000000l));
     }
 
     public static boolean isConcerned(String uid, int period) {
@@ -45,11 +57,11 @@ public class DataId {
         System.out.println(" Version : " + uuid.version());
         if (uuid.version() == 1) {
             long uuidTimestamp = uuid.getMostSignificantBits();
-            long millisecond=uuidTimestamp / 1000000;
+            long millisecond = uuidTimestamp / 1000000;
             Calendar di = Calendar.getInstance();
             di.setTimeInMillis(millisecond);
-         
-            System.out.println("Timestamp From data: " + uuidTimestamp+" "+new Date(millisecond));
+
+            System.out.println("Timestamp From data: " + uuidTimestamp + " " + new Date(millisecond));
             Instant instant = Instant.ofEpochMilli(millisecond);
             LocalDateTime datetime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
             LocalDate uuidate = datetime.toLocalDate();
@@ -68,5 +80,4 @@ public class DataId {
         return diff <= period;
     }
 
-    
 }

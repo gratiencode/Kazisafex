@@ -44,7 +44,7 @@ public class AretirerEncoder implements Encoder.Text<Aretirer>{
                   .add("payload", oper.getPayload())
                  .add("count", oper.getCount())
                  .add("counter", oper.getCounter())
-                    .add("date", tools.Constants.Datetime.format(oper.getDate()))
+                    .add("date", oper.getDate().toString())
                     .add("clientId", Json.createObjectBuilder().add("uid", oper.getClientId().getUid()).build())
                     .add("ligneVenteId", Json.createObjectBuilder().add("uid", oper.getLigneVenteId().getUid()).build())
                     .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());

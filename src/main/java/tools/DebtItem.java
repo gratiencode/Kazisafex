@@ -5,6 +5,7 @@
  */
 package tools;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.Date;
 
@@ -13,7 +14,7 @@ import java.util.Date;
  * @author eroot
  */
 public class DebtItem implements Comparator<DebtItem> {
-    private Date date;
+    private LocalDate date;
     private String nomClient;
     private String phoneClient;
     private String facture;
@@ -24,7 +25,7 @@ public class DebtItem implements Comparator<DebtItem> {
     public DebtItem() {
     }
 
-    public DebtItem(Date date, String nomClient, String phoneClient, String facture, double montantDette, double montantPaye, double montantRestant) {
+    public DebtItem(LocalDate date, String nomClient, String phoneClient, String facture, double montantDette, double montantPaye, double montantRestant) {
         this.date = date;
         this.nomClient = nomClient;
         this.phoneClient = phoneClient;
@@ -41,11 +42,11 @@ public class DebtItem implements Comparator<DebtItem> {
       return o1.date.compareTo(o2.date);
     }
 
-    public Date getDate() {
+    public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDate date) {
         this.date = date;
     }
 

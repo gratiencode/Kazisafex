@@ -6,6 +6,7 @@
 package services;
 
 import IServices.FactureStorage;
+import data.Category;
 import delegates.MesureDelegate;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -21,7 +22,10 @@ import jakarta.persistence.Query;
 import jakarta.persistence.TemporalType;
 import data.Facture;
 import data.Mesure;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import tools.Constants;
+import tools.Tables;
 import utilities.Relevee;
 
 /**
@@ -30,47 +34,81 @@ import utilities.Relevee;
  */
 public class FactureService implements FactureStorage{
 
-    EntityManager em;
+     
+    
+    @Override
+    public boolean isExists(String uid) {
+        return findFacture(uid)!=null;
+    }
 
     public FactureService() {
-        em=JpaUtil.getEntityManagerFactory().createEntityManager();
     }
 
     @Override
     public Facture createFacture(Facture cat) {
-        EntityTransaction etr = em.getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Facture enregistree");
+            });
+            return cat;
         }
-        em.merge(cat);
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
+        if (!etr.isActive()) {
+            etr.begin(); 
+        }
+        ManagedSessionFactory.getEntityManager().merge(cat);
         etr.commit();
         return cat;
     }
 
     @Override
     public Facture updateFacture(Facture cat) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Facture mise a jour");
+            });
+            return cat;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        em.merge(cat);
+        ManagedSessionFactory.getEntityManager().merge(cat);
         etr.commit();
         return cat;
     }
 
     @Override
     public void deleteFacture(Facture cat) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Facture supprimee");
+            });
+            return;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        em.remove(em.merge(cat));
+        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
     }
 
     @Override
     public Facture findFacture(String catId) {
-         return em.find(Facture.class, catId);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.find(Facture.class, catId));
+        }
+        return ManagedSessionFactory.getEntityManager().find(Facture.class, catId);
     }
     
      @Override
@@ -78,7 +116,12 @@ public class FactureService implements FactureStorage{
        try{
            StringBuilder sb=new StringBuilder();
            sb.append("SELECT COUNT(*) FROM facture");
-           return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+           if (ManagedSessionFactory.isEmbedded()) {
+               return ManagedSessionFactory.executeRead(em -> {
+                   return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+               });
+           }
+           return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
        }catch(NoResultException e){
            return 0L;
        }
@@ -87,7 +130,13 @@ public class FactureService implements FactureStorage{
     @Override
     public List<Facture> findFactures() {
         try{
-            Query query=em.createNamedQuery("Facture.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Facture.findAll");
+                    return query.getResultList();
+                });
+            }
+            Query query=ManagedSessionFactory.getEntityManager().createNamedQuery("Facture.findAll");
             return query.getResultList();
         }catch(NoResultException e){
             return null;
@@ -98,7 +147,15 @@ public class FactureService implements FactureStorage{
     @Override
     public List<Facture> findFactures(int start, int max) {
         try{
-            Query query=em.createNamedQuery("Facture.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Facture.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query=ManagedSessionFactory.getEntityManager().createNamedQuery("Facture.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
@@ -117,7 +174,36 @@ public class FactureService implements FactureStorage{
                 + " AND a.client_organisation_id=o.uid AND l.reference_uid=v.uid AND o.uid = ? AND v.datevente BETWEEN ? AND ?");
 
         try {
-            Query query = em.createNativeQuery(sb.toString());
+            if (ManagedSessionFactory.isEmbedded()) {
+                List<Object[]> objs = ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString());
+                    query.setParameter(1, orgId)
+                            .setParameter(2, d1, TemporalType.TIMESTAMP)
+                            .setParameter(3, d2, TemporalType.TIMESTAMP);
+                    return query.getResultList();
+                });
+                for (Object[] obj : objs) {
+                    Relevee r = new Relevee();
+                    try {
+                        r.setDate(Constants.DATE_HEURE_FORMAT.parse(String.valueOf(obj[0])));
+                    } catch (ParseException ex) {
+                        Logger.getLogger(RepportService.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                    String mid = String.valueOf(obj[10]);
+                    Mesure m = MesureDelegate.findMesure(mid);
+                    r.setMesure(m);
+                    r.setNomClient(String.valueOf(obj[2]));
+                    r.setNomProduit(String.valueOf(obj[3]));
+                    r.setNumeroBon(String.valueOf(obj[1]));
+                    r.setParent(String.valueOf(obj[4]));
+                    r.setPrixunitaire(Double.parseDouble(String.valueOf(obj[6])));
+                    r.setQuantite(Double.parseDouble(String.valueOf(obj[5])));
+                    r.setMontant(Double.parseDouble(String.valueOf(obj[7])));
+                    result.add(r);
+                }
+                return result;
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, orgId)
                     .setParameter(2, d1, TemporalType.TIMESTAMP)
                     .setParameter(3, d2, TemporalType.TIMESTAMP);
@@ -128,7 +214,7 @@ public class FactureService implements FactureStorage{
                 try {
                     r.setDate(Constants.DATE_HEURE_FORMAT.parse(String.valueOf(obj[0])));
                 } catch (ParseException ex) {
-                    Logger.getLogger(JpaStorage.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(RepportService.class.getName()).log(Level.SEVERE, null, ex);
                 }
                 String mid = String.valueOf(obj[10]);
                 Mesure m = MesureDelegate.findMesure(mid);
@@ -153,7 +239,14 @@ public class FactureService implements FactureStorage{
         StringBuilder sb = new StringBuilder();
         try {
             sb.append("SELECT * FROM facture f WHERE f.organis_id = ?");
-            Query query = em.createNativeQuery(sb.toString(), Facture.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Facture.class);
+                    query.setParameter(1, uid);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Facture.class);
             query.setParameter(1, uid);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -166,7 +259,16 @@ public class FactureService implements FactureStorage{
        StringBuilder sb = new StringBuilder();
         try {
             sb.append("SELECT * FROM facture f WHERE f.organis_id = ? AND (f.status = ? OR f.status = ?) ");
-            Query query = em.createNativeQuery(sb.toString(), Facture.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Facture.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, Constants.BILL_STATUS_UNPAID);
+                    query.setParameter(3, Constants.BILL_STATUS_INPAYMENT);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Facture.class);
             query.setParameter(1, uid);
             query.setParameter(2, Constants.BILL_STATUS_UNPAID);
             query.setParameter(3, Constants.BILL_STATUS_INPAYMENT);
@@ -182,7 +284,15 @@ public class FactureService implements FactureStorage{
         try{
         StringBuilder sb=new StringBuilder();
         sb.append("SELECT * FROM facture f WHERE f.start_date BETWEEN ? AND ? ");
-           Query query = em.createNativeQuery(sb.toString(), Facture.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Facture.class);
+                    query.setParameter(1, date1, TemporalType.DATE);
+                    query.setParameter(2, date2, TemporalType.DATE);
+                    return query.getResultList();
+                });
+            }
+           Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Facture.class);
             query.setParameter(1, date1, TemporalType.DATE);
             query.setParameter(2, date2, TemporalType.DATE);
             return query.getResultList();
@@ -195,5 +305,48 @@ public class FactureService implements FactureStorage{
     public List<Facture> mergeSet(Set<Facture> bulk) {
         throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
     }
+
+    @Override
+    public List<Facture> findUnSyncedFactures(long disconnected_at) {
+       try {
+            Timestamp offline = new Timestamp(disconnected_at);
             
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM facture p WHERE p.updated_at >= ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Facture.class);
+                    query.setParameter(1, offline);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Facture.class);
+            query.setParameter(1, offline);
+            
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+     
+    
+      @Override
+    public boolean isExists(String uid, LocalDateTime atime) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM facture p WHERE p.uid = ? AND p.updated_at = ?");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Facture.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, atime);
+                List<Facture> result = query.getResultList();
+                return !result.isEmpty();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Facture.class);
+        query.setParameter(1, uid);
+        query.setParameter(2, atime);
+        List<Facture> result = query.getResultList();
+        return !result.isEmpty();
+    }
 }

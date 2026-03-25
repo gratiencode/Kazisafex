@@ -5,17 +5,23 @@
  */
 package com.endeleya.kazisafex;
 
-import delegates.JournalDelegate;
+import com.fazecast.jSerialComm.SerialPort;
+import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
 import java.util.ResourceBundle;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.RadioButton;
@@ -26,6 +32,7 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
+import javafx.util.StringConverter;
 import tools.MainUI;
 import tools.SyncEngine;
 
@@ -45,6 +52,7 @@ public class ParametreController implements Initializable {
     @FXML
     private ToggleButton tgbtn_print_bill;
     @FXML
+    private ToggleButton tgbtn_dark_theme;
     ImageView image_sync;
     @FXML
     private TextField message4client;
@@ -58,7 +66,8 @@ public class ParametreController implements Initializable {
     Spinner<Integer> spinner;
     @FXML
     ComboBox<String> cbx_param_paper_size;
-    @FXML private TextField text_msg;
+    @FXML
+    private TextField text_msg;
     @FXML
     private RadioButton ppps;
     @FXML
@@ -68,9 +77,9 @@ public class ParametreController implements Initializable {
     @FXML
     private CheckBox avertiBill;
     ToggleGroup methodGroup;
+    ToggleGroup mode_stock;
     ResourceBundle bundle;
     String mainCur;
-    
 
     Preferences pref;
     private static ParametreController instance;
@@ -82,6 +91,17 @@ public class ParametreController implements Initializable {
     private CheckBox print_tail;
     @FXML
     private CheckBox print_total_usd;
+    @FXML
+    private ComboBox<SerialPort> cbx_display_ports;
+
+    @FXML
+    private RadioButton rb_emarque;
+    @FXML
+    private RadioButton rb_serveur;
+    @FXML
+    private TextField tf_ip_serveur;
+    @FXML
+    private TextField tf_port_serveur;
 
     public ParametreController() {
         instance = this;
@@ -131,15 +151,14 @@ public class ParametreController implements Initializable {
         }
     }
 
-    @FXML
     public void configFreqSync(Event evt) {
         pref.putInt("sync-freq", cbx_frequence.getValue());
 //        SyncEngine.getInstance().start();
-    Executors.newSingleThreadExecutor()
-                    .execute(() -> {
-  JournalDelegate.swipe();
-        MainUI.notify(null, "Info", bundle.getString("synconfigsaved"), 4, "Info");
-                    });      
+        Executors.newSingleThreadExecutor()
+                .execute(() -> {
+
+                    MainUI.notify(null, "Info", bundle.getString("synconfigsaved"), 4, "Info");
+                });
     }
 
     @FXML
@@ -156,6 +175,22 @@ public class ParametreController implements Initializable {
     }
 
     @FXML
+    public void configDarkTheme(Event evt) {
+        ToggleButton tbtn = (ToggleButton) evt.getSource();
+        boolean darkEnabled = tbtn.getText().equals(bundle.getString("xbtn.no"));
+        tbtn.setText(darkEnabled ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
+        tbtn.setSelected(darkEnabled);
+        pref.putBoolean(Kazisafex.DARK_THEME_PREF, darkEnabled);
+        Node source = (Node) evt.getSource();
+        if (source != null && source.getScene() != null) {
+            Kazisafex.applyTheme(source.getScene());
+        }
+        if (MainUI.mainStage != null && MainUI.mainStage.getScene() != null) {
+            Kazisafex.applyTheme(MainUI.mainStage.getScene());
+        }
+    }
+
+    @FXML
     public void setMessage4CustomersOnBill(Event evt) {
         pref.put("mesc", message4client.getText());
         MainUI.notify(null, bundle.getString("success"), bundle.getString("msgconf"), 4, "info");
@@ -163,18 +198,21 @@ public class ParametreController implements Initializable {
 
     public void init() {
         boolean session = pref.getBoolean("session", false);
+        boolean darkTheme = pref.getBoolean(Kazisafex.DARK_THEME_PREF, false);
         boolean sync = pref.getBoolean("sync", true),
-                print = pref.getBoolean("print", true);
-
+                print = pref.getBoolean("print", true),
+                embd = pref.getBoolean("embedded_db", true);
         mainCur = pref.get("mainCur", "USD");
         cbx_main_cur.setValue(mainCur);
-        tf_taux_de_change.setText(pref.get("taux2change", "2700"));
+        tf_taux_de_change.setText(pref.get("taux2change", "2800"));
         tgbtn_print_bill.setSelected(print);
         tgbtn_sync.setSelected(sync);
         tgbtn_session.setSelected(session);
+        tgbtn_dark_theme.setSelected(darkTheme);
         int cvalue = pref.getInt("sync-freq", 120);
         cbx_frequence.setValue(cvalue);
         tgbtn_session.setText(session ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
+        tgbtn_dark_theme.setText(darkTheme ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
         tgbtn_sync.setText(sync ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
         tgbtn_print_bill.setText(print ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
         String message = pref.get("mesc", bundle.getString("goodsoldmsg"));
@@ -186,7 +224,7 @@ public class ParametreController implements Initializable {
                 bundle.getString("xlbl.init_counter_bill_day"),
                 bundle.getString("xlbl.init_counter_bill_month"),
                 bundle.getString("xlbl.init_counter_bill_year"),
-                 bundle.getString("xlbl.never_init_counter_bill_day")));
+                bundle.getString("xlbl.never_init_counter_bill_day")));
         boolean pmark = pref.getBoolean("print_mark", true);
         boolean pmodel = pref.getBoolean("print_mark", true);
         boolean ptail = pref.getBoolean("print_tail", true);
@@ -203,6 +241,8 @@ public class ParametreController implements Initializable {
         ppps.setToggleGroup(methodGroup);
         fifo.setToggleGroup(methodGroup);
         lifo.setToggleGroup(methodGroup);
+        rb_emarque.setToggleGroup(mode_stock);
+        rb_serveur.setToggleGroup(mode_stock);
         boolean avert = pref.getBoolean("averti", true);
         avertiBill.setSelected(avert);
         if (meth.equals("ppps")) {
@@ -211,6 +251,29 @@ public class ParametreController implements Initializable {
             fifo.setSelected(true);
         } else if (meth.equals("lifo")) {
             lifo.setSelected(true);
+        }
+        int port = pref.getInt("default_mysql_port", 3306);
+        String host = pref.get("default_mysql_host", "localhost");
+        tf_ip_serveur.setText(host);
+        tf_port_serveur.setText(Integer.toString(port));
+        rb_emarque.selectedProperty()
+                .addListener((ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) -> {
+                    if (t1) {
+                        pref.putBoolean("embedded_db", true);
+                        MainUI.notify(null, bundle.getString("success"), "Utilisation de la Base interne activee", 4, "info");
+                    }
+                });
+        rb_serveur.selectedProperty()
+                .addListener((ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) -> {
+                    if (t1) {
+                        pref.putBoolean("embedded_db", false);
+                        MainUI.notify(null, bundle.getString("success"), "Utilisation de la Base MySQL activee", 4, "info");
+                    }
+                });
+        if (embd) {
+            rb_emarque.setSelected(true);
+        } else {
+            rb_serveur.setSelected(true);
         }
         cbx_main_cur.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
             if (newValue != null) {
@@ -308,33 +371,47 @@ public class ParametreController implements Initializable {
                 }
             }
         });
-        lifo.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
-                    pref.put("meth", "lifo");
-                    MainUI.notify(null, "Succes", bundle.getString("methlifosaved"), 3, "info");
-                }
+        lifo.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            if (newValue) {
+                pref.put("meth", "lifo");
+                MainUI.notify(null, "Succes", bundle.getString("methlifosaved"), 3, "info");
             }
         });
-        text_msg.textProperty().addListener(new ChangeListener<String>() {
+        text_msg.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+            if (!newValue.isEmpty()) {
+                pref.put("ads_mesg", newValue);
+            }
+        });
+        cbx_display_ports.setConverter(new StringConverter<SerialPort>() {
             @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                if(!newValue.isEmpty()){
-                    pref.put("ads_mesg", newValue);
-                }
+            public String toString(SerialPort object) {
+                return object == null ? null : object.getSystemPortName();
+            }
+
+            @Override
+            public SerialPort fromString(String string) {
+                return cbx_display_ports.getItems()
+                        .stream()
+                        .filter(f -> (f.getSystemPortName())
+                        .equalsIgnoreCase(string))
+                        .findFirst().orElse(null);
+            }
+        });
+        SerialPort ports[] = SerialPort.getCommPorts();
+        cbx_display_ports.setItems(FXCollections.observableArrayList(ports));
+        cbx_display_ports.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends SerialPort> observable, SerialPort oldValue, SerialPort newValue) -> {
+            if (newValue != null) {
+                pref.put("display_port", newValue.getSystemPortName());
             }
         });
 
     }
 
-    @FXML
     private void onHoverHome(MouseEvent event) {
         ImageView img = (ImageView) event.getSource();
         MainUI.setShadowEffect(img);
     }
 
-    @FXML
     private void onOutHome(MouseEvent event) {
         ImageView img = (ImageView) event.getSource();
         MainUI.removeShaddowEffect(img);
@@ -361,42 +438,58 @@ public class ParametreController implements Initializable {
                     });
         });
         methodGroup = new ToggleGroup();
+        mode_stock = new ToggleGroup();
         SpinnerValueFactory<Integer> values = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 5, 1);
         values.setValue(pref.getInt("bill-copy", 1));
         spinner.setValueFactory(values);
-        spinner.valueProperty().addListener(new ChangeListener<Integer>() {
-            @Override
-            public void changed(ObservableValue<? extends Integer> observable, Integer oldValue, Integer newValue) {
-                if (newValue != null) {
-                    pref.putInt("bill-copy", newValue);
+        spinner.valueProperty().addListener((ObservableValue<? extends Integer> observable, Integer oldValue, Integer newValue) -> {
+            if (newValue != null) {
+                pref.putInt("bill-copy", newValue);
+            }
+        });
+
+        print_mark.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            pref.putBoolean("print_mark", newValue);
+        });
+        print_modele.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            pref.putBoolean("print_modele", newValue);
+        });
+        print_tail.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            pref.putBoolean("print_tail", newValue);
+        });
+        print_total_usd.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            pref.putBoolean("print_total_usd", newValue);
+        });
+    }
+
+    @FXML
+    private void saveConfigurations(ActionEvent event) {
+        boolean go = true;
+        if (tf_ip_serveur.getText().isEmpty()) {
+            go = false;
+        }
+        if (tf_port_serveur.getText().isEmpty()) {
+            go = false;
+        }
+        if (go) {
+            try {
+                if (InetAddress.getByName(tf_ip_serveur.getText()).isReachable(5000)) {
+                    pref.putInt("default_mysql_port", Integer.parseInt(tf_port_serveur.getText()));
+                    pref.put("default_mysql_host", tf_ip_serveur.getText());
+                    MainUI.notify(null, "Info", "Succes : Configuration enregistree", 4, "info");
                 }
+            } catch (IOException ex) {
+                Logger.getLogger(ParametreController.class.getName()).log(Level.SEVERE, null, ex);
             }
-        });
-        
-        print_mark.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                    pref.putBoolean("print_mark", newValue);
-            }
-        });
-        print_modele.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                    pref.putBoolean("print_modele", newValue);
-            }
-        });
-        print_tail.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                    pref.putBoolean("print_tail", newValue);
-            }
-        });
-        print_total_usd.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                    pref.putBoolean("print_total_usd", newValue);
-            }
-        });
+        } else {
+            MainUI.notify(null, "Info", "Erreur : Configuration non enregistree", 4, "error");
+        }
+    }
+
+    @FXML
+    private void reinitSync(ActionEvent event) {
+        pref.putLong(tools.Constants.SYNC_ELLAPSED_TIME, 0);
+        MainUI.notify(null, "Info", "Configuration fiat avec succes, la prochaine synchronisation sera totale", 4, "info");
     }
 
 }

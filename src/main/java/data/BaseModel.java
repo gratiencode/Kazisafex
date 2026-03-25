@@ -3,13 +3,15 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
+
+import java.io.Serializable;
 
 /**
  *
  * @author eroot
  */
-public class BaseModel {
+public class BaseModel implements Serializable {
 
     protected String type;
     protected String action;

@@ -4,14 +4,10 @@
  * and open the template in the editor.
  */
 package data;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQueries;
@@ -19,14 +15,11 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
 
-import org.hibernate.annotations.UuidGenerator; 
 import jakarta.xml.bind.annotation.XmlRootElement;
-import tools.Tables;
+import java.time.LocalDateTime;
 
 /**
  *
@@ -44,31 +37,27 @@ public class Affecter extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
-    @Column(name = "uid", updatable = false, nullable = false)
+    @Column(name = "uid")
     private String uid;
     private String region;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateAffect;
-    @JsonBackReference
+    
+    private LocalDateTime dateAffect;
+    private LocalDateTime updatedAt;
+    private LocalDateTime deletedAt;
+    
     @ManyToOne
     private Permission permissionId;
     @ManyToOne
-    @JsonBackReference
     private Role roleId;
 
-    public Affecter() {
-        
+    public Affecter() { 
     }
 
     @PrePersist
     @PreUpdate
     protected void onDataOperation(){
         if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
     }
 
@@ -92,11 +81,11 @@ public class Affecter extends BaseModel implements Serializable {
         this.region = region;
     }
 
-    public Date getDateAffect() {
+    public LocalDateTime getDateAffect() {
         return dateAffect;
     }
 
-    public void setDateAffect(Date dateAffect) {
+    public void setDateAffect(LocalDateTime dateAffect) {
         this.dateAffect = dateAffect;
     }
 
@@ -140,5 +129,23 @@ public class Affecter extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Affecter[ uid=" + uid + " ]";
     }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+    
+    
 
 }

@@ -31,6 +31,14 @@ public class InventoryItem {
     private String stockAlerte;
     private String valeurStock;
 
+    // Additional fields for StockDepotAgregate integration
+    private String productId;
+    private String productName;
+    private double quantite;
+    private double coutAchat;
+    private String region;
+    private java.time.LocalDate date;
+
     public InventoryItem() {
     }
 
@@ -122,6 +130,55 @@ public class InventoryItem {
         this.valeurStock = valeurStock;
     }
 
+    // Additional getters/setters for StockDepot integration
+    public String getProductId() {
+        return productId;
+    }
+
+    public void setProductId(String productId) {
+        this.productId = productId;
+    }
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+
+    public double getQuantite() {
+        return quantite;
+    }
+
+    public void setQuantite(double quantite) {
+        this.quantite = quantite;
+    }
+
+    public double getCoutAchat() {
+        return coutAchat;
+    }
+
+    public void setCoutAchat(double coutAchat) {
+        this.coutAchat = coutAchat;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
+    }
+
+    public java.time.LocalDate getDate() {
+        return date;
+    }
+
+    public void setDate(java.time.LocalDate date) {
+        this.date = date;
+    }
+
     @Override
     public int hashCode() {
         int hash = 3;
@@ -147,7 +204,4 @@ public class InventoryItem {
         return true;
     }
 
-   
-    
-    
 }

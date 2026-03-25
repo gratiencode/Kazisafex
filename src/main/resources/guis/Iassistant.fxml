@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
+<?import javafx.scene.web.WebView?>
+
+<AnchorPane id="AnchorPane" prefHeight="663.0" prefWidth="685.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.IassistantController">
+      <children>
+      <Separator layoutX="4.0" layoutY="63.0" prefHeight="0.0" prefWidth="689.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="63.0" />
+      <AnchorPane layoutX="7.0" layoutY="70.0" prefHeight="517.0" prefWidth="683.0" style="-fx-border-color: #44cef5;" AnchorPane.bottomAnchor="77.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="1.0" AnchorPane.topAnchor="69.0">
+         <children>
+            <WebView fx:id="ia_webvu_chat" layoutX="5.0" layoutY="5.0" prefHeight="509.0" prefWidth="675.0" AnchorPane.bottomAnchor="4.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="4.0" AnchorPane.topAnchor="4.0" />
+         </children>
+      </AnchorPane>
+      <AnchorPane layoutX="56.0" layoutY="600.0" prefHeight="34.0" prefWidth="576.0" style="-fx-background-color: #cccccc; -fx-background-radius: 18; -fx-border-radius: 18;" AnchorPane.bottomAnchor="29.0" AnchorPane.leftAnchor="56.0" AnchorPane.rightAnchor="53.0">
+         <children>
+            <TextField fx:id="tf_input_msg_ia" layoutX="14.0" layoutY="14.0" onAction="#sendMessage" prefHeight="34.0" prefWidth="619.0" promptText="Entre votre message ici" style="-fx-background-color: white; -fx-background-radius: 18; -fx-border-radius: 18;" AnchorPane.bottomAnchor="1.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="1.0" AnchorPane.topAnchor="1.0" />
+         </children>
+      </AnchorPane>
+      <ImageView fitHeight="34.0" fitWidth="34.0" layoutX="641.0" layoutY="599.0" onMouseClicked="#sendMessage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="30.0" AnchorPane.rightAnchor="10.0">
+         <image>
+            <Image url="@../icons/envoyer.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <Separator layoutY="589.0" prefHeight="0.0" prefWidth="689.0" AnchorPane.bottomAnchor="71.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+      <ImageView fitHeight="32.0" fitWidth="22.0" layoutX="654.0" layoutY="9.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="9.0" AnchorPane.topAnchor="9.0">
+         <image>
+            <Image url="@../icons/Cancel_32px_1.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <ImageView fitHeight="42.0" fitWidth="34.0" layoutX="15.0" layoutY="12.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="15.0" AnchorPane.topAnchor="12.0">
+         <image>
+            <Image url="@../icons/bot.png" />
+         </image>
+      </ImageView>
+      <Label layoutX="64.0" layoutY="14.0" prefHeight="24.0" prefWidth="139.0" text="Assistant IA">
+         <font>
+            <Font size="19.0" />
+         </font></Label>
+      <Label layoutX="11.0" layoutY="640.0" text="L'assistant peut donner des reponses inexactes, verifiez toujours ses reponses." textFill="#999999" AnchorPane.bottomAnchor="7.0" AnchorPane.leftAnchor="11.0" />
+      <Label layoutX="66.0" layoutY="43.0" text="Experimental." textFill="#999999" />
+      <Button layoutX="8.0" layoutY="601.0" mnemonicParsing="false" onAction="#addAttachemnts" prefHeight="33.0" prefWidth="22.0" style="-fx-background-color: #44cef5; -fx-background-radius: 50;" text="+" textFill="WHITE" AnchorPane.bottomAnchor="29.0" AnchorPane.leftAnchor="8.0">
+         <font>
+            <Font name="System Bold" size="17.0" />
+         </font>
+      </Button>
+   </children> 
+</AnchorPane>

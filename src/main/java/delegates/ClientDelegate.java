@@ -9,6 +9,8 @@ import IServices.ClientStorage;
 import static delegates.ClientDelegate.getClientStorage;
 import java.util.List;
 import data.Client;
+import static delegates.AretirerDelegate.getStorage;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -61,5 +63,21 @@ public class ClientDelegate {
 
     public static Long getCount() {
         return getClientStorage().getCount();
+    }
+
+    public static List<Client> findUnSyncedClients(long disconnected_at) {
+        return getClientStorage().findUnSyncedClients(disconnected_at);
+    }
+
+    public static boolean isExists(String uid, LocalDateTime attime) {
+        return getClientStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getClientStorage().isExists(uid);
+    }
+
+    public static double getTotalDebt() {
+        return getClientStorage().getTotalDebt();
     }
 }

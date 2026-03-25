@@ -3,14 +3,15 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
-import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import java.io.Serializable;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -19,26 +20,24 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.util.UUID;
+import java.time.LocalDateTime;
 import tools.Tables;
-
-
 
 /**
  *
  * @author eroot
  */
- @Entity
+@Entity
 @Table(name = "ligne_vente")
 @NamedQueries({
-    @NamedQuery(name = "LigneVente.findAll", query = "SELECT DISTINCT  l FROM LigneVente l")
-    , @NamedQuery(name = "LigneVente.findByUid", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.uid = :uid")
-    , @NamedQuery(name = "LigneVente.findByClientId", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.clientId = :clientId")
-    , @NamedQuery(name = "LigneVente.findByQuantite", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.quantite = :quantite")
-    , @NamedQuery(name = "LigneVente.findByMontantUsd", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantUsd = :montantUsd")
-    , @NamedQuery(name = "LigneVente.findByMontantCdf", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantCdf = :montantCdf")
-    , @NamedQuery(name = "LigneVente.findByPrixUnit", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.prixUnit = :prixUnit")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+    @NamedQuery(name = "LigneVente.findAll", query = "SELECT DISTINCT  l FROM LigneVente l"),
+    @NamedQuery(name = "LigneVente.findByUid", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.uid = :uid"),
+    @NamedQuery(name = "LigneVente.findByClientId", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.clientId = :clientId"),
+    @NamedQuery(name = "LigneVente.findByQuantite", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.quantite = :quantite"),
+    @NamedQuery(name = "LigneVente.findByMontantUsd", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantUsd = :montantUsd"),
+    @NamedQuery(name = "LigneVente.findByMontantCdf", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantCdf = :montantCdf"),
+    @NamedQuery(name = "LigneVente.findByPrixUnit", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.prixUnit = :prixUnit")})
+
 public class LigneVente extends BaseModel implements Serializable {
 
     private String clientId;
@@ -46,39 +45,47 @@ public class LigneVente extends BaseModel implements Serializable {
     private double montantUsd;
     private double montantCdf;
     private String numlot;
-
+    @Column(name = "coutAchat")
+    private Double coutAchat;
     private static final long serialVersionUID = 1L;
     @Id
     private Long uid;
     private Double prixUnit;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Mesure mesureId;
     @JoinColumn(name = "product_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Produit productId;
-    @ManyToOne(optional = false , cascade = CascadeType.PERSIST) 
+    @ManyToOne(optional = false)
     @JoinColumn(name = "reference_uid", referencedColumnName = "uid")
-    @JsonBackReference
     private Vente reference;
-    
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+
     @PrePersist
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = System.currentTimeMillis() + 101;
+        } 
+        this.updatedAt=LocalDateTime.now();
+    }
+    
+     
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= System.currentTimeMillis()+101;
-        }
+    protected void onUpdate() {
+        this.updatedAt=LocalDateTime.now();
     }
 
     public LigneVente() {
-         this.type=Tables.LIGNEVENTE.name();
+        this.type = Tables.LIGNEVENTE.name();
     }
 
     public LigneVente(Long uid) {
         this.uid = uid;
-         this.type=Tables.LIGNEVENTE.name();
+        this.type = Tables.LIGNEVENTE.name();
     }
 
     public LigneVente(Long uid, String clientId, double quantite, double montantUsd, double montantCdf) {
@@ -87,7 +94,7 @@ public class LigneVente extends BaseModel implements Serializable {
         this.quantite = quantite;
         this.montantUsd = montantUsd;
         this.montantCdf = montantCdf;
-         this.type=Tables.LIGNEVENTE.name();
+        this.type = Tables.LIGNEVENTE.name();
     }
 
     public Long getUid() {
@@ -105,7 +112,6 @@ public class LigneVente extends BaseModel implements Serializable {
     public void setClientId(String clientId) {
         this.clientId = clientId;
     }
-
 
     public double getMontantUsd() {
         return montantUsd;
@@ -131,8 +137,6 @@ public class LigneVente extends BaseModel implements Serializable {
         this.prixUnit = prixUnit;
     }
 
-   
-  
     public Mesure getMesureId() {
         return mesureId;
     }
@@ -179,12 +183,10 @@ public class LigneVente extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "entities.LigneVente[ uid=" + uid + " produit = "+productId+" \nquantite ="
-                + " "+quantite+" mesure = "+mesureId+"\n"
-                + " montant usd = "+montantUsd+" montant cdf = "+montantCdf+" prix unit = "+prixUnit+" clientid = "+clientId+"  ]";
+        return "entities.LigneVente[ uid=" + uid + " produit = " + productId + " \nquantite ="
+                + " " + quantite + " mesure = " + mesureId + "\n"
+                + " montant usd = " + montantUsd + " montant cdf = " + montantCdf + " prix unit = " + prixUnit + " clientid = " + clientId + "  ]";
     }
-
-  
 
     public double getQuantite() {
         return quantite;
@@ -201,5 +203,29 @@ public class LigneVente extends BaseModel implements Serializable {
     public void setNumlot(String numlot) {
         this.numlot = numlot;
     }
-    
+
+    public Double getCoutAchat() {
+        return coutAchat;
+    }
+
+    public void setCoutAchat(Double coutAchat) {
+        this.coutAchat = coutAchat;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
 }

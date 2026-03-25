@@ -1,0 +1,60 @@
+.root {
+    -fx-base: #111827;
+    -fx-background: #111827;
+    -fx-control-inner-background: #1f2937;
+    -fx-background-color: #111827;
+}
+
+.anchor-pane,
+.border-pane,
+.pane,
+.stack-pane {
+    -fx-background-color: #111827;
+}
+
+.label {
+    -fx-text-fill: #e5e7eb;
+}
+
+.text-field,
+.text-area,
+.combo-box-base,
+.list-view,
+.table-view,
+.tree-view,
+.scroll-pane,
+.tab-pane {
+    -fx-background-color: #1f2937;
+    -fx-control-inner-background: #1f2937;
+    -fx-text-fill: #f3f4f6;
+}
+
+.button {
+    -fx-background-color: #334155;
+    -fx-text-fill: #f8fafc;
+}
+
+.tool-bar {
+    -fx-background-color: #0f172a;
+}
+
+.table-view,
+.list-view,
+.tree-view {
+    -fx-background-insets: 0;
+    -fx-border-color: #334155;
+}
+
+.table-view .column-header-background,
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: #1f2937;
+}
+
+.chart-plot-background {
+    -fx-background-color: #0f172a;
+}
+
+.chart-legend {
+    -fx-background-color: #111827;
+}

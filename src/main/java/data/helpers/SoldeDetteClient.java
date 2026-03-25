@@ -5,10 +5,11 @@
  */
 package data.helpers;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+
 import java.util.Date;
 import java.util.Objects;
 import data.Vente;
+import java.time.LocalDate;
 
 /**
  *
@@ -16,11 +17,7 @@ import data.Vente;
  */
 public class SoldeDetteClient {
     private String clientName;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'H:mm:ss"
-    )
-    private Date lastUpdateDate;
+    private LocalDate lastUpdateDate;
     private double debtAmount;
     private double payedAmount;
     private double remainSum;
@@ -33,7 +30,7 @@ public class SoldeDetteClient {
     public SoldeDetteClient() {
     }
 
-    public SoldeDetteClient(String clientName, Date lastUpdateDate, double debtAmount, double payedAmount, double remainSum, String reference, String region, String engager_id, String entreprise_id) {
+    public SoldeDetteClient(String clientName, LocalDate lastUpdateDate, double debtAmount, double payedAmount, double remainSum, String reference, String region, String engager_id, String entreprise_id) {
         this.clientName = clientName;
         this.lastUpdateDate = lastUpdateDate;
         this.debtAmount = debtAmount;
@@ -61,11 +58,11 @@ public class SoldeDetteClient {
         this.clientName = clientName;
     }
 
-    public Date getLastUpdateDate() {
+    public LocalDate getLastUpdateDate() {
         return lastUpdateDate;
     }
 
-    public void setLastUpdateDate(Date lastUpdateDate) {
+    public void setLastUpdateDate(LocalDate lastUpdateDate) {
         this.lastUpdateDate = lastUpdateDate;
     }
 

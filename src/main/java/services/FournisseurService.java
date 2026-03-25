@@ -6,6 +6,8 @@
 package services;
 
 import IServices.FournisseurStorage;
+import data.Category;
+import data.Entreprise;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -15,6 +17,9 @@ import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import data.Fournisseur;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import tools.Tables;
 
 /**
  *
@@ -22,50 +27,119 @@ import data.Fournisseur;
  */
 public class FournisseurService implements FournisseurStorage {
 
-    EntityManager em;
+    @Override
+    public boolean isExists(String uid) {
+        String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
+                + "FROM Fournisseur c WHERE c.uid = :id";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+                    .setParameter("id", uid)
+                    .getSingleResult());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createQuery(jpql, Boolean.class)
+                .setParameter("id", uid)
+                .getSingleResult();
+    }
 
     public FournisseurService() {
-        em = JpaUtil.getEntityManagerFactory().createEntityManager();
+        // initializing...
     }
 
     @Override
     public Fournisseur createFournisseur(Fournisseur cat) {
+
         List<Fournisseur> exist = findByPhone(cat.getPhone());
+
         if (exist.isEmpty()) {
-            EntityTransaction tx = em.getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
+            if (ManagedSessionFactory.isEmbedded()) {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.persist(cat);
+                    return cat;
+                }).thenAccept(e -> {
+                    System.out.println("Element " + e.getNomFourn() + " enregistree");
+                });
+                return cat;
             }
-            em.persist(cat);
-            tx.commit();
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+            try {
+                if (!tx.isActive()) {
+                    tx.begin();
+                }
+                ManagedSessionFactory.getEntityManager().persist(cat);
+                tx.commit();
+            } catch (Exception e) {
+                if (isUniqueConstraintViolation(e)) {
+                    if (tx.isActive()) {
+                        tx.rollback();
+                    }
+                    return cat;
+                }
+            }
         }
         return cat;
     }
 
+    private boolean isUniqueConstraintViolation(Exception e) {
+        Throwable t = e;
+        while (t != null) {
+            String msg = t.getMessage() != null ? t.getMessage().toLowerCase() : "";
+            if (t instanceof java.sql.SQLIntegrityConstraintViolationException
+                    || msg.contains("constraint")
+                    || msg.contains("unique")
+                    || msg.contains("duplicate")) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
+    }
+
     @Override
     public Fournisseur updateFournisseur(Fournisseur cat) {
-        EntityTransaction tx = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getNomFourn() + " enregistree");
+            });
+            return cat;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!tx.isActive()) {
             tx.begin();
         }
-        em.persist(cat);
+        ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
         return cat;
     }
 
     @Override
     public void deleteFournisseur(Fournisseur cat) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getNomFourn() + " supprimee");
+            });
+            return;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-       em.remove(em.merge(cat));
+        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
     }
 
     @Override
     public Fournisseur findFournisseur(String catId) {
-        return em.find(Fournisseur.class, catId);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.find(Fournisseur.class, catId));
+        }
+        return ManagedSessionFactory.getEntityManager().find(Fournisseur.class, catId);
     }
 
     @Override
@@ -73,7 +147,12 @@ public class FournisseurService implements FournisseurStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM fournisseur");
-            return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+                });
+            }
+            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
         } catch (NoResultException e) {
             return 0L;
         }
@@ -82,7 +161,12 @@ public class FournisseurService implements FournisseurStorage {
     @Override
     public List<Fournisseur> findFournisseurs() {
         try {
-            Query query = em.createNativeQuery("Select * from fournisseur", Fournisseur.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(
+                        em -> em.createNativeQuery("Select * from fournisseur", Fournisseur.class).getResultList());
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery("Select * from fournisseur",
+                    Fournisseur.class);
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
@@ -92,7 +176,15 @@ public class FournisseurService implements FournisseurStorage {
     @Override
     public List<Fournisseur> findFournisseurs(int start, int max) {
         try {
-            Query query = em.createNamedQuery("Fournisseur.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Fournisseur.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Fournisseur.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
@@ -104,7 +196,11 @@ public class FournisseurService implements FournisseurStorage {
     @Override
     public List<Fournisseur> findByPhone(String text) {
         try {
-            Query query = em.createNamedQuery("Fournisseur.findByPhone");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> em.createNamedQuery("Fournisseur.findByPhone")
+                        .setParameter("phone", text).getResultList());
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Fournisseur.findByPhone");
             query.setParameter("phone", text);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -114,7 +210,7 @@ public class FournisseurService implements FournisseurStorage {
 
     @Override
     public List<Fournisseur> mergeSet(Set<Fournisseur> bulk) {
-        EntityTransaction etr = em.getTransaction();
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
@@ -122,20 +218,90 @@ public class FournisseurService implements FournisseurStorage {
         int i = 0;
         for (Fournisseur lj : bulk) {
             i++;
-            em.merge(lj);
+            ManagedSessionFactory.getEntityManager().merge(lj);
             if (i % 16 == 0) {
                 etr.commit();
-                em.clear();
-                EntityTransaction etr2 = em.getTransaction();
-        if (!etr2.isActive()) {
-            etr2.begin();
-       }
+                ManagedSessionFactory.getEntityManager().clear();
+                EntityTransaction etr2 = ManagedSessionFactory.getEntityManager().getTransaction();
+                if (!etr2.isActive()) {
+                    etr2.begin();
+                }
 
             }
         }
         etr.commit();
         Enumeration<Fournisseur> enums = Collections.enumeration(bulk);
         return Collections.list(enums);
+    }
+
+    @Override
+    public List<Fournisseur> findUnSyncedFournisseurs(long disconnected_at) {
+        try {
+            Timestamp offline = new Timestamp(disconnected_at);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM fournisseur p WHERE p.updated_at >= ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Fournisseur.class);
+                    query.setParameter(1, offline);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Fournisseur.class);
+            query.setParameter(1, offline);
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public Fournisseur findOrCreate(Entreprise entreprise) {
+        Fournisseur ff = findFournisseur(entreprise.getUid());
+        if (ff == null) {
+            Fournisseur f = new Fournisseur(entreprise.getUid());
+            f.setAdresse(entreprise.getAdresse());
+            f.setIdentification(entreprise.getIdentification());
+            f.setNomFourn(entreprise.getNomEntreprise());
+            f.setPhone(entreprise.getPhones());
+            ff = createFournisseur(f);
+        }
+        return ff;
+    }
+
+    @Override
+    public boolean isExists(String uid, LocalDateTime atime) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM Fournisseur p WHERE p.uid = ? AND p.updated_at = ?");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Fournisseur.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, atime);
+                List<Fournisseur> result = query.getResultList();
+                return !result.isEmpty();
+
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Fournisseur.class);
+        query.setParameter(1, uid);
+        query.setParameter(2, atime);
+        List<Fournisseur> result = query.getResultList();
+        return !result.isEmpty();
+    }
+
+    @Override
+    public double getTotalDebt() {
+        String jpql = "SELECT SUM(l.remained) FROM Livraison l";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Double res = em.createQuery(jpql, Double.class).getSingleResult();
+                return res == null ? 0d : res;
+            });
+        }
+        Double res = ManagedSessionFactory.getEntityManager().createQuery(jpql, Double.class).getSingleResult();
+        return res == null ? 0d : res;
     }
 
 }

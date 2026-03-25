@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.PrixDeVente;
 import data.Mesure;
@@ -38,7 +38,17 @@ public interface PrixDeVenteStorage {
     public void commitTransaction();
 
     public PrixDeVente addToTransaction(PrixDeVente lpv);
-     public List<PrixDeVente> mergeSet(Set<PrixDeVente> bulk);
+    
+    public List<PrixDeVente> mergeSet(Set<PrixDeVente> bulk);
 
     public List<PrixDeVente> findPrixDeVente(Double qmin, String uid, String uid0);
+    
+    public List<PrixDeVente> findPrixDeVentes(Double qmin, double quantContenuMesure, String requisid);
+    
+    public List<PrixDeVente> findPrixDeVentes(double qmin,double qmax, double quantContenuMesure, String requisid);
+
+    public List<PrixDeVente> findUnSyncedPrixDeVentes(long disconnected_at);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
+    
+    
 }

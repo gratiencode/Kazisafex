@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Depense;
 import data.Depense;
@@ -25,4 +25,7 @@ public interface DepenseStorage {
     public List<Depense> findDepenseByDescription(String objId);
     public List<Depense> findDepenses(String region);
      public List<Depense> mergeSet(Set<Depense> bulk);
+
+    public List<Depense> findUnSyncedDepenses(long disconnected_at);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
 }

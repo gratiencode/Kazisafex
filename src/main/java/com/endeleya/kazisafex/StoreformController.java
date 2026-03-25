@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URL;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -89,6 +90,10 @@ import tools.MainUI;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
+import java.awt.Desktop;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.io.IOException;
 
 /**
  * FXML Controller class
@@ -97,6 +102,8 @@ import tools.Util;
  */
 public class StoreformController implements Initializable {
 
+    public static final int MAX_RETRY = 5;
+
     @FXML
     private Label txt_somme_global_stk;
     @FXML
@@ -104,29 +111,29 @@ public class StoreformController implements Initializable {
 
     @FXML
     private DatePicker dpk_expir_lot;
-    @FXML
-    private DatePicker dpk_date_expir_stk;
+//    @FXML
+//     private DatePicker dpk_date_expir_stk;
     @FXML
     private ComboBox<Produit> cbx_choose_produit_stk;
     @FXML
     private ComboBox<Mesure> cbx_choose_mesurelot;
-    @FXML
-    private ComboBox<Mesure> cbx_choose_mesure_stk;
+    // @FXML
+    // private ComboBox<Mesure> cbx_choose_mesure_stk;
     @FXML
     private ComboBox<Livraison> cbx_choose_livraison;
-    @FXML
-    ComboBox<Mesure> cbx_choose_mesure_vente;
-    @FXML
-    ComboBox<String> cbx_devise_price;
+//     @FXML
+//     ComboBox<Mesure> cbx_choose_mesure_vente;
+//     @FXML
+//     ComboBox<String> cbx_devise_price;
 
-    @FXML
-    private TextField tf_quantite_stk;
-    @FXML
-    private TextField tf_cout_unitr_stk;
+    // @FXML
+    // private TextField tf_quantite_stk;
+    // @FXML
+    // private TextField tf_cout_unitr_stk;
     @FXML
     private Label txt_somme_ct_stk, txt_somme_ct_lot1;
     @FXML
-    Tab lottab, standtab;
+    Tab lottab; // standtab removed
     @FXML
     TabPane tabPanelot;
     @FXML
@@ -161,8 +168,10 @@ public class StoreformController implements Initializable {
 
     @FXML
     private TextField tf_localisation_stk;
+//     @FXML
+//     private TextField tf_stock_alerte_stk;
     @FXML
-    private TextField tf_stock_alerte_stk, tf_stock_allot;
+    private TextField tf_stock_allot;
     @FXML
     private TextField tf_numlot;
     @FXML
@@ -171,8 +180,7 @@ public class StoreformController implements Initializable {
     private TextField tf_localisalot;
     @FXML
     private TextField tf_cout_achlot;
-    @FXML
-    private Pane pricepane;
+
     @FXML
     Label txt_equivalentCdf;
 
@@ -215,10 +223,9 @@ public class StoreformController implements Initializable {
     TextField tf_qte_min;
     @FXML
     TextField tf_qte_max;
-    @FXML
-    TextField tf_prix_de_vente;
-    @FXML
-    TilePane tilepn_prices1;
+//     @FXML
+//     TextField tf_prix_de_vente;
+
 
     private static StoreformController instance;
 
@@ -264,7 +271,7 @@ public class StoreformController implements Initializable {
             }
         }
         if (addStocker()) {
-            pricepane.setVisible(true);
+            // pricepane.setVisible(...);
         }
     }
 
@@ -287,11 +294,11 @@ public class StoreformController implements Initializable {
         cbx_regions.setItems(regions);
         cbx_choose_livraison.setItems(lisvrezon);
         cbx_choose_produit_stk.setItems(lisproduit);
-        cbx_choose_mesure_stk.setItems(lismesure);
+//         cbx_choose_mesure_stk.setItems(lismesure);
         cbx_choose_mesurelot.setItems(lismesure);
-        cbx_choose_mesure_vente.setItems(lismesure);
-        cbx_choose_mesure_stk.getSelectionModel().selectFirst();
-        cbx_choose_mesure_vente.getSelectionModel().selectFirst();
+//         cbx_choose_mesure_vente.setItems(lismesure);
+//         cbx_choose_mesure_stk.getSelectionModel().selectFirst();
+//         cbx_choose_mesure_vente.getSelectionModel().selectFirst();
         cbxFssearch = FXCollections.observableArrayList();
 
         cbx_regions.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
@@ -308,10 +315,10 @@ public class StoreformController implements Initializable {
         if (meth.equalsIgnoreCase("ppps")) {
             tabPanelot.getSelectionModel().select(lottab);
         }
-        cbx_devise_price.setItems(FXCollections.observableArrayList("USD", "CDF"));
+//         cbx_devise_price.setItems(FXCollections.observableArrayList("USD", "CDF"));
         String maindev = pref.get("mainCur", "USD");
-        cbx_devise_price.getSelectionModel().select(maindev);
-        ksf.getRegions(entreprise.getUid()).enqueue(new retrofit2.Callback<List<String>>() {
+//         cbx_devise_price.getSelectionModel().select(maindev);
+        ksf.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
             @Override
             public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
                 if (rspns.isSuccessful()) {
@@ -361,12 +368,12 @@ public class StoreformController implements Initializable {
             return new SimpleStringProperty(pr.getNomProduit() + " " + pr.getMarque() + " " + pr.getModele() + " " + pr.getCodebar());
         });
         col_date_lot.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
-            Date date = param.getValue().getDateStocker();
-            return new SimpleStringProperty(tools.Constants.DATE_HEURE_FORMAT.format(date));
+            LocalDateTime date = param.getValue().getDateStocker();
+            return new SimpleStringProperty(date == null ? "" : date.toString());
         });
         col_date_expir_lot.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
-            Date exp = param.getValue().getDateExpir();
-            return new SimpleStringProperty(exp == null ? "Non périssable" : tools.Constants.DATE_HEURE_FORMAT.format(exp));
+            LocalDate exp = param.getValue().getDateExpir();
+            return new SimpleStringProperty(exp == null ? "Non périssable" : exp.toString());
         });
         col_ref_lot.setCellValueFactory((TableColumn.CellDataFeatures<Stocker, String> param) -> {
             return new SimpleStringProperty(param.getValue().getLivraisId().getReference());
@@ -399,19 +406,7 @@ public class StoreformController implements Initializable {
 
     } 
 
-    private PrixDeVente findPrix(List<PrixDeVente> lpv, PrixDeVente p) {
-        for (PrixDeVente pv : lpv) {
-            if (Objects.equals(pv.getQmin(), p.getQmin()) && Objects.equals(pv.getQmax(), p.getQmax())
-                    && pv.getMesureId().getUid().equals(p.getMesureId().getUid())) {
-                return pv;
-            }
-            if (Objects.equals(pv.getQmax(), p.getQmin())
-                    && pv.getMesureId().getUid().equals(p.getMesureId().getUid())) {
-                return pv;
-            }
-        }
-        return null;
-    }
+   
     HashMap<String, PrixDeVente> coupleLotPv = new HashMap<>();
 
     @FXML
@@ -421,79 +416,22 @@ public class StoreformController implements Initializable {
     }
 
     public void addPriceIfNotExist(Event e) {
-        if (choosenStock == null) {
-            MainUI.notify(null, "Erreur", "Ajouter d'abord un stock avant de continuer", 3, "error");
-            return;
-        }
-
-        choosendestock = DestockerDelegate.findCustomised(choosenStock.getProductId().getUid(),
-                choosenStock.getNumlot(), this.ref, choosenStock.getDateStocker());
-        if (choosendestock == null) {
-            choosendestock = new Destocker(DataId.generate());
-        }
-        choosendestock.setCoutAchat(choosenStock.getCoutAchat());
-        choosendestock.setDateDestockage(choosenStock.getDateStocker());
-        choosendestock.setDestination(destination == null ? region : destination);
-        choosendestock.setLibelle(choosenStock.getLibelle());
-        choosendestock.setMesureId(choosenStock.getMesureId());
-        choosendestock.setNumlot(choosenStock.getNumlot());
-        choosendestock.setObservation(choosenStock.getObservation());
-        choosendestock.setProductId(choosenStock.getProductId());
-        choosendestock.setQuantite(choosenStock.getQuantite());
-        choosendestock.setReference(this.ref);
-        choosendestock.setRegion(destination == null ? region : destination);
-        choosenreq = RecquisitionDelegate.findCustomized(choosenStock.getProductId().getUid(),
-                choosenStock.getNumlot(), this.ref, choosenStock.getDateStocker());
-        if (choosenreq == null) {
-            choosenreq = new Recquisition(DataId.generate());
-        }
-        choosenreq.setCoutAchat(choosenStock.getCoutAchat());
-        choosenreq.setDate(choosenStock.getDateStocker());
-        choosenreq.setDateExpiry(choosenStock.getDateExpir());
-        choosenreq.setMesureId(choosenStock.getMesureId());
-        choosenreq.setNumlot(choosenStock.getNumlot());
-        choosenreq.setObservation(choosenStock.getObservation());
-        choosenreq.setProductId(choosenStock.getProductId());
-        choosenreq.setQuantite(choosenStock.getQuantite());
-        choosenreq.setReference(this.ref);
-        choosenreq.setRegion(destination == null ? region : destination);
-        choosenreq.setStockAlert(choosenStock.getStockAlerte());
-
-        Destocker foundd = DestockerDelegate.findDestocker(choosendestock.getUid());
-        if (foundd == null) {
-            Destocker dt = DestockerDelegate.saveDestocker(choosendestock);
-            Executors.newCachedThreadPool()
-                    .submit(() -> {
-                        Util.sync(dt, Constants.ACTION_CREATE, Tables.DESTOCKER);
-                    });
-            saveDestockByHttp(choosendestock);
-        }
-        Recquisition foundr = RecquisitionDelegate.findRecquisition(choosenreq.getUid());
-        if (foundr == null) {
-            foundr = RecquisitionDelegate.saveRecquisition(choosenreq);
-            Executors.newCachedThreadPool()
-                    .submit(() -> {
-                        Util.sync(choosenreq, Constants.ACTION_CREATE, Tables.RECQUISITION);
-                    });
-            saveRecqusitionByHttp(choosenreq);
-        }
-        appendPrice(foundr);
-
+     
     }
 
     @FXML
     public void closepricepane(Event e) {
-        dpk_date_expir_stk.setValue(null);
-        tf_cout_unitr_stk.clear();
-        tf_localisation_stk.clear();
-        tf_quantite_stk.clear();
-        tf_stock_alerte_stk.clear();
+//         dpk_date_expir_stk.setValue(null);
+//         tf_cout_unitr_stk.clear();
+        // tf_localisation_stk.clear();
+//         tf_quantite_stk.clear();
+//         tf_stock_alerte_stk.clear();
         dpk_expir_lot.setValue(null);
         tf_cout_achlot.clear();
         tf_localisalot.clear();
-        tilepn_prices1.getChildren().clear();
-        tf_prix_de_vente.clear();
-        cbx_choose_mesure_vente.setValue(null);
+        // tilepn_prices1.clear();
+//         tf_prix_de_vente.clear();
+//         cbx_choose_mesure_vente.setValue(null);
         tf_numlot.clear();
         tf_quant_lot.clear();
         tf_stock_allot.clear();
@@ -501,42 +439,43 @@ public class StoreformController implements Initializable {
         closeFloatingPane(e);
     }
 
+/*
     private void appendPrice(Recquisition savdr) {
         if (tf_qte_min.getText().isEmpty()
-                || tf_qte_max.getText().isEmpty()
-                || tf_prix_de_vente.getText().isEmpty()) {
+                || tf_qte_max.getText().isEmpty()) {
+//                 || tf_prix_de_vente.getText().isEmpty()) {
             MainUI.notify(null, "Erreur", "Veuillez completer tout les champs relatifs au prix de vente", 5, "error");
             return;
         }
-        String ctach = (lottab.isSelected() ? tf_cout_achlot.getText() : tf_cout_unitr_stk.getText());
+//         String ctach = (lottab.isSelected() ? tf_cout_achlot.getText() : tf_cout_unitr_stk.getText());
         if (ctach.isEmpty()) {
             MainUI.notify(null, "Erreur", "Veuillez completer le cout d'achat", 5, "error");
             return;
         }
-        Mesure stm = cbx_choose_mesure_stk.getValue();
-        Mesure mesurePv = cbx_choose_mesure_vente.getValue();
+//         Mesure stm = cbx_choose_mesure_stk.getValue();
+//         Mesure mesurePv = cbx_choose_mesure_vente.getValue();
         double raps = stm.getQuantContenu() / mesurePv.getQuantContenu();
         if (mesurePv == null) {
             MainUI.notify(null, "Erreur", "Veuillez selectionner une mesure puis continuer", 5, "error");
             return;
         }
-        double ppcd = Double.parseDouble(lottab.isSelected() ? tf_cout_achlot.getText() : tf_cout_unitr_stk.getText());
+//         double ppcd = Double.parseDouble(lottab.isSelected() ? tf_cout_achlot.getText() : tf_cout_unitr_stk.getText());
         double caupc = BigDecimal.valueOf(ppcd / stm.getQuantContenu()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-        double pvu = Double.parseDouble(tf_prix_de_vente.getText());
+//         double pvu = Double.parseDouble(tf_prix_de_vente.getText());
         double rapv = (ppcd / pvu);
         if (rapv >= raps) {
             MainUI.notify(null, bundle.getString("warning"), String.format(bundle.getString("xlowerprice"), caupc), 5, "warning");
             return;
         }
         PrixDeVente pv = new PrixDeVente(DataId.generate());
-        pv.setDevise(cbx_devise_price.getValue());
+//         pv.setDevise(cbx_devise_price.getValue());
         pv.setPrixUnitaire(pvu);
         pv.setQmin(Double.valueOf(tf_qte_min.getText()));
         pv.setQmax(Double.valueOf(tf_qte_max.getText()));
         pv.setMesureId(mesurePv);
         pv.setRecquisitionId(savdr == null ? choosenreq : savdr);
         if (findPrix(prices, pv) == null) {
-            addPrice(pv, tilepn_prices1);
+            // addPrice(pv, tilepn_prices1);
         } else {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("xpriceinterval"), 3, "error");
         }
@@ -563,7 +502,7 @@ public class StoreformController implements Initializable {
         l.setTooltip(new Tooltip(price));
         tilep.getChildren().add(l);
         prices.add(pv);
-        List<PrixDeVente> lpvs = PrixDeVenteDelegate.findPrixDeVente(pv.getQmin(),
+        List<PrixDeVente> lpvs = PrixDeVenteDelegate.findPrixDeVentes(pv.getQmin(),
                 pv.getMesureId().getUid(),
                 pv.getRecquisitionId().getUid());
         if (!lpvs.isEmpty()) {
@@ -614,17 +553,20 @@ public class StoreformController implements Initializable {
             }
         });
     }
+*/
 
     @FXML
     public void clearPrices(Event e) {
-        if (!tilepn_prices1.getChildren().isEmpty() && !prices.isEmpty()) {
-            tilepn_prices1.getChildren().clear();
+/*
+         if (!tilepn_prices1.getChildren().isEmpty() && !prices.isEmpty()) {
+            // tilepn_prices1.clear();
             for (PrixDeVente price : prices) {
                 PrixDeVenteDelegate.deletePrixDeVente(price);
             }
             DestockerDelegate.deleteDestocker(choosendestock);
             RecquisitionDelegate.deleteRecquisition(choosenreq);
         }
+*/
     }
 
     @FXML
@@ -636,9 +578,9 @@ public class StoreformController implements Initializable {
         choosenreq = null;
         tf_qte_max.clear();
         tf_qte_min.clear();
-        tf_prix_de_vente.clear();
-        cbx_choose_mesure_vente.setValue(null);
-        tilepn_prices1.getChildren().clear();
+//         tf_prix_de_vente.clear();
+//         cbx_choose_mesure_vente.setValue(null);
+        // tilepn_prices1.clear();
     }
 
     public Recquisition getLastActiveRecquisition(Produit prod) {
@@ -672,16 +614,16 @@ public class StoreformController implements Initializable {
                 cbx_choose_mesurelot.setValue(choosenStock.getMesureId());
                 if (choosenStock.getDateExpir() != null) {
                     System.out.println("DAtex " + choosenStock.getDateExpir());
-                    dpk_expir_lot.setValue(Constants.Datetime.toLocalDate(choosenStock.getDateExpir()));
+                    dpk_expir_lot.setValue(choosenStock.getDateExpir());
                 }
             } else {
-                tf_cout_unitr_stk.setText(String.valueOf(choosenStock.getCoutAchat()));
-                tf_quantite_stk.setText(String.valueOf(choosenStock.getQuantite()));
+//                 tf_cout_unitr_stk.setText(String.valueOf(choosenStock.getCoutAchat()));
+//                 tf_quantite_stk.setText(String.valueOf(choosenStock.getQuantite()));
                 tf_localisation_stk.setText(choosenStock.getLocalisation());
-                tf_stock_alerte_stk.setText(String.valueOf(choosenStock.getStockAlerte()));
-                cbx_choose_mesure_stk.setValue(choosenStock.getMesureId());
+//                 tf_stock_alerte_stk.setText(String.valueOf(choosenStock.getStockAlerte()));
+//                 cbx_choose_mesure_stk.setValue(choosenStock.getMesureId());
                 if (choosenStock.getDateExpir() != null) {
-                    dpk_date_expir_stk.setValue(Constants.Datetime.toLocalDate(choosenStock.getDateExpir()));
+//                     dpk_date_expir_stk.setValue(choosenStock.getDateExpir());
                 }
             }
         }
@@ -740,8 +682,8 @@ public class StoreformController implements Initializable {
                 }
                 choosenStock.setCoutAchat(Double.parseDouble(tf_cout_achlot.getText()));
                 LocalDate expir = dpk_expir_lot.getValue();
-                choosenStock.setDateExpir(expir == null ? null : Constants.Datetime.toUtilDate(expir));
-                choosenStock.setDateStocker(Constants.Datetime.toUtilDate(chlivraisonf.getDateLivr()));
+                choosenStock.setDateExpir(expir);
+                choosenStock.setDateStocker(chlivraisonf.getDateLivr() == null ? LocalDateTime.now() : chlivraisonf.getDateLivr().atStartOfDay());
                 choosenStock.setLibelle(chlivraisonf.getLibelle());
                 choosenStock.setLivraisId(chlivraisonf);
                 choosenStock.setLocalisation(tf_localisalot.getText());
@@ -756,25 +698,11 @@ public class StoreformController implements Initializable {
                 choosenStock.setReduction(0);
                 choosenStock.setRegion(region);
             } else {
-                choosenStock.setCoutAchat(Double.parseDouble(tf_cout_unitr_stk.getText()));
-                LocalDate expir = dpk_date_expir_stk.getValue();
-                choosenStock.setDateExpir(expir == null ? null : Constants.Datetime.toUtilDate(expir));
-                choosenStock.setDateStocker(Constants.Datetime.toUtilDate(chlivraisonf.getDateLivr()));
-                choosenStock.setLibelle(chlivraisonf.getLibelle());
-                choosenStock.setLivraisId(chlivraisonf);
-                choosenStock.setLocalisation(tf_localisation_stk.getText());
-                choosenStock.setProductId(cbx_choose_produit_stk.getValue());
-                choosenStock.setNumlot(Constants.TIMESTAMPED_FORMAT.format(new Date()));
-                choosenStock.setQuantite(Double.parseDouble(tf_quantite_stk.getText()));
-                choosenStock.setMesureId(cbx_choose_mesure_stk.getValue());
-                choosenStock.setObservation(chlivraisonf.getObservation());
-                double totalot = choosenStock.getCoutAchat() * choosenStock.getQuantite();
-                choosenStock.setPrixAchatTotal(totalot);
-                choosenStock.setStockAlerte(Double.parseDouble(tf_stock_alerte_stk.getText()));
-                choosenStock.setReduction(0);
-                choosenStock.setRegion(destination == null ? region : destination);
+                MainUI.notify(null, "Info", "Veuillez utiliser l'onglet des lots pour modifier le stock.", 3, "info");
+                return;
             }
             Stocker upd = StockerDelegate.updateStocker(choosenStock);
+            StockerDelegate.rectifyStockDepot(upd.getProductId(), upd.getDateStocker().toLocalDate(), upd.getRegion(), upd.getCoutAchat());
             Executors.newCachedThreadPool()
                     .submit(() -> {
                         Util.sync(upd, Constants.ACTION_UPDATE, Tables.STOCKER);
@@ -793,25 +721,22 @@ public class StoreformController implements Initializable {
                 choosendestock.setQuantite(choosenStock.getQuantite());
                 choosendestock.setReference(this.ref);
                 choosendestock.setRegion(destination == null ? region : destination);
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(DestockerDelegate.updateDestocker(choosendestock), Constants.ACTION_UPDATE, Tables.DESTOCKER);
-                        });
+             
             }
             List<Recquisition> rqs = RecquisitionDelegate.findByReference(choosenPro.getUid(), ref);
             if (!rqs.isEmpty()) {
                 choosenreq = rqs.get(0);
-                choosenreq.setCoutAchat(choosenStock.getCoutAchat());
-                choosenreq.setDate(choosenStock.getDateStocker());
-                choosenreq.setDateExpiry(choosenStock.getDateExpir());
-                choosenreq.setMesureId(choosenStock.getMesureId());
-                choosenreq.setNumlot(choosenStock.getNumlot());
-                choosenreq.setObservation(choosenStock.getObservation());
-                choosenreq.setProductId(choosenStock.getProductId());
-                choosenreq.setQuantite(choosenStock.getQuantite());
-                choosenreq.setReference(this.ref);
-                choosenreq.setRegion(destination == null ? region : destination);
-                choosenreq.setStockAlert(choosenStock.getStockAlerte());
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
+                // Recquisition prop removed
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             Util.sync(RecquisitionDelegate.updateRecquisition(choosenreq), Constants.ACTION_UPDATE, Tables.RECQUISITION);
@@ -868,8 +793,8 @@ public class StoreformController implements Initializable {
             }
             choosenStock.setCoutAchat(Double.parseDouble(tf_cout_achlot.getText()));
             LocalDate expir = dpk_expir_lot.getValue();
-            choosenStock.setDateExpir(expir == null ? null : Constants.Datetime.toUtilDate(expir));
-            choosenStock.setDateStocker(new Date());
+            choosenStock.setDateExpir(expir);
+            choosenStock.setDateStocker(LocalDateTime.now());
             choosenStock.setLibelle(chlivraisonf.getLibelle());
             choosenStock.setLivraisId(chlivraisonf);
             choosenStock.setLocalisation(tf_localisalot.getText());
@@ -887,159 +812,23 @@ public class StoreformController implements Initializable {
             if (findStocker(choosenStock.getNumlot()) == null) {
                 if (obllot.add(choosenStock)) {
                     Stocker stk = StockerDelegate.saveStocker(choosenStock);
+                    StockerDelegate.rectifyStockDepot(stk.getProductId(), stk.getDateStocker().toLocalDate(), stk.getRegion(), stk.getCoutAchat());
                     Executors.newCachedThreadPool()
                             .submit(() -> {
                                 Util.sync(stk, Constants.ACTION_CREATE, Tables.STOCKER);
                             });
-
-                    choosendestock = new Destocker(DataId.generate());
-                    choosendestock.setCoutAchat(choosenStock.getCoutAchat());
-                    choosendestock.setDateDestockage(choosenStock.getDateStocker());
-                    choosendestock.setDestination(destination == null ? region : destination);
-                    choosendestock.setLibelle(choosenStock.getLibelle());
-                    choosendestock.setMesureId(choosenStock.getMesureId());
-                    choosendestock.setNumlot(choosenStock.getNumlot());
-                    choosendestock.setObservation(choosenStock.getObservation());
-                    choosendestock.setProductId(choosenStock.getProductId());
-                    choosendestock.setQuantite(choosenStock.getQuantite());
-                    choosendestock.setReference(this.ref);
-                    choosendestock.setRegion(destination == null ? region : destination);
-
-                    choosenreq = new Recquisition(DataId.generate());
-                    choosenreq.setCoutAchat(choosenStock.getCoutAchat());
-                    choosenreq.setDate(choosenStock.getDateStocker());
-                    choosenreq.setDateExpiry(choosenStock.getDateExpir());
-                    choosenreq.setMesureId(choosenStock.getMesureId());
-                    choosenreq.setNumlot(choosenStock.getNumlot());
-                    choosenreq.setObservation(choosenStock.getObservation());
-                    choosenreq.setProductId(choosenStock.getProductId());
-                    choosenreq.setQuantite(choosenStock.getQuantite());
-                    choosenreq.setReference(this.ref);
-                    choosenreq.setRegion(destination == null ? region : destination);
-                    choosenreq.setStockAlert(choosenStock.getStockAlerte());
                     ok = true;
                     //we don't save as long as we haven't yet saved any sale price
                     Platform.runLater(() -> {
                         txt_totalot.setText(String.format(bundle.getString("xnlot"), obllot.size()));
                     });
                 }
-            } else {
-
-                choosendestock = new Destocker(DataId.generate());
-                choosendestock.setCoutAchat(choosenStock.getCoutAchat());
-                choosendestock.setDateDestockage(choosenStock.getDateStocker());
-                choosendestock.setDestination(destination == null ? region : destination);
-                choosendestock.setLibelle(choosenStock.getLibelle());
-                choosendestock.setMesureId(choosenStock.getMesureId());
-                choosendestock.setNumlot(choosenStock.getNumlot());
-                choosendestock.setObservation(choosenStock.getObservation());
-                choosendestock.setProductId(choosenStock.getProductId());
-                choosendestock.setQuantite(choosenStock.getQuantite());
-                choosendestock.setReference(this.ref);
-                choosendestock.setRegion(destination == null ? region : destination);
-
-                choosenreq = new Recquisition(DataId.generate());
-                choosenreq.setCoutAchat(choosenStock.getCoutAchat());
-                choosenreq.setDate(choosenStock.getDateStocker());
-                choosenreq.setDateExpiry(choosenStock.getDateExpir());
-                choosenreq.setMesureId(choosenStock.getMesureId());
-                choosenreq.setNumlot(choosenStock.getNumlot());
-                choosenreq.setObservation(choosenStock.getObservation());
-                choosenreq.setProductId(choosenStock.getProductId());
-                choosenreq.setQuantite(choosenStock.getQuantite());
-                choosenreq.setReference(this.ref);
-                choosenreq.setRegion(destination == null ? region : destination);
-                choosenreq.setStockAlert(choosenStock.getStockAlerte());
-                ok = true;
-
-            }
+            } 
 
         } else {
-            if (txt_ref_livr.getText().isEmpty() || tf_cout_unitr_stk.getText().isEmpty()
-                    || tf_localisation_stk.getText().isEmpty() || tf_quantite_stk.getText().isEmpty()
-                    || tf_stock_alerte_stk.getText().isEmpty()) {
-                MainUI.notify(null, "Erreur", "Veuillez completer tout les champs non facultatif", 4, "error");
-                return false;
-            }
-
-            if (cbx_choose_mesure_stk.getValue() == null) {
-                MainUI.notify(null, "Erreur", "Veuillez choisir les mesures puis continuer", 4, "error");
-                return false;
-            }
-            if (cbx_choose_produit_stk.getValue() == null) {
-                MainUI.notify(null, "Erreur", "Veuillez completer le produit puis continuer", 4, "error");
-                return false;
-            }
-            if (action.equals(Constants.ACTION_CREATE)) {
-                choosenStock = new Stocker(DataId.generate());
-            }
-            choosenStock.setCoutAchat(Double.parseDouble(tf_cout_unitr_stk.getText()));
-            LocalDate expir = dpk_date_expir_stk.getValue();
-            choosenStock.setDateExpir(expir == null ? null : Constants.Datetime.toUtilDate(expir));
-            choosenStock.setDateStocker(Constants.Datetime.toUtilDate(chlivraisonf.getDateLivr()));
-            choosenStock.setLibelle(chlivraisonf.getLibelle());
-            choosenStock.setLivraisId(chlivraisonf);
-            choosenStock.setLocalisation(tf_localisation_stk.getText());
-            choosenStock.setProductId(cbx_choose_produit_stk.getValue());
-            choosenStock.setNumlot(Constants.TIMESTAMPED_FORMAT.format(new Date()));
-            choosenStock.setQuantite(Double.parseDouble(tf_quantite_stk.getText()));
-            choosenStock.setMesureId(cbx_choose_mesure_stk.getValue());
-            choosenStock.setObservation(chlivraisonf.getObservation());
-            double totalot = choosenStock.getCoutAchat() * choosenStock.getQuantite();
-            choosenStock.setPrixAchatTotal(totalot);
-            choosenStock.setStockAlerte(Double.parseDouble(tf_stock_alerte_stk.getText()));
-            choosenStock.setReduction(0);
-            choosenStock.setRegion(destination == null ? region : destination);
-            if (findStocker2(choosenStock.getProductId().getUid()) == null) {
-                if (obllot.add(choosenStock)) {
-                    Executors.newCachedThreadPool()
-                            .submit(() -> {
-                                Util.sync(StockerDelegate.saveStocker(choosenStock), Constants.ACTION_CREATE, Tables.STOCKER);
-                            });
-                    List<Destocker> ld = DestockerDelegate.findByReference(ref, choosenStock.getProductId().getUid(), choosenStock.getNumlot());
-                    if (ld.isEmpty()) {
-                        choosendestock = new Destocker(DataId.generate());
-                        choosendestock.setCoutAchat(choosenStock.getCoutAchat());
-                        choosendestock.setDateDestockage(choosenStock.getDateStocker());
-                        choosendestock.setDestination(destination == null ? region : destination);
-                        choosendestock.setLibelle(choosenStock.getLibelle());
-                        choosendestock.setMesureId(choosenStock.getMesureId());
-                        choosendestock.setNumlot(choosenStock.getNumlot());
-                        choosendestock.setObservation(choosenStock.getObservation());
-                        choosendestock.setProductId(choosenStock.getProductId());
-                        choosendestock.setQuantite(choosenStock.getQuantite());
-                        choosendestock.setReference(this.ref);
-                        choosendestock.setRegion(destination == null ? region : destination);
-                    } else {
-                        choosendestock = ld.get(0);
-                    }
-                    List<Recquisition> lr = RecquisitionDelegate.findByReference(ref, choosenStock.getProductId().getUid(), choosenStock.getNumlot());
-                    if (lr.isEmpty()) {
-                        choosenreq = new Recquisition(DataId.generate());
-                        choosenreq.setCoutAchat(choosenStock.getCoutAchat());
-                        choosenreq.setDate(choosenStock.getDateStocker());
-                        choosenreq.setDateExpiry(choosenStock.getDateExpir());
-                        choosenreq.setMesureId(choosenStock.getMesureId());
-                        choosenreq.setNumlot(choosenStock.getNumlot());
-                        choosenreq.setObservation(choosenStock.getObservation());
-                        choosenreq.setProductId(choosenStock.getProductId());
-                        choosenreq.setQuantite(choosenStock.getQuantite());
-                        choosenreq.setReference(this.ref);
-                        choosenreq.setRegion(destination == null ? region : destination);
-                        choosenreq.setStockAlert(choosenStock.getStockAlerte());
-                        ok = true;
-                        //we don't save as long as we haven't yet saved any sale price
-                        Platform.runLater(() -> {
-                            txt_totalot.setText(String.format(bundle.getString("xnlot"), obllot.size()));
-                        });
-                    } else {
-                        choosenreq = lr.get(0);
-                    }
-                }
-            } else {
-                MainUI.notify(null, "Erreur", "Le stock de ce produit existe deja", 4, "error");
-            }
-
+            // Standard tab logic removed as per user request
+            MainUI.notify(null, "Info", "Veuillez utiliser l'onglet des lots pour enregistrer le stock.", 3, "info");
+            return false;
         }
         saveStockByHttp(choosenStock);
         cglobal += choosenStock.getPrixAchatTotal();
@@ -1065,9 +854,9 @@ public class StoreformController implements Initializable {
             @Field("productId") String productId,
             @Field("numlot") String numlo
          */
-        Date d=stocker.getDateExpir();
-        ksf.syncStockage(stocker.getUid(),Constants.DATE_HEURE_FORMAT.format(stocker.getDateStocker()), 
-                Double.toString(stocker.getCoutAchat()),Constants.DATE_ONLY_FORMAT.format(d), 
+        LocalDate d=stocker.getDateExpir();
+        ksf.syncStockage(stocker.getUid(),(stocker.getDateStocker() == null ? "" : stocker.getDateStocker().toString()), 
+                Double.toString(stocker.getCoutAchat()),(d == null ? "" : d.toString()), 
                 Double.toString(stocker.getStockAlerte()),Double.toString(stocker.getQuantite()), stocker.getLibelle(), 
                 stocker.getLocalisation(), stocker.getRegion(), Double.toString(stocker.getPrixAchatTotal()),
                 stocker.getObservation(),stocker.getLivraisId().getUid(), stocker.getMesureId().getUid(),
@@ -1193,6 +982,7 @@ public class StoreformController implements Initializable {
 
     private void configcbx() {
 
+/*
         cbx_choose_mesure_stk.setConverter(new StringConverter<Mesure>() {
             @Override
             public String toString(Mesure object) {
@@ -1208,6 +998,7 @@ public class StoreformController implements Initializable {
                         .findFirst().orElse(null);
             }
         });
+*/
 
         cbx_choose_livraison.setConverter(new StringConverter<Livraison>() {
             @Override
@@ -1224,21 +1015,7 @@ public class StoreformController implements Initializable {
                         .findFirst().orElse(null);
             }
         });
-        cbx_choose_mesure_vente.setConverter(new StringConverter<Mesure>() {
-            @Override
-            public String toString(Mesure object) {
-                return object == null ? null : object.getDescription();
-            }
 
-            @Override
-            public Mesure fromString(String string) {
-                return cbx_choose_mesure_vente.getItems()
-                        .stream()
-                        .filter(f -> (f.getDescription())
-                        .equalsIgnoreCase(string))
-                        .findFirst().orElse(null);
-            }
-        });
 
         cbx_choose_mesurelot.setConverter(new StringConverter<Mesure>() {
             @Override
@@ -1255,9 +1032,11 @@ public class StoreformController implements Initializable {
                         .findFirst().orElse(null);
             }
         });
+/*
         cbx_choose_mesure_stk.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             choosenM = newValue;
         });
+*/
         cbx_choose_mesurelot.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             choosenM = newValue;
         });
@@ -1289,9 +1068,9 @@ public class StoreformController implements Initializable {
             //nsmesure.findAllEquals("produitId.uid", choosenPro.getUid());
             // Util.findMesureForProduitWithId(nsmesure.findAll(), choosenPro.getUid());
             lismesure.setAll(mzs);
-            cbx_choose_mesure_stk.getSelectionModel().selectFirst();
+//             cbx_choose_mesure_stk.getSelectionModel().selectFirst();
             cbx_choose_mesurelot.getSelectionModel().selectFirst();
-            cbx_choose_mesure_vente.getSelectionModel().selectFirst();
+//             cbx_choose_mesure_vente.getSelectionModel().selectFirst();
             List<Stocker> proxt = StockerDelegate.findDescSortedByDateStock(choosenPro.getUid());
 
             if (!proxt.isEmpty()) {
@@ -1299,21 +1078,17 @@ public class StoreformController implements Initializable {
                 if (lottab.isSelected()) {
                     tf_cout_achlot.setText(String.valueOf(fromlast.getCoutAchat()));
                     tf_localisalot.setText(fromlast.getLocalisation());
-                    dpk_expir_lot.setValue(Constants.Datetime.toLocalDate(fromlast.getDateExpir()));
+                    dpk_expir_lot.setValue(fromlast.getDateExpir());
                     tf_numlot.setText(fromlast.getNumlot());
                     tf_stock_allot.setText(String.valueOf(fromlast.getStockAlerte()));
                 } else {
-                    tf_cout_unitr_stk.setText(String.valueOf(fromlast.getCoutAchat()));
-                    tf_localisation_stk.setText(fromlast.getLocalisation());
-                    tf_stock_alerte_stk.setText(String.valueOf(fromlast.getStockAlerte()));
-                    if (fromlast.getDateExpir() != null) {
-                        dpk_date_expir_stk.setValue(Constants.Datetime.toLocalDate(fromlast.getDateExpir()));
-                    }
+                    // Standard tab logic removed
                 }
             }
 
         });
 
+/*
         tf_quantite_stk.textProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -1343,6 +1118,7 @@ public class StoreformController implements Initializable {
 //                    e.printStackTrace();
             }
         });
+*/
 
         tf_quant_lot.textProperty().addListener(new ChangeListener<String>() {
             @Override
@@ -1376,6 +1152,7 @@ public class StoreformController implements Initializable {
                 }
             }
         });
+/*
         tf_prix_de_vente.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
             if (newValue.isEmpty() || newValue == null) {
                 return;
@@ -1394,6 +1171,7 @@ public class StoreformController implements Initializable {
                 MainUI.notify(null, "Erreur", "Entrer les chiffres uniquement", 3, "error");
             }
         });
+*/
     }
 
     /**
@@ -1408,9 +1186,9 @@ public class StoreformController implements Initializable {
         lisvrezon = FXCollections.observableArrayList();
         configcbx();
         configtablot();
-        MainUI.setPattern(dpk_date_expir_stk);
+//         MainUI.setPattern(dpk_date_expir_stk);
         MainUI.setPattern(dpk_expir_lot);
-        pricepane.setVisible(false);
+        // pricepane.setVisible(...);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         taux = pref.getDouble("taux2change", 2000);
         region = pref.get("region", null);
@@ -1491,5 +1269,14 @@ public class StoreformController implements Initializable {
             }
         }
         return null;
+    }
+
+    @FXML
+    public void openNunua(ActionEvent event) {
+        try {
+            Desktop.getDesktop().browse(new URI("https://nunua.markets"));
+        } catch (IOException | URISyntaxException ex) {
+            Logger.getLogger(StoreformController.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 }

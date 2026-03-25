@@ -12,10 +12,11 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="485.0" prefWidth="432.0" style="-fx-background-color: white; -fx-background-radius: 5; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.PanierappenderController">
+<AnchorPane id="AnchorPane" prefHeight="485.0" prefWidth="432.0" style="-fx-background-color: white; -fx-background-radius: 5; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.PanierappenderController">
    <children>
       <ImageView fx:id="img_vu_pixa_prod" fitHeight="80.0" fitWidth="80.0" layoutX="6.0" layoutY="5.0" pickOnBounds="true" preserveRatio="true">
          <image>
@@ -40,8 +41,6 @@
             <Font size="18.0" />
          </font></Button>
       <Separator layoutX="-1.0" layoutY="428.0" prefHeight="4.0" prefWidth="430.0" />
-      <TextField fx:id="tf_prix_unitr_usd" layoutX="26.0" layoutY="276.0" prefHeight="32.0" prefWidth="180.0" promptText="Prix unitaire" />
-      <TextField fx:id="tf_prix_unitr_cdf" layoutX="218.0" layoutY="275.0" prefHeight="32.0" prefWidth="188.0" />
       <Label fx:id="txt_total_usd" layoutX="30.0" layoutY="330.0" prefHeight="21.0" prefWidth="180.0" text="....">
          <font>
             <Font size="15.0" />
@@ -67,11 +66,11 @@
             <Font size="15.0" />
          </font>
       </Label>
-      <Label fx:id="txt_product_name1" layoutX="34.0" layoutY="243.0" prefHeight="16.0" prefWidth="180.0" text="USD" />
+      <Label fx:id="lbl_usd_part" layoutX="34.0" layoutY="243.0" prefHeight="16.0" prefWidth="180.0" text="USD" />
       <Label fx:id="txt_product_name11" layoutX="225.0" layoutY="243.0" prefHeight="16.0" prefWidth="180.0" text="CDF" />
       <Separator layoutX="1.0" layoutY="173.0" prefHeight="16.0" prefWidth="430.0" />
-      <ComboBox fx:id="cbx_lot_recquisitionee" layoutX="31.0" layoutY="115.0" prefHeight="32.0" prefWidth="170.0" />
-      <Label fx:id="txt_peremption" layoutX="224.0" layoutY="115.0" prefHeight="32.0" prefWidth="196.0" style="-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;" text="Non perissable">
+      <ComboBox fx:id="cbx_lot_recquisitionee" layoutX="16.0" layoutY="115.0" prefHeight="32.0" prefWidth="170.0" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="246.0" />
+      <Label fx:id="txt_peremption" layoutX="204.0" layoutY="115.0" prefHeight="32.0" prefWidth="144.0" style="-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;" text="Non perissable" AnchorPane.rightAnchor="85.0">
          <opaqueInsets>
             <Insets />
          </opaqueInsets>
@@ -122,5 +121,12 @@
             <Button layoutX="142.0" layoutY="162.0" mnemonicParsing="false" onAction="#printbarcode" text="OK" />
          </children>
       </Pane>
+      <Label fx:id="txt_qte_lot" layoutX="377.0" layoutY="123.0" prefHeight="16.0" prefWidth="61.0" text="..." AnchorPane.rightAnchor="14.0" />
+      <HBox layoutX="41.0" layoutY="272.0" prefHeight="38.0" prefWidth="371.0">
+         <children>
+            <TextField fx:id="tf_prix_unitr_usd" prefHeight="32.0" prefWidth="180.0" promptText="Prix unitaire" />
+            <TextField fx:id="tf_prix_unitr_cdf" prefHeight="32.0" prefWidth="188.0" />
+         </children>
+      </HBox>
    </children>
 </AnchorPane>

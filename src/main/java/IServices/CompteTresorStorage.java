@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.CompteTresor;
 import data.CompteTresor;
@@ -25,7 +25,9 @@ public interface CompteTresorStorage {
     public List<CompteTresor> findCompteTresors(int start,int max);
     public List<CompteTresor> findCompteTresorByNumero(String objId);
      public List<CompteTresor> findCompteTresorByBankName(String bname);
-
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
     public List<CompteTresor> findByNumeroCompte(String numeroCompte);
      public List<CompteTresor> mergeSet(Set<CompteTresor> bulk);
+
+    public List<CompteTresor> findUnSyncedCompteTresors(long disconnected_at);
 }

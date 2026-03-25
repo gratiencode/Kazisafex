@@ -10,7 +10,6 @@ import com.github.anastaciocintra.escpos.EscPosConst;
 import com.github.anastaciocintra.escpos.barcode.BarCode;
 import com.github.anastaciocintra.output.PrinterOutputStream;
 import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.oned.Code128Writer;
@@ -81,7 +80,18 @@ import tools.Constants;
 import tools.MainUI;
 import tools.SyncEngine;
 import tools.Util;
-import data.helpers.Role; import data.network.Kazisafe;
+import data.helpers.Role;
+import data.network.Kazisafe;
+import delegates.TraisorerieDelegate;
+import java.time.LocalDate;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * FXML Controller class
@@ -145,9 +155,20 @@ public class PanierappenderController implements Initializable {
     Printer defaultPrinter;
     ToggleGroup printerGroup;
     String dev;
+    @FXML
+    private Label txt_product_name11;
+    @FXML
+    private Label txt_alerte_pa1;
+    @FXML
+    private Label txt_qte_lot;
+    @FXML
+    private Label lbl_usd_part;
 
     /**
      * Initializes the controller class.
+     *
+     * @param url
+     * @param rb
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {
@@ -155,7 +176,7 @@ public class PanierappenderController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         taux2change = pref.getDouble("taux2change", 2000);
         region = pref.get("region", "...");
-        role = pref.get("priv", null);
+        role = pref.get("priv", "");
         meth = pref.get("meth", "fifo");
         printerGroup = new ToggleGroup();
         thermal.setToggleGroup(printerGroup);
@@ -168,12 +189,12 @@ public class PanierappenderController implements Initializable {
                 return;
             }
             String numlotx = choosenRecquisition.getNumlot();
-            if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
+            if (hasGlobalStockAccess()) {
                 resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
             } else {
                 resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
             }
-            prices = PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
+            prices = getRecentPrice(prod.getUid()).getValue();//PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
 
             reste = (resteEnPiece / choosenmez.getQuantContenu());
             txt_available_quant.setText(reste + " " + choosenmez.getDescription());
@@ -182,18 +203,20 @@ public class PanierappenderController implements Initializable {
                 List<PrixDeVente> pvds = PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, d);
                 if (pvds.isEmpty()) {
                     applyPrices(prices);
+                    return;
                 }
                 PrixDeVente pvd = pvds.get(0);
                 dev = pvd.getDevise();
                 if (dev.equals("CDF")) {
                     tf_prix_unitr_cdf.setText(String.valueOf(pvd.getPrixUnitaire()));
-                    tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvd.getPrixUnitaire() / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+                    tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvd.getPrixUnitaire()).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
                     double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
                     double cdf = Double.parseDouble(tf_prix_unitr_cdf.getText());
                     double tusd = BigDecimal.valueOf(d * pv).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                    double tcfd = BigDecimal.valueOf(d * cdf).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                    txt_total_cdf.setText(String.valueOf(tcfd));
+//                    double tcfd = BigDecimal.valueOf(d * cdf).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+                    txt_total_cdf.setText(String.valueOf(Math.round(d * cdf)));
                     txt_total_usd.setText(String.valueOf(tusd));
+                    lbl_usd_part.setVisible(false);
                 } else {
                     tf_prix_unitr_usd.setText(String.valueOf(pvd.getPrixUnitaire()));
                     double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
@@ -207,6 +230,18 @@ public class PanierappenderController implements Initializable {
             applyPrices(prices);
         });
         tf_input_quant.requestFocus();
+        tf_input_quant.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+            try {
+                System.out.println("Execution carret on quant");
+                resolve(newValue);
+            } catch (NumberFormatException e) {
+                System.err.println("NFE error " + e.getMessage());
+            } catch (IOException ex) {
+                Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (Exception ex) {
+                Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        });
     }
 
     @FXML
@@ -216,7 +251,7 @@ public class PanierappenderController implements Initializable {
         st.close();
     }
 
-     @FXML
+    @FXML
     private void closeFloatingPane(Event evt) {
         Node n = (Node) evt.getSource();
         n.getParent().setVisible(false);
@@ -227,8 +262,6 @@ public class PanierappenderController implements Initializable {
         pane_print.setVisible(true);
     }
 
-    
-    
     @FXML
     private void onHoverHome(MouseEvent event) {
         ImageView img = (ImageView) event.getSource();
@@ -245,6 +278,9 @@ public class PanierappenderController implements Initializable {
     ComboBox<Printer> cbx_printers;
 
     public void setProduit(Entreprise eze, Kazisafe ksf, Produit produit, String action, long id) {
+        if (produit == null) {
+            return;
+        }
         this.prod = produit;
         this.action = action;
         this.id = id;
@@ -253,18 +289,13 @@ public class PanierappenderController implements Initializable {
         Util.installPicture(img_vu_pixa_prod, prod.getUid() + ".jpeg");
         txt_codebar.setText(prod.getCodebar());
         System.out.println("selected pro " + prod.getNomProduit() + " From " + eze);
-
         mesures = MesureDelegate.findAscSortedByQuantWithProduit(prod.getUid());
-        Mesure minMesure = mesures.get(0);
-        choosenmez = minMesure;
         ObservableList<Mesure> lmez = FXCollections.observableArrayList(mesures);
         cbx_mesure_selected.setItems(lmez);
         cbx_lot_recquisitionee.setItems(lisrecquisition);
         cbx_mesure_selected.getSelectionModel().selectFirst();
-        if (minMesure == null) {
-            choosenmez = cbx_mesure_selected.getValue();
-        }
-         ObservableSet<Printer> osp = Printer.getAllPrinters();
+        choosenmez = cbx_mesure_selected.getValue();
+        ObservableSet<Printer> osp = Printer.getAllPrinters();
         cbx_printers.setItems(setToList(osp));
         defaultPrinter = Printer.getDefaultPrinter();
         cbx_printers.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Printer> observable, Printer oldValue, Printer newValue) -> {
@@ -273,83 +304,90 @@ public class PanierappenderController implements Initializable {
         cbx_printers.getSelectionModel().select(defaultPrinter);
         txt_product_name.setText(prod.getNomProduit() + " " + (prod.getMarque() == null ? "" : prod.getMarque()) + " " + (prod.getModele() == null ? "" : prod.getModele()) + ""
                 + " " + (prod.getTaille() == null ? "" : prod.getTaille()) + " " + (prod.getCouleur() == null ? "" : prod.getCouleur()));
-//        applyPrice(prices);
-        if (meth.equals("ppps")) {
-            List<Recquisition> lsks = RecquisitionDelegate.toFefoOrdering(prod.getUid());
-            //db.findByProduitOrderByExp(Recquisition.class, prod.getUid());
-            for (Recquisition lsk : lsks) {
-                if (lsk.getNumlot() == null) {
-                    lsk.setNumlot(Constants.TIMESTAMPED_FORMAT.format(lsk.getDate()));
-                }
-                if (!isSameLotExistInRecqs(lsk.getNumlot())) {
-                    lisrecquisition.add(lsk);
-                }
+        List<Recquisition> lsks = getRecquisitionList(meth, role, region, prod);
+        if (lsks == null) {
+            lsks = Collections.emptyList();
+        }
+        for (Recquisition lsk : lsks) {
+            if (lsk.getNumlot() == null) {
+                lsk.setNumlot(lsk.getDate().toString());
             }
-        } else if (meth.equals("fifo")) {
-            List<Recquisition> lsks = RecquisitionDelegate.toFifoOrdering(prod.getUid());
-            //db.findByProduitOrderByDateAsc(Recquisition.class, prod.getUid());
-            for (Recquisition lsk : lsks) {
-                if (lsk.getNumlot() == null) {
-                    lsk.setNumlot(Constants.TIMESTAMPED_FORMAT.format(lsk.getDate()));
-                }
-                if (!isSameLotExistInRecqs(lsk.getNumlot())) {
-                    lisrecquisition.add(lsk);
-                }
-            }
-        } else if (meth.equals("lifo")) {
-            List<Recquisition> lsks = RecquisitionDelegate.toLifoOrdering(prod.getUid());
-            //db.findByProduitOrderByDateDesc(Recquisition.class, prod.getUid());
-            for (Recquisition lsk : lsks) {
-                if (lsk.getNumlot() == null) {
-                    lsk.setNumlot(Constants.TIMESTAMPED_FORMAT.format(lsk.getDate()));
-                }
-                if (!isSameLotExistInRecqs(lsk.getNumlot())) {
+            if (!isSameLotExistInRecqs(lsk.getNumlot())) {
+                double q = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot());
+                if (q > 0) {
                     lisrecquisition.add(lsk);
                 }
             }
         }
         System.out.println("Recqusis met size " + lisrecquisition.size());
-        Recquisition choosen = chooseValideRecquisition(lisrecquisition);
-        cbx_lot_recquisitionee.getSelectionModel().select(choosen);
-        if (choosen == null) {
+//        Recquisition choosen = chooseValideRecquisitionx(lisrecquisition);
+        cbx_lot_recquisitionee.getSelectionModel().selectFirst();//.select(choosen);
+        choosenRecquisition = cbx_lot_recquisitionee.getValue();
+        Map.Entry<Recquisition, List<PrixDeVente>> recent = getRecentPrice(prod.getUid());
+        if (choosenRecquisition == null) {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("choosemeth"), 4, "error");
+            choosenRecquisition = recent.getKey();
+            if (choosenRecquisition != null) {
+                lisrecquisition.add(choosenRecquisition);
+            }
+        }
+        if (choosenRecquisition == null) {
+            MainUI.notify(null, bundle.getString("error"), "Aucun lot disponible pour ce produit.", 4, "error");
             return;
         }
-        List<Stocker> locals = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosen.getNumlot());
+        List<Stocker> locals = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosenRecquisition.getNumlot());
         Stocker local = locals.isEmpty() ? null : locals.get(0);
         localisabel.setText(local == null ? "" : local.getLocalisation());
-        choosenRecquisition = cbx_lot_recquisitionee.getValue();
         System.out.println("Recs size " + lisrecquisition.size());
-        Recquisition headerRecq = PosController.getInstance().getHeaderRecq(prod);
-        String numlot = choosenRecquisition == null ? headerRecq.getNumlot() : choosenRecquisition.getNumlot();
+//        Recquisition headerRecq = PosController.getInstance().getHeaderRecq(prod);
+//        String numlot = choosenRecquisition == null ? headerRecq.getNumlot() : choosenRecquisition.getNumlot();
 
         int expir = isStockExpired(choosenRecquisition);
-        if (expir == -1) {
-            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-        } else if (expir == 3) {
-            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-        } else if (expir == 6) {
-            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-        } else if (expir == 12) {
-            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-        } else {
-            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+        switch (expir) {
+            case -1 ->
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
+            case 3 ->
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
+            case 6 ->
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
+            case 12 ->
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
+            default ->
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
         }
         txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
+        if (hasGlobalStockAccess()) {
+            resteEnPiece = RecquisitionDelegate.findCurrentStockFor(prod, "%");
         } else {
-            resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
+            resteEnPiece = RecquisitionDelegate.findCurrentStockFor(prod, region);
         }
-        prices = PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
-        txt_alerte_pa.setText(choosenRecquisition.getStockAlert() + " " + choosenmez.getDescription());
 
+//        prices = PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
+        if (prices == null) {
+            prices = recent.getValue() == null ? new ArrayList<>() : new ArrayList<>(recent.getValue());
+        }
+        txt_alerte_pa.setText(choosenRecquisition.getStockAlert() + " " + choosenmez.getDescription());
+        if (prices.isEmpty()) {
+            for (Recquisition rx : RecquisitionDelegate.toLifoOrdering(prod.getUid())) {
+                List<PrixDeVente> pricez = PrixDeVenteDelegate.findPricesForRecq(rx.getUid());
+                if (!pricez.isEmpty()) {
+                    for (PrixDeVente prixDeVente : pricez) {
+                        if (prixDeVente.getPrixUnitaire() > 0) {
+                            prices.add(prixDeVente);
+                        }
+                    }
+                    if (!prices.isEmpty()) {
+                        break;
+                    }
+                }
+            }
+        }
         txt_available_quant.setText((resteEnPiece / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-        List<PrixDeVente> pvxs = PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, 1);
+        List<PrixDeVente> pvxs = pickPrice(prices, choosenmez, 1);
         if (!pvxs.isEmpty()) {
             PrixDeVente pvx = pvxs.get(0);
             String dev = pvx.getDevise();
-//                    pref.get("mainCur", "USD");
+//                   
             if (dev.equals("CDF")) {
                 tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire()));
                 tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvx.getPrixUnitaire() / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
@@ -358,6 +396,9 @@ public class PanierappenderController implements Initializable {
                 double tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                 txt_total_cdf.setText(String.valueOf(tcdf));
                 txt_total_usd.setText(String.valueOf(tusd));
+                tf_prix_unitr_usd.setVisible(false);
+                txt_total_usd.setVisible(false);
+                lbl_usd_part.setVisible(false);
             } else {
                 tf_prix_unitr_usd.setText(String.valueOf(pvx.getPrixUnitaire()));
                 tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire() * taux2change));
@@ -371,54 +412,13 @@ public class PanierappenderController implements Initializable {
         } else {
             applyPrices(prices);
         }
-        String text = "X" + prod.getUid() + "-" + choosenmez.getQuantContenu() + "-" + tf_input_quant.getText() + "-"
+        String text = "#" + prod.getUid() + "-" + choosenmez.getQuantContenu() + "-" + tf_input_quant.getText() + "-"
                 + "" + choosenRecquisition.getNumlot() + "-" + dev;
         try {
             writeCartItem(text.trim());
         } catch (IOException ex) {
             Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
         }
-        tf_input_quant.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                try {
-                    double d = Double.parseDouble(newValue);
-                    List<PrixDeVente> pvxs = PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, d);
-
-                    if (pvxs.isEmpty()) {
-                        return;
-                    }
-
-                    PrixDeVente pvx = pvxs.get(0);
-                    String dev = pvx.getDevise();
-                    if (dev.equals("CDF")) {
-                        tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvx.getPrixUnitaire() / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
-                        tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire()));
-                        double fc = Double.parseDouble(tf_prix_unitr_cdf.getText());
-                        double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
-                        double tusd = BigDecimal.valueOf(d * pv).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                        double tcfd = BigDecimal.valueOf(d * fc).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
-                        txt_total_cdf.setText(String.valueOf(tcfd));
-                        txt_total_usd.setText(String.valueOf(tusd));
-                    } else {
-                        tf_prix_unitr_usd.setText(String.valueOf(pvx.getPrixUnitaire()));
-                        tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire() * taux2change));
-                        double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
-                        double tusd = BigDecimal.valueOf(d * pv).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                        double tcfd = BigDecimal.valueOf(tusd * taux2change).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                        txt_total_cdf.setText(String.valueOf(tcfd));
-                        txt_total_usd.setText(String.valueOf(tusd));
-                    }
-                    String text = "X" + prod.getUid() + "-" + choosenmez.getQuantContenu() + "-" + tf_input_quant.getText() + "-"
-                            + "" + choosenRecquisition.getNumlot() + "-" + dev;
-                    writeCartItem(text);
-                } catch (NumberFormatException e) {
-
-                } catch (IOException ex) {
-                    Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        });
 
         tf_prix_unitr_usd.textProperty().addListener(new ChangeListener<String>() {
             @Override
@@ -446,12 +446,14 @@ public class PanierappenderController implements Initializable {
                 try {
                     double d = Double.parseDouble(tf_input_quant.getText());
                     double pv = Double.parseDouble(newValue);
-                    pv = (pv / taux2change);
+                    String dev = pref.get("mainCur", "USD");
+                    pv = "USD".equals(dev) ? (pv / taux2change) : pv;
                     if (tf_prix_unitr_cdf.isFocused()) {
                         tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pv).setScale(3, RoundingMode.HALF_EVEN).doubleValue()));
                     }
                     double tusd = BigDecimal.valueOf(d * pv).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                    double tcfd = BigDecimal.valueOf(tusd * taux2change).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+                    double tcfd = "USD".equals(dev) ? BigDecimal.valueOf(tusd * taux2change)
+                            .setScale(3, RoundingMode.HALF_EVEN).doubleValue() : tusd;
 
                     txt_total_cdf.setText(String.valueOf(tcfd));
                     txt_total_usd.setText(String.valueOf(tusd));
@@ -466,14 +468,16 @@ public class PanierappenderController implements Initializable {
             public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue, Recquisition newValue) {
                 if (newValue != null) {
                     choosenRecquisition = newValue;
-                    Date date = choosenRecquisition.getDateExpiry();
-                    txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + Constants.USER_READABLE_FORMAT.format(date));
+                    LocalDate date = choosenRecquisition.getDateExpiry();
+                    txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date.toString());
                     txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
 //                    if (date == null) {
 //                        return;
 //                    }
-
+                    String lot = choosenRecquisition.getNumlot();
+                    double sum;
                     Mesure mzr = choosenRecquisition.getMesureId();
+
                     Mesure mz = MesureDelegate.findMesure(mzr.getUid());
                     if (mz == null) {
                         List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(choosenRecquisition.getProductId().getUid());
@@ -484,69 +488,200 @@ public class PanierappenderController implements Initializable {
                     double stalertpc = (choosenRecquisition.getStockAlert() * mz.getQuantContenu());
                     double alerte = stalertpc / choosenmez.getQuantContenu();
                     txt_alerte_pa.setText("Alt:" + alerte + " " + choosenmez.getDescription());
-                    if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                    if (hasGlobalStockAccess()) {
                         resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
+                        sum = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lot);
                     } else {
                         resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
+                        sum = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lot, region);
                     }
                     reste = resteEnPiece / choosenmez.getQuantContenu();
                     txt_available_quant.setText(reste + " " + choosenmez.getDescription());
+                    txt_qte_lot.setText((sum / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
+                    int exp = isStockExpired(choosenRecquisition);
+                    switch (exp) {
+                        case -1 ->
+                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
+                        case 3 ->
+                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
+                        case 6 ->
+                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
+                        case 12 ->
+                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
+                        default ->
+                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+                    }
+                    txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
                     List<Stocker> lstk = StockerDelegate.findStockerByProduitLot(choosenRecquisition.getProductId().getUid(), choosenRecquisition.getNumlot());
                     if (lstk.isEmpty()) {
                         return;
                     }
                     localisabel.setText(lstk.get(0).getLocalisation());
-                    int exp = isStockExpired(choosenRecquisition);
-                    if (exp == -1) {
-                        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 3) {
-                        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 6) {
-                        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 12) {
-                        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-                    } else {
-                        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-                    }
-                    txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
                 }
             }
         });
 
-        Date date = choosenRecquisition.getDateExpiry();
-        txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + Constants.USER_READABLE_FORMAT.format(date));
+        LocalDate date = choosenRecquisition.getDateExpiry();
+        txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date.toString());
         txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
         if (txt_peremption.getText().trim().equals(bundle.getString("noperish"))) {
             return;
         }
         int exp = isStockExpired(choosenRecquisition);
         switch (exp) {
-            case -1:
+            case -1 ->
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-                break;
-            case 3:
+            case 3 ->
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-                break;
-            case 6:
+            case 6 ->
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-                break;
-            case 12:
+            case 12 ->
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-                break;
-            default:
+            default ->
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-                break;
         }
         txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
         tf_input_quant.requestFocus();
     }
-    
+
+    private PrixDeVente findPriceWithConversion(List<PrixDeVente> pvxs,
+            Mesure mesureChoisie,
+            double quantiteChoisie) {
+
+        PrixDeVente exact = pvxs.stream()
+                .filter(p -> sameMesure(p, mesureChoisie))
+                .filter(p -> inInterval(p, quantiteChoisie))
+                .findFirst()
+                .orElse(null);
+
+        if (exact != null) {
+            return exact;
+        }
+
+        return pvxs.stream()
+                .filter(p -> p.getMesureId() != null)
+                .map(p -> convertIfPossible(p, mesureChoisie, quantiteChoisie))
+                .filter(Objects::nonNull)
+                .min(Comparator.comparingDouble(PrixDeVente::getQmin)) // qmin le plus bas
+                .orElse(null);
+    }
+
+    private boolean sameMesure(PrixDeVente p, Mesure m) {
+        return p.getMesureId().getUid().equals(m.getUid());
+    }
+
+    private boolean inInterval(PrixDeVente p, double q) {
+        return p.getQmin() <= q && q <= p.getQmax();
+    }
+
+    private PrixDeVente convertIfPossible(PrixDeVente prix,
+            Mesure mesureChoisie,
+            double quantiteChoisie) {
+
+        Mesure mesurePrix = prix.getMesureId();
+        // facteur de conversion
+        double facteur = mesureChoisie.getQuantContenu() / mesurePrix.getQuantContenu();
+
+        // quantité équivalente dans la mesure du prix
+        double quantiteConvertie = quantiteChoisie * facteur;
+
+        // respect des bornes
+        if (!inInterval(prix, quantiteConvertie)) {
+            return null;
+        }
+
+        double prixUnitaire = prix.getPrixUnitaire()/ mesurePrix.getQuantContenu();
+        double prixFinal = prixUnitaire * mesureChoisie.getQuantContenu();
+
+        PrixDeVente approx = new PrixDeVente(prix.getUid());
+        approx.setPrixUnitaire(prixFinal);
+        approx.setQmin(prix.getQmin() / facteur);
+        approx.setQmax(prix.getQmax() / facteur);
+        approx.setDevise(prix.getDevise());
+        approx.setRecquisitionId(prix.getRecquisitionId());
+        approx.setMesureId(mesureChoisie);
+        return approx;
+    }
+
+    private void resolve(String newValue) throws Exception {
+        if (newValue == null || newValue.isBlank() || prod == null || choosenmez == null || choosenRecquisition == null) {
+            return;
+        }
+        double d = Double.parseDouble(newValue);
+        if (d <= 0) {
+            return;
+        }
+        List<PrixDeVente> pvxs
+                = //PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, d);
+                getRecentPrice(prod.getUid()).getValue();
+        PrixDeVente pvx = findPriceWithConversion(pvxs, choosenmez, d);
+        if (pvx == null) {
+            return;
+        }
+        System.out.println("PRIXO");
+        String divize = pvx.getDevise();
+        if (divize.equals("CDF")) {
+            tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvx.getPrixUnitaire() / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+            tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire()));
+            double fc = Double.parseDouble(tf_prix_unitr_cdf.getText());
+            double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
+            double tusd = BigDecimal.valueOf(d * pv).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+            double tcfd = BigDecimal.valueOf(d * fc).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
+            txt_total_cdf.setText(String.valueOf(tcfd));
+            txt_total_usd.setText(String.valueOf(tusd));
+            tf_prix_unitr_usd.setVisible(false);
+            txt_total_usd.setVisible(false);
+            lbl_usd_part.setVisible(false);
+        } else {
+            tf_prix_unitr_usd.setText(String.valueOf(pvx.getPrixUnitaire()));
+            tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire() * taux2change));
+            double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
+            double tusd = BigDecimal.valueOf(d * pv).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+            double tcfd = BigDecimal.valueOf(tusd * taux2change).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+            txt_total_cdf.setText(String.valueOf(tcfd));
+            txt_total_usd.setText(String.valueOf(tusd));
+        }
+        String text = "#" + prod.getUid() + "-" + choosenmez.getQuantContenu() + "-" + tf_input_quant.getText() + "-"
+                + "" + choosenRecquisition.getNumlot() + "-" + divize;
+        writeCartItem(text);
+    }
+
     private ObservableList<Printer> setToList(ObservableSet<Printer> osp) {
         ObservableList<Printer> rst = FXCollections.observableArrayList();
         osp.forEach((p) -> {
             rst.add(p);
         });
         return rst;
+    }
+
+    private List<Recquisition> getRecquisitionList(String meth, String role, String region, Produit prod) {
+        List<Recquisition> result = null;
+        switch (meth) {
+            case "ppps":
+                if (hasGlobalStockAccess()) {
+                    result = RecquisitionDelegate.toFefoOrdering(prod.getUid());
+                } else {
+                    result = RecquisitionDelegate.toFefoOrdering(prod.getUid(), region);
+                }
+                break;
+            case "fifo":
+                if (hasGlobalStockAccess()) {
+                    result = RecquisitionDelegate.toFifoOrdering(prod.getUid());
+                } else {
+                    result = RecquisitionDelegate.toFifoOrdering(prod.getUid(), region);
+                }
+                break;
+            case "lifo":
+                if (hasGlobalStockAccess()) {
+                    result = RecquisitionDelegate.toLifoOrdering(prod.getUid());
+                } else {
+                    result = RecquisitionDelegate.toLifoOrdering(prod.getUid(), region);
+                }
+                break;
+            default:
+                break;
+        }
+        return result;
     }
 
     private boolean isSameLotExistInRecqs(String numlot) {
@@ -557,42 +692,50 @@ public class PanierappenderController implements Initializable {
         }
         return false;
     }
-    
-    
 
-    private void printBCWithThermal(String printerName, String bcode) {
-        PrinterOutputStream pos = null;
-        try {
-            if (bcode.isEmpty()) {
-                return;
-            }
-            PrintService ps = PrinterOutputStream.getPrintServiceByName(printerName);
-            pos = new PrinterOutputStream(ps);
-            EscPos printer = new EscPos(pos);
-            BarCode bc = new BarCode();
-            bc.setBarCodeSize(12, 6).setJustification(EscPosConst.Justification.Center)
-                    .getBytes(bcode);
-            printer.feed(2);
-            printer.cut(EscPos.CutMode.FULL);
-            printer.close();
-        } catch (IOException ex) {
-            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
-        } finally {
-            try {
-                pos.close();
-            } catch (IOException ex) {
-                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        }
-
-    }
+//    private void printBCWithThermal(String printerName, String bcode) {
+//        PrinterOutputStream pos = null;
+//        try {
+//            if (bcode.isEmpty()) {
+//                return;
+//            }
+//            PrintService ps = PrinterOutputStream.getPrintServiceByName(printerName);
+//            pos = new PrinterOutputStream(ps);
+//            EscPos printer = new EscPos(pos);
+//            BarCode bc = new BarCode();
+//            bc.setBarCodeSize(12, 6).setJustification(EscPosConst.Justification.Center)
+//                    .getBytes(bcode);
+//            printer.feed(2);
+//            printer.cut(EscPos.CutMode.FULL);
+//            printer.close();
+//        } catch (IOException ex) {
+//            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+//        } finally {
+//            if (pos != null) {
+//                try {
+//                    pos.close();
+//                } catch (IOException ex) {
+//                    Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+//                }
+//            }
+//        }
+//
+//    }
 
     @FXML
     public void printbarcode(Event e) {
+        if (prod == null || choosenmez == null || choosenRecquisition == null) {
+            MainUI.notify(null, bundle.getString("error"), "Sélection incomplète pour impression du code-barres.", 4, "error");
+            return;
+        }
         if (thermal.isSelected()) {
-            String text = "ENCODE:" + prod.getUid() + "-" + choosenmez.getUid() + "-" + tf_input_quant.getText() + "-"
-                    + "" + choosenRecquisition.getNumlot() + "-" + dev;
-            printBCWithThermal(defaultPrinter.getName(), text);
+            if (defaultPrinter == null) {
+                MainUI.notify(null, bundle.getString("error"), "Aucune imprimante sélectionnée.", 4, "error");
+                return;
+            }
+//            String text = "ENCODE:" + prod.getUid() + "-" + choosenmez.getUid() + "-" + tf_input_quant.getText() + "-"
+//                    + "" + choosenRecquisition.getNumlot() + "-" + dev;
+//            printBCWithThermal(defaultPrinter.getName(), text);
         } else if (jet.isSelected()) {
             print();
         }
@@ -622,39 +765,12 @@ public class PanierappenderController implements Initializable {
 
     }
 
-    private Recquisition chooseValideRecquisition(List<Recquisition> reqs) {
-        List<Recquisition> lrq;
-        List<LigneVente> llv;
-        for (Recquisition req : reqs) {
-            String numlot = req.getNumlot();
-            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                lrq = RecquisitionDelegate.findRecquisitionByProduit(prod.getUid(), numlot);
-                llv = LigneVenteDelegate.findByProduitWithLot(prod.getUid(), numlot);
-            } else {
-                llv = LigneVenteDelegate.findByProduitWithLot(prod.getUid(), numlot, region);
-                lrq = RecquisitionDelegate.findRecquisitionByProduit(prod.getUid(), numlot, region);
-            }
-//            List<Recquisition> lr = fullMesureRecqs(lrq);
-//            List<LigneVente> ll = fullMesureRecqs(llv);
-            double entree = Util.sumQuantInPc(lrq);
-            double sortie = Util.sumQuantInPc(llv);
-            reste = (entree - sortie);
-            if (reste > 0) {
-                return req;
-            }
-        }
-        if (reqs.isEmpty()) {
-            return null;
-        }
-        return reqs.get(0);
-    }
-
     private int isStockExpired(Recquisition e) {
         long now = System.currentTimeMillis();
         if (e.getDateExpiry() == null) {
             return 555;
         }
-        long exp = e.getDateExpiry().getTime();
+        long exp = Constants.Datetime.dateInMillis(e.getDateExpiry());
         long un_mois = Constants.UN_MOIS;
         long interval = exp - now;
         long mois3 = (un_mois * 3);
@@ -680,6 +796,18 @@ public class PanierappenderController implements Initializable {
         }
     }
 
+    private List<PrixDeVente> pickPrice(List<PrixDeVente> prices, Mesure m, double quant) {
+        List<PrixDeVente> rst = new ArrayList<>();
+        for (PrixDeVente price : prices) {
+            if (price.getMesureId().equals(m)
+                    && (price.getQmin() <= quant
+                    && price.getQmax() > quant)) {
+                rst.add(price);
+            }
+        }
+        return rst;
+    }
+
     private void applyPrices(List<PrixDeVente> prices) {
         try {
             double d = Double.parseDouble(tf_input_quant.getText());
@@ -693,8 +821,12 @@ public class PanierappenderController implements Initializable {
                 double tcdf;
                 double tusd;
                 if (dvz.equals("CDF")) {
-                    tcdf = BigDecimal.valueOf(d * pv.getPrixUnitaire()).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
+                    tcdf = BigDecimal.valueOf(d * pv.getPrixUnitaire())
+                            .setScale(0, RoundingMode.HALF_EVEN).doubleValue();
                     tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    tf_prix_unitr_usd.setVisible(false);
+                    txt_total_usd.setVisible(false);
+                    lbl_usd_part.setVisible(false);
                 } else {
                     tusd = BigDecimal.valueOf(d * pv.getPrixUnitaire()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                     tcdf = BigDecimal.valueOf(tusd * taux2change).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
@@ -713,7 +845,7 @@ public class PanierappenderController implements Initializable {
                     return;
                 }
                 double raport = choosenmez.getQuantContenu() / pvmz.getQuantContenu();
-                double pvs = pvx.getPrixUnitaire() == null ? 0 : pvx.getPrixUnitaire();
+                double pvs = pvx.getPrixUnitaire();
                 double pup = BigDecimal.valueOf(pvs * raport).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
                 String dvz = pvx.getDevise();
                 tf_prix_unitr_cdf.setText(String.valueOf(dvz.equals("CDF") ? pup
@@ -725,16 +857,36 @@ public class PanierappenderController implements Initializable {
                 if (dvz.equals("CDF")) {
                     tcdf = BigDecimal.valueOf(d * pup).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
                     tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    tf_prix_unitr_usd.setVisible(false);
+                    txt_total_usd.setVisible(false);
+                    lbl_usd_part.setVisible(false);
+                    txt_total_cdf.setText(String.valueOf(tcdf));
+                    txt_total_usd.setText(String.valueOf(tcdf));
                 } else {
                     tusd = BigDecimal.valueOf(d * pup).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                     tcdf = BigDecimal.valueOf(tusd * taux2change).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
+                    txt_total_cdf.setText(String.valueOf(tcdf));
+                    txt_total_usd.setText(String.valueOf(tusd));
                 }
-                txt_total_cdf.setText(String.valueOf(tcdf));
-                txt_total_usd.setText(String.valueOf(tusd));
+
             }
         } catch (NumberFormatException e) {
         }
         tf_input_quant.requestFocus();
+    }
+
+    private Map.Entry<Recquisition, List<PrixDeVente>> getRecentPrice(String produit) {
+//        List<Recquisition> lasts = RecquisitionDelegate.findDescSortedByDateForProduit(produit);
+        List<PrixDeVente> pxs = RecquisitionDelegate.findLastPrices(produit);
+        if (pxs == null || pxs.isEmpty()) {
+            return new AbstractMap.SimpleEntry<>(choosenRecquisition, new ArrayList<>());
+        }
+        Recquisition rec = pxs.get(0).getRecquisitionId();
+        if (rec == null) {
+            rec = choosenRecquisition;
+        }
+        return new AbstractMap.SimpleEntry<>(rec, new ArrayList<>(pxs));
+
     }
 
     private void config() {
@@ -775,17 +927,43 @@ public class PanierappenderController implements Initializable {
     public void increase(ActionEvent evt) {
         quant++;
         tf_input_quant.setText(String.valueOf(quant));
+//        try {
+//            resolve(String.valueOf(quant));
+//        } catch (Exception e) {
+//
+//        }
     }
 
     @FXML
     public void addToCart(Event ebt) {
-        if (tf_prix_unitr_usd.getText().isEmpty() || tf_prix_unitr_cdf.getText().isEmpty()) {
+        if (prod == null || choosenmez == null || choosenRecquisition == null) {
+            MainUI.notify(null, bundle.getString("error"), "Produit, lot ou mesure manquant.", 4, "error");
             return;
-        } 
-        double qr = Double.parseDouble(tf_input_quant.getText());
-        double pu = Double.parseDouble(tf_prix_unitr_usd.getText());
-        double usd = Double.parseDouble(txt_total_usd.getText());
-        double cdf = Double.parseDouble(txt_total_cdf.getText());
+        }
+        if (tf_prix_unitr_usd.getText().isEmpty() || tf_prix_unitr_cdf.getText().isEmpty() || tf_input_quant.getText().isEmpty()) {
+            MainUI.notify(null, bundle.getString("error"), "Prix ou quantité invalide.", 4, "error");
+            return;
+        }
+        String dex = pref.get("mainCur", "USD");
+        double qr = parseDoubleOrDefault(tf_input_quant.getText(), 0);
+        if (qr <= 0) {
+            MainUI.notify(null, bundle.getString("error"), "La quantité doit être supérieure à 0.", 4, "error");
+            return;
+        }
+        double prixUnitUsd = parseDoubleOrDefault(tf_prix_unitr_usd.getText(), 0);
+        double prixUnitCdf = parseDoubleOrDefault(tf_prix_unitr_cdf.getText(), 0);
+        if (prixUnitUsd <= 0 && prixUnitCdf <= 0) {
+            MainUI.notify(null, bundle.getString("error"), "Prix unitaire invalide.", 4, "error");
+            return;
+        }
+        double valeurTotalUsd = parseDoubleOrDefault(txt_total_usd.getText(), qr * prixUnitUsd);
+        double valeurTotalCdf = parseDoubleOrDefault(txt_total_cdf.getText(), qr * prixUnitCdf);
+        if ("USD".equals(dex)) {
+            valeurTotalCdf = valeurTotalUsd * taux2change;
+        } else {
+            valeurTotalUsd = valeurTotalCdf / taux2change;
+        }
+
         double rest = PosController.getInstance().getRest(prod);
         double kms = rest;
         // choosenmez.getQuantContenu();
@@ -809,8 +987,11 @@ public class PanierappenderController implements Initializable {
                 Optional<ButtonType> showAndWait = alertdlg.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
                     qr = kms;
-                    usd = BigDecimal.valueOf(qr * pu).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                    cdf = usd * taux2change;
+                    valeurTotalUsd = BigDecimal.valueOf(qr * prixUnitUsd)
+                            .setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+                    valeurTotalCdf = BigDecimal.valueOf(valeurTotalUsd * taux2change)
+                            .setScale(0, RoundingMode.HALF_EVEN).doubleValue();
+//                    cdf = dex.equals("USD") ? usd * taux2change : cdf;
                 } else if (showAndWait.get() == ButtonType.CANCEL) {
                     return;
                 }
@@ -824,25 +1005,45 @@ public class PanierappenderController implements Initializable {
                 }
             }
         }
+//        else {
+//            usd = BigDecimal.valueOf(qr * prixEnQuestion)
+//                    .setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+//        }
         if (rst <= -1) {
             MainUI.notify(null, bundle.getString("warning"), bundle.getString("quantexceed"), 4, "warning");
             return;
         }
+        double coutAchat = choosenRecquisition.getCoutAchat();
+        if (coutAchat <= 0) {
+            List<Recquisition> order = RecquisitionDelegate.toLifoOrdering(prod.getUid());
+            if (!order.isEmpty()) {
+                coutAchat = order.get(0).getCoutAchat();
+            }
+        }
+        Mesure chrmez = cbx_lot_recquisitionee.getValue().getMesureId();
+        if (chrmez == null || chrmez.getQuantContenu() == 0) {
+            MainUI.notify(null, bundle.getString("error"), "Mesure de lot invalide.", 4, "error");
+            return;
+        }
+        if(!PosController.getInstance().pass(qr, last, prod, choosenmez))return;
+        double ctpc = coutAchat / chrmez.getQuantContenu();
+        double chznpc = choosenmez.getQuantContenu();
         String time = String.valueOf(System.currentTimeMillis());
         String lvid = String.valueOf((long) (Math.random() * 1000000)).concat(time.substring(time.length() - 2, time.length()));
         LigneVente lv = new LigneVente(action.equals("Modif") ? this.id : Long.valueOf(lvid));
         lv.setMesureId(choosenmez);
-        lv.setMontantCdf(cdf);
-        lv.setMontantUsd(usd);
-        lv.setPrixUnit(pu);
+        lv.setMontantCdf(valeurTotalCdf);
+        lv.setCoutAchat((ctpc * chznpc));
+        lv.setMontantUsd(valeurTotalUsd);
+        lv.setPrixUnit(prixUnitUsd);
         lv.setNumlot(cbx_lot_recquisitionee.getValue().getNumlot());
         lv.setProductId(prod);
         lv.setQuantite(qr);
 //        if (PosController.getInstance().isInScanMode()) {
-            MainuiController.getInstance().reinitSearchBar();
+        MainuiController.getInstance().reinitSearchBar();
 //        }
         PosController.getInstance().addCartItem(lv);
-       close(ebt); 
+        close(ebt);
 //       PosController.getInstance().fillProductInTable("All");
 //       
 //        MainuiController.getInstance().cleanSearchBar();
@@ -856,26 +1057,15 @@ public class PanierappenderController implements Initializable {
 //                            double unitPrice=Double.valueOf(tokens[3]);
 //                            String batch=tokens[4];
 //                            String dev=tokens[5];
-InputStream is;
-//            EAN13Writer writer = new EAN13Writer();
-Code128Writer w128 = new Code128Writer();
+        ////            EAN13Writer writer = new EAN13Writer();
+        Code128Writer w128 = new Code128Writer();
 //            Code128Writer c39 = new Code39Writer();
-BitMatrix matrix = w128.encode(texte, BarcodeFormat.CODE_128, 256, 150);
-BufferedImage bimage = MatrixToImageWriter.toBufferedImage(matrix);
-try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-    ImageIO.write(bimage, "jpg", stream);
-    is = new ByteArrayInputStream(stream.toByteArray());
-}
-is.close();
-// } else {
-//            ByteArrayOutputStream stream = net.glxn.qrgen.QRCode
-//                    .from(texte)
-//                    .withSize(250, 250)
-//                    .stream();
-//            is = new ByteArrayInputStream(stream.toByteArray());
-// }
-img_codebar.setImage(new Image(is));
-
+        BitMatrix matrix = w128.encode(texte, BarcodeFormat.CODE_128, 256, 150);
+        BufferedImage bimage = MatrixToImageWriter.toBufferedImage(matrix);
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            ImageIO.write(bimage, "jpg", stream);
+            img_codebar.setImage(new Image(new ByteArrayInputStream(stream.toByteArray())));
+        }
     }
 
     @FXML
@@ -883,8 +1073,28 @@ img_codebar.setImage(new Image(is));
         if (quant >= 2) {
             quant--;
             tf_input_quant.setText(String.valueOf(quant));
+//            try {
+//                resolve(String.valueOf(quant));
+//            } catch (IOException e) {
+//
+//            }
         } else {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("emptinesswarn"), 3, "error");
+        }
+    }
+
+    private boolean hasGlobalStockAccess() {
+        return Role.Trader.name().equals(role) || (role != null && role.contains(Role.ALL_ACCESS.name()));
+    }
+
+    private double parseDoubleOrDefault(String value, double fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException ex) {
+            return fallback;
         }
     }
 }

@@ -9,6 +9,7 @@ import IServices.ClientOrganisationStorage;
 import static delegates.ClientOrganisationDelegate.getClientOrganisationStorage;
 import java.util.List;
 import data.ClientOrganisation;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -17,7 +18,7 @@ import tools.Tables;
  * @author eroot
  */
 public class ClientOrganisationDelegate {
-    
+
     public static ClientOrganisation saveClientOrganisation(ClientOrganisation cat) {
         return getClientOrganisationStorage().createClientOrganisation(cat);
     }
@@ -33,22 +34,33 @@ public class ClientOrganisationDelegate {
     public static ClientOrganisation findClientOrganisation(String objId) {
         return getClientOrganisationStorage().findClientOrganisation(objId);
     }
-    
-    
-    public static List<ClientOrganisation> findClientOrganisations(){
-       return getClientOrganisationStorage().findClientOrganisations();
+
+    public static List<ClientOrganisation> findClientOrganisations() {
+        return getClientOrganisationStorage().findClientOrganisations();
     }
-    
-    public static List<ClientOrganisation> findClientOrganisations(int s,int m){
-       return getClientOrganisationStorage().findClientOrganisations(s,m);
+
+    public static List<ClientOrganisation> findClientOrganisations(int s, int m) {
+        return getClientOrganisationStorage().findClientOrganisations(s, m);
     }
-    
-    public static ClientOrganisationStorage getClientOrganisationStorage(){
-        ClientOrganisationStorage cats=(ClientOrganisationStorage)ServiceLocator.getInstance().getService(Tables.CLIENTORGANISATION);
+
+    public static ClientOrganisationStorage getClientOrganisationStorage() {
+        ClientOrganisationStorage cats = (ClientOrganisationStorage) ServiceLocator.getInstance().getService(Tables.CLIENTORGANISATION);
         return cats;
     }
 
     public static Long getCount() {
-       return getClientOrganisationStorage().getCount();
+        return getClientOrganisationStorage().getCount();
+    }
+
+    public static List<ClientOrganisation> findUnSyncedClientOrganisations(long disconnected_at) {
+        return getClientOrganisationStorage().findUnSyncedClientOrganisations(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getClientOrganisationStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getClientOrganisationStorage().isExists(uid);
     }
 }

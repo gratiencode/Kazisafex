@@ -1,0 +1,13 @@
+/*
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/Other/CascadeStyleSheet.css to edit this template
+*/
+/* 
+    Created on : Sep 19, 2025, 10:18:27 AM
+    Author     : endeleya
+*/
+
+#recentSales{
+    -fx-table-cell-border-color:transparent;
+    -fx-border-color:transparent;
+}

@@ -5,14 +5,15 @@
  */
 package data;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import jakarta.persistence.Column;
 import java.io.Serializable;
-import java.util.Date;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -21,11 +22,10 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -34,25 +34,21 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "destocker")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Destocker.findAll", query = "SELECT DISTINCT  d FROM Destocker d ORDER BY d.dateDestockage DESC"),
-    @NamedQuery(name = "Destocker.findByUid", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.uid = :uid"),
-    @NamedQuery(name = "Destocker.findByRegion", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.region = :region"),
-    @NamedQuery(name = "Destocker.findByDateDestockage", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.dateDestockage = :dateDestockage"),
-    @NamedQuery(name = "Destocker.findByCoutAchat", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.coutAchat = :coutAchat"),
-    @NamedQuery(name = "Destocker.findByQuantite", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.quantite = :quantite")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+        @NamedQuery(name = "Destocker.findAll", query = "SELECT DISTINCT  d FROM Destocker d ORDER BY d.dateDestockage DESC"),
+        @NamedQuery(name = "Destocker.findByUid", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.uid = :uid"),
+        @NamedQuery(name = "Destocker.findByRegion", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.region = :region AND d.productId.uid IN (SELECT p.uid FROM Produit p)"),
+        @NamedQuery(name = "Destocker.findByDateDestockage", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.dateDestockage = :dateDestockage"),
+        @NamedQuery(name = "Destocker.findByCoutAchat", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.coutAchat = :coutAchat"),
+        @NamedQuery(name = "Destocker.findByQuantite", query = "SELECT DISTINCT  d FROM Destocker d WHERE d.quantite = :quantite") })
+
 public class Destocker extends BaseModel implements Serializable {
 
     private String region;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateDestockage;
+
+    private LocalDateTime dateDestockage;
     private String reference;
     private String destination;
     private double coutAchat;
@@ -63,25 +59,27 @@ public class Destocker extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
-   
     private String uid;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private Mesure mesureId;
     @JoinColumn(name = "product_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Produit productId;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
-    
-@PrePersist
+    @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
+
     public Destocker() {
         this.type = Tables.DESTOCKER.name();
     }
@@ -91,7 +89,8 @@ public class Destocker extends BaseModel implements Serializable {
         this.type = Tables.DESTOCKER.name();
     }
 
-    public Destocker(String uid, Date dateDestockage, String reference, String destination, double coutAchat, double quantite, String libelle, String observation) {
+    public Destocker(String uid, LocalDateTime dateDestockage, String reference, String destination, double coutAchat,
+            double quantite, String libelle, String observation) {
         this.uid = uid;
         this.dateDestockage = dateDestockage;
         this.reference = reference;
@@ -111,11 +110,11 @@ public class Destocker extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Date getDateDestockage() {
+    public LocalDateTime getDateDestockage() {
         return dateDestockage;
     }
 
-    public void setDateDestockage(Date dateDestockage) {
+    public void setDateDestockage(LocalDateTime dateDestockage) {
         this.dateDestockage = dateDestockage;
     }
 
@@ -223,4 +222,21 @@ public class Destocker extends BaseModel implements Serializable {
     public void setObservation(String observation) {
         this.observation = observation;
     }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
 }

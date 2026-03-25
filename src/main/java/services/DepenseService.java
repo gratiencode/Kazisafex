@@ -6,6 +6,7 @@
 package services;
 
 import IServices.DepenseStorage;
+import data.Category;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -15,138 +16,256 @@ import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import data.Depense;
+import data.Mesure;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import tools.Tables;
 
 /**
  *
  * @author eroot
  */
-public class DepenseService implements DepenseStorage{
+public class DepenseService implements DepenseStorage {
 
-    EntityManager em;
-   
+    @Override
+    public boolean isExists(String uid) {
+        String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
+                + "FROM Depense c WHERE c.uid = :id";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+                    .setParameter("id", uid)
+                    .getSingleResult());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createQuery(jpql, Boolean.class)
+                .setParameter("id", uid)
+                .getSingleResult();
+    }
 
     public DepenseService() {
-        em = JpaUtil.getEntityManagerFactory().createEntityManager();
+        // initializing...
     }
 
     @Override
     public Depense createDepense(Depense cat) {
-       EntityTransaction tx = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.persist(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element dps " + e.getNomDepense() + " enregistree");
+            });
+            return cat;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!tx.isActive()) {
             tx.begin();
         }
-        em.merge(cat);
+        ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
         return cat;
     }
 
     @Override
     public Depense updateDepense(Depense cat) {
-        EntityTransaction tx = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element dps " + e.getNomDepense() + " enregistree");
+            });
+            return cat;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!tx.isActive()) {
             tx.begin();
         }
-        em.merge(cat);
+        ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
         return cat;
     }
 
     @Override
     public void deleteDepense(Depense cat) {
-        EntityTransaction etr =em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element dps " + e.getNomDepense() + " supprimee");
+            });
+            return;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        em.remove(em.merge(cat));
+        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
     }
 
     @Override
     public Depense findDepense(String catId) {
-         return em.find(Depense.class, catId);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.find(Depense.class, catId));
+        }
+        return ManagedSessionFactory.getEntityManager().find(Depense.class, catId);
     }
-    
-    
 
     @Override
     public List<Depense> findDepenses() {
-        try{
-            Query query= em.createNamedQuery("Depense.findAll");
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Depense.findAll");
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Depense.findAll");
             return query.getResultList();
-        }catch(NoResultException e){
+        } catch (NoResultException e) {
             return null;
         }
     }
 
     @Override
     public List<Depense> findDepenseByDescription(String objId) {
-         try{
-            Query query= em.createNamedQuery("Depense.findByNomDepense");
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Depense.findByNomDepense");
+                    query.setParameter("nomDepense", objId);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Depense.findByNomDepense");
             query.setParameter("nomDepense", objId);
             return query.getResultList();
-        }catch(NoResultException e){
+        } catch (NoResultException e) {
             return null;
         }
     }
 
     @Override
     public List<Depense> findDepenses(int start, int max) {
-        try{
-            Query query= em.createNamedQuery("Depense.findAll");
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Depense.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Depense.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
-        }catch(NoResultException e){
+        } catch (NoResultException e) {
             return null;
         }
     }
 
     @Override
     public List<Depense> findDepenses(String region) {
-        try{
-            Query query= em.createNamedQuery("Depense.findByRegion");
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("Depense.findByRegion");
+                    query.setParameter("region", region);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Depense.findByRegion");
             query.setParameter("region", region);
             return query.getResultList();
-        }catch(NoResultException e){
+        } catch (NoResultException e) {
             return null;
         }
     }
-    
-     @Override
+
+    @Override
     public Long getCount() {
-       try{
-           StringBuilder sb=new StringBuilder();
-           sb.append("SELECT COUNT(*) FROM depense");
-           return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
-       }catch(NoResultException e){
-           return 0L;
-       }
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT COUNT(*) FROM depense");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+                });
+            }
+            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
+        } catch (NoResultException e) {
+            return 0L;
+        }
     }
 
     @Override
     public List<Depense> mergeSet(Set<Depense> bulk) {
-       EntityTransaction etr = em.getTransaction();
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-       
+
         int i = 0;
         for (Depense lj : bulk) {
             i++;
-            em.merge(lj);
+            ManagedSessionFactory.getEntityManager().merge(lj);
             if (i % 16 == 0) {
                 etr.commit();
-                em.clear();
-                EntityTransaction etr2 = em.getTransaction();
-        if (!etr2.isActive()) {
-            etr2.begin();
-       }
-       
+                ManagedSessionFactory.getEntityManager().clear();
+                EntityTransaction etr2 = ManagedSessionFactory.getEntityManager().getTransaction();
+                if (!etr2.isActive()) {
+                    etr2.begin();
+                }
+
             }
         }
         etr.commit();
         Enumeration<Depense> enums = Collections.enumeration(bulk);
         return Collections.list(enums);
     }
-    
+
+    @Override
+    public List<Depense> findUnSyncedDepenses(long disconnected_at) {
+        try {
+            Timestamp offline = new Timestamp(disconnected_at);
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM depense p WHERE p.updated_at >= ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Depense.class);
+                    query.setParameter(1, offline);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Depense.class);
+            query.setParameter(1, offline);
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isExists(String uid, LocalDateTime atime) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM depense p WHERE p.uid = ? AND p.updated_at = ?");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Depense.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, atime);
+                List<Depense> result = query.getResultList();
+                return !result.isEmpty();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Depense.class);
+        query.setParameter(1, uid);
+        query.setParameter(2, atime);
+        List<Depense> result = query.getResultList();
+        return !result.isEmpty();
+    }
+
 }

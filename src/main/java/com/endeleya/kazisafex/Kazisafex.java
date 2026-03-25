@@ -12,12 +12,14 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.ThemeStyler;
 
 
 /**
  * JavaFX Kazisafex
  */
 public class Kazisafex extends Application {
+    public static final String DARK_THEME_PREF = "dark_theme_enabled";
     public static Stage stagex;
     public static Parent rootx;
     private double xOffset = 0;
@@ -28,6 +30,7 @@ public class Kazisafex extends Application {
     public Kazisafex() {
         instance=this;
         pref=Preferences.userNodeForPackage(SyncEngine.class);
+        System.out.println("Time now: "+System.currentTimeMillis());
     }
     
     public static Kazisafex getInstance(){
@@ -39,12 +42,17 @@ public class Kazisafex extends Application {
     
     @Override
     public void start(Stage stage) throws Exception {
+//          System.setProperty("javax.net.debug", "ssl,handshake");
+//
+//            // Spécifier les versions de protocoles SSL/TLS
+//            System.setProperty("https.protocols", "TLSv1.2,TLSv1.3");
         String lang = pref.get("lang", "fr");
         Locale locale = new Locale.Builder().setLanguage(lang).build();
         langageBundle= ResourceBundle.getBundle("bundles." +lang, locale);
                 
         Parent root = FXMLLoader.load(getClass().getResource("/guis/FXMLDocument.fxml"),langageBundle);
         Scene scene = new Scene(root);
+        applyTheme(scene);
         stage.setScene(scene);
         stagex = stage;
         rootx = root;
@@ -83,6 +91,23 @@ public class Kazisafex extends Application {
         Locale locale = new Locale.Builder().setLanguage(langn).build();
         langageBundle= ResourceBundle.getBundle("bundles." + langn, locale);
         return langageBundle;
+    }
+
+    public static void applyTheme(Scene scene) {
+        if (scene == null) {
+            return;
+        }
+        Preferences preferences = Preferences.userNodeForPackage(SyncEngine.class);
+        String darkCss = Kazisafex.class.getResource("/styles/dark-theme.css").toExternalForm();
+        String lightCss = Kazisafex.class.getResource("/styles/light-theme.css").toExternalForm();
+        scene.getStylesheets().remove(darkCss);
+        scene.getStylesheets().remove(lightCss);
+        scene.getStylesheets().add(lightCss);
+        boolean darkEnabled = preferences.getBoolean(DARK_THEME_PREF, false);
+        if (darkEnabled) {
+            scene.getStylesheets().add(darkCss);
+        }
+        ThemeStyler.apply(scene.getRoot(), darkEnabled);
     }
     
     

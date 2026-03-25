@@ -2,29 +2,34 @@
 package data.core;
 
 import java.io.IOException;
-import data.network.Kazisafe;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import data.network.OnTokenRefreshedListener;
 import okhttp3.Authenticator;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.ResponseBody;
 import okhttp3.Route;
-import retrofit2.Call; 
 import data.helpers.Token;
 
 public class HttpAuthenticator implements Authenticator {
-    Token token;
-    OnTokenRefreshedListener onTokenRefreshedListener;
 
-    public HttpAuthenticator(Token token) {
-        this.token = token;
+    private static final Logger LOGGER = Logger.getLogger(HttpAuthenticator.class.getName());
+    private static final int MAX_AUTH_ATTEMPTS = 2;
+    private final AuthTokenState tokenState;
+    private final TokenRefreshClient tokenRefreshClient;
+    private OnTokenRefreshedListener onTokenRefreshedListener;
+
+    public HttpAuthenticator(AuthTokenState tokenState, TokenRefreshClient tokenRefreshClient) {
+        this.tokenState = tokenState;
+        this.tokenRefreshClient = tokenRefreshClient;
     }
 
-    private void notifyTokenRefresh(Token tkn) {
+    private void notifyTokenRefresh(String tokenValue) {
         if (this.onTokenRefreshedListener != null) {
+            Token tkn = new Token();
+            tkn.setToken(tokenValue);
             this.onTokenRefreshedListener.onTokenRefreshed(tkn);
         }
-
     }
 
     public void setOnTokenRefreshedListener(OnTokenRefreshedListener onTokenRefreshedListener) {
@@ -34,28 +39,35 @@ public class HttpAuthenticator implements Authenticator {
     @Override
     public Request authenticate(Route route, Response rspns) throws IOException {
         String htkn = rspns.request().header("Authorization");
-        if (rspns.header("WWW-Authenticate").contains("endeleya")) {
+        if (htkn == null || !htkn.startsWith("Bearer ") || responseCount(rspns) > MAX_AUTH_ATTEMPTS) {
+            return null;
         }
-
-        if (!htkn.startsWith("Bearer")) {
+        if (rspns.request().url().encodedPath().endsWith("/auth/refresh")) {
+            return null;
         }
-
-        String accessToken = null;
-        Kazisafe apiService = (Kazisafe)KazisafeServiceFactory.getInstanceRefresh().create(Kazisafe.class);
-        Call call = apiService.refreshToken(this.token);
 
         try {
-            retrofit2.Response responseCall = call.execute();
-            ResponseBody responseRequest = (ResponseBody)responseCall.body();
-            if (responseRequest != null) {
-                accessToken = responseRequest.string();
-                this.token.setToken(accessToken);
-                this.notifyTokenRefresh(this.token);
+            String accessToken = tokenRefreshClient.refreshAccessToken(tokenState.getToken());
+            if (accessToken != null && !accessToken.isBlank()) {
+                LOGGER.info("Affichage authenticator old = "+htkn+" new = "+accessToken);
+                tokenState.setToken(accessToken);
+                notifyTokenRefresh(accessToken);
+                return rspns.request().newBuilder()
+                        .header("Authorization", "Bearer " + accessToken)
+                        .build();
             }
-        } catch (Exception var9) {
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING, "Token refresh failed", ex);
         }
 
-        return accessToken != null ? rspns.request().newBuilder().header("Authorization", accessToken).build() : null;
+        return null;
+    }
+
+    private int responseCount(Response response) {
+        int result = 1;
+        while ((response = response.priorResponse()) != null) {
+            result++;
+        }
+        return result;
     }
 }
-

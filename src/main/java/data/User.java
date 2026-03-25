@@ -4,28 +4,20 @@
  * and open the template in the editor.
  */
 package data;
-
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
-import java.util.List;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+  import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 
 
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+ import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
 
 
 /**
@@ -89,7 +81,7 @@ public class User extends BaseModel implements Serializable {
         pattern = "yyyy-MM-dd"
     )
     @Temporal(TemporalType.DATE)
-    private Date dateCreation;
+    private LocalDate dateCreation;
     
 
     
@@ -120,11 +112,11 @@ public class User extends BaseModel implements Serializable {
     }
 
 
-    public Date getDateCreation() {
+    public LocalDate getDateCreation() {
         return dateCreation;
     }
 
-    public void setDateCreation(Date dateCreation) {
+    public void setDateCreation(LocalDate dateCreation) {
         this.dateCreation = dateCreation;
     }
     @Override

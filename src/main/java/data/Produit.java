@@ -3,20 +3,17 @@ package data;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.math.BigInteger;
-import java.util.Date;
-import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 
-import jakarta.persistence.CascadeType;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Basic;
+
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
@@ -24,17 +21,15 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
-import jakarta.persistence.Version;
 import java.util.UUID;
 
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 @Entity
 @Table(name = "produit")
- @XmlRootElement
+@XmlRootElement
 @NamedQueries(value = {
     @NamedQuery(name = "Produit.findAll", query = "SELECT DISTINCT  p FROM Produit p ORDER BY p.dateCreation DESC"),
     @NamedQuery(name = "Produit.findByUid", query = "SELECT DISTINCT  p FROM Produit p WHERE p.uid = :uid"),
@@ -44,11 +39,13 @@ import tools.Tables;
     @NamedQuery(name = "Produit.findByCouleur", query = "SELECT DISTINCT  p FROM Produit p WHERE p.couleur = :couleur"),
     @NamedQuery(name = "Produit.findByMethodeInventaire", query = "SELECT DISTINCT  p FROM Produit p WHERE p.methodeInventaire = :methodeInventaire"),
     @NamedQuery(name = "Produit.findByDateCreation", query = "SELECT DISTINCT  p FROM Produit p WHERE p.dateCreation = :dateCreation")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
-
 public class Produit extends BaseModel implements Serializable {
 
     private String codebar;
+    
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "image", columnDefinition = "BLOB")
+    @JsonIgnore
     private byte[] image;
     private String nomProduit;
     private String marque;
@@ -56,55 +53,95 @@ public class Produit extends BaseModel implements Serializable {
     private String taille;
     private String couleur;
     private String methodeInventaire;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateCreation;
+   
+    @Column(name = "dateCreation", columnDefinition = "DATETIME")
+    private LocalDateTime dateCreation;
     private static final long serialVersionUID = 1;
     @Id
-   @Column(name="uid",updatable=false, nullable=false)
+    @Column(name = "uid", updatable = false, nullable = false)
     private String uid;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
     @ManyToOne(optional = false)
-    @JsonBackReference("catsprods")
-    private Category categoryId;  
-    @JsonManagedReference(value = "prodsmesur")
+    private Category categoryId;
+    @OneToMany(mappedBy = "productId")
+    @JsonBackReference(value = "prod-stockAg")
+    private List<StockAgregate> stockAgregateList;
+    @OneToMany(mappedBy = "productId")
+    @JsonBackReference(value = "prod-saleAg")
+    private List<SaleAgregate> saleAgregateList;
     @OneToMany(mappedBy = "produitId")
+    @JsonBackReference("prod-mez")
     private List<Mesure> mesureList;
-    @OneToMany( mappedBy = "productId")
-    @JsonManagedReference(value = "prodsstock")
+    @JsonBackReference(value = "prod-compter")
+    @OneToMany(mappedBy = "productId")
+
+    private List<Compter> compterList;
+    @JsonBackReference(value = "prod-period")
+    @OneToMany(mappedBy = "productId")
+
+    private List<Periode> periodeList;
+    @JsonBackReference(value = "prod-stock")
+    @OneToMany(mappedBy = "productId")
+
     private List<Stocker> stockerList;
     @OneToMany(mappedBy = "productId")
-    @JsonManagedReference(value = "prodslvente")
+    @JsonBackReference(value = "prod-ligv")
     private List<LigneVente> ligneVenteList;
-    @JsonManagedReference(value = "prodsdestockage")
-    @OneToMany( mappedBy = "productId")
-    private List<Destocker> destockerList;
-    @JsonManagedReference(value = "prodsrecq")
     @OneToMany(mappedBy = "productId")
+    @JsonBackReference(value = "prod-destok")
+
+    private List<Destocker> destockerList;
+    @OneToMany(mappedBy = "productId")
+    @JsonBackReference(value = "prod-req")
+
     private List<Recquisition> recquisitionList;
-  
+    @JsonBackReference(value = "prod-cmdl")
+    @OneToMany(mappedBy = "produitId")
+
+    private List<CommandeLister> commandeListerList;
+    @JsonBackReference(value = "prod-produkt")
+    @OneToMany(mappedBy = "produitId")
+
+    private List<Production> productionList;
+
+    public List<CommandeLister> getCommandeListerList() {
+        return commandeListerList;
+    }
+
+    public void setCommandeListerList(List<CommandeLister> commandeListerList) {
+        this.commandeListerList = commandeListerList;
+    }
 
     public Produit() {
-        this.type=Tables.PRODUIT.name();
+        this.type = Tables.PRODUIT.name();
     }
 
     public Produit(String uid) {
         this.uid = uid;
-        this.type=Tables.PRODUIT.name();
+        this.type = Tables.PRODUIT.name();
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
-    
 
-    public Produit(String nomProduit, String marque, String modele, String taille, String couleur, String methodeInventaire, Date dateCreation, String uid, String codebar) {
+    public Produit(String nomProduit, String marque, String modele, String taille, String couleur, String methodeInventaire, LocalDateTime dateCreation, String uid, String codebar) {
         this.nomProduit = nomProduit;
         this.marque = marque;
         this.modele = modele;
@@ -114,7 +151,7 @@ public class Produit extends BaseModel implements Serializable {
         this.dateCreation = dateCreation;
         this.uid = uid;
         this.codebar = codebar;
-        this.type=Tables.PRODUIT.name();
+        this.type = Tables.PRODUIT.name();
     }
 
     public String getUid() {
@@ -141,11 +178,11 @@ public class Produit extends BaseModel implements Serializable {
         this.methodeInventaire = methodeInventaire;
     }
 
-    public Date getDateCreation() {
+    public LocalDateTime getDateCreation() {
         return this.dateCreation;
     }
 
-    public void setDateCreation(Date dateCreation) {
+    public void setDateCreation(LocalDateTime dateCreation) {
         this.dateCreation = dateCreation;
     }
 
@@ -157,7 +194,6 @@ public class Produit extends BaseModel implements Serializable {
         this.categoryId = categoryId;
     }
 
-    @JsonbTransient
     public List<Mesure> getMesureList() {
         return this.mesureList;
     }
@@ -166,7 +202,6 @@ public class Produit extends BaseModel implements Serializable {
         this.mesureList = mesureList;
     }
 
-    @JsonbTransient
     public List<Stocker> getStockerList() {
         return this.stockerList;
     }
@@ -175,7 +210,6 @@ public class Produit extends BaseModel implements Serializable {
         this.stockerList = stockerList;
     }
 
-    @JsonbTransient
     public List<LigneVente> getLigneVenteList() {
         return this.ligneVenteList;
     }
@@ -184,7 +218,6 @@ public class Produit extends BaseModel implements Serializable {
         this.ligneVenteList = ligneVenteList;
     }
 
-    @JsonbTransient
     public List<Destocker> getDestockerList() {
         return this.destockerList;
     }
@@ -193,7 +226,6 @@ public class Produit extends BaseModel implements Serializable {
         this.destockerList = destockerList;
     }
 
-    @JsonbTransient
     public List<Recquisition> getRecquisitionList() {
         return this.recquisitionList;
     }
@@ -219,7 +251,7 @@ public class Produit extends BaseModel implements Serializable {
     }
 
     public String toString() {
-        return "entities.Produit[ uid =" + this.uid + " ]";
+        return "entities.Produit[ uid =" + this.uid + " nomproduit =" + this.nomProduit + "]";
     }
 
     public String getCodebar() {
@@ -268,6 +300,54 @@ public class Produit extends BaseModel implements Serializable {
 
     public void setCouleur(String couleur) {
         this.couleur = couleur;
+    }
+
+    public List<Periode> getPeriodeList() {
+        return periodeList;
+    }
+
+    public void setPeriodeList(List<Periode> periodeList) {
+        this.periodeList = periodeList;
+    }
+
+    public List<Compter> getCompterList() {
+        return compterList;
+    }
+
+    public void setCompterList(List<Compter> compterList) {
+        this.compterList = compterList;
+    }
+
+    public List<Production> getProductionList() {
+        return productionList;
+    }
+
+    public void setProductionList(List<Production> productionList) {
+        this.productionList = productionList;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public List<StockAgregate> getStockAgregateList() {
+        return stockAgregateList;
+    }
+
+    public void setStockAgregateList(List<StockAgregate> stockAgregateList) {
+        this.stockAgregateList = stockAgregateList;
+    }
+
+    public List<SaleAgregate> getSaleAgregateList() {
+        return saleAgregateList;
+    }
+
+    public void setSaleAgregateList(List<SaleAgregate> saleAgregateList) {
+        this.saleAgregateList = saleAgregateList;
     }
 
 }

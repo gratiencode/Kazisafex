@@ -5,6 +5,7 @@
  */
 package com.endeleya.kazisafex;
 
+import data.Abonnement;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -31,6 +32,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import tools.SubscriptionUtil;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Paint;
@@ -42,7 +44,6 @@ import data.Entreprise;
 import data.User;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
-import okhttp3.RequestBody;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -53,7 +54,11 @@ import tools.MainUI;
 import tools.SyncEngine;
 import tools.Util;
 import static tools.Util.centerImage;
-import data.helpers.Role; 
+import data.helpers.Role;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import okhttp3.RequestBody;
 
 /**
  * FXML Controller class
@@ -103,14 +108,16 @@ public class EntrepriseController implements Initializable {
     ResourceBundle bundle;
 
     private static EntrepriseController instance;
+    @FXML
+    private Label txt_subscripro;
 
     public EntrepriseController() {
         instance = this;
     }
 
     public static EntrepriseController getInstance() {
-        if(instance==null){
-            instance=new EntrepriseController();
+        if (instance == null) {
+            instance = new EntrepriseController();
         }
         return instance;
     }
@@ -146,7 +153,7 @@ public class EntrepriseController implements Initializable {
         } catch (FileNotFoundException ex) {
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
-        ksf.getRegions(this.eze.getUid()).enqueue(new Callback<List<String>>() {
+        ksf.getRegions().enqueue(new Callback<List<String>>() {
             @Override
             public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
                 if (rspns.isSuccessful()) {
@@ -161,63 +168,73 @@ public class EntrepriseController implements Initializable {
 
             }
         });
+        kazisafe.getAbonnements().enqueue(new Callback<List<Abonnement>>() {
+            @Override
+            public void onResponse(Call<List<Abonnement>> call, Response<List<Abonnement>> rspns) {
+                if (rspns.isSuccessful()) {
+                    List<Abonnement> abns = rspns.body();
+                    for (Abonnement abn : abns) {
+                        String etat = abn.getEtat();
+                        String typeAb = abn.getTypeAbonnement();
+
+                        switch (typeAb) {
+                            case "Gold", "Metal", "Super gold" -> {
+                                pref.put("type-sub", typeAb);
+                                String status = SubscriptionUtil.computeStatus(abn);
+                                Duration time = SubscriptionUtil.remainingDuration(abn);
+                                if (time.minusDays(7).isZero()) {
+                                    MainUI.notify(null, "Attention", "Le crédit Kazisafe (Record) expire bientôt, pensez à le renouveller", 5, "warning");
+                                }
+                                pref.putDouble("sub", Double.valueOf(
+                                        SubscriptionUtil.nextSubscriptionMillis(abn)));
+                                pref.put("etat-sub", etat);
+                                if (!status.equals(Constants.ETAT_SUBSCRIPTION_EXPIRY)) {
+                                    MainUI.notifySync("Kazisafe-Abonnement", "Activation souscription " + typeAb + " faite avec succes", "Notification de souscription au service kazisafe");
+                                }
+                            }
+                            case "PRO" -> {
+                                double nombreOper = abn.getNombreOperation();
+                                pref.put("pro-sub", typeAb);
+                                pref.putDouble("subscripro", nombreOper);
+                                pref.put("pro-etat", etat);
+                                MainUI.notifySync("Kazisafe-Abonnement", "Abonnement " + typeAb + " de " + formatNumber(nombreOper) + " eBonus active", "Notification de souscription au service kazisafe");
+                            }
+                        }
+                    }
+
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<Abonnement>> call, Throwable thrwbl) {
+                System.err.println("No network");
+            }
+        });
         go();
-//        ksf.checkSigninValidation(eze.getUid()).enqueue(new Callback<Abonnement>() {
-//            @Override
-//            public void onResponse(Call<Abonnement> call, Response<Abonnement> rspns) {
-//                if (rspns.isSuccessful()) {
-//                    Abonnement ab = rspns.body();
-//                    System.out.println("current subscription " + ab.getTypeAbonnement() + " ");
-//                    if (ab.getTypeAbonnement().equalsIgnoreCase("Gold")) {
-//                        Platform.runLater(new Runnable() {
-//                            @Override
-//                            public void run() {
-//                                double rkd = BigDecimal.valueOf(ab.getNombreOperation()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-//                                txt_abonn_value_eze.setText(String.valueOf(rkd));
-//                                txt_design_balance_eze.setText("Record");
-//                                txt_type_abonnement_eze.setText("Gold");
-//                                txt_type_abonnement_eze.setTextFill(Paint.valueOf("#f7fa45"));
-//                            }
-//                        });
-//
-//                    } else {
-//                        Platform.runLater(new Runnable() {
-//                            @Override
-//                            public void run() {
-//                                double ax = ab.getNombreOperation();
-//                                double d1 = ab.getDateAbonnement().getTime();
-//                                double d2 = System.currentTimeMillis();
-//                                double max = d1 + ax;
-//                                pref.putDouble("sub", max);
-//                                double remaind = max - d2;
-//                                long week = tools.Constants.MILLSECONDS_JOURN * 7;
-//                                if (Math.abs(remaind) <= week) {
-//                                    MainUI.notify(null, "Attention", "Votre abonnement expire bientot, pensez à le renouveller", 5, "warning");
-//                                }
-//                                double jrc = remaind / Constants.MILLSECONDS_JOURN;
-//                                double jrs = BigDecimal.valueOf(jrc).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-//                                txt_abonn_value_eze.setText(String.valueOf(jrs));
-//                                txt_design_balance_eze.setText("jours");
-//                                txt_type_abonnement_eze.setText(ab.getTypeAbonnement());
-//                                txt_type_abonnement_eze.setTextFill(Paint.valueOf(String.valueOf("#dddddd")));
-//                            }
-//                        });
-//                    }
-//                }
-//            }
-//
-//            @Override
-//            public void onFailure(Call<Abonnement> call, Throwable thrwbl) {
-//                System.err.println("Erreur activation "+thrwbl.getMessage());
-//              // go();
-//            }
-//        });
+    }
+
+    private String formatNumber(double val) {
+        BigDecimal bd = new BigDecimal(val);
+        bd = bd.setScale(2, RoundingMode.UNNECESSARY);
+        double value = bd.doubleValue();
+        if (value >= 1_000_000_000) {
+            return String.format("%.1fB", value / 1_000_000_000);
+        } else if (value >= 1_000_000) {
+            return String.format("%.1fM", value / 1_000_000);
+        } else if (value >= 1_000) {
+            return String.format("%.1fK", value / 1_000);
+        } else {
+            return Double.toString(value);
+        }
     }
 
     public boolean go() {
         if (txt_type_abonnement_eze != null && txt_abonn_value_eze != null) {
             double max = pref.getDouble("sub", 0);
+            double pro = pref.getDouble("subscripro", 0);
+            String proetat = pref.get("pro-etat", "INVALID");
             String type = pref.get("type-sub", "Gold");
+            txt_subscripro.setText("PRO: " + formatNumber(pro) + " eBonus (" + proetat + ")");
             if (type.equalsIgnoreCase("Gold")) {
                 txt_abonn_value_eze.setText(String.valueOf(max));
                 txt_design_balance_eze.setText("Record");
@@ -283,22 +300,21 @@ public class EntrepriseController implements Initializable {
     }
 
     public void save2cloud(Entreprise ese) {
-
-        RequestBody rNomEze = RequestBody.create(MediaType.parse("text/plain"),ese.getNomEntreprise() );
-        RequestBody rIdent = RequestBody.create( MediaType.parse("text/plain"),ese.getIdentification());
-        RequestBody rAdress = RequestBody.create( MediaType.parse("text/plain"),ese.getAdresse());
-        RequestBody rDomain = RequestBody.create(MediaType.parse("text/plain"), ese.getCategory()); 
-        RequestBody rMail = RequestBody.create(MediaType.parse("text/plain"),ese.getEmail());
-        RequestBody rTypeId = RequestBody.create(MediaType.parse("text/plain"),ese.getTypeIdentification());
-        RequestBody rWeb = RequestBody.create(MediaType.parse("text/plain"),ese.getWebsite()); 
+        RequestBody rNomEze = RequestBody.create(MediaType.parse("text/plain"), ese.getNomEntreprise());
+        RequestBody rIdent = RequestBody.create(MediaType.parse("text/plain"), ese.getIdentification());
+        RequestBody rAdress = RequestBody.create(MediaType.parse("text/plain"), ese.getAdresse());
+        RequestBody rDomain = RequestBody.create(MediaType.parse("text/plain"), ese.getCategory());
+        RequestBody rMail = RequestBody.create(MediaType.parse("text/plain"), ese.getEmail());
+        RequestBody rTypeId = RequestBody.create(MediaType.parse("text/plain"), ese.getTypeIdentification());
+        RequestBody rWeb = RequestBody.create(MediaType.parse("text/plain"), ese.getWebsite());
         RequestBody rLat = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(ese.getLatitude()));
-        RequestBody rLong = RequestBody.create(MediaType.parse("text/plain"),String.valueOf(ese.getLongitude()));
-        RequestBody rDate = RequestBody.create(MediaType.parse("text/plain"),Constants.DATE_HEURE_FORMAT.format(new Date()) );
-        RequestBody rPriv = RequestBody.create( MediaType.parse("text/plain"),Role.Trader.name());
-        RequestBody rReg = RequestBody.create(MediaType.parse("text/plain"),tf_ville_eze.getText() );
-        RequestBody rDescrip = RequestBody.create(MediaType.parse("text/plain"),"Fondateur");
-        RequestBody rUsername = RequestBody.create(MediaType.parse("text/plain"),user.getPrenom());
-        RequestBody rUserId = RequestBody.create(MediaType.parse("text/plain"),user.getUid());
+        RequestBody rLong = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(ese.getLongitude()));
+        RequestBody rDate = RequestBody.create(MediaType.parse("text/plain"), Constants.DATE_HEURE_FORMAT.format(new Date()));
+        RequestBody rPriv = RequestBody.create(MediaType.parse("text/plain"), Role.Trader.name());
+        RequestBody rReg = RequestBody.create(MediaType.parse("text/plain"), tf_ville_eze.getText());
+        RequestBody rDescrip = RequestBody.create(MediaType.parse("text/plain"), "Fondateur");
+        RequestBody rUsername = RequestBody.create(MediaType.parse("text/plain"), user.getPrenom());
+        RequestBody rUserId = RequestBody.create(MediaType.parse("text/plain"), user.getUid());
         MultipartBody.Part rLogo = MultipartBody.Part.createFormData("logo", choosenFile.getName(), RequestBody.create(MediaType.parse("image/jpg"), choosenFile));
         ksf.createEntreprise(rLogo,
                 rIdent, rTypeId,
@@ -332,19 +348,19 @@ public class EntrepriseController implements Initializable {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("moreprivmsg"), 3, "error");
             return;
         }
-        MultipartBody.Part rLogo = MultipartBody.Part.createFormData("logo", choosenFile.getName(), RequestBody.create(MediaType.parse("image/jpg"),choosenFile));
+        MultipartBody.Part rLogo = MultipartBody.Part.createFormData("logo", choosenFile.getName(), RequestBody.create(MediaType.parse("image/jpg"), choosenFile));
         RequestBody rNomEze = RequestBody.create(MediaType.parse("text/plain"), ese.getNomEntreprise());
-        RequestBody rIdent = RequestBody.create( MediaType.parse("text/plain"),ese.getIdentification());
-        RequestBody rAdress = RequestBody.create( MediaType.parse("text/plain"),ese.getAdresse());
-        RequestBody rDomain = RequestBody.create(MediaType.parse("text/plain"),ese.getCategory());
-        RequestBody rMail = RequestBody.create( MediaType.parse("text/plain"),ese.getEmail());
-        RequestBody rTypeId = RequestBody.create(MediaType.parse("text/plain"),ese.getTypeIdentification() == null ? "RCCM" : ese.getTypeIdentification());
-        RequestBody rWeb = RequestBody.create(MediaType.parse("text/plain"),ese.getWebsite() == null ? "-" : ese.getWebsite());
-        RequestBody rLat = RequestBody.create(MediaType.parse("text/plain"),String.valueOf(ese.getLatitude()));
-        RequestBody rLong = RequestBody.create(MediaType.parse("text/plain"),String.valueOf(ese.getLongitude()));
-        RequestBody rImpot = RequestBody.create( MediaType.parse("text/plain"),ese.getNumeroImpot());
-        RequestBody rIdnat = RequestBody.create(MediaType.parse("text/plain"),ese.getIdNat() == null ? "-" : ese.getIdNat());
-        RequestBody rPhone = RequestBody.create(MediaType.parse("text/plain"),ese.getPhones() == null ? "-" : ese.getPhones());
+        RequestBody rIdent = RequestBody.create(MediaType.parse("text/plain"), ese.getIdentification());
+        RequestBody rAdress = RequestBody.create(MediaType.parse("text/plain"), ese.getAdresse());
+        RequestBody rDomain = RequestBody.create(MediaType.parse("text/plain"), ese.getCategory());
+        RequestBody rMail = RequestBody.create(MediaType.parse("text/plain"), ese.getEmail());
+        RequestBody rTypeId = RequestBody.create(MediaType.parse("text/plain"), ese.getTypeIdentification() == null ? "RCCM" : ese.getTypeIdentification());
+        RequestBody rWeb = RequestBody.create(MediaType.parse("text/plain"), ese.getWebsite() == null ? "-" : ese.getWebsite());
+        RequestBody rLat = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(ese.getLatitude()));
+        RequestBody rLong = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(ese.getLongitude()));
+        RequestBody rImpot = RequestBody.create(MediaType.parse("text/plain"), ese.getNumeroImpot());
+        RequestBody rIdnat = RequestBody.create(MediaType.parse("text/plain"), ese.getIdNat() == null ? "-" : ese.getIdNat());
+        RequestBody rPhone = RequestBody.create(MediaType.parse("text/plain"), ese.getPhones() == null ? "-" : ese.getPhones());
         pane_progress.setVisible(true);
         ksf.updateEntreprise(rLogo, rIdent, rTypeId, rAdress, rDomain, rNomEze, rLat,
                 rLong, rMail, rWeb, rImpot, rIdnat, rPhone, uid)
@@ -378,7 +394,7 @@ public class EntrepriseController implements Initializable {
         Entreprise ese = new Entreprise();
         ese.setAdresse(tf_adresse_eze.getText());
         ese.setCategory(cbx_domaine_eze.getValue());
-        ese.setDateCreation(new Date());
+        ese.setDateCreation(LocalDateTime.now());
         ese.setEmail(tf_email_eze.getText());
         ese.setIdentification(tf_identifiant_eze.getText());
         ese.setLatitude(eze.getLatitude());
@@ -403,7 +419,7 @@ public class EntrepriseController implements Initializable {
         }
         eze.setAdresse(tf_adresse_eze.getText());
         eze.setCategory(cbx_domaine_eze.getValue());
-        eze.setDateCreation(new Date());
+        eze.setDateCreation(LocalDateTime.now());
         eze.setEmail(tf_email_eze.getText());
         eze.setIdentification(tf_identifiant_eze.getText());
         eze.setNomEntreprise(tf_nom_eze.getText());
@@ -416,6 +432,9 @@ public class EntrepriseController implements Initializable {
 
     /**
      * Initializes the controller class.
+     *
+     * @param url
+     * @param rb
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {

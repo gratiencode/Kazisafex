@@ -5,13 +5,13 @@
  */
 package com.endeleya.kazisafex;
 
-//import com.launchdarkly.eventsource.EventHandler;
-//import com.launchdarkly.eventsource.EventSource;
-import delegates.LigneVenteDelegate;
-import delegates.MesureDelegate;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import delegates.OperationDelegate;
-import delegates.StockerDelegate;
 import delegates.VenteDelegate;
+import delegates.LigneVenteDelegate;
+import delegates.RepportDelegate;
 import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
 import java.io.File;
@@ -24,16 +24,10 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
-import java.util.TreeMap;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -44,6 +38,7 @@ import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
+import javafx.event.ActionEvent;
 import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -52,6 +47,7 @@ import javafx.scene.chart.AreaChart;
 import javafx.scene.chart.PieChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
@@ -64,7 +60,6 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 
 import javafx.scene.shape.Circle;
@@ -72,33 +67,16 @@ import javafx.scene.shape.StrokeType;
 
 import data.Abonnement;
 import data.BaseModel;
-import data.Category;
-import data.Client;
-import data.ClientAppartenir;
-import data.ClientOrganisation;
-import data.CompteTresor;
-import data.Depense;
-import data.Destocker;
 import data.Entreprise;
 import data.Facture;
-import data.Fournisseur;
 import data.LigneVente;
-import data.Livraison;
-import data.LoginResult;
-import data.Mesure;
+import data.helpers.LoginWebResult;
 import data.Module;
 import data.Operation;
-import data.PrixDeVente;
-import data.Produit;
-import data.Recquisition;
 import data.Refresher;
-import data.RetourMagasin;
-import data.Stocker;
-import data.Traisorerie;
 import data.User;
 import data.Vente;
 import okhttp3.ResponseBody;
-import org.apache.commons.lang3.time.DateUtils;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -111,27 +89,44 @@ import tools.FileUtils;
 import services.PlatformUtil;
 import tools.MainUI;
 import tools.NetLoockup;
-import tools.OnUpdateVersionListener;
-import tools.SyncEndpoint;
+import tools.PriceMaker;
+import tools.Agregator;
+import tools.LocalTaskStateListener;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
 import tools.Constants;
+import data.Permission;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import data.helpers.Token;
 import jakarta.persistence.EntityExistsException;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
-import jakarta.persistence.Query;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Flow;
-import services.SafeConnectionFactory;
+import com.launchdarkly.eventsource.EventHandler;
+import com.launchdarkly.eventsource.EventSource;
+import delegates.PermissionDelegate;
+import java.net.URI;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Month;
+import java.time.Year;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
+import java.util.Locale;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import javafx.scene.control.ToolBar;
+import okhttp3.Headers;
+import tools.TopTen;
+import tools.Droit;
+import tools.Metric;
+import tools.SubscriptionUtil;
 
 /**
  * FXML Controller class
@@ -153,7 +148,6 @@ public class MainuiController implements Initializable {
         @Override
         public void onNext(Set<BaseModel> items) {
 
-            save(items);
             System.out.println("fin fonction request now");
             abonnement.request(1);
         }
@@ -204,8 +198,9 @@ public class MainuiController implements Initializable {
     @FXML
     private ImageView products_gate;
     @FXML
+    private ImageView immobilisation;
+    @FXML
     private ImageView caisse, img_iconify, img_close, agrandir;
-    SyncEngine se;
 
     @FXML
     private ImageView image_title, download_imgbtn;
@@ -219,7 +214,7 @@ public class MainuiController implements Initializable {
     @FXML
     private AnchorPane showPane;
     @FXML
-    private AreaChart<?, ?> venteChart;
+    private AreaChart<String, Number> venteChart;
     @FXML
     private Label svente;
     @FXML
@@ -237,8 +232,6 @@ public class MainuiController implements Initializable {
     @FXML
     Label txt_region, appName;
     @FXML
-    VBox vbox_menu;
-    @FXML
     Hyperlink install_update_link;
     @FXML
     private ProgressBar download_update_pgb;
@@ -250,7 +243,6 @@ public class MainuiController implements Initializable {
     private String phone;
     private String region, role, rccm;
     private String entrepiseId;
-    private LoginResult loginResult;
     private Module newModule;
     Preferences pref;
     double taux;
@@ -259,6 +251,7 @@ public class MainuiController implements Initializable {
     Kazisafe kazisafe;
     User user;
     Entreprise entreprisex;
+    PriceMaker maker;
 
     private String CURRENT_VIEW = tools.Constants.MAIN;
     boolean isConnected = false;
@@ -266,8 +259,25 @@ public class MainuiController implements Initializable {
     private static MainuiController instance;
     private static final int BATCH_SIZE = 10;
     private Set<BaseModel> buffer;
-
+    Agregator ag;
     NetLoockup network;
+    private ImageView activeMenuIcon;
+    @FXML
+    private Label sync_txt_message;
+    @FXML
+    private ProgressBar sync_pg_bar;
+    @FXML
+    private ImageView production;
+    @FXML
+    private ToolBar tbar_menu;
+    @FXML
+    private Button btn_theme_toggle;
+    @FXML
+    public Label txt_states_features;
+
+    public Label getSync_txt_message() {
+        return sync_txt_message;
+    }
 
     public MainuiController() {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
@@ -286,7 +296,6 @@ public class MainuiController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         bundle = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-
         appName.setText("Kazisafe");
         role = pref.get("priv", "Non disponible");
         installTooltips();
@@ -296,60 +305,119 @@ public class MainuiController implements Initializable {
         Tooltip.install(img_close, new Tooltip(bundle.getString("xtooltip.fer_me")));
         Tooltip.install(download_imgbtn, new Tooltip("Télécharger les mises à jours"));
         Tooltip.install(aide, new Tooltip("Ouvrir le fichier d'aide"));
-        Tooltip.install(app_image, new Tooltip("© Endeleya Corp. Kazisafe v" + pref.get("ksf_version", tools.Constants.APP_VERSION)));
+        Tooltip.install(app_image, new Tooltip("© " + Year.now() + " Endeleya Corp. Kazisafe v"
+                + pref.get("ksf_version", tools.Constants.APP_VERSION)));
         douwnload_update_pgi.setVisible(false);
         download_update_pgb.setVisible(false);
         install_update_link.setVisible(false);
         localPath = MainUI.cPath("/Media/Update");
+        MainUI.cPath(File.separator+"datastore");
         pref.put("ksf_version", tools.Constants.APP_VERSION);
         taux = pref.getDouble("taux2change", 2300);
         network = new NetLoockup();
+        maker = new PriceMaker();
+        maker.setMainCurrency(pref.get("mainCur", "USD"));
+        txt_states_features.setVisible(true);
+        txt_states_features.setText("...");
+        btn_theme_toggle.setText(pref.getBoolean(Kazisafex.DARK_THEME_PREF, false)
+                ? bundle.getString("xbtn.theme.light")
+                : bundle.getString("xbtn.theme.dark"));
+        Platform.runLater(this::refreshThemeView);
+        Platform.runLater(() -> setActiveMenu(home));
+        searchField.focusedProperty().addListener((ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) -> {
+            if (t1) {
+                if (searchField.getText().isEmpty()) {
+                    searchField.selectAll();
+                }
+            }
+        });
 
-        // TODO
+        cloturer(LocalDate.now(), LocalDate.now(), "Journalier du " + LocalDate.now().toString());
+        // sync();
     }
 
-    SyncEndpoint sep;
-    String URL;
+    @FXML
+    private void toggleTheme(ActionEvent event) {
+        boolean darkEnabled = !pref.getBoolean(Kazisafex.DARK_THEME_PREF, false);
+        pref.putBoolean(Kazisafex.DARK_THEME_PREF, darkEnabled);
+        refreshThemeView();
+    }
 
-    public void setToken(String token) {
-        this.token = token;
-        kazisafe = KazisafeServiceFactory.createService(token);
+    private void refreshThemeView() {
+        if (mainpane == null || mainpane.getScene() == null) {
+            return;
+        }
+        Kazisafex.applyTheme(mainpane.getScene());
+        boolean darkEnabled = pref.getBoolean(Kazisafex.DARK_THEME_PREF, false);
+        btn_theme_toggle.setText(darkEnabled
+                ? bundle.getString("xbtn.theme.light")
+                : bundle.getString("xbtn.theme.dark"));
+        if (darkEnabled) {
+            appName.setTextFill(Color.web("#a7d8ff"));
+            tbar_menu.setStyle("-fx-background-color: #111827;");
+        } else {
+            appName.setTextFill(Color.web("#44cef5"));
+            tbar_menu.setStyle("-fx-background-color: #ffffff;");
+        }
+    }
 
-        KazisafeServiceFactory.setOnTokenRefreshCallback((Token var1) -> {
-            MainuiController.this.token = var1.getToken();
-            System.err.println("Nouveau Token "+var1.getToken());
-            pref.put("token", var1.getToken());
-        });
+    public Label getTxt_states_features() {
+        return txt_states_features;
+    }
 
-        network.setOnNetworkStateChangeListener((boolean isReachable) -> {
-            System.err.println("NET_LOOK : " + isReachable);
-            if (isReachable) {
-                System.err.println("NET_LOOK - REACABLE: " + isReachable);
-                if (!isConnected) {
-                    isConnected = true;
-                    System.err.println("MAINUIC_NETWORK_IS_ON : Good states websocket can start");
-                    kazisafe = KazisafeServiceFactory.createService(token);
-                    KazisafeServiceFactory.setOnTokenRefreshCallback((Token var1) -> {
-                        MainuiController.this.token = var1.getToken();
-                        pref.put("token", var1.getToken());
-                    });
-                }
-            } else {
-                System.err.println("MAINUIC_NETWORK_IS_OFF : Bad states websocket can't start");
-                isConnected = false;
-            }
-            pref.putBoolean(NetLoockup.NETWORK_STATUS, isReachable);
-        });
-        searchField.focusedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) {
-                if(t1){
-                    if(searchField.getText().isEmpty()){
-                        searchField.selectAll();
+    public void cloturer(LocalDate d1, LocalDate d2, String context) {
+        try {
+            sync_txt_message.setVisible(true);
+            sync_pg_bar.setVisible(true);
+            MainUI.notify(null, "", "Veuillez patientez que la cloture de stock se termine", 15, "warning");
+            sync_txt_message.setText("Cloture des stocks en cours....");
+            ag = Agregator.getInstance();
+            ag.setLocalTaskStateListener(new LocalTaskStateListener() {
+                @Override
+                public void onFinish(boolean isfinished, String name) {
+                    if (name.contains("stock")) {
+                        sync_txt_message.setVisible(false);
+                        sync_pg_bar.setVisible(false);
+                        Platform.runLater(() -> {
+                            summarise();
+                        });
                     }
                 }
+
+                @Override
+                public void onProgress(double progress, String message) {
+                    Platform.runLater(() -> {
+                        sync_txt_message.setText(message);
+                        sync_pg_bar.setProgress(progress);
+                    });
+                }
+            });
+            ag.agregate(d1, d2, d1.equals(d2) ? "Journalier du " + d1 : context);
+            ag.setOnReportSavedListener((double chiffreAffaire, double coutVariable) -> {
+                Platform.runLater(() -> {
+                    dashCardVente(chiffreAffaire);
+                    dashCardDepense(coutVariable);
+                    dashCardResult(chiffreAffaire, coutVariable);
+                });
+            });
+            ag.reportInBackground();
+        } catch (java.lang.RuntimeException e) {
+        }
+    }
+
+    public void sync(Kazisafe ksf) {
+        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+        ses.scheduleWithFixedDelay(() -> {
+            if (ag != null) {
+                if (ag.isFinish()
+                        && NetLoockup.NETWORK_STATUS_ON) {
+                    System.out.println("Connected on Internet");
+                    Platform.runLater(() -> {
+                        SyncEngine.getInstance().syncWithHttpProtocol(sync_txt_message, ksf);
+                    });
+                }
             }
-        });
+        }, 1, 8, TimeUnit.MINUTES);
     }
 
     @FXML
@@ -366,64 +434,33 @@ public class MainuiController implements Initializable {
         searchField.selectAll();
     }
 
-    @FXML
-    public void sync(Event e) {
-        if (se != null) {
-            se.start();
-        } else {
-            MainUI.notify(null, "Erreur", "Echec de lancement de la synchronisation, verifiez la connection internet", 4, "error");
-        }
-    }
-
-    public List<Vente> getVentes(Date date) {
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        List<Vente> vts = VenteDelegate.findAllByDateInterval(d1, kesho);//db.findAllByDateInterval(Vente.class, d1, kesho);
+    public List<Vente> getVentes(LocalDate date) {
+        LocalDate kesho = date.plusDays(1);
+        List<Vente> vts = VenteDelegate.findAllByDateInterval(date, kesho);// db.findAllByDateInterval(Vente.class, d1,
+                                                                           // kesho);
         if (vts == null) {
             return null;
         }
         return vts;
     }
 
-    public List<Vente> getVentesDebt(Date date) {
-        Calendar cexp = Calendar.getInstance();
-        cexp.setTime(date);
-        cexp.set(Calendar.HOUR, 0);
-        cexp.set(Calendar.MINUTE, 59);
-        cexp.set(Calendar.SECOND, 59);
-        cexp.set(Calendar.MILLISECOND, 0);
-        Date date1 = DateUtils.addDays(date, 1);
-        List<Vente> vts = VenteDelegate.findAllByDateInterval(cexp.getTime(), date1);
-        //Util.getByDay(db.findAll(), new Date());
-
+    public List<Vente> getVentesDebt(LocalDate date) {
+        LocalDate date1 = date.plusDays(1);
+        List<Vente> vts = VenteDelegate.findAllByDateInterval(date, date1);
         return vts;
     }
 
-    public List<Vente> getVentesDebt(Date date, String region) {
-        Calendar cexp = Calendar.getInstance();
-        cexp.setTime(date);
-        cexp.set(Calendar.HOUR, 0);
-        cexp.set(Calendar.MINUTE, 59);
-        cexp.set(Calendar.SECOND, 59);
-        cexp.set(Calendar.MILLISECOND, 0);
-        Date date1 = DateUtils.addDays(date, 1);
-        List<Vente> vts = VenteDelegate.findAllByDateInterval(cexp.getTime(), date1, region);
-        //Util.getByDay(db.findAll(), new Date());
-
+    public List<Vente> getVentesDebt(LocalDate date, String region) {
+        LocalDate date1 = date.plusDays(1);
+        List<Vente> vts = VenteDelegate.findAllByDateInterval(date, date1, region);
         return vts;
     }
 
     public List<Vente> getVentesInMoth(String month) {
         List<Vente> result = new ArrayList<>();
-        List<Vente> vts = VenteDelegate.findVentes();//db.findAll(Vente.class);
+        List<Vente> vts = VenteDelegate.findVentes();// db.findAll(Vente.class);
         for (Vente vt : vts) {
-            String dv = tools.Constants.YEAR_AND_MONTH_FORMAT.format(vt.getDateVente());
+            String dv = String.valueOf(vt.getDateVente().getMonthValue());
             if (dv.equals(month)) {
                 result.add(vt);
             }
@@ -433,10 +470,10 @@ public class MainuiController implements Initializable {
 
     public List<Operation> getOpsInMonth(String month) {
         List<Operation> result = new ArrayList<>();
-        List<Operation> vts = OperationDelegate.findOperations();//db.findAll(Operation.class);
+        List<Operation> vts = OperationDelegate.findOperations();// db.findAll(Operation.class);
         if (vts != null) {
             for (Operation vt : vts) {
-                String dv = tools.Constants.YEAR_AND_MONTH_FORMAT.format(vt.getDate());
+                String dv = String.valueOf(vt.getDate().getMonthValue());
                 if (dv.equals(month)) {
                     result.add(vt);
                 }
@@ -450,7 +487,7 @@ public class MainuiController implements Initializable {
         List<Vente> vts = VenteDelegate.findVentes(region);// db.findAllByRegion(Vente.class, region);
         if (vts != null) {
             for (Vente vt : vts) {
-                String dv = tools.Constants.YEAR_AND_MONTH_FORMAT.format(vt.getDateVente());
+                String dv = String.valueOf(vt.getDateVente().getMonthValue());
                 if (dv.equals(month)) {
                     result.add(vt);
                 }
@@ -461,7 +498,7 @@ public class MainuiController implements Initializable {
 
     public List<Operation> getOpsInMonth(String month, String region) {
         List<Operation> result = new ArrayList<>();
-        List<Operation> vts = OperationDelegate.findOperations(region);//db.findAllByRegion(Operation.class, region);
+        List<Operation> vts = OperationDelegate.findOperations(region);// db.findAllByRegion(Operation.class, region);
         if (vts != null) {
             for (Operation vt : vts) {
                 String dv = tools.Constants.YEAR_AND_MONTH_FORMAT.format(vt.getDate());
@@ -473,42 +510,22 @@ public class MainuiController implements Initializable {
         return result;
     }
 
-    public List<Operation> getOps(Date date) {
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        List<Operation> vts = OperationDelegate.findByDateInterval(d1, kesho);
+    public List<Operation> getOps(LocalDate date) {
+        LocalDate kesho = date.plusDays(1);
+        List<Operation> vts = OperationDelegate.findByDateInterval(date, kesho);
         return vts;
     }
 
-    public List<Operation> getOps(Date date, String region) {
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        List<Operation> vts = OperationDelegate.findByDateInterval(d1, kesho, region);
+    public List<Operation> getOps(LocalDate date, String region) {
+        LocalDate kesho = date.plusDays(1);
+        List<Operation> vts = OperationDelegate.findByDateInterval(date, kesho, region);
         return vts;
     }
 
-    public List<Vente> getVentes(Date date, String region) {
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        List<Vente> vts = VenteDelegate.findAllByDateInterval(d1, kesho, region);//db.findAllByDateIntervalInRegion(Vente.class, d1, kesho, region);
+    public List<Vente> getVentes(LocalDate date, String region) {
+        LocalDate kesho = date.plusDays(1);
+        List<Vente> vts = VenteDelegate.findAllByDateInterval(date, kesho, region);// db.findAllByDateIntervalInRegion(Vente.class,
+                                                                                   // d1, kesho, region);
         return vts;
     }
 
@@ -517,341 +534,166 @@ public class MainuiController implements Initializable {
         MainUI.enlarge();
     }
 
-    public void dashCardVente() {
-        Date date = new Date();
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            double sumSales = VenteDelegate.sumVente(d1, kesho, taux);
-            //Util.sumSales(ventes, taux);
-            System.out.println("Sum sale " + sumSales);
-            svente.setText("$ " + BigDecimal.valueOf(sumSales).setScale(1, RoundingMode.FLOOR).doubleValue());
-        } else {
-            // List<Vente> ventes = getVentes(new Date(), region);
-            double sumSales = VenteDelegate.sumVente(d1, kesho, region, taux);
-            svente.setText("$ " + BigDecimal.valueOf(sumSales).setScale(1, RoundingMode.FLOOR).doubleValue());
-        }
+    public void dashCardVente(double sumSales) {
+        System.out.println("Sum sale " + sumSales);
+        String somV = maker.isUsd() ? "$ " + formatNumber(BigDecimal.valueOf(sumSales).setScale(1, RoundingMode.FLOOR)
+                .doubleValue())
+                : "Fc " + formatNumber(
+                        BigDecimal.valueOf(sumSales * taux).setScale(2, RoundingMode.FLOOR).doubleValue());
+        svente.setText(somV);
     }
 
     public void creanceToday() {
         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            List<Vente> ventes = getVentesDebt(new Date());
+            List<Vente> ventes = getVentesDebt(LocalDate.now());
             double sumSales = Util.sumCreditSales(ventes, taux);
-            screance.setText("$ " + BigDecimal.valueOf(sumSales).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            String somC = maker.isUsd() ? "$ " + formatNumber(BigDecimal.valueOf(sumSales)
+                    .setScale(2, RoundingMode.HALF_EVEN).doubleValue())
+                    : "Fc " + formatNumber(BigDecimal.valueOf(sumSales * taux)
+                            .setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            screance.setText(somC);
         } else {
-            List<Vente> ventes = getVentesDebt(new Date(), region);
+            List<Vente> ventes = getVentesDebt(LocalDate.now(), region);
             double sumSales = Util.sumCreditSales(ventes, taux);
-            screance.setText("$ " + BigDecimal.valueOf(sumSales).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            String somC = maker.isUsd() ? "$ " + formatNumber(BigDecimal.valueOf(sumSales)
+                    .setScale(2, RoundingMode.HALF_EVEN).doubleValue())
+                    : "Fc " + formatNumber(BigDecimal.valueOf(sumSales * taux)
+                            .setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            screance.setText(somC);
         }
     }
 
-    public void dashCardResult() {
-        Date date = new Date();
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            double sumSales = VenteDelegate.sumVente(d1, kesho, taux);
-            double achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho, null);
-            double sum = VenteDelegate.sumExpenses(d1, kesho, taux);
-            double exp = achat + sum;
-            double result = sumSales - exp;
-            stresor.setText("$ " + BigDecimal.valueOf(result).setScale(2, RoundingMode.HALF_EVEN));
-        } else {
-            double sumSales = VenteDelegate.sumVente(d1, kesho, region, taux);
-            double achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho, region);
-            double sum = VenteDelegate.sumExpenses(d1, kesho, region, taux);
-            double exp = achat + sum;
-            double result = sumSales - exp;
-            stresor.setText("$ " + BigDecimal.valueOf(result).setScale(2, RoundingMode.HALF_EVEN));
-        }
+    public void dashCardResult(double sumSales, double achat) {
+        double result = sumSales - achat;
+        String r = (maker.isUsd() ? ("$ " + formatNumber(BigDecimal.valueOf(result)
+                .setScale(2, RoundingMode.HALF_EVEN).doubleValue()))
+                : "Fc " + formatNumber(BigDecimal.valueOf(result * taux)
+                        .setScale(2, RoundingMode.HALF_EVEN)
+                        .doubleValue()));
+        stresor.setText(r);
     }
 
-    public double dashAchat(List<Vente> vents) {
-        double sB = 0;
-        for (Vente vent : vents) {
-            List<LigneVente> lvs = LigneVenteDelegate.findByReference(vent.getUid());
-            //db.findAll("reference.uid", vent.getUid());
-            double sm = 0;
-            if (lvs == null) {
-                continue;
-            }
-            for (LigneVente lv : lvs) {
-                if (lv.getNumlot() == null) {
-                    continue;
-                }
-                Vente vref = lv.getReference();
-                if (vref == null) {
-                    continue;
-                }
-                Vente v = VenteDelegate.findVente(vref.getUid());
-                double smv = v.getMontantCdf() + v.getMontantUsd() + (v.getMontantDette() == null
-                        ? 0 : v.getMontantDette());
-                if (smv == 0) {
-                    continue;
-                }
-                Produit p = lv.getProductId();
-                List<Stocker> stocks = StockerDelegate.findDescSortedByDateStock(p.getUid());
-                if (stocks.isEmpty()) {
-                    continue;
-                }
-                Stocker s = stocks.get(0);
-                Mesure mstok = s.getMesureId();
-
-                Mesure mreel = MesureDelegate.findMesure(mstok.getUid());
-                if (mreel == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-                    mreel = mesures.get(0);
-                }
-                double qpcsti = mreel.getQuantContenu();
-                double qpcst = qpcsti == 0 ? 1 : mreel.getQuantContenu();
-                double coutAchat = s.getCoutAchat();
-                double pupc = coutAchat / qpcst;
-                Mesure mvndu = lv.getMesureId();
-                Mesure mreelv = MesureDelegate.findMesure(mvndu.getUid());
-                if (mreelv == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-                    mreelv = mesures.get(0);
-                }
-                double vndu = mreelv.getQuantContenu();
-                double qtvndupc = vndu * lv.getQuantite();
-                double sv = pupc * qtvndupc;
-                sm += sv;
-            }
-            sB += sm;
-        }
-        System.out.println("Achat - " + sB);
-        return sB;
+    public void dashCardDepense(double achat) {
+        sdepense.setText(maker.isUsd() ? ("$ " + formatNumber(achat)) : ("Fc " + formatNumber(achat * taux)));
     }
-
-    public double dashAchat(List<Vente> vents, String region) {
-        double sB = 0;
-        for (Vente vent : vents) {
-            List<LigneVente> lvs = LigneVenteDelegate.findByReference(vent.getUid());
-            double sm = 0;
-            if (lvs == null) {
-                continue;
-            }
-            for (LigneVente lv : lvs) {
-                if (lv.getNumlot() == null) {
-                    continue;
-                }
-                Vente v = VenteDelegate.findVente(lv.getReference().getUid());
-                double smv = v.getMontantCdf() + v.getMontantUsd() + (v.getMontantDette() == null
-                        ? 0 : v.getMontantDette());
-                if (smv == 0) {
-                    continue;
-                }
-                Produit p = lv.getProductId();
-                List<Stocker> stocks = StockerDelegate.findDescSortedByDateStock(p.getUid(), region);
-                if (stocks.isEmpty()) {
-                    continue;
-                }
-                Stocker s = stocks.get(0);
-                Mesure mstok = s.getMesureId();
-                Mesure mzr = MesureDelegate.findMesure(mstok.getUid());
-                if (mzr == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-                    mzr = mesures.get(0);
-                }
-                double qpcst = mzr.getQuantContenu();
-                double coutAchat = s.getCoutAchat();
-                double pupc = coutAchat / qpcst;
-                Mesure mvndu = lv.getMesureId();
-                Mesure mzir = MesureDelegate.findMesure(mvndu.getUid());
-                if (mzir == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-                    mzir = mesures.get(0);
-                }
-                double vndu = mzir.getQuantContenu();
-                double qtvndupc = vndu * lv.getQuantite();
-                double sv = pupc * qtvndupc;
-                sm += sv;
-            }
-            sB += sm;
-        }
-        return sB;
-    }
-
-    public void dashCardDepense() {
-        Date date = new Date();
-        Date kesho = DateUtils.addDays(date, 1);
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(date);
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-        Date d1 = leo.getTime();
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-            double achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho, null);
-            double sum = VenteDelegate.sumExpenses(d1, kesho, taux);
-            double exp = achat + sum;
-            sdepense.setText("$ " + BigDecimal.valueOf(exp).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
-            if (exp != 0) {
-                double p = (sum / exp) * 100;
-                p = BigDecimal.valueOf(p).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
-                depense_proportion.setText(String.format(bundle.getString("xlbel.depense_proport"), p, "%", sum));
-            } else {
-                depense_proportion.setText(String.format(bundle.getString("xlbel.depense_proport"), "0.0", "%", 0.0));
-            }
-        } else {
-            double achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho, region);
-            double sum = VenteDelegate.sumExpenses(d1, kesho, region, taux);
-            double exp = achat + sum;
-            sdepense.setText("$ " + BigDecimal.valueOf(exp).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
-            if (exp != 0) {
-                double p = (sum / exp) * 100;
-                p = BigDecimal.valueOf(p).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
-                depense_proportion.setText(String.format(bundle.getString("xlbel.depense_proport"), p, "%", sum));
-            } else {
-                depense_proportion.setText(String.format(bundle.getString("xlbel.depense_proport"), "0.0", "%", 0.0));
-            }
-        }
-    }
-
-    public void summarise() {
-
-        System.out.println("is summary called");
-        dashCardVente();
-        dashCardDepense();
-        dashCardResult();
-        loadSaleChart();
-        loadProChart();
-        creanceToday();
-
-    }
-    String reg = null;
 
     public void metrify() {
         venteChart.setLegendVisible(true);
-        XYChart.Series serie_vente = new XYChart.Series();
-        XYChart.Series serie_prixderevient = new XYChart.Series();
-        XYChart.Series serie_resultat = new XYChart.Series();
+        XYChart.Series<String, Number> serie_vente = new XYChart.Series();
+        XYChart.Series<String, Number> serie_prixderevient = new XYChart.Series();
+        XYChart.Series<String, Number> serie_resultat = new XYChart.Series();
         serie_vente.setName(bundle.getString("xgraph.seri1_vente").trim());
         serie_prixderevient.setName(bundle.getString("xgraph.seri2_depens").trim());
         serie_resultat.setName(bundle.getString("xgraph.seri3_marg").trim());
-
-        Calendar leo = Calendar.getInstance();
-        leo.setTime(new Date());
-        leo.set(Calendar.HOUR, 0);
-        leo.set(Calendar.MINUTE, 0);
-        leo.set(Calendar.SECOND, 0);
-        leo.set(Calendar.MILLISECOND, 0);
-
-        int month = leo.get(Calendar.MONTH) + 1;
-
-//        Date mwanzo = DateUtils.addMonths(d1, -month);
-//        if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
-//            reg = region;
-//        }
-//        HashMap<String, Double> datax = db.getSalesInPerod(mwanzo, d1, null, taux);
-//        System.out.println("Dataxsf " + datax.size());
-//        datax.forEach((x, y) -> {
-//            System.out.println(">>>>>>>>>>>> Value Mois " + x + " : " + y);
-//            serie_vente.getData().add(new XYChart.Data<>(x, y));
-//            Double mca = VenteDelegate.sumCoutAchatArticleVendu(x, null);
-//            double dep = VenteDelegate.sumExpenses(x, null, taux);
-//            double prixrevient = mca + dep;
-//            serie_prixderevient.getData().add(new XYChart.Data<>(x, prixrevient));
-//            double result = y - prixrevient;//resultat
-//            serie_resultat.getData().add(new XYChart.Data<>(x, result));
-//        });
+        int month = LocalDate.now().getMonthValue();
         System.out.println("mois en cours " + month);
-        for (int i = 1; i <= month; i++) {
-            try {
-                String suffix = String.format("%02d", i);
-                String firstday = leo.get(Calendar.YEAR) + "-" + suffix + "-01";
-                Date date1 = Constants.dateFormater.parse(firstday);
-                Calendar d2 = Calendar.getInstance();
-                d2.setTime(date1);
-                int maxday = d2.getActualMaximum(Calendar.DAY_OF_MONTH);
-                String lastday = leo.get(Calendar.YEAR) + "-" + suffix + "-" + maxday;
-                Date date2 = Constants.dateFormater.parse(lastday);
+        List<Metric> kpis;
 
-                String moix = getMonthName(lastday.substring(0, lastday.lastIndexOf("-")));
-                System.out.println("lonog " + moix);
-                if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-                    System.out.println("vente ajour " + lastday);
-                    double sumSales = VenteDelegate.sumVente(date1, date2, taux);
+        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+            kpis = RepportDelegate.kpiValues(LocalDate.of(Year.now().getValue(), Month.JANUARY, 1),
+                    LocalDate.now(),
+                    "%", "Mensuel");
+        } else {
+            kpis = RepportDelegate.kpiValues(LocalDate.of(Year.now().getValue(), Month.JANUARY, 1),
+                    LocalDate.now(),
+                    region, "Mensuel");
+        }
+        for (Metric kpi : kpis) {
+            LocalDate period = kpi.period();
+            String moix = period.getMonth().getDisplayName(TextStyle.FULL_STANDALONE, Locale.FRANCE);
+            serie_vente.getData().add(new XYChart.Data<>(moix, kpi.chiffreAffaire()));
+            serie_prixderevient.getData().add(new XYChart.Data<>(moix, kpi.coutAchat()));
+            serie_resultat.getData().add(new XYChart.Data<>(moix, kpi.result()));
+        }
 
-                    double achat = VenteDelegate.sumCoutAchatArticleVendu(date1, date2, null);
-                    double sum = VenteDelegate.sumExpenses(date1, date2, taux);
-                    double prixrevient = achat + sum;
-                    double result = sumSales - prixrevient;
-                    serie_vente.getData().add(new XYChart.Data<>(moix, sumSales));
-                    serie_prixderevient.getData().add(new XYChart.Data<>(moix, prixrevient));
-                    serie_resultat.getData().add(new XYChart.Data<>(moix, result));
-                } else {
-                    System.out.println("vente ajour reg" + lastday);
-                    double sumSales = VenteDelegate.sumVente(date1, date2, region, taux);
-                    serie_vente.getData().add(new XYChart.Data<>(moix, sumSales));
-                    double achat = VenteDelegate.sumCoutAchatArticleVendu(date1, date2, region);
-                    double sum = VenteDelegate.sumExpenses(date1, date2, region, taux);
-                    double prixrevient = achat + sum;
-                    double result = sumSales - prixrevient;
-                    serie_prixderevient.getData().add(new XYChart.Data<>(moix, prixrevient));
-                    // double result = sumSales - prixrevient;//resultat
-                    serie_resultat.getData().add(new XYChart.Data<>(moix, result));
-                }
-            } catch (ParseException ex) {
-                Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
+        venteChart.getData().addAll(serie_vente, serie_prixderevient, serie_resultat);
+        for (XYChart.Series<String, Number> serie : venteChart.getData()) {
+            for (XYChart.Data<String, Number> data : serie.getData()) {
+                String text = serie.getName() + "\n" + data.getXValue() + " : "
+                        + formatNumber(data.getYValue().doubleValue()) + " " + maker.getMainCurrency();
+                Tooltip tooltip = new Tooltip(text);
+                Tooltip.install(data.getNode(), tooltip);
+                data.getNode().setStyle("-fx-background-color: #ff6600, white; -fx-padding: 5px;");
             }
         }
-        venteChart.getData().add(serie_vente);
-        venteChart.getData().add(serie_prixderevient);
-        venteChart.getData().add(serie_resultat);
         venteChart.setLegendSide(Side.BOTTOM);
+    }
+
+    private double sumCout(List<Vente> ventes) {
+        double coutTotal = 0;
+        for (Vente vente : ventes) {
+            List<LigneVente> items = LigneVenteDelegate.findByReference(vente.getUid());
+            coutTotal += items.stream()
+                    .mapToDouble(l -> l.getQuantite() * (l.getCoutAchat() == null ? 0 : l.getCoutAchat())).sum();
+        }
+        return coutTotal;
+    }
+
+    public void summarise() {
+        maker.setMainCurrency(pref.get("mainCur", "USD"));
+        System.out.println("is summary called");
+        creanceToday();
+        loadSaleChart();
+        loadProChart();
 
     }
 
-    private Map<Long, String> sortDesc(Map<Long, String> values) {
-        return new TreeMap(values).descendingMap();
-    }
+    String reg = null;
 
     private void loadProChart() {
-
         piepane.setPrefSize(351, 318);
         piepane.setLabelsVisible(true);
-        //piepane.setLegendVisible(true);
-
-        HashMap<Long, String> entries;
+        List<TopTen> entries;
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
             entries = VenteDelegate.getTop10ProductDesc();
         } else {
             entries = VenteDelegate.getTop10ProductDesc(region);
         }
         System.out.println("entree " + entries.size());
-        for (Map.Entry<Long, String> entry : entries.entrySet()) {
-            PieChart.Data data = new PieChart.Data(entry.getValue(), entry.getKey());
-            piepane.setAnimated(true);
+        for (TopTen top : entries) {
+            PieChart.Data data = new PieChart.Data(top.nomp(), top.quantite());
 
+            piepane.setAnimated(true);
             if (!existPie(piepane.getData(), data.getName())) {
                 piepane.getData().add(data);
+                Tooltip bull = new Tooltip(
+                        data.getName() + " : " + formatNumber(data.getPieValue()) + " " + top.mesure());
+                Tooltip.install(data.getNode(), bull);
+                data.pieValueProperty().addListener(new ChangeListener<Number>() {
+                    @Override
+                    public void changed(ObservableValue<? extends Number> ov, Number t, Number t1) {
+                        bull.setText(data.getName() + " : " + formatNumber(data.getPieValue()) + " " + top.mesure());
+                    }
+                });
+
             }
         }
+        piepane.setLabelsVisible(true);
+    }
 
+    private String formatNumber(double value) {
+        if (value >= 1_000_000_000) {
+            return String.format("%.1fB", value / 1_000_000_000);
+        } else if (value >= 1_000_000) {
+            return String.format("%.1fM", value / 1_000_000);
+        } else if (value >= 1_000) {
+            return String.format("%.1fK", value / 1_000);
+        } else {
+            return Double.toString(value);
+        }
     }
 
     private void loadSaleChart() {
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                venteChart.getData().clear();
-                metrify();
-            }
-        });
+        Executors.newSingleThreadScheduledExecutor()
+                .scheduleAtFixedRate(() -> {
+                    Platform.runLater(new Runnable() {
+                        @Override
+                        public void run() {
+                            venteChart.getData().clear();
+                            metrify();
+                        }
+                    });
+                }, 2, 60, TimeUnit.SECONDS);
 
     }
 
@@ -864,38 +706,49 @@ public class MainuiController implements Initializable {
         return false;
     }
 
-    public String getMonthName(String numRepres) {
-        if (numRepres.endsWith("01")) {
-            return bundle.getString("xmwezi_1");
-        } else if (numRepres.endsWith("02")) {
-            return bundle.getString("xmwezi_2");
-        } else if (numRepres.endsWith("03") || numRepres.endsWith("3")) {
-            return bundle.getString("xmwezi_3");
-        } else if (numRepres.endsWith("04") || numRepres.endsWith("4")) {
-            return bundle.getString("xmwezi_4");
-        } else if (numRepres.endsWith("05") || numRepres.endsWith("5")) {
-            return bundle.getString("xmwezi_5");
-        } else if (numRepres.endsWith("06") || numRepres.endsWith("6")) {
-            return bundle.getString("xmwezi_6");
-        } else if (numRepres.endsWith("07") || numRepres.endsWith("7")) {
-            return bundle.getString("xmwezi_7");
-        } else if (numRepres.endsWith("08") || numRepres.endsWith("8")) {
-            return bundle.getString("xmwezi_8");
-        } else if (numRepres.endsWith("09") || numRepres.endsWith("9")) {
-            return bundle.getString("xmwezi_9");
-        } else if (numRepres.endsWith("10")) {
-            return bundle.getString("xmwezi_10");
-        } else if (numRepres.endsWith("11")) {
-            return bundle.getString("xmwezi_11");
-        } else if (numRepres.endsWith("12")) {
-            return bundle.getString("xmwezi_12");
+    private void setActiveMenu(ImageView target) {
+        List<ImageView> menus = List.of(home, products_gate, caisse, immobilisation, stockage, pos, production, agents,
+                rapport, compagnie, parametre);
+        for (ImageView menu : menus) {
+            if (menu == null) {
+                continue;
+            }
+            if (menu.equals(target)) {
+                menu.setOpacity(1d);
+                menu.setScaleX(1.08);
+                menu.setScaleY(1.08);
+                menu.setStyle("-fx-effect: dropshadow(three-pass-box, #44cef5, 14, 0.2, 0, 0);");
+            } else {
+                menu.setOpacity(0.62);
+                menu.setScaleX(1d);
+                menu.setScaleY(1d);
+                menu.setStyle("");
+                MainUI.removeShaddowEffect(menu);
+            }
         }
-        return "";
+        activeMenuIcon = target;
+    }
+
+    private ImageView menuForView(String viewName) {
+        return switch (viewName) {
+            case tools.Constants.MAIN -> home;
+            case tools.Constants.PRODUIT -> products_gate;
+            case tools.Constants.CAISSES -> caisse;
+            case tools.Constants.IMMOBILISATIONS -> immobilisation;
+            case tools.Constants.STORAGE -> stockage;
+            case tools.Constants.POS -> pos;
+            case tools.Constants.PRODUCTION -> production;
+            case tools.Constants.AGENTS -> agents;
+            case tools.Constants.REPPORTS -> rapport;
+            case tools.Constants.ENTREPRISE -> compagnie;
+            case tools.Constants.PARAMETRES -> parametre;
+            default -> null;
+        };
     }
 
     public void setUserPhone(String phone) {
         this.phone = phone;
-        setPhone(phone);
+
     }
 
     @FXML
@@ -904,8 +757,11 @@ public class MainuiController implements Initializable {
         mainpane.getChildren().add(showPane);
         pane_title.setText("Tableau de bord");
         image_title.setImage(new Image(this.getClass().getResourceAsStream("/icons/dashboard(2).png")));
-        summarise();
+        if (ag != null) {
+            ag.reportInBackground();
+        }
         CURRENT_VIEW = "DASHBOARD";
+        setActiveMenu(home);
     }
 
     @FXML
@@ -922,30 +778,38 @@ public class MainuiController implements Initializable {
     }
 
     public void switchSimpleScreens(String xml, String viewName, String title, String iconName) {
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(viewName)) {
-                    AnchorPane p = MainUI.getPage(MainuiController.this, xml, token, entreprisex, kazisafe);
-                    if (p == null) {
-                        return;
-                    }
-                    p.setLayoutY(LAYOUTY);
-                    p.setLayoutX(LAYOUTX);
-                    mainpane.getChildren().remove(0);
-                    mainpane.getChildren().add(p);
-                    pane_title.setText(title);
-                    image_title.setImage(new Image(MainuiController.this.getClass().getResourceAsStream("/icons/" + iconName)));
-                    CURRENT_VIEW = viewName;
-                }
-            }
-        });
+        Executors.newCachedThreadPool()
+                .submit(() -> {
+                    Platform.runLater(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(viewName)) {
+                                txt_states_features.setText("...");
+                                AnchorPane p = MainUI.getPage(MainuiController.this, xml, token, getEntreprisex(),
+                                        kazisafe);
+                                if (p == null) {
+                                    return;
+                                }
+                                p.setLayoutY(LAYOUTY);
+                                p.setLayoutX(LAYOUTX);
+                                mainpane.getChildren().remove(0);
+                                mainpane.getChildren().add(p);
+                                pane_title.setText(title);
+                                image_title.setImage(new Image(
+                                        MainuiController.this.getClass().getResourceAsStream("/icons/" + iconName)));
+                                CURRENT_VIEW = viewName;
+                                setActiveMenu(menuForView(viewName));
+                            }
+                        }
+                    });
+                });
 
     }
 
-    public void switchScreens(String xml, String viewName, String title, String iconName, Vente v, Facture liv) {
+    public void switchScreens(String xml, String viewName, String title, String iconName, Vente v, Object liv) {
         if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(viewName)) {
-            AnchorPane p = MainUI.getPage(this, xml, token, entreprisex, v, liv);
+            txt_states_features.setText("...");
+            AnchorPane p = MainUI.getPage(this, xml, token, getEntreprisex(), v, liv);
             if (p == null) {
                 return;
             }
@@ -956,6 +820,7 @@ public class MainuiController implements Initializable {
             pane_title.setText(title);
             image_title.setImage(new Image(this.getClass().getResourceAsStream("/icons/" + iconName)));
             CURRENT_VIEW = viewName;
+            setActiveMenu(menuForView(viewName));
         }
     }
 
@@ -979,7 +844,8 @@ public class MainuiController implements Initializable {
     private void switchToAgents(MouseEvent event) {
         if (go()) {
             if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(tools.Constants.AGENTS)) {
-                AnchorPane p = MainUI.getPage(this, tools.Constants.AGENTS_VIEW, token, entreprisex, kazisafe);
+                txt_states_features.setText("...");
+                AnchorPane p = MainUI.getPage(this, tools.Constants.AGENTS_VIEW, token, getEntreprisex(), kazisafe);
                 p.setLayoutY(LAYOUTY);
                 p.setLayoutX(LAYOUTX);
                 mainpane.getChildren().remove(0);
@@ -987,6 +853,7 @@ public class MainuiController implements Initializable {
                 pane_title.setText("Agents");
                 image_title.setImage(new Image(this.getClass().getResourceAsStream("/icons/hosting-services.png")));
                 CURRENT_VIEW = tools.Constants.AGENTS;
+                setActiveMenu(agents);
             }
         }
 
@@ -994,8 +861,8 @@ public class MainuiController implements Initializable {
 
     @FXML
     private void switchToCompany(MouseEvent event) {
-
-        AnchorPane p = MainUI.getPage(this, tools.Constants.ENTREPRISE_VIEW, token, entreprisex, kazisafe, user);
+        txt_states_features.setText("...");
+        AnchorPane p = MainUI.getPage(this, tools.Constants.ENTREPRISE_VIEW, token, getEntreprisex(), kazisafe, user);
         p.setLayoutY(LAYOUTY);
         p.setLayoutX(LAYOUTX);
         mainpane.getChildren().remove(0);
@@ -1003,24 +870,31 @@ public class MainuiController implements Initializable {
         pane_title.setText("Entreprise");
         image_title.setImage(new Image(this.getClass().getResourceAsStream("/icons/office-building.png")));
         CURRENT_VIEW = tools.Constants.ENTREPRISE;
+        setActiveMenu(compagnie);
     }
 
-    public void startSMSreporting() {
+    public void sseSync() {
         if (go()) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-//                    EventHandler evh = new NotificationHandler();
-//                    String url = KazisafeServiceFactory.BASE_URL + "notification/smsrepport";
-//                    EventSource.Builder evb = new EventSource.Builder(evh, URI.create(url))
-//                            .reconnectTimeMs(3000);
-//                    try (EventSource evs = evb.build()) {
-//                        evs.start();
-//                        TimeUnit.MINUTES.sleep(10);
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                    }
+            new Thread(() -> {
+                EventHandler evh = new tools.NotificationHandler();
+                String url = KazisafeServiceFactory.BASE_URL + "notification/events";
+                Headers headers = new Headers.Builder()
+                        .add("Authorization", "Bearer " + token).build();
+                EventSource.Builder evb = new EventSource.Builder(evh, URI.create(url))
+                        .headers(headers)
+                        .reconnectTime(1, TimeUnit.SECONDS).readTimeout(29, TimeUnit.HOURS);
+                EventSource evs = evb.build();
+                if (evh instanceof tools.NotificationHandler) {
+                    ((tools.NotificationHandler) evh).setEventSource(evs);
                 }
+
+                evs.start();
+                // try () {
+                //
+                // TimeUnit.MINUTES.sleep(6);
+                // } catch (InterruptedException e) {
+                // e.printStackTrace();
+                // }
             }).start();
         }
     }
@@ -1032,8 +906,9 @@ public class MainuiController implements Initializable {
                 @Override
                 public void run() {
                     if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(tools.Constants.PRODUIT)) {
-                        AnchorPane p = MainUI.getPage(MainuiController.this, tools.Constants.PRODUITS_VIEW, token, null, entreprisex);
-
+                        txt_states_features.setText("...");
+                        AnchorPane p = MainUI.getPage(MainuiController.this, tools.Constants.PRODUITS_VIEW, token,
+                                entreprisex);
                         p.setLayoutY(LAYOUTY);
                         p.setLayoutX(LAYOUTX);
                         mainpane.getChildren().remove(0);
@@ -1041,6 +916,7 @@ public class MainuiController implements Initializable {
                         pane_title.setText("Produits");
                         image_title.setImage(new Image(this.getClass().getResourceAsStream("/icons/boxes.png")));
                         CURRENT_VIEW = tools.Constants.PRODUIT;
+                        setActiveMenu(products_gate);
                     }
                 }
             });
@@ -1058,27 +934,24 @@ public class MainuiController implements Initializable {
     }
 
     @FXML
+    private void switchToImmobilisation(MouseEvent event) {
+        if (go()) {
+            switchSimpleScreens(tools.Constants.IMMOBILISATION_VIEW, tools.Constants.IMMOBILISATIONS, "Immobilisations",
+                    "annual-report.png");
+        }
+    }
+
+    @FXML
     private void exit(Event event) {
         pref.putInt("exit", 1);
-        if (sep != null) {
-            sep.closeSession();
+        if (!pref.getBoolean("session", false)) {
+            pref.remove("token");
         }
-        System.exit(0);
+        // if (sep != null) {
+        // sep.closeSession();
+        // }
 
-//        new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                try {
-//                    if (session != null) {
-//                        
-//                        session.close(new CloseReason(CloseReason.CloseCodes.NORMAL_CLOSURE, "Bye bye all"));
-//                    }
-//                } catch (IOException ex) {
-//                    Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
-//                }
-//            }
-//        }).start();
-        //   pref.putLong(tools.Constants.LAST_SESSION_ENDS, System.currentTimeMillis());
+        System.exit(0);
     }
 
     @FXML
@@ -1096,67 +969,10 @@ public class MainuiController implements Initializable {
     @FXML
     private void onOutHome(MouseEvent event) {
         ImageView img = (ImageView) event.getSource();
+        if (img == activeMenuIcon) {
+            return;
+        }
         MainUI.removeShaddowEffect(img);
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-        kazisafe.showUserByPhoneSecurely(phone)
-                .enqueue(new Callback<User>() {
-                    @Override
-                    public void onResponse(Call<User> call, Response<User> rspns) {
-                        System.out.println("loading usr rspn " + rspns.message());
-                        if (rspns.isSuccessful()) {
-                            user = rspns.body();
-                            pref.put("operator", user.getNom() + " " + user.getPrenom());
-                            pref.put("userid", user.getUid());
-                            Platform.runLater(new Runnable() {
-                                @Override
-                                public void run() {
-                                    user_connected.setText(user.getPrenom() + " " + user.getNom());
-                                }
-                            });
-                            kazisafe.downloadUserPhotoSecurely(user.getUid())
-                                    .enqueue(new Callback<ResponseBody>() {
-                                        @Override
-                                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
-                                            if (rspns.isSuccessful()) {
-                                                InputStream is = rspns.body().byteStream();
-                                                Image image = new Image(is, 90, 94, true, true);
-                                                img_profile.setImage(MainUI.makeTransparent(image));
-                                                Circle clip = new Circle(16);
-                                                clip.setStrokeType(StrokeType.CENTERED);
-                                                clip.setStroke(Color.valueOf("#44cef5"));
-                                                clip.setStrokeWidth(3);
-                                                clip.setCenterX(img_profile.getFitWidth() / 2);
-                                                clip.setCenterY(img_profile.getFitHeight() / 2);
-                                                img_profile.setClip(clip);
-                                                centerImage(img_profile);
-
-                                            }
-                                        }
-
-                                        @Override
-                                        public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
-                                            System.err.println("Erreur image profile " + thrwbl.getMessage());
-                                        }
-                                    });
-                            img_profile.imageProperty().addListener(new ChangeListener<Image>() {
-                                @Override
-                                public void changed(ObservableValue<? extends Image> observable, Image oldValue, Image newValue) {
-
-                                }
-                            });
-                        }
-
-                    }
-
-                    @Override
-                    public void onFailure(Call<User> call, Throwable thrwbl) {
-                        thrwbl.printStackTrace();
-                    }
-                });
-
     }
 
     public void centerImage(ImageView imageView) {
@@ -1186,288 +1002,370 @@ public class MainuiController implements Initializable {
 
     public void setEntrepiseId(String entrepiseId) {
         this.entrepiseId = entrepiseId;
-
     }
 
-    Abonnement ab = null;
-
-    public void setLoginResult(String token, String rccm, LoginResult loginResult) {
-        setToken(token);
-        this.rccm = rccm;
-        this.loginResult = loginResult;
-        final String ezi = loginResult.getEntreprise();
-        role = loginResult.getRole();
-        System.out.println("Role " + role);
-        region = loginResult.getRegion();
-        if (role.equals(Role.Saler.name())) {
-            vbox_menu.getChildren().remove(caisse);
-            vbox_menu.getChildren().remove(stockage);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Magazinner.name())) {
-            vbox_menu.getChildren().remove(caisse);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Finance.name())) {
-            vbox_menu.getChildren().remove(stockage);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Manager.name()) || role.contains(Role.ALL_ACCESS.name())) {
-            vbox_menu.getChildren().remove(agents);
+    public Entreprise getEntreprisex() {
+        if (entreprisex == null) {
+            String ezi = pref.get("eUid", "f3d81978a5524681bf1090d1d41edb15");
+            String eName = pref.get("ent_name", null);
+            String id = pref.get("ent_ID", null);
+            String adresse = pref.get("ent_adresse", null);
+            String email = pref.get("ent_email", null);
+            String idnat = pref.get("ent_idnat", null);
+            String impot = pref.get("ent_impot", null);
+            String phonez = pref.get("ent_phones", null);
+            token = pref.get("token", null);
+            region = pref.get("region", "...");
+            txt_region.setText(region);
+            String user = pref.get("operator", "Chargement...");
+            entreprisex = new Entreprise(ezi);
+            entreprisex.setNomEntreprise(eName);
+            entreprisex.setAdresse(adresse);
+            entreprisex.setIdNat(idnat == null ? " " : idnat);
+            entreprisex.setNumeroImpot(impot == null ? " " : impot);
+            entreprisex.setPhones(phonez == null ? " " : phonez);
+            entreprisex.setIdentification(id);
+            entrep_name.setText(entreprisex.getNomEntreprise());
+            user_connected.setText(user);
+            entreprisex.setEmail(email);
         }
-      
-        searchField.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-            if (newValue == null) {
-                return;
+        return entreprisex;
+    }
+
+    private void initializePermissions(LoginWebResult loginResult, Runnable next) {
+        // System.out.println("Permix-ion "+loginResult.getJsonPermissions()+"
+        // "+loginResult.getRole());
+        if (loginResult.getJsonPermissions() == null) {
+            next.run();
+            return;
+        }
+        if (loginResult.getJsonPermissions().startsWith("[")) {
+            try {
+                ObjectMapper drx = KazisafeServiceFactory.mapper();
+                region = loginResult.getRegion();
+                role = loginResult.getRole();
+                List<Permission> perms = drx.readValue(loginResult.getJsonPermissions(),
+                        new TypeReference<List<Permission>>() {
+                        });
+                List<Permission> tosave = perms.stream()
+                        .map(p -> {
+                            p.setTablename(loginResult.getUserContract());
+                            return p;
+                        }).collect(Collectors.toList());
+                PermissionDelegate.renewPermissions(tosave);
+                pref.put("priv", loginResult.getRole());
+            } catch (JsonProcessingException ex) {
+                Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
             }
-            switch (CURRENT_VIEW) {
-                case tools.Constants.PRODUIT:
-                    ProduitsController pc = ProduitsController.getInstance();
-                    pc.searchProduit(newValue);
-                    break;
-                case tools.Constants.STORAGE:
-                    GoodstorageController gc = GoodstorageController.getInstance();
-                    gc.search(newValue);
-                    break;
-                case tools.Constants.POS:
-                    PosController poc = PosController.getInstance();
-                    poc.search(newValue);
-                    break;
-                case tools.Constants.CAISSES:
-                    TresorerieController.getInstance().search(newValue);
-                    break;
-                case tools.Constants.AGENTS:
-                    AgentController.getInstance().search(newValue);
-                    break;
-                default:
-                    break;
+        }
+        next.run();
+    }
+
+    private void initializePreferencesAndGui(LoginWebResult logr, Runnable next) {
+        if (logr.getNomentreprise() != null) {
+            pref.put("ent_name", logr.getNomentreprise());
+            entrep_name.setText(logr.getNomentreprise());
+        } else {
+            String eName = pref.get("ent_name", "Chargement...");
+            entrep_name.setText(eName);
+            logr.setNomentreprise(eName);
+        }
+        role = logr.getRole();
+        if (role == null) {
+            role = pref.get("role", "Trader");
+        }
+        region = logr.getRegion();
+        if (region == null) {
+            region = pref.get("region", "Goma");
+        }
+        txt_region.setText(region);
+        if (logr.getRccm() != null) {
+            pref.put("ent_ID", logr.getRccm());
+            this.rccm = logr.getRccm();
+        } else {
+            String id = pref.get("ent_ID", null);
+            logr.setRccm(id);
+            this.rccm = id;
+        }
+        if (logr.getAdresseEntreprise() != null) {
+            pref.put("ent_adresse", logr.getAdresseEntreprise());
+        } else {
+            String adresse = pref.get("ent_adresse", null);
+            logr.setAdresseEntreprise(adresse);
+        }
+        if (logr.getEmailEntreprise() != null) {
+            pref.put("ent_email", logr.getEmailEntreprise());
+        } else {
+            String email = pref.get("ent_email", null);
+            logr.setEmailEntreprise(email);
+        }
+        if (logr.getIdNat() != null) {
+            pref.put("ent_idnat", logr.getIdNat());
+        } else {
+            String idnat = pref.get("ent_idnat", null);
+            logr.setIdNat(idnat);
+        }
+        if (logr.getNumeroImpot() != null) {
+            pref.put("ent_impot", logr.getNumeroImpot());
+        } else {
+            String impot = pref.get("ent_impot", null);
+            logr.setNumeroImpot(impot);
+        }
+        if (logr.getPhoneEntrerprise() != null) {
+            pref.put("ent_phones", logr.getPhoneEntrerprise());
+        } else {
+            String phonez = pref.get("ent_phones", null);
+            logr.setPhoneEntrerprise(phonez);
+        }
+        String u = logr.getNomUtilisateur() + " " + logr.getPrenomUtilisateur();
+        if (!u.contains("null")) {
+            pref.put("operator", u);
+        } else {
+            u = pref.get("operator", "Chargement...");
+            if (u.length() == 2) {
+                logr.setNomUtilisateur(u.split(" ")[0]);
+                logr.setPrenomUtilisateur(u.split(" ")[1]);
+            }
+        }
+        entreprisex = new Entreprise(logr.getEntrepriseId());
+        entreprisex.setNomEntreprise(logr.getNomentreprise());
+        entreprisex.setAdresse(logr.getAdresseEntreprise());
+        entreprisex.setCategory(logr.getCategoryEntreprise());
+        entreprisex.setEmail(logr.getEmailEntreprise());
+        entreprisex.setIdNat(logr.getIdNat());
+        entreprisex.setIdentification(logr.getRccm());
+        entreprisex.setNumeroImpot(logr.getNumeroImpot());
+        entreprisex.setPhones(logr.getPhoneEntrerprise());
+
+        Platform.runLater(new Runnable() {
+            @Override
+            public void run() {
+                String nom = logr.getNomUtilisateur(), prenom = logr.getPrenomUtilisateur();
+                user_connected.setText(
+                        (nom != null && prenom != null) ? (nom + " " + prenom) : pref.get("operator", "Chargement..."));
             }
         });
+        next.run();
+    }
 
-        try {
-
-            if (ezi == null) {
-                return;
-            }
-            System.err.println(" e: 0x" + ezi + " rccm " + rccm);
-            Response<Entreprise> rent
-                    = kazisafe.getEntrepriseInfo(rccm)
-                            .execute();
-            System.err.println("Reponse search entreprise " + rent.message());
-            if (rent.isSuccessful()) {
-                entreprisex = rent.body();
-                System.out.println("Affiche info entreprise " + entreprisex);
-                pref.put("ent_name", entreprisex.getNomEntreprise());
-                pref.put("ent_ID", entreprisex.getIdentification());
-                pref.put("ent_adresse", entreprisex.getAdresse());
-                pref.put("ent_email", entreprisex.getEmail());
-                pref.put("ent_idnat", entreprisex.getIdNat() == null ? "Aucun" : entreprisex.getIdNat());
-                pref.put("ent_impot", entreprisex.getNumeroImpot() == null ? "Aucun" : entreprisex.getNumeroImpot());
-                pref.put("ent_phones", entreprisex.getPhones() == null ? "Aucun" : entreprisex.getPhones());
-                txt_region.setText(region);
-                Platform.runLater(() -> {
-                    entrep_name.setText(entreprisex.getNomEntreprise());
-                });//;localhost:8080
-                URL = KazisafeServiceFactory.WEBSOCKET + "/wssync/ez/" + ezi + "/" + token;
-                sep = new SyncEndpoint(URL);
-
-                pref.putInt("exit", 0);
-                kazisafe.downloadLogo(ezi)
-                        .enqueue(new Callback<ResponseBody>() {
-                            @Override
-                            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
-                                if (rspns.isSuccessful()) {
-                                    try {
-                                        InputStream is = rspns.body().byteStream();
-                                        byte[] pixa = data.helpers.FileUtils.readFromFile(FileUtils.streamTofile(is));
-                                        FileUtils.byteToFile(ezi, pixa, "png");
-                                    } catch (IOException ex) {
-                                        Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
-                                    }
-                                }
-                            }
-
-                            @Override
-                            public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
-
-                            }
-                        });
-
-                kazisafe.getRegions(entreprisex.getUid()).enqueue(new retrofit2.Callback<List<String>>() {
+    private void initializeImages(LoginWebResult logr, Runnable next) {
+        if (logr.getUserId() != null && !logr.getUserId().isBlank()) {
+            kazisafe.downloadUserPhotoSecurely(logr.getUserId())
+                    .enqueue(new Callback<ResponseBody>() {
                     @Override
-                    public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
+                    public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
                         if (rspns.isSuccessful()) {
-                            List<String> lreg = rspns.body();
-                            int i = 0;
-                            for (String reg : lreg) {
-                                pref.put("region" + (++i), reg);
-                            }
-                            System.err.println("Agent regions " + lreg.size());
+                            InputStream is = rspns.body().byteStream();
+                            Image image = new Image(is, 90, 94, true, true);
+                            img_profile.setImage(MainUI.makeTransparent(image));
+                            Circle clip = new Circle(16);
+                            clip.setStrokeType(StrokeType.CENTERED);
+                            clip.setStroke(Color.valueOf("#44cef5"));
+                            clip.setStrokeWidth(3);
+                            clip.setCenterX(img_profile.getFitWidth() / 2);
+                            clip.setCenterY(img_profile.getFitHeight() / 2);
+                            img_profile.setClip(clip);
+                            centerImage(img_profile);
                         }
                     }
 
                     @Override
-                    public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-
+                    public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
+                        System.err.println("Erreur image profile " + thrwbl.getMessage());
                     }
-                });
-
-                se = SyncEngine.getInstance();
-
-                se.setup(token, entreprisex);
-                if (go()) {
-                    se.start();
-                } else {
-                    return;
-                }
-                se.startChecking();
-                se.setOnUpdateVersionListener(new OnUpdateVersionListener() {
+                    });
+        }
+        kazisafe.downloadLogo(logr.getEntrepriseId())
+                .enqueue(new Callback<ResponseBody>() {
                     @Override
-                    public void onNewUpdate(Module module) {
-                        newModule = module;
-                        update_pane.setVisible(true);
-                        Platform.runLater(() -> {
-                            label_version.setText("Version : " + module.getVersion());
-                        });
-
-                    }
-
-                    @Override
-                    public void onSameUpdate(Module module) {
-                        update_pane.setVisible(false);
-                    }
-                });
-                sep.getPublisher().subscribe(saver);
-            }
-            summarise();
-        } catch (IOException ex) {
-            boolean open = pref.getBoolean("open-session", true);
-            if (open) {
-                String eName = pref.get("ent_name", null);
-                String id = pref.get("ent_ID", null);
-                String adresse = pref.get("ent_adresse", null);
-                String email = pref.get("ent_email", null);
-                String idnat = pref.get("ent_idnat", null);
-                String impot = pref.get("ent_impot", null);
-                String phonez = pref.get("ent_phones", null);
-                token = pref.get("token", null);
-                region = pref.get("region", "...");
-                txt_region.setText(region);
-                String user = pref.get("operator", "Chargement...");
-                entreprisex = new Entreprise(ezi);
-                if (eName == null) {
-                    return;
-                }
-                entreprisex.setNomEntreprise(eName);
-                if (adresse == null) {
-                    return;
-                }
-                entreprisex.setAdresse(adresse);
-                if (idnat == null) {
-                    return;
-                }
-                entreprisex.setIdNat(idnat == null ? " " : idnat);
-                entreprisex.setNumeroImpot(impot == null ? " " : impot);
-                entreprisex.setPhones(phonez == null ? " " : phonez);
-
-                if (id == null) {
-                    return;
-                }
-                entreprisex.setIdentification(id);
-                if (email == null) {
-                    return;
-                }
-                entrep_name.setText(entreprisex.getNomEntreprise());
-                user_connected.setText(user);
-                entreprisex.setEmail(email);
-                se = SyncEngine.getInstance();
-                se.setup(token, entreprisex);
-                if (go()) {
-
-                    se.start();
-                }
-                se.startChecking();
-                se.setOnUpdateVersionListener(new OnUpdateVersionListener() {
-                    @Override
-                    public void onNewUpdate(Module module) {
-                        newModule = module;
-                        update_pane.setVisible(true);
-                        Platform.runLater(new Runnable() {
-                            @Override
-                            public void run() {
-                                label_version.setText("Version : " + module.getVersion());
+                    public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
+                        if (rspns.isSuccessful()) {
+                            try {
+                                InputStream is = rspns.body().byteStream();
+                                byte[] pixa = data.helpers.FileUtils.readFromFile(FileUtils.streamTofile(is));
+                                FileUtils.byteToFile(logr.getEntrepriseId(), pixa, "png");
+                            } catch (IOException ex) {
+                                Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
                             }
-                        });
+                        }
                     }
 
                     @Override
-                    public void onSameUpdate(Module module) {
-                        update_pane.setVisible(false);
+                    public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
+                        System.out.println("erreur logo e " + thrwbl.getMessage());
                     }
                 });
-            }
-            //  Logger.getLogger(MainuiController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-
-        if (role.equals(Role.Saler.name())) {
-            vbox_menu.getChildren().remove(caisse);
-            vbox_menu.getChildren().remove(stockage);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Magazinner.name())) {
-            vbox_menu.getChildren().remove(caisse);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Finance.name())) {
-            vbox_menu.getChildren().remove(stockage);
-            vbox_menu.getChildren().remove(agents);
-            vbox_menu.getChildren().remove(rapport);
-        } else if (role.equals(Role.Manager.name())) {
-            vbox_menu.getChildren().remove(agents);
-        }
-
-        searchField.textProperty().addListener(new ChangeListener<String>() {
+        kazisafe.getAbonnements().enqueue(new Callback<List<Abonnement>>() {
             @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                if (newValue == null) {
-                    return;
-                }
-                if (CURRENT_VIEW.equals(tools.Constants.PRODUIT)) {
-                    ProduitsController pc = ProduitsController.getInstance();
-                    pc.searchProduit(newValue);
-                } else if (CURRENT_VIEW.equals(tools.Constants.STORAGE)) {
-                    GoodstorageController gc = GoodstorageController.getInstance();
-                    gc.search(newValue);
-                } else if (CURRENT_VIEW.equals(tools.Constants.POS)) {
+            public void onResponse(Call<List<Abonnement>> call, Response<List<Abonnement>> rspns) {
+                if (rspns.isSuccessful()) {
+                    List<Abonnement> abns = rspns.body();
+                    System.out.println("Souscrizise-->> " + abns.size());
+                    for (Abonnement abn : abns) {
+                        String etat = abn.getEtat();
+                        String typeAb = abn.getTypeAbonnement();
 
-                    PosController poc = PosController.getInstance();
-                    poc.search(newValue);
+                        switch (typeAb) {
+                            case "Gold", "Metal", "Super gold" -> {
+                                pref.put("type-sub", typeAb);
+                                String status = SubscriptionUtil.computeStatus(abn);
+                                Duration time = SubscriptionUtil.remainingDuration(abn);
+                                if (time.minusDays(7).isZero()) {
+                                    MainUI.notify(null, "Attention",
+                                            "Le crédit Kazisafe (Record) expire bientôt, pensez à le renouveller", 5,
+                                            "warning");
+                                }
 
-                } else if (CURRENT_VIEW.equals(tools.Constants.CAISSES)) {
-                    TresorerieController.getInstance().search(newValue);
-                } else if (CURRENT_VIEW.equals(tools.Constants.AGENTS)) {
-                    AgentController.getInstance().search(newValue);
+                                long max = SubscriptionUtil.nextSubscriptionMillis(abn);
+                                System.err.println("Abonnement total " + max + " rest " + time.toMillis());
+                                pref.putDouble("sub", Double.valueOf(max));
+                                pref.put("etat-sub", etat);
+                                if (!status.equals(Constants.ETAT_SUBSCRIPTION_EXPIRY)) {
+                                    MainUI.notifySync("Kazisafe-Abonnement",
+                                            "Activation souscription " + typeAb + " faite avec succes",
+                                            "Notification de souscription au service kazisafe");
+                                }
+                            }
+                            case "PRO" -> {
+                                double nombreOper = abn.getNombreOperation();
+                                pref.put("pro-sub", typeAb);
+                                pref.putDouble("subscripro", nombreOper);
+                                pref.put("pro-etat", etat);
+                                MainUI.notifySync("Kazisafe-Abonnement",
+                                        "Abonnement " + typeAb + " de " + formatNumber(nombreOper) + " eBonus active",
+                                        "Notification de souscription au service kazisafe");
+                            }
+                        }
+                    }
+
                 }
+            }
+
+            @Override
+            public void onFailure(Call<List<Abonnement>> call, Throwable thrwbl) {
+                System.err.println("No network");
             }
         });
-        //summarise();
-        startSMSreporting();
 
     }
 
+    public void setLoginResult(LoginWebResult loginResult) {
+        token = loginResult.getToken();
+        kazisafe = KazisafeServiceFactory.createService(loginResult.getToken());
+        KazisafeServiceFactory.setOnTokenRefreshCallback((Token var1) -> {
+            MainuiController.this.token = var1.getToken();
+            pref.put("token", var1.getToken());
+        });
+        // URL = KazisafeServiceFactory.WEBSOCKET + "/wssync/ez/" +
+        // loginResult.getEntrepriseId() ;
+        // sep = new SyncEndpoint(URL,token);
+        pref.putInt("exit", 0);
+        pref.putLong("entretime", loginResult.getCreationTimestamp());
+        // if (services.ManagedSessionFactory.isEmbedded()) {
+        // if (services.ManagedSessionFactory.isBdCreated()) {
+        initializePermissions(loginResult, () -> {
+            initializePreferencesAndGui(loginResult, () -> {
+                initializeImages(loginResult, () -> {
+                    kazisafe.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
+                        @Override
+                        public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
+                            System.out.println("Reponse web server " + rspns.code());
+                            if (rspns.isSuccessful()) {
+                                List<String> lreg = rspns.body();
+                                int i = 0;
+                                for (String reg : lreg) {
+                                    pref.put("region" + (++i), reg);
+                                }
+                                System.err.println("Agent regions " + lreg.size());
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<List<String>> call, Throwable thrwbl) {
+                            System.err.println("Error : " + thrwbl);
+                        }
+                    });
+                    SyncEngine.getInstance().setup(token);
+                });
+            });
+        });
+        // }
+        // }
+        System.out.println("permix " + loginResult.getRole());
+        if (role.equals(Role.Saler.name())) {
+            tbar_menu.getItems().remove(caisse);
+            tbar_menu.getItems().remove(immobilisation);
+            tbar_menu.getItems().remove(stockage);
+            tbar_menu.getItems().remove(agents);
+            tbar_menu.getItems().remove(production);
+        } else if (role.equals(Role.Magazinner.name())) {
+            tbar_menu.getItems().remove(caisse);
+            tbar_menu.getItems().remove(immobilisation);
+            tbar_menu.getItems().remove(agents);
+            tbar_menu.getItems().remove(rapport);
+        } else if (role.equals(Role.Finance.name())) {
+            tbar_menu.getItems().remove(stockage);
+            tbar_menu.getItems().remove(production);
+            tbar_menu.getItems().remove(agents);
+            tbar_menu.getItems().remove(rapport);
+        } else if (role.equals(Role.Manager.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            tbar_menu.getItems().remove(agents);
+        } else {
+
+        }
+        SyncEngine.getInstance().startChecking();
+        searchField.textProperty()
+                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                    if (newValue == null) {
+                        return;
+                    }
+                    switch (CURRENT_VIEW) {
+                        case tools.Constants.PRODUIT:
+                            ProduitsController pc = ProduitsController.getInstance();
+                            pc.searchProduit(newValue);
+                            break;
+                        case tools.Constants.STORAGE:
+                            GoodstorageController gc = GoodstorageController.getInstance();
+                            gc.search(newValue);
+                            break;
+                        case tools.Constants.POS:
+                            PosController poc = PosController.getInstance();
+                            poc.search(newValue);
+                            break;
+                        case tools.Constants.CAISSES:
+                            TresorerieController.getInstance().search(newValue);
+                            break;
+                        case tools.Constants.AGENTS:
+                            AgentController.getInstance().search(newValue);
+                            break;
+                        case tools.Constants.IMMOBILISATIONS:
+                            ImmobilisationController ic = ImmobilisationController.getInstance();
+                            if (ic != null) {
+                                ic.search(newValue);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                });
+        sseSync();
+        sync(kazisafe);
+    }
+
     private void subscribe() {
-//        Executors.newSingleThreadExecutor()
-//                .execute(() -> {
-//                    boolean network_on = pref.getBoolean(NetLoockup.NETWORK_STATUS, NetLoockup.NETWORK_STATUS_DEFAULT);
-//                    if (network_on) {
+        // Executors.newSingleThreadExecutor()
+        // .execute(() -> {
+        // boolean network_on = pref.getBoolean(NetLoockup.NETWORK_STATUS,
+        // NetLoockup.NETWORK_STATUS_DEFAULT);
+        // if (network_on) {
         Executors.newCachedThreadPool()
                 .submit(() -> {
                     Refresher ref = new Refresher();
                     ref.setTarget("CHK_SUB");
                     Util.sync(ref, "read", Tables.REFRESH);
                 });
-//                    }
-//                });
+        // }
+        // });
     }
 
     @FXML
@@ -1489,6 +1387,11 @@ public class MainuiController implements Initializable {
                 TresorerieController.getInstance().search(searchField.getText());
             } else if (CURRENT_VIEW.equals(tools.Constants.AGENTS)) {
                 AgentController.getInstance().search(searchField.getText());
+            } else if (CURRENT_VIEW.equals(tools.Constants.IMMOBILISATIONS)) {
+                ImmobilisationController ic = ImmobilisationController.getInstance();
+                if (ic != null) {
+                    ic.search(searchField.getText());
+                }
             }
         }
     }
@@ -1503,7 +1406,9 @@ public class MainuiController implements Initializable {
             if (max > 0) {
                 return true;
             } else {
-                MainUI.notify(null, "Attention", "Vous n'avez plus de crédit Kazisafe (record) dans votre compte, veuillez recharger votre compte", 5, "warning");
+                MainUI.notify(null, "Attention",
+                        "Vous n'avez plus de crédit Kazisafe (record) dans votre compte, veuillez recharger votre compte",
+                        5, "warning");
                 return false;
             }
         } else {
@@ -1514,11 +1419,14 @@ public class MainuiController implements Initializable {
             System.err.println("Remained " + remaind + " week " + week);
 
             if (remaind <= 0) {
-                MainUI.notify(null, "Attention", "Vous n'avez plus de crédit Kazisafe (record) dans votre compte, veuillez récharger votre compte", 5, "warning");
+                MainUI.notify(null, "Attention",
+                        "Vous n'avez plus de crédit Kazisafe (record) dans votre compte, veuillez récharger votre compte",
+                        5, "warning");
                 return false;
             }
             if (Math.abs(remaind) <= week) {
-                MainUI.notify(null, "Attention", "Votre crédit Kazisafe expire bientôt, pensez à le renouveller", 5, "warning");
+                MainUI.notify(null, "Attention", "Votre crédit Kazisafe expire bientôt, pensez à le renouveller", 5,
+                        "warning");
                 return true;
             }
             return true;
@@ -1536,7 +1444,9 @@ public class MainuiController implements Initializable {
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (java.lang.IllegalArgumentException ex) {
-                    MainUI.notify(null, "Erreur", "Le fichier d'aide n'existe plus ou son nom \"Kazisafe guide d'utilisation.pdf\" d'origine a été modifié", 4, "error");
+                    MainUI.notify(null, "Erreur",
+                            "Le fichier d'aide n'existe plus ou son nom \"Kazisafe guide d'utilisation.pdf\" d'origine a été modifié",
+                            4, "error");
                 }
             }
 
@@ -1546,12 +1456,16 @@ public class MainuiController implements Initializable {
     @FXML
     private void installUpdate(Event e) {
         try {
-            Alert alert = new Alert(Alert.AlertType.WARNING, "Cet action va fermer Kazisafe pour installer le mise a jour\nvoulez vous continuer ?", ButtonType.YES, ButtonType.CANCEL);
+            Alert alert = new Alert(Alert.AlertType.WARNING,
+                    "Cet action va fermer Kazisafe pour installer le mise a jour\nvoulez vous continuer ?",
+                    ButtonType.YES, ButtonType.CANCEL);
             alert.setTitle("Attention!");
             alert.setHeaderText(null);
             Optional<ButtonType> showAndWait = alert.showAndWait();
             if (showAndWait.get() == ButtonType.YES) {
-                Runtime.getRuntime().exec(localPath + File.separator + (PlatformUtil.isWindows() ? newModule.getNomModule() : PlatformUtil.isMac() ? "Kazisafe-MacOS.zip" : "Kazisafe-Linux.zip"));
+                Runtime.getRuntime()
+                        .exec(localPath + File.separator + (PlatformUtil.isWindows() ? newModule.getNomModule()
+                                : PlatformUtil.isMac() ? "Kazisafe-MacOS.zip" : "Kazisafe-Linux.zip"));
                 pref.put("ksf_version", newModule.getVersion());
                 exit(e);
             }
@@ -1571,14 +1485,12 @@ public class MainuiController implements Initializable {
         if (newModule != null) {
             if (PlatformUtil.isWindows()) {
                 Task<Void> downTask = new DownloadTask(newModule.getNomModule(), localPath);
-                downTask.stateProperty().addListener(new ChangeListener<Worker.State>() {
-                    @Override
-                    public void changed(ObservableValue<? extends Worker.State> observable, Worker.State oldValue, Worker.State newValue) {
-                        if (downTask.getState() == newValue.SUCCEEDED) {
-                            install_update_link.setVisible(true);
-                        } else if (downTask.getState() == newValue.FAILED) {
-                            MainUI.notify(null, "Erreur", "Le téléchargemement a été interrompu", 4, "error");
-                        }
+                downTask.stateProperty().addListener((ObservableValue<? extends Worker.State> observable,
+                        Worker.State oldValue, Worker.State newValue) -> {
+                    if (downTask.getState() == newValue.SUCCEEDED) {
+                        install_update_link.setVisible(true);
+                    } else if (downTask.getState() == newValue.FAILED) {
+                        MainUI.notify(null, "Erreur", "Le téléchargemement a été interrompu", 4, "error");
                     }
                 });
                 download_update_pgb.setVisible(true);
@@ -1592,7 +1504,8 @@ public class MainuiController implements Initializable {
                 Task<Void> downTask = new DownloadTask("Kazisafe-MacOS.zip", localPath);
                 downTask.stateProperty().addListener(new ChangeListener<Worker.State>() {
                     @Override
-                    public void changed(ObservableValue<? extends Worker.State> observable, Worker.State oldValue, Worker.State newValue) {
+                    public void changed(ObservableValue<? extends Worker.State> observable, Worker.State oldValue,
+                            Worker.State newValue) {
                         if (downTask.getState() == newValue.SUCCEEDED) {
                             install_update_link.setVisible(true);
                         } else if (downTask.getState() == newValue.FAILED) {
@@ -1629,12 +1542,26 @@ public class MainuiController implements Initializable {
                 + "-fx-text-fill: white;");
         Tooltip.install(caisse, tclient);
 
+        Tooltip timo = new Tooltip();
+        timo.setText("Immobilisations");
+        timo.setStyle("-fx-font: normal bold 14 Langdon; "
+                + "-fx-base: #EEEEEE; "
+                + "-fx-text-fill: white;");
+        Tooltip.install(immobilisation, timo);
+
         Tooltip tvente = new Tooltip();
         tvente.setText(bundle.getString("xtooltip.vente_recquis"));
         tvente.setStyle("-fx-font: normal bold 14 Langdon; "
                 + "-fx-base: #EEEEEE; "
                 + "-fx-text-fill: white;");
         Tooltip.install(pos, tvente);
+
+        Tooltip tproduction = new Tooltip();
+        tproduction.setText("Production");
+        tproduction.setStyle("-fx-font: normal bold 14 Langdon; "
+                + "-fx-base: #EEEEEE; "
+                + "-fx-text-fill: white;");
+        Tooltip.install(production, tproduction);
 
         Tooltip tdepot = new Tooltip();
         tdepot.setText(bundle.getString("xtooltip.entr_epot"));
@@ -1679,6 +1606,29 @@ public class MainuiController implements Initializable {
         Tooltip.install(parametre, perf);
     }
 
+    @FXML
+    private void synchronizeWithServer(MouseEvent event) {
+        if (isConnected) {
+            SyncEngine.getInstance().syncWithHttpProtocol(label_status, kazisafe);
+        } else {
+            System.out.println("Pas de connection");
+        }
+    }
+
+    @FXML
+    private void switchToProduction(MouseEvent event) {
+        if (go()) {
+            switchSimpleScreens(tools.Constants.PRODUCTION_VIEW, Constants.PRODUCTION, "Production",
+                    "production-line.png");
+        }
+    }
+
+    @FXML
+    private void callAssistantDialog(MouseEvent event) {
+        MainUI.showAssistantIa(tools.Constants.ASSISTANT_DLG, 663, 685, this.entreprisex,
+                this.user_connected.getText());
+    }
+
     private static class DownloadTask extends Task<Void> {
 
         String url;
@@ -1693,7 +1643,8 @@ public class MainuiController implements Initializable {
         protected Void call() throws Exception {
             URLConnection connexion = new URL("https://www.kazisafe.com/download/" + this.url).openConnection();
             long taille = connexion.getContentLengthLong();
-            try (InputStream is = connexion.getInputStream(); OutputStream os = Files.newOutputStream(Paths.get(localPath + "/" + url))) {
+            try (InputStream is = connexion.getInputStream();
+                    OutputStream os = Files.newOutputStream(Paths.get(localPath + "/" + url))) {
                 long nread = 0L;
                 byte[] buffer = new byte[8192];
                 int n;
@@ -1716,392 +1667,6 @@ public class MainuiController implements Initializable {
             super.succeeded();
         }
 
-    }
-
-    private void save(Set<BaseModel> models) {
-        int retries = 0;
-//        boolean success = false;                
-
-//        while (retries < 5 && !success) {
-        EntityManager em = SafeConnectionFactory.getEntityManager();
-        EntityTransaction tx = em.getTransaction();
-
-        try {
-            tx.begin();
-            for (BaseModel model : models) {
-                String type = model.getType();
-                System.out.println("Pret a enregistrer un " + type);
-                switch (type) {
-                    case "CATEGORY" -> {
-                        Category c = (Category) model;
-                        Category ct = em.find(Category.class, c.getUid());
-                        if (ct != null) {
-                            em.merge(c);
-                        } else {
-                            em.merge(c);
-                        }
-                        em.merge(Util.createJournal(c.getUid(), c, true));
-                    }
-                    case "PRODUIT" -> {
-                        Produit mz = (Produit) model;
-                        Produit pt = em.find(Produit.class, mz.getUid());
-                        String idcat = extractId(mz.getCategoryId().getUid());
-                        System.out.println("ID CAT = " + idcat);
-                        Category categ = em.find(Category.class, idcat);
-                        System.out.println("Category P trouvee " + categ);
-                        if (categ != null) {
-                            mz.setCategoryId(new Category(idcat));
-                            if (pt == null) {
-                                em.merge(mz);
-//                                    em.merge(Util.createJournal(p.getUid(), p, true));
-                            } else {
-                                em.merge(mz);
-//                                    em.merge(Util.createJournal(p.getUid(), p, true));
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "MESURE" -> {
-
-                        Mesure mz = (Mesure) model;
-                        String idcat = extractId(mz.getProduitId().getUid());
-                        // Vérifier l'existence du parent (Department)
-                        Produit pr = em.find(Produit.class, idcat);
-                        if (pr != null) {
-                            Mesure mex = em.find(Mesure.class, mz.getUid());
-                            mz.setProduitId(new Produit(idcat));
-                            if (mex != null) {
-                                em.merge(mz);
-//                                    em.merge(Util.createJournal(mz.getUid(), mz, true));
-                            } else {
-                                em.merge(mz);
-//                                    em.merge(Util.createJournal(mz.getUid(), mz, true));
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "FOURNISSEUR" -> {
-
-                        Fournisseur mz = (Fournisseur) model;
-
-                        Fournisseur exist = em.find(Fournisseur.class, mz.getUid());
-                        if (exist != null) {
-                            em.merge(mz);
-                        } else {
-                            em.merge(mz);
-                        }
-                        em.merge(Util.createJournal(mz.getUid(), mz, true));
-                    }
-                    case "LIVRAISON" -> {
-
-                        Livraison mz = (Livraison) model;
-                        // Vérifier l'existence du parent (Department)
-                        System.out.println("Livraison -- FRN " + mz.getFournId().getUid());
-                        String idcat = extractId(mz.getFournId().getUid());
-                        Fournisseur fr = em.find(Fournisseur.class, idcat);
-                        if (fr != null) {
-                            Livraison exist = em.find(Livraison.class, mz.getUid());
-                            mz.setFournId(new Fournisseur(idcat));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "STOCKER" -> {
-
-                        Stocker mz = (Stocker) model;
-
-                        // Vérifier l'existence du parent (Department)
-                        String idp = extractId(mz.getProductId().getUid());
-                        Produit pr = em.find(Produit.class, idp);
-                        String idm = extractId(mz.getMesureId().getUid());
-                        Mesure m = em.find(Mesure.class, idm);
-                        String idl = extractId(mz.getLivraisId().getUid());
-                        Livraison l = em.find(Livraison.class, idl);
-                        if (pr != null && m != null && l != null) {
-                            Stocker exist = em.find(Stocker.class, mz.getUid());
-                            mz.setLivraisId(new Livraison(idl));
-                            mz.setMesureId(new Mesure(idm));
-                            mz.setProductId(new Produit(idp));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "DESTOCKER" -> {
-
-                        Destocker mz = (Destocker) model;
-
-                        // Vérifier l'existence du parent (Department)
-                        String idp = extractId(mz.getProductId().getUid());
-                        Produit pr = em.find(Produit.class, idp);
-                        String idm = extractId(mz.getMesureId().getUid());
-                        Mesure m = em.find(Mesure.class, idm);
-                        if (pr != null && m != null) {
-                            Destocker exist = em.find(Destocker.class, mz.getUid());
-                            mz.setMesureId(new Mesure(idm));
-                            mz.setProductId(new Produit(idp));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "RECQUISITION" -> {
-                        Recquisition mz = (Recquisition) model;
-                        // Vérifier l'existence du parent (Department)
-                        String idp = extractId(mz.getProductId().getUid());
-                        Produit pr = em.find(Produit.class, idp);
-                        String idm = extractId(mz.getMesureId().getUid());
-                        Mesure m = em.find(Mesure.class, idm);
-                        if (pr != null && m != null) {
-                            Recquisition exist = em.find(Recquisition.class, mz.getUid());
-                            mz.setMesureId(new Mesure(idm));
-                            mz.setProductId(new Produit(idp));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-                    }
-                    case "PRIXDEVENTE" -> {
-                        PrixDeVente mz = (PrixDeVente) model;
-                        // Vérifier l'existence du parent (Department)
-                        String idr = extractId(mz.getRecquisitionId().getUid());
-                        Recquisition pr = em.find(Recquisition.class, idr);
-                        String idm = extractId(mz.getMesureId().getUid());
-                        Mesure m = em.find(Mesure.class, idm);
-                        if (pr != null && m != null) {
-                            PrixDeVente exist = em.find(PrixDeVente.class, mz.getUid());
-                            mz.setMesureId(new Mesure(idm));
-                            mz.setRecquisitionId(new Recquisition(idr));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-                    }
-                    case "CLIENT" -> {
-
-                        Client mz = (Client) model;
-                        if (mz.getUid() != null) {
-                            Client parent = mz.getParentId();
-                            if (parent != null) {
-                                Client mere = em.find(Client.class, parent.getUid());
-                                if (mere == null) {
-                                    mz.setParentId(mz);
-                                }
-                                Client exist = em.find(Client.class, mz.getUid());
-                                if (exist != null) {
-                                    em.merge(mz);
-                                } else {
-                                    em.merge(mz);
-                                }
-                                em.merge(Util.createJournal(mz.getUid(), mz, true));
-
-                            }
-
-                        }
-                    }
-                    case "CLIENTORGANISATION" -> {
-
-                        ClientOrganisation mz = (ClientOrganisation) model;
-
-                        ClientOrganisation exist = em.find(ClientOrganisation.class, mz.getUid());
-                        if (exist != null) {
-                            em.merge(mz);
-                        } else {
-                            em.merge(mz);
-                        }
-                        em.merge(Util.createJournal(mz.getUid(), mz, true));
-
-                    }
-                    case "CLIENTAPPARTENIR" -> {
-
-                        ClientAppartenir mz = (ClientAppartenir) model;
-
-                        // Vérifier l'existence du parent (Department)
-                        String ido = extractId(mz.getClientOrganisationId().getUid());
-                        ClientOrganisation pr = em.find(ClientOrganisation.class, ido);
-                        String idc = extractId(mz.getClientId().getUid());
-                        Client m = em.find(Client.class, idc);
-                        if (pr != null && m != null) {
-                            ClientAppartenir exist = em.find(ClientAppartenir.class, mz.getUid());
-                            mz.setClientId(new Client(idc));
-                            mz.setClientOrganisationId(new ClientOrganisation(ido));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "VENTE" -> {
-
-                        Vente mz = (Vente) model;
-
-                        // Vérifier l'existence du parent (Department)
-                        String idc = extractId(mz.getClientId().getUid());
-                        Client pr = em.find(Client.class, idc);
-                        if (pr != null) {
-                            Vente exist = em.find(Vente.class, mz.getUid());
-                            mz.setClientId(new Client(idc));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "LIGNEVENTE" -> {
-
-                        LigneVente mz = (LigneVente) model;
-
-                        // Vérifier l'existence du parent (Department)
-                        String idp = extractId(mz.getProductId().getUid());
-                        Produit pr = em.find(Produit.class, idp);
-                        String idm = extractId(mz.getMesureId().getUid());
-                        Mesure m = em.find(Mesure.class, idm);
-                        String idv = extractId(mz.getReference().getUid());
-                        int uidv = Integer.parseInt(idv);
-                        Vente v = em.find(Vente.class, uidv);
-                        if (pr != null && m != null && v != null) {
-                            LigneVente exist = em.find(LigneVente.class, mz.getUid());
-                            mz.setMesureId(new Mesure(idm));
-                            mz.setReference(new Vente(uidv));
-                            mz.setProductId(new Produit(idp));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "COMPTETRESOR" -> {
-                        CompteTresor mz = (CompteTresor) model;
-                        CompteTresor exist = em.find(CompteTresor.class, mz.getUid());
-                        if (exist != null) {
-                            em.merge(mz);
-                        } else {
-                            em.merge(mz);
-                        }
-                        em.merge(Util.createJournal(mz.getUid(), mz, true));
-                    }
-                    case "TRAISORERIE" -> {
-
-                        Traisorerie mz = (Traisorerie) model;
-                        // Vérifier l'existence du parent (Department)
-                        String idcp = extractId(mz.getTresorId().getUid());
-                        CompteTresor pr = em.find(CompteTresor.class, idcp);
-                        if (pr != null) {
-                            Traisorerie exist = em.find(Traisorerie.class, mz.getUid());
-                            mz.setTresorId(new CompteTresor(idcp));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "DEPENSE" -> {
-                        Depense mz = (Depense) model;
-                        Depense exist = em.find(Depense.class, mz.getUid());
-                        if (exist != null) {
-                            em.merge(mz);
-                        } else {
-                            em.merge(mz);
-                        }
-                        em.merge(Util.createJournal(mz.getUid(), mz, true));
-
-                    }
-                    case "OPERATION" -> {
-                        Operation mz = (Operation) model;
-                        // Vérifier l'existence du parent (Department)
-                        String idd = extractId(mz.getDepenseId().getUid());
-                        Depense pr = em.find(Depense.class, mz.getDepenseId().getUid());
-                        String idc = extractId(mz.getTresorId().getUid());
-                        CompteTresor ct = em.find(CompteTresor.class, idc);
-                        String idt = extractId(mz.getCaisseOpId().getUid());
-                        Traisorerie tr = em.find(Traisorerie.class, idt);
-                        if (pr != null && ct != null && tr != null) {
-                            Operation exist = em.find(Operation.class, mz.getUid());
-                            mz.setCaisseOpId(new Traisorerie(idt));
-                            mz.setDepenseId(new Depense(idd));
-                            mz.setTresorId(new CompteTresor(idc));
-                            if (exist != null) {
-                                em.merge(mz);
-                            } else {
-                                em.merge(mz);
-                            }
-                            em.merge(Util.createJournal(mz.getUid(), mz, true));
-                        }
-
-                    }
-                    case "RETOURDEPOT" -> {
-
-                    }
-                    case "RETOURMAGASIN" -> {
-                        RetourMagasin mz = (RetourMagasin) model;
-                        RetourMagasin exist = em.find(RetourMagasin.class, mz.getUid());
-                        if (exist != null) {
-                            em.merge(mz);
-                        } else {
-                            em.merge(mz);
-                        }
-                        em.merge(Util.createJournal(mz.getUid(), mz, true));
-                    }
-                    case "ARETIRER" -> {
-
-                    }
-                    case "FACTURE" -> {
-
-                    }
-                    case "REFRESH" -> {
-
-                    }
-                }
-            }
-            tx.commit();
-            em.clear();
-        } catch (Exception e) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            if (isDeadlockException(e)) {
-                System.out.println("Dead lock detecte " + retries + " fois, reessaie en cours.... ");
-            } else if (isUniqueConstraintViolation(e)) {
-                System.out.println("Doublon dans les donnees saut executed");
-            } else if (isIllegalStateException(e)) {
-                e.printStackTrace();
-            } else {
-                e.printStackTrace();
-            }
-        }
     }
 
     private boolean isDeadlockException(Exception e) {

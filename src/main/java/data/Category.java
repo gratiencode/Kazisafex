@@ -5,19 +5,20 @@
  */
 package data;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.NamedQueries;
@@ -26,11 +27,11 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.util.UUID;
 
-import org.hibernate.annotations.UuidGenerator;
 import jakarta.xml.bind.annotation.XmlRootElement;
-import org.hibernate.annotations.GenericGenerator;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -44,7 +45,7 @@ import tools.Tables;
     @NamedQuery(name = "Category.findAll", query = "SELECT DISTINCT  c FROM Category c"),
     @NamedQuery(name = "Category.findByUid", query = "SELECT DISTINCT  c FROM Category c WHERE c.uid = :uid"),
     @NamedQuery(name = "Category.findByDescritption", query = "SELECT DISTINCT  c FROM Category c WHERE c.descritption = :descritption")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+
 public class Category extends BaseModel implements Serializable {
 
     @Lob
@@ -54,19 +55,29 @@ public class Category extends BaseModel implements Serializable {
     @Id
     @Column(name = "uid", updatable = false, nullable = false)
     private String uid;
-    @JsonManagedReference(value = "catsprods")
     @OneToMany(mappedBy = "categoryId")
+    @JsonBackReference("cat-produitx")
     private List<Produit> produitList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+    @OneToMany(mappedBy = "categoryId")
+    @JsonBackReference(value = "cat-saleAg")
+    private List<SaleAgregate> saleAgregateList;
 
     public Category() {
         this.type = Tables.CATEGORY.name();
     }
-    
+
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+        }
+        if(this.updatedAt==null){
+        this.updatedAt = LocalDateTime.now();
         }
     }
 
@@ -89,7 +100,7 @@ public class Category extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    @JsonbTransient
+    
     public List<Produit> getProduitList() {
         return produitList;
     }
@@ -129,6 +140,30 @@ public class Category extends BaseModel implements Serializable {
 
     public void setDescritption(String descritption) {
         this.descritption = descritption;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public List<SaleAgregate> getSaleAgregateList() {
+        return saleAgregateList;
+    }
+
+    public void setSaleAgregateList(List<SaleAgregate> saleAgregateList) {
+        this.saleAgregateList = saleAgregateList;
     }
 
 }

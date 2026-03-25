@@ -19,7 +19,7 @@
 <?import javafx.scene.shape.Circle?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="592.0" prefWidth="1089.0" style="-fx-background-color: white; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.EntrepriseController">
+<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="592.0" prefWidth="1089.0" style="-fx-background-color: white; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.EntrepriseController">
    <effect>
       <DropShadow />
    </effect>
@@ -106,25 +106,30 @@
                         <Font name="System Bold" size="24.0" />
                      </font>
                   </Label>
-                  <Label fx:id="txt_type_abonnement_eze" alignment="CENTER" layoutX="136.0" layoutY="349.0" text="Gold" textFill="#f7fa45" AnchorPane.bottomAnchor="26.0" AnchorPane.leftAnchor="136.0" AnchorPane.rightAnchor="113.0">
+                  <Label fx:id="txt_type_abonnement_eze" alignment="CENTER" layoutX="127.0" layoutY="303.0" text="Gold" textFill="#f7fa45" AnchorPane.bottomAnchor="128.0" AnchorPane.leftAnchor="127.0" AnchorPane.rightAnchor="124.0">
                      <font>
-                        <Font name="System Bold" size="33.0" />
+                        <Font name="System Bold" size="23.0" />
                      </font>
                   </Label>
-                  <Circle fill="WHITE" layoutX="178.0" layoutY="222.0" opacity="0.74" radius="98.0" stroke="#44cef5" strokeType="INSIDE" AnchorPane.bottomAnchor="130.0" AnchorPane.leftAnchor="79.0" AnchorPane.rightAnchor="86.0" AnchorPane.topAnchor="123.0" />
-                  <Label fx:id="txt_abonn_value_eze" alignment="CENTER" contentDisplay="CENTER" layoutX="77.0" layoutY="208.0" prefHeight="25.0" prefWidth="200.0" text="0000" textAlignment="CENTER" AnchorPane.leftAnchor="75.0">
+                  <Circle fill="WHITE" layoutX="176.0" layoutY="190.0" opacity="0.74" radius="98.0" stroke="#44cef5" strokeType="INSIDE" AnchorPane.bottomAnchor="170.0" AnchorPane.leftAnchor="78.0" AnchorPane.rightAnchor="89.0" AnchorPane.topAnchor="92.0" />
+                  <Label fx:id="txt_abonn_value_eze" alignment="CENTER" contentDisplay="CENTER" layoutX="76.0" layoutY="166.0" prefHeight="25.0" prefWidth="200.0" text="0000" textAlignment="CENTER" AnchorPane.leftAnchor="76.0">
                      <font>
                         <Font name="System Bold" size="20.0" />
                      </font>
                   </Label>
-                  <Label alignment="CENTER" contentDisplay="CENTER" layoutX="108.0" layoutY="66.0" text="Abonnement" textAlignment="CENTER" AnchorPane.leftAnchor="52.0" AnchorPane.rightAnchor="47.0" AnchorPane.topAnchor="66.0">
+                  <Label alignment="CENTER" contentDisplay="CENTER" layoutX="54.0" layoutY="48.0" text="Abonnement" textAlignment="CENTER" AnchorPane.leftAnchor="54.0" AnchorPane.rightAnchor="53.0" AnchorPane.topAnchor="48.0">
                      <font>
                         <Font size="21.0" />
                      </font>
                   </Label>
-                  <Label fx:id="txt_design_balance_eze" alignment="CENTER" layoutX="137.0" layoutY="242.0" prefHeight="19.0" prefWidth="85.0" text="Record" AnchorPane.leftAnchor="137.0">
+                  <Label fx:id="txt_design_balance_eze" alignment="CENTER" layoutX="137.0" layoutY="211.0" prefHeight="19.0" prefWidth="85.0" text="Record" AnchorPane.leftAnchor="137.0">
                      <font>
                         <Font size="15.0" />
+                     </font>
+                  </Label>
+                  <Label fx:id="txt_subscripro" alignment="CENTER" contentDisplay="CENTER" layoutX="76.0" layoutY="362.0" prefHeight="21.0" prefWidth="208.0" text="PRO: 0 eBonus" textAlignment="CENTER" AnchorPane.bottomAnchor="74.0" AnchorPane.leftAnchor="75.0" AnchorPane.rightAnchor="82.0">
+                     <font>
+                        <Font size="14.0" />
                      </font>
                   </Label>
                </children>

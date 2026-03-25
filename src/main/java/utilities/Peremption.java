@@ -5,6 +5,7 @@
  */
 package utilities;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.Objects;
 
@@ -13,6 +14,7 @@ import java.util.Objects;
  * @author eroot
  */
 public class Peremption {
+    private String produitUid;
     private String codebar;
     private String produit;
     private String lot;
@@ -22,12 +24,12 @@ public class Peremption {
     private double quantite;
     private double coutAchat;
     private double valeur;
-    private Date dateExpiry;
+    private LocalDate dateExpiry;
 
     public Peremption() {
     }
 
-    public Peremption(String codebar, String produit, String lot, String localisation, String region, double quantite, double coutAchat, double valeur, Date dateExpiry) {
+    public Peremption(String codebar, String produit, String lot, String localisation, String region, double quantite, double coutAchat, double valeur, LocalDate dateExpiry) {
         this.codebar = codebar;
         this.produit = produit;
         this.lot = lot;
@@ -108,11 +110,11 @@ public class Peremption {
         this.valeur = valeur;
     }
 
-    public Date getDateExpiry() {
+    public LocalDate getDateExpiry() {
         return dateExpiry;
     }
 
-    public void setDateExpiry(Date dateExpiry) {
+    public void setDateExpiry(LocalDate dateExpiry) {
         this.dateExpiry = dateExpiry;
     }
 
@@ -156,6 +158,14 @@ public class Peremption {
 
     public void setMesure(String mesure) {
         this.mesure = mesure;
+    }
+
+    public String getProduitUid() {
+        return produitUid;
+    }
+
+    public void setProduitUid(String produitUid) {
+        this.produitUid = produitUid;
     }
     
     

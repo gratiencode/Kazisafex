@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.prefs.Preferences;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.application.ConditionalFeature;
@@ -44,6 +45,7 @@ import javafx.util.StringConverter;
 import data.network.Kazisafe;
 import com.endeleya.kazisafex.AgentController;
 import com.endeleya.kazisafex.ClientController;
+import com.endeleya.kazisafex.ClotureController;
 import com.endeleya.kazisafex.DeliveryController;
 import com.endeleya.kazisafex.DestockController;
 import com.endeleya.kazisafex.EntrepriseController;
@@ -51,10 +53,13 @@ import com.endeleya.kazisafex.FichedestockController;
 import com.endeleya.kazisafex.GoodstorageController;
 import com.endeleya.kazisafex.Kazisafex;
 import com.endeleya.kazisafex.MezureController;
+import com.endeleya.kazisafex.ImmobilisationController;
+import com.endeleya.kazisafex.IassistantController;
 import com.endeleya.kazisafex.PanierappenderController;
 import com.endeleya.kazisafex.ParametreController;
 import com.endeleya.kazisafex.PaymentController;
 import com.endeleya.kazisafex.PosController;
+import com.endeleya.kazisafex.ProductionController;
 import com.endeleya.kazisafex.ProduitItemController;
 import com.endeleya.kazisafex.ProduitsController;
 import com.endeleya.kazisafex.RecqController;
@@ -71,12 +76,16 @@ import data.Facture;
 import data.Fournisseur;
 import data.LigneVente;
 import data.Livraison;
-import data.LoginResult;
+import data.helpers.LoginWebResult;
 import data.Produit;
+import data.Inventaire;
+import data.Mesure;
 import data.Recquisition;
 import data.Stocker;
 import data.User;
 import data.Vente;
+import javafx.collections.ObservableList;
+import javafx.scene.control.ComboBox;
 import raven.toast.Notifications;
 //import org.controlsfx.control.Notifications;
 import services.PlatformUtil;
@@ -93,16 +102,16 @@ public class MainUI {
     private static final int TOLERANCE_THRESHOLD = 0xFF;
     public static Stage mainStage;
 
-    public static void loadMainView(Class theClass, String fxmlPath, double h, double w, String phone, String token, String rccm, LoginResult loginr) {
+    public static void loadMainView(Class theClass, String fxmlPath, double h, double w, LoginWebResult loginr) {
         try {
-            FXMLLoader fxmlLoader = new FXMLLoader(theClass.getResource("/guis/" + fxmlPath), Kazisafex.getInstance().getLangageBundle());
+            FXMLLoader fxmlLoader = new FXMLLoader(theClass.getResource("/guis/" + fxmlPath),
+                    Kazisafex.getInstance().getLangageBundle());
             Parent main = fxmlLoader.load();
             MainuiController controller = fxmlLoader.<MainuiController>getController();
-//           controller.setToken(token); 
-            controller.setLoginResult(token, rccm, loginr);
-            controller.setUserPhone(phone);
+            controller.setLoginResult(loginr);
             mainStage = new Stage();
             Scene scene = new Scene(main, w, h);
+            Kazisafex.applyTheme(scene);
             ancienh = h * 0.9;
             ancienw = w * 0.9;
             mainStage.initStyle(StageStyle.UNDECORATED);
@@ -136,6 +145,7 @@ public class MainUI {
         }
         mainStage.setIconified(true);
     }
+
     static boolean ismax = false;
     static double ancienh = 0, ancienw = 0;
 
@@ -151,7 +161,7 @@ public class MainUI {
             Rectangle2D vr = Screen.getPrimary().getVisualBounds();
             mainStage.getScene().getWindow().setHeight(vr.getHeight());
             mainStage.getScene().getWindow().setWidth(vr.getWidth());
-//            mainStage.setMaximized(true);
+            // mainStage.setMaximized(true);
         } else {
             ismax = false;
             mainStage.getScene().getWindow().setHeight(ancienh);
@@ -181,7 +191,8 @@ public class MainUI {
                 return;
             }
             SystemTray tray = SystemTray.getSystemTray();
-            java.awt.Image image = Toolkit.getDefaultToolkit().createImage(MainUI.class.getResource("/icons/icone_ksf.png"));
+            java.awt.Image image = Toolkit.getDefaultToolkit()
+                    .createImage(MainUI.class.getResource("/icons/icone_ksf.png"));
             TrayIcon trayIcon = new TrayIcon(image, "Kazisafe");
             trayIcon.setImageAutoSize(true);
             trayIcon.setToolTip(tooltip);
@@ -189,9 +200,11 @@ public class MainUI {
             trayIcon.displayMessage(title, message, MessageType.INFO);
             new AudioClip(MainUI.class.getResource("/icons/notify_sound.mp3").toExternalForm()).play();
             // Error:
-            // trayIcon.displayMessage("Hello, World", "Java Notification Demo", MessageType.ERROR);
+            // trayIcon.displayMessage("Hello, World", "Java Notification Demo",
+            // MessageType.ERROR);
             // Warning:
-            // trayIcon.displayMessage("Hello, World", "Java Notification Demo", MessageType.WARNING);
+            // trayIcon.displayMessage("Hello, World", "Java Notification Demo",
+            // MessageType.WARNING);
             tray.remove(trayIcon);
 
         } catch (Exception ex) {
@@ -262,14 +275,14 @@ public class MainUI {
     public static String createFileWithPath(String folderPath, String filename) {
         String path;
         if (PlatformUtil.isWindows()) {
-            path = mediaRootPath() + "/" + folderPath;
+            path = mediaRootPath() +  File.separator  + folderPath;
         } else {
-            path = mediaRootPath() + "/" + folderPath;
+            path = mediaRootPath() + File.separator +  folderPath;
         }
         File folder = new File(path);
         boolean dir = folder.exists();
         if (!dir) {
-            dir = folder.mkdir();
+            folder.mkdir();
         }
         return path + filename;
     }
@@ -277,7 +290,7 @@ public class MainUI {
     public static String mediaRootPath() {
         String path = null;
         if (PlatformUtil.isWindows()) {
-            path = "C:" + File.separator + "Kazisafe" + File.separator + "Media";
+            path = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + "Media";
         } else if (PlatformUtil.isLinux()) {
             path = "/home/" + System.getProperty("user.name") + "/Kazisafe/Media";
         } else if (PlatformUtil.isMac()) {
@@ -286,7 +299,7 @@ public class MainUI {
         File folder = new File(path);
         boolean dir = folder.exists();
         if (!dir) {
-            dir = folder.mkdir();
+            dir = folder.mkdirs();
         }
         return path;
     }
@@ -294,7 +307,7 @@ public class MainUI {
     public static String cPath(String added) {
         String path = null;
         if (PlatformUtil.isWindows()) {
-            path = "C:" + File.separator + "Kazisafe" + File.separator + added;
+            path = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + added;
         } else if (PlatformUtil.isLinux()) {
             path = "/home/" + System.getProperty("user.name") + "/Kazisafe/" + added;
         } else if (PlatformUtil.isMac()) {
@@ -303,7 +316,7 @@ public class MainUI {
         File folder = new File(path);
         boolean dir = folder.exists();
         if (!dir) {
-            dir = folder.mkdir();
+            folder.mkdirs();
         }
         return path;
     }
@@ -311,7 +324,7 @@ public class MainUI {
     public static String rootPath() {
         String path = null;
         if (PlatformUtil.isWindows()) {
-            path = "C:" + File.separator + "Kazisafe";
+            path = System.getenv("ProgramData") + File.separator + "Kazisafe";
         } else if (PlatformUtil.isLinux()) {
             path = "/home/" + System.getProperty("user.name") + "/Kazisafe";
         } else if (PlatformUtil.isMac()) {
@@ -320,29 +333,63 @@ public class MainUI {
         File folder = new File(path);
         boolean dir = folder.exists();
         if (!dir) {
-            dir = folder.mkdir();
+            dir = folder.mkdirs();
         }
         return path;
     }
 
-//
+    public static void showAssistantIa(String res, int w, int h, Object... objs) {
+        FXMLLoader fxmlLoader = new FXMLLoader(MainuiController.class.getResource("/guis/" + res),
+                Kazisafex.getInstance().getLangageBundle());
+        try {
+            Parent load = fxmlLoader.load();
+            if (res.equals(tools.Constants.ASSISTANT_DLG)) {
+                IassistantController controller = fxmlLoader.<IassistantController>getController();
+                Scene scene = new Scene(load, w, h);
+                Kazisafex.applyTheme(scene);
+                Stage stage = new Stage();
+                stage.initModality(Modality.APPLICATION_MODAL);
+                stage.initStyle(StageStyle.UNDECORATED);
+                stage.setScene(scene);
+                load.setOnMousePressed((javafx.scene.input.MouseEvent event) -> {
+                    xOffset = event.getSceneX();
+                    yOffset = event.getSceneY();
+                });
+
+                load.setOnMouseDragged((javafx.scene.input.MouseEvent event) -> {
+                    stage.setX(event.getScreenX() - xOffset);
+                    stage.setY(event.getScreenY() - yOffset);
+                });
+                stage.showAndWait();
+                controller.setup(String.valueOf(objs[0]), String.valueOf(objs[1]));
+            }
+
+        } catch (IOException ex) {
+            Logger.getLogger(MainUI.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
     public static void floatDialog(String res, int w, int h, String token, Kazisafe ksf, Object... objs) {
-        FXMLLoader fxmlLoader = new FXMLLoader(MainuiController.class.getResource("/guis/" + res), Kazisafex.getInstance().getLangageBundle());
+        FXMLLoader fxmlLoader = new FXMLLoader(MainuiController.class.getResource("/guis/" + res),
+                Kazisafex.getInstance().getLangageBundle());
         try {
             Parent load = fxmlLoader.load();
             switch (res) {
-                case tools.Constants.PRODUCT_DLG:
+                case tools.Constants.PRODUCT_DLG -> {
                     ProduitItemController controller = fxmlLoader.<ProduitItemController>getController();
                     controller.setEntreprise((Entreprise) objs[0]);
                     controller.setProduct((Produit) objs[1]);
-
-                    break;
-                case tools.Constants.MESURE_DLG:
+                }
+                case tools.Constants.CLOTURE_DLG -> {
+                    ClotureController clot = fxmlLoader.<ClotureController>getController();
+                    clot.setEntreprise((Entreprise) objs[0]);
+                }
+                case tools.Constants.MESURE_DLG -> {
                     MezureController mcontroller = fxmlLoader.<MezureController>getController();
                     mcontroller.setProduct((Produit) objs[1]);
                     mcontroller.setDatabase((Entreprise) objs[0], ksf);
-                    break;
-                case tools.Constants.STOCKAGE_DLG:
+                }
+                case tools.Constants.STOCKAGE_DLG -> {
                     Livraison s = (Livraison) objs[0];
                     String action = String.valueOf(objs[1]);
                     Entreprise e = ((Entreprise) objs[2]);
@@ -351,10 +398,9 @@ public class MainUI {
                     pcontroller.setAction(action);
                     pcontroller.setDatabase(e);
                     pcontroller.setStock(stock);
-
                     pcontroller.setChoosenDelivery(s);
-                    break;
-                case tools.Constants.DESTOCKAGE_DLG:
+                }
+                case tools.Constants.DESTOCKAGE_DLG -> {
                     Destocker dx = (Destocker) objs[0];
                     String actionx = String.valueOf(objs[1]);
                     System.out.println("Affichange action destockage " + actionx);
@@ -362,52 +408,67 @@ public class MainUI {
                     xcontroller.setDestocker(dx);
                     xcontroller.setDatabase((Entreprise) objs[2]);
                     xcontroller.setAction(actionx);
-
-                    break;
-                case tools.Constants.FICHESTOCK_DLG:
+                }
+                case tools.Constants.FICHESTOCK_DLG -> {
                     Produit produit = (Produit) objs[0];
                     FichedestockController fdsc = fxmlLoader.<FichedestockController>getController();
                     fdsc.setDatabase((Entreprise) objs[1], ksf, produit);
-                    break;
-                case tools.Constants.RECQ_DLG:
+                }
+                case tools.Constants.RECQ_DLG -> {
                     String actionz = String.valueOf(objs[0]);
                     RecqController reqc = fxmlLoader.<RecqController>getController();
-                    reqc.setup((Entreprise) objs[2], actionz);
-                    reqc.setRecq((Recquisition) objs[1]);
-                    break;
-                case tools.Constants.PANIER_DLG:
+                   
+                    if (objs.length > 4) {
+                        String paylod=String.valueOf(objs[3]);
+                        reqc.setup(((Entreprise) objs[2]), actionz,paylod,((Livraison)objs[4]));
+                    } 
+                    else {
+                        String paylod=String.valueOf(objs[3]);
+                        reqc.setup((Entreprise) objs[2], actionz, paylod,null);
+                    }
+                    if (objs[1] != null) {
+                        reqc.setRecq((Recquisition) objs[1]);
+                    }
+                }
+                case tools.Constants.PANIER_DLG -> {
                     PanierappenderController pc = fxmlLoader.<PanierappenderController>getController();
-                    pc.setProduit((Entreprise) objs[1], ksf, ((Produit) objs[0]), String.valueOf(objs[2]), Long.valueOf(String.valueOf(objs[3])));
-                    break;
-                case tools.Constants.PAYMENT_DLG:
+                    pc.setProduit((Entreprise) objs[1], ksf, ((Produit) objs[0]), String.valueOf(objs[2]),
+                            Long.parseLong(String.valueOf(objs[3])));
+                }
+                case tools.Constants.PAYMENT_DLG -> {
                     PaymentController pyc = fxmlLoader.<PaymentController>getController();
                     pyc.setEntreprise((Entreprise) objs[2]);
                     pyc.setClient(objs[3] == null ? null : (Client) objs[3]);
                     pyc.setLines(((List<LigneVente>) objs[0]), ((Vente) objs[1]));
-                    break;
-                case tools.Constants.CLIENT_DLG:
+                }
+                case tools.Constants.CLIENT_DLG -> {
                     ClientController clt = fxmlLoader.<ClientController>getController();
                     clt.setUp((Entreprise) objs[0], token, String.valueOf(objs[1]));
-                    break;
-                case tools.Constants.FOURNISSEUR_DLG:
+                }
+                case tools.Constants.FOURNISSEUR_DLG -> {
                     SuppliersController fsc = fxmlLoader.<SuppliersController>getController();
                     fsc.setDataSource((Entreprise) objs[0], (Fournisseur) objs[1]);
-                    break;
-                case tools.Constants.RELEVEE_DLG:
+                }
+                case tools.Constants.RELEVEE_DLG -> {
                     ReleveeController rlvc = fxmlLoader.<ReleveeController>getController();
                     rlvc.setup(ksf, (Entreprise) objs[0], (ClientOrganisation) objs[1]);
-                    break;
-                case tools.Constants.DELIVERY_DLG:
+                }
+                case tools.Constants.DELIVERY_DLG -> {
                     DeliveryController dc = fxmlLoader.<DeliveryController>getController();
                     dc.setUp((Entreprise) objs[0], (Livraison) objs[1]);
-                    break;
+                    if (objs.length == 3) {
+                        dc.setWinCaller(String.valueOf(objs[2]));
+                    }
+                }
 
             }
             Scene scene = new Scene(load, w, h);
+            Kazisafex.applyTheme(scene);
             Stage stage = new Stage();
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.initStyle(StageStyle.UNDECORATED);
             stage.setScene(scene);
+            stage.setAlwaysOnTop(false);
             load.setOnMousePressed((javafx.scene.input.MouseEvent event) -> {
                 xOffset = event.getSceneX();
                 yOffset = event.getSceneY();
@@ -424,7 +485,8 @@ public class MainUI {
     }
 
     public static Initializable getLoadedController(Initializable init, String ress) {
-        FXMLLoader fxmlLoader = new FXMLLoader(init.getClass().getResource("/guis/" + ress), Kazisafex.getInstance().getLangageBundle());
+        FXMLLoader fxmlLoader = new FXMLLoader(init.getClass().getResource("/guis/" + ress),
+                Kazisafex.getInstance().getLangageBundle());
         try {
             fxmlLoader.load();
             return fxmlLoader.getController();
@@ -436,7 +498,8 @@ public class MainUI {
 
     public static AnchorPane getPage(Initializable init, String ress, String token, Object... objs) {
         try {
-            FXMLLoader fxmlLoader = new FXMLLoader(init.getClass().getResource("/guis/" + ress), Kazisafex.getInstance().getLangageBundle());
+            FXMLLoader fxmlLoader = new FXMLLoader(init.getClass().getResource("/guis/" + ress),
+                    Kazisafex.getInstance().getLangageBundle());
             AnchorPane main = fxmlLoader.load();
             switch (ress) {
                 case tools.Constants.PRODUITS_VIEW:
@@ -453,7 +516,14 @@ public class MainUI {
                     PosController cclt = fxmlLoader.<PosController>getController();
                     cclt.setEntreprise((Entreprise) objs[0]);
                     cclt.setDatabase();
-
+                    break;
+                case tools.Constants.PRODUCTION_VIEW:
+                    ProductionController controlp = fxmlLoader.<ProductionController>getController();
+                    controlp.initArgs(((Entreprise) objs[0]));
+                    break;
+                case tools.Constants.IMMOBILISATION_VIEW:
+                    ImmobilisationController ic = fxmlLoader.<ImmobilisationController>getController();
+                    ic.init((Entreprise) objs[0], (Kazisafe) objs[1]);
                     break;
                 case Constants.CAISSE_VIEW:
                     TresorerieController tc = fxmlLoader.<TresorerieController>getController();
@@ -476,6 +546,8 @@ public class MainUI {
                     pc.init();
                     break;
             }
+            Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
+            ThemeStyler.apply(main, pref.getBoolean(Kazisafex.DARK_THEME_PREF, false));
             AnchorPane.setBottomAnchor(main, 28.3);
             AnchorPane.setRightAnchor(main, 28.3);
             AnchorPane.setLeftAnchor(main, 28.3);
@@ -496,7 +568,7 @@ public class MainUI {
                 if (tp.equalsIgnoreCase("warning")) {
                     instance.show(Notifications.Type.WARNING, Notifications.Location.BOTTOM_RIGHT, dur, message);
                 } else if (tp.equalsIgnoreCase("error")) {
-                    instance.show(Notifications.Type.ERROR, Notifications.Location.BOTTOM_RIGHT, dur, message);
+                    instance.show(Notifications.Type.ERROR, Notifications.Location.TOP_CENTER, dur, message);
                 } else {
                     instance.show(Notifications.Type.SUCCESS, Notifications.Location.BOTTOM_RIGHT, dur, message);
                 }
@@ -509,23 +581,189 @@ public class MainUI {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER, message);
+                Notifications.getInstance().show(Notifications.Type.SUCCESS, Notifications.Location.TOP_CENTER,
+                        message);
 
-//                Notifications n = Notifications.create()
-//                        .title(title)
-//                        .text(message)
-//                        .position(Pos.BOTTOM_RIGHT)
-//                        .hideAfter(Duration.seconds(duration));
-//               
-//                if (graph == null) {
-//                        n.showInformation();
-//                } else {
-//                    n.graphic(graph);
-//                    n.show();
-//                }
+                // Notifications n = Notifications.create()
+                // .title(title)
+                // .text(message)
+                // .position(Pos.BOTTOM_RIGHT)
+                // .hideAfter(Duration.seconds(duration));
+                //
+                // if (graph == null) {
+                // n.showInformation();
+                // } else {
+                // n.graphic(graph);
+                // n.show();
+                // }
             }
         });
 
+    }
+
+    public static <T> void initAutoChooser(ComboBox<T> elements, ObservableList<T> instances) {
+        elements.setConverter(new StringConverter<T>() {
+            @Override
+            public String toString(T obj) {
+                switch (obj) {
+                    case null -> {
+                        return null;
+                    }
+                    case Produit object -> {
+                        return object == null ? null
+                                : object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque())
+                                        + " "
+                                        + (object.getModele() == null ? "" : object.getModele()) + " "
+                                        + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " "
+                                        + object.getCodebar();
+                    }
+                    case Mesure object -> {
+                        return object == null ? null : object.getDescription();
+                    }
+                    case Client object -> {
+                        return object == null ? null
+                                : object.getNomClient() + " " + object.getAdresse() + " " + object.getPhone();
+                    }
+                    case Fournisseur object -> {
+                        return object == null ? null
+                                : object.getNomFourn() + " " + object.getAdresse() + " " + object.getPhone();
+                    }
+                    case Inventaire object -> {
+                        return object == null ? null
+                                : object.getCodeInventaire() + " " + object.getEtat() + " "
+                                        + object.getDateDebut().toString() + " " + object.getRegion();
+                    }
+                    default -> {
+                        return null;
+                    }
+                }
+
+            }
+
+            @Override
+            public T fromString(String string) {
+                return elements.getItems().stream()
+                        .filter(objx -> {
+                            switch (objx) {
+                                case Produit object -> {
+                                    return ((object.getNomProduit() + " "
+                                            + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                                            + (object.getModele() == null ? "" : object.getModele()) + " "
+                                            + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                            + (object.getCouleur() == null ? "" : object.getCouleur()) + " "
+                                            + object.getCodebar())
+                                            .equalsIgnoreCase(string));
+                                }
+                                case Mesure object -> {
+                                    return object.getDescription().equalsIgnoreCase(string);
+                                }
+                                case Inventaire object -> {
+                                    String value = object.getCodeInventaire() + " " + object.getEtat() + " "
+                                            + object.getDateDebut().toString() + " " + object.getRegion();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                case Client object -> {
+                                    String value = object.getNomClient() + " " + object.getAdresse() + " "
+                                            + object.getPhone();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                case Fournisseur object -> {
+                                    String value = object.getNomFourn() + " " + object.getAdresse() + " "
+                                            + object.getPhone();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                default -> {
+                                    return false;
+                                }
+                            }
+                        }).findFirst().orElse(null);
+            }
+        });
+        elements.setItems(instances);
+        ComboBoxAutoCompletion<T> comx = new ComboBoxAutoCompletion<>(elements);
+    }
+
+    public static <T> void initChooser(ComboBox<T> elements, ObservableList<T> instances) {
+        elements.setConverter(new StringConverter<T>() {
+            @Override
+            public String toString(T obj) {
+                switch (obj) {
+                    case null -> {
+                        return null;
+                    }
+                    case Produit object -> {
+                        return object == null ? null
+                                : object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque())
+                                        + " "
+                                        + (object.getModele() == null ? "" : object.getModele()) + " "
+                                        + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " "
+                                        + object.getCodebar();
+                    }
+                    case Mesure object -> {
+                        return object == null ? null : object.getDescription();
+                    }
+                    case Client object -> {
+                        return object == null ? null
+                                : object.getNomClient() + " " + object.getAdresse() + " " + object.getPhone();
+                    }
+                    case Fournisseur object -> {
+                        return object == null ? null
+                                : object.getNomFourn() + " " + object.getAdresse() + " " + object.getPhone();
+                    }
+                    case Inventaire object -> {
+                        return object == null ? null
+                                : object.getCodeInventaire() + " " + object.getEtat() + " "
+                                        + object.getDateDebut().toString() + " " + object.getRegion();
+                    }
+                    default -> {
+                        return null;
+                    }
+                }
+
+            }
+
+            @Override
+            public T fromString(String string) {
+                return elements.getItems().stream()
+                        .filter(objx -> {
+                            switch (objx) {
+                                case Produit object -> {
+                                    return ((object.getNomProduit() + " "
+                                            + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                                            + (object.getModele() == null ? "" : object.getModele()) + " "
+                                            + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                            + (object.getCouleur() == null ? "" : object.getCouleur()) + " "
+                                            + object.getCodebar())
+                                            .equalsIgnoreCase(string));
+                                }
+                                case Mesure object -> {
+                                    return object.getDescription().equalsIgnoreCase(string);
+                                }
+                                case Inventaire object -> {
+                                    String value = object.getCodeInventaire() + " " + object.getEtat() + " "
+                                            + object.getDateDebut().toString() + " " + object.getRegion();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                case Client object -> {
+                                    String value = object.getNomClient() + " " + object.getAdresse() + " "
+                                            + object.getPhone();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                case Fournisseur object -> {
+                                    String value = object.getNomFourn() + " " + object.getAdresse() + " "
+                                            + object.getPhone();
+                                    return value.equalsIgnoreCase(string);
+                                }
+                                default -> {
+                                    return false;
+                                }
+                            }
+                        }).findFirst().orElse(null);
+            }
+        });
+        elements.setItems(instances);
     }
 
 }

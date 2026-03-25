@@ -18,6 +18,7 @@ import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
@@ -70,6 +71,7 @@ import data.Mesure;
 import tools.Constants;
 import static tools.Constants.CAISSES;
 import tools.DataId;
+import tools.DebtItem;
 import tools.FileUtils;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -338,10 +340,12 @@ public class ReleveeController implements Initializable {
         ContextMenu recov = new ContextMenu();
         MenuItem rec = new MenuItem("Voir la facture");
         MenuItem billing = new MenuItem("Recouvrer la facture");
+        MenuItem debtSheet = new MenuItem("Releve dettes client");
         MenuItem cancel = new MenuItem("Annuler la facture");
         MenuItem delete = new MenuItem("Supprimer la facture");
         recov.getItems().add(rec);
         recov.getItems().add(billing);
+        recov.getItems().add(debtSheet);
         recov.getItems().add(cancel);
         recov.getItems().add(delete);
         arrierre_pane.setVisible(false);
@@ -378,6 +382,12 @@ public class ReleveeController implements Initializable {
                         MainUI.notify(null, "Info", "Cette facture est completement payee", 3, "info");
                     }
                 }
+            }
+        });
+        debtSheet.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                exportDebtSheetForClient();
             }
         });
         cancel.setOnAction(new EventHandler<ActionEvent>() {
@@ -423,6 +433,49 @@ public class ReleveeController implements Initializable {
             }
         });
         wait_insert_pane.setVisible(false);
+    }
+
+    private void exportDebtSheetForClient() {
+        if (orga == null) {
+            MainUI.notify(null, "Info", "Aucun client organisation selectionne", 3, "warning");
+            return;
+        }
+        List<Facture> source = tfactures.getItems();
+        if (source == null || source.isEmpty()) {
+            MainUI.notify(null, "Info", "Aucune facture disponible pour ce client", 3, "warning");
+            return;
+        }
+        List<DebtItem> items = new ArrayList<>();
+        for (Facture f : source) {
+            double total = f.getTotalamount() == null ? 0d : f.getTotalamount();
+            double payed = f.getPayedamount() == null ? 0d : f.getPayedamount();
+            double remained = Math.max(0d, total - payed);
+            if (remained <= 0d) {
+                continue;
+            }
+            DebtItem row = new DebtItem();
+            LocalDate date = f.getEndDate() != null ? f.getEndDate() : f.getStartDate();
+            row.setDate(date == null ? LocalDate.now() : date);
+            row.setNomClient(orga.getNomOrganisation());
+            row.setPhoneClient(orga.getPhoneOrganisation());
+            row.setFacture(f.getNumero());
+            row.setMontantDette(total);
+            row.setMontantPaye(payed);
+            row.setMontantRestant(remained);
+            items.add(row);
+        }
+        if (items.isEmpty()) {
+            MainUI.notify(null, "Info", "Aucune dette restante pour ce client", 3, "info");
+            return;
+        }
+        File report = Util.exportPDFicheDebiteurs(items);
+        if (report != null) {
+            try {
+                Desktop.getDesktop().open(report);
+            } catch (IOException ex) {
+                Logger.getLogger(ReleveeController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
     }
 
     @FXML
@@ -801,12 +854,12 @@ public class ReleveeController implements Initializable {
         if (dpk1.getValue() != null && dpk2.getValue() != null) {
             wait_insert_pane.setVisible(true);
             Facture f = new Facture(DataId.generate());
-            f.setEndDate(Constants.Datetime.toUtilDate(dpk2.getValue()));
+            f.setEndDate(dpk2.getValue());
             SimpleDateFormat sdf = new SimpleDateFormat("yymmdd");
             f.setNumero(figureOutRef(count_logic) + sdf.format(new Date()));
             f.setOrganisId(orga);
             f.setRegion(region);
-            f.setStartDate(Constants.Datetime.toUtilDate(dpk1.getValue()));
+            f.setStartDate(dpk1.getValue());
             f.setStatus(Constants.BILL_STATUS_UNPAID);
             double s = sumRelev();
             System.out.println("Somme relev " + s);

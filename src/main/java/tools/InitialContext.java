@@ -5,20 +5,30 @@
  */
 package tools;
 
-import data.RetourDepot;
+import services.CommandeListService;
+import services.CommandeService;
+import services.ProductionService;
+import services.RepartirService;
+import services.SatisfaireService;
+import services.ImputerService;
 import services.AretirerService;
 import services.CategoryService;
 import services.ClientAppartenirService;
 import services.ClientOrganisationService;
 import services.ClientService;
 import services.CompteTresorService;
+import services.CompterService;
 import services.DepenseService;
+import services.DepotService;
 import services.DestockerService;
+import services.EntreposerService;
 import services.FactureService;
 import services.FournisseurService;
-import services.JournalService;
+import services.InventaireService;
 import services.LigneVenteService;
 import services.LivraisonService;
+import services.MatiereService;
+import services.MatiereSkuService;
 import services.MesureService;
 import services.OperationService;
 import services.PrixDeVenteService;
@@ -29,6 +39,12 @@ import services.RetourMagasinService;
 import services.StockerService;
 import services.TraisorerieService;
 import services.VenteService;
+import services.PeriodeService;
+import services.PermissionService;
+import services.RepportService;
+import services.ImmobilisationService;
+import services.PresenceService;
+import services.FingerprintMappingService;
 
 /**
  *
@@ -37,55 +53,48 @@ import services.VenteService;
 public class InitialContext {
 
     public Object lookup(Tables name) {
-        switch (name) {
-            case CATEGORY:
-                return new CategoryService();
-            case PRODUIT:
-                return new ProduitService();
-            case MESURE:
-                return new MesureService();
-            case FOURNISSEUR:
-                return new FournisseurService();
-            case LIVRAISON:
-                return new LivraisonService();
-            case STOCKER:
-                return new StockerService();
-            case DESTOCKER:
-                return new DestockerService();
-            case RECQUISITION:
-                return new RecquisitionService();
-            case PRIXDEVENTE:
-                return new PrixDeVenteService();
-            case CLIENT:
-                return new ClientService();
-            case CLIENTAPPARTENIR:
-                return new ClientAppartenirService();
-            case CLIENTORGANISATION:
-                return new ClientOrganisationService();
-            case VENTE:
-                return new VenteService();
-            case LIGNEVENTE:
-                return new LigneVenteService();
-            case COMPTETRESOR:
-                return new CompteTresorService();
-            case DEPENSE:
-                return new DepenseService();
-            case OPERATION:
-                return new OperationService();
-            case RETOURDEPOT:
-                return new RetourDepotService();
-            case RETOURMAGASIN:
-                return new RetourMagasinService();
-            case TRAISORERIE:
-                return new TraisorerieService();
-            case FACTURE:
-                return new FactureService();
-            case ARETIRER:
-                return new AretirerService();
-            case JOURNAL:
-                return new JournalService();
-            default:
-                return null;
-        }
+        return switch (name) {
+            case CATEGORY -> new CategoryService();
+            case PRODUIT -> new ProduitService();
+            case MESURE -> new MesureService();
+            case FOURNISSEUR -> new FournisseurService();
+            case LIVRAISON -> new LivraisonService();
+            case STOCKER -> new StockerService();
+            case DESTOCKER -> new DestockerService();
+            case RECQUISITION -> new RecquisitionService();
+            case PRIXDEVENTE -> new PrixDeVenteService();
+            case CLIENT -> new ClientService();
+            case CLIENTAPPARTENIR -> new ClientAppartenirService();
+            case CLIENTORGANISATION -> new ClientOrganisationService();
+            case VENTE -> new VenteService();
+            case LIGNEVENTE -> new LigneVenteService();
+            case COMPTETRESOR -> new CompteTresorService();
+            case DEPENSE -> new DepenseService();
+            case OPERATION -> new OperationService();
+            case RETOURDEPOT -> new RetourDepotService();
+            case RETOURMAGASIN -> new RetourMagasinService();
+            case TRAISORERIE -> new TraisorerieService();
+            case FACTURE -> new FactureService();
+            case ARETIRER -> new AretirerService();
+            case PERIODE -> new PeriodeService();
+            case INVENTORY -> new InventaireService();
+            case COMPTER -> new CompterService();
+            case DEPOT -> new DepotService();
+            case ENTREPOSER -> new EntreposerService();
+            case MATIERE -> new MatiereService();
+            case MATIERESKU -> new MatiereSkuService();
+            case REPARTIR -> new RepartirService();
+            case PRODUCTION -> new ProductionService();
+            case COMMANDE -> new CommandeService();
+            case COMMANDELIST -> new CommandeListService();
+            case IMPUTER -> new ImputerService();
+            case SATISFAIRE -> new SatisfaireService();
+            case REPPORTING -> new RepportService();
+            case PERMISSION -> new PermissionService();
+            case IMMOBILISATION -> new ImmobilisationService();
+            case PRESENCE -> new PresenceService();
+            case FINGERPRINTMAPPING -> new FingerprintMappingService();
+            default -> null;
+        };
     }
 }

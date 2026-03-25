@@ -3,13 +3,13 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
+
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+  import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
@@ -20,7 +20,9 @@ import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
-import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+ import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 
 
@@ -62,25 +64,23 @@ public class Entreprise extends BaseModel implements Serializable {
             shape = JsonFormat.Shape.STRING,
             pattern = "yyyy-MM-dd'T'HH:mm:ss"
     )
-//    @Column(name = "dateCreation")
-    @Temporal(TemporalType.TIMESTAMP)
-
-    private Date dateCreation;
+    @Column(name = "dateCreation",columnDefinition = "DATETIME")
+    private LocalDateTime dateCreation;
     private String idNat;
     private String numeroImpot;
     @Column(name = "phones")
     private String phones;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "role-list")
+//    (value = "role-list")
 //    private List<Role> roleList;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "client-list")
+//    (value = "client-list")
 //    private List<Client> clientList;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "fournisseur-list")
+//    (value = "fournisseur-list")
 //    private List<Fournisseur> fournisseurList;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "mesure-list")
+//    (value = "mesure-list")
 //    private List<Mesure> mesureList;
     private static final long serialVersionUID = 1L;
     @Id
@@ -91,36 +91,36 @@ public class Entreprise extends BaseModel implements Serializable {
     private Double latitude;
     @Column(name = "longitude")
     private Double longitude;
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date deletedAt;
+    @Column(name = "deletedAt",columnDefinition = "DATE")
+    private LocalDate deletedAt;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "produit-list")
+//    (value = "produit-list")
 //    private List<Produit> produitList;
 //    @OneToMany(mappedBy = "entrepriseId")
-//    @JsonManagedReference(value = "stock-list")
+//    (value = "stock-list")
 //    private List<Stocker> stockerList;
-//    @JsonManagedReference(value = "eng-list")
+//    (value = "eng-list")
 //    @OneToMany(cascade = CascadeType.ALL, mappedBy = "entrepriseId")
 //    private List<Engager> engagerList;
-//    @JsonManagedReference(value = "traisorerie-list")
+//    (value = "traisorerie-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Traisorerie> traisorerieList;
-//    @JsonManagedReference(value = "destocker-list")
+//    (value = "destocker-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Destocker> destockerList;
-//    @JsonManagedReference(value = "livraison-list")
+//    (value = "livraison-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Livraison> livraisonList;
-//    @JsonManagedReference(value = "requisition-list")
+//    (value = "requisition-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Recquisition> recquisitionList;
-//    @JsonManagedReference(value = "category-list")
+//    (value = "category-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Category> categoryList;
-//    @JsonManagedReference(value = "operation-list")
+//    (value = "operation-list")
 //    @OneToMany(mappedBy = "entrepriseId")
 //    private List<Operation> operationList;
-//    @JsonManagedReference(value = "vente-list")
+//    (value = "vente-list")
 //    @OneToMany(cascade = CascadeType.ALL, mappedBy = "entrepriseId")
 //    private List<Vente> venteList;
 
@@ -128,7 +128,7 @@ public class Entreprise extends BaseModel implements Serializable {
     @PreUpdate
     protected void onDataOperation(){
         if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
     }
 
@@ -139,7 +139,8 @@ public class Entreprise extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Entreprise(String uid, String nomEntreprise, String identification, String typeIdentification, String adresse, String category, Date dateCreation) {
+    public Entreprise(String uid, String nomEntreprise, String identification, String typeIdentification,
+            String adresse, String category, LocalDateTime dateCreation) {
         this.uid = uid;
         this.nomEntreprise = nomEntreprise;
         this.identification = identification;
@@ -173,11 +174,11 @@ public class Entreprise extends BaseModel implements Serializable {
         this.typeIdentification = typeIdentification;
     }
 
-    public Date getDateCreation() {
+    public LocalDateTime getDateCreation() {
         return dateCreation;
     }
 
-    public void setDateCreation(Date dateCreation) {
+    public void setDateCreation(LocalDateTime dateCreation) {
         this.dateCreation = dateCreation;
     }
 
@@ -197,15 +198,15 @@ public class Entreprise extends BaseModel implements Serializable {
         this.longitude = longitude;
     }
 
-    public Date getDeletedAt() {
+    public LocalDate getDeletedAt() {
         return deletedAt;
     }
 
-    public void setDeletedAt(Date deletedAt) {
+    public void setDeletedAt(LocalDate deletedAt) {
         this.deletedAt = deletedAt;
     }
 
-//    @JsonbTransient
+//    
 //    public List<Produit> getProduitList() {
 //        return produitList;
 //    }
@@ -214,7 +215,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.produitList = produitList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Stocker> getStockerList() {
 //        return stockerList;
 //    }
@@ -223,7 +224,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.stockerList = stockerList;
 //    }
 
-//    @JsonbTransient
+//    
 //    public List<Engager> getEngagerList() {
 //        return engagerList;
 //    }
@@ -232,7 +233,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.engagerList = engagerList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Traisorerie> getTraisorerieList() {
 //        return traisorerieList;
 //    }
@@ -241,7 +242,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.traisorerieList = traisorerieList;
 //    }
 
-//    @JsonbTransient
+//    
 //    public List<Destocker> getDestockerList() {
 //        return destockerList;
 //    }
@@ -250,7 +251,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.destockerList = destockerList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Livraison> getLivraisonList() {
 //        return livraisonList;
 //    }
@@ -259,7 +260,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.livraisonList = livraisonList;
 //    }
 
-//    @JsonbTransient
+//    
 //    public List<Recquisition> getRecquisitionList() {
 //        return recquisitionList;
 //    }
@@ -268,7 +269,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.recquisitionList = recquisitionList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Category> getCategoryList() {
 //        return categoryList;
 //    }
@@ -277,7 +278,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.categoryList = categoryList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Operation> getOperationList() {
 //        return operationList;
 //    }
@@ -286,7 +287,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.operationList = operationList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Vente> getVenteList() {
 //        return venteList;
 //    }
@@ -336,7 +337,7 @@ public class Entreprise extends BaseModel implements Serializable {
         this.numeroImpot = numeroImpot;
     }
 
-//    @JsonbTransient
+//    
 //    public List<Mesure> getMesureList() {
 //        return mesureList;
 //    }
@@ -345,7 +346,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.mesureList = mesureList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Client> getClientList() {
 //        return clientList;
 //    }
@@ -354,7 +355,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.clientList = clientList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Fournisseur> getFournisseurList() {
 //        return fournisseurList;
 //    }
@@ -363,7 +364,7 @@ public class Entreprise extends BaseModel implements Serializable {
 //        this.fournisseurList = fournisseurList;
 //    }
 //
-//    @JsonbTransient
+//    
 //    public List<Role> getRoleList() {
 //        return roleList;
 //    }

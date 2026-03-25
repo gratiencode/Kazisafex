@@ -6,7 +6,7 @@
 package IServices;
 
 import java.util.Date;
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Facture;
 import data.Facture;
@@ -25,6 +25,7 @@ public interface FactureStorage {
     public Facture findFacture(String objId);
     public List<Facture> findFactures();
     public List<Facture> findFactures(int start , int max);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
 
     public List<Relevee> findReleveeInterval(String uid, Date toUtilDate, Date toUtilDate0);
 
@@ -34,5 +35,7 @@ public interface FactureStorage {
 
     public List<Facture> findBillingInInterval(Date toUtilDate, Date toUtilDate0);
      public List<Facture> mergeSet(Set<Facture> bulk);
+
+    public List<Facture> findUnSyncedFactures(long disconnected_at);
     
 }

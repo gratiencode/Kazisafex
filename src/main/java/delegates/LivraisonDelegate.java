@@ -10,7 +10,7 @@ import java.util.List;
 import data.Livraison;
 import tools.ServiceLocator;
 import tools.Tables;
-import static delegates.LivraisonDelegate.getStorage;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
@@ -18,6 +18,7 @@ import java.util.Set;
  * @author eroot
  */
 public class LivraisonDelegate {
+    
     public static Livraison saveLivraison(Livraison cat) {
         return getStorage().createLivraison(cat);
     }
@@ -80,4 +81,21 @@ public class LivraisonDelegate {
     public static List<Livraison> mergeSet(Set<Livraison> ls) {
        return getStorage().mergeSet(ls);
     }
+    
+    public static List<Livraison> findByRef(String ref) {
+       return getStorage().findLivraisonByReference(ref);
+    }
+
+    public static List<Livraison> findUnSyncedLivraisons(long disconnected_at) {
+       return getStorage().findUnSyncedLivraisons(disconnected_at);
+    } 
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
+    }
+    
 }

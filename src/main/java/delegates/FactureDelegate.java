@@ -10,6 +10,8 @@ import static delegates.FactureDelegate.getFactureStorage;
 import java.util.Date;
 import java.util.List;
 import data.Facture;
+import static delegates.AretirerDelegate.getStorage;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 import utilities.Relevee;
@@ -69,5 +71,17 @@ public class FactureDelegate {
 
    public static Long getCount() {
         return getFactureStorage().getCount();
+    }
+
+    public static List<Facture> findUnSyncedFactures(long disconnected_at) {
+      return getFactureStorage().findUnSyncedFactures(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

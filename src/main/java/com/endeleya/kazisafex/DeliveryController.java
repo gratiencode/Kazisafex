@@ -74,7 +74,8 @@ public class DeliveryController implements Initializable {
     @FXML
     DatePicker dpk_dateLivr;
     ResourceBundle RB;
-    @FXML Button bntsave;
+    @FXML
+    Button bntsave;
 
     public static DeliveryController getInstance() {
         if (instance == null) {
@@ -86,6 +87,7 @@ public class DeliveryController implements Initializable {
     Fournisseur choosenSupplier;
     Entreprise ent;
     String region, role, token, entr, action = "create";
+    private String winCaller = "COMM";
     ObservableList<Fournisseur> list_fourn;
 
     public DeliveryController() {
@@ -93,7 +95,7 @@ public class DeliveryController implements Initializable {
     }
 
     public void gotoSuplier(Event e) {
-        MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 355, null, kazisafe, ent, null);
+        MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, ent, null);
     }
 
     /**
@@ -101,13 +103,13 @@ public class DeliveryController implements Initializable {
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        this.RB=rb;
+        this.RB = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         region = pref.get("region", "...");
         role = pref.get("priv", null);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
-        bntsave.setText(RB.getString("xbtn.save")+" >>");
+        bntsave.setText(RB.getString("xbtn.save") + " >>");
         MainUI.setPattern(dpk_dateLivr);
         dpk_dateLivr.setValue(LocalDate.now());
         kazisafe = KazisafeServiceFactory.createService(token);
@@ -124,7 +126,7 @@ public class DeliveryController implements Initializable {
                         .filter(f -> (f.getNomFourn() + ", " + f.getAdresse() + " " + f.getPhone())
                         .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
-            } 
+            }
         });
         cbx_choose_fourniss_lic.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Fournisseur>() {
             @Override
@@ -157,6 +159,12 @@ public class DeliveryController implements Initializable {
 
     }
 
+    public void addSupplier(Fournisseur f) {
+        if (list_fourn != null) {
+            list_fourn.add(f);
+        }
+    }
+
     @FXML
     public void saveLivraison(Event e) {
         if (action.equals("create")) {
@@ -172,11 +180,17 @@ public class DeliveryController implements Initializable {
             newl.setLibelle(tf_libelle.getText());
             newl.setNumPiece(tf_numpiece.getText());
             newl.setObservation(tf_observation.getText());
-            double pyd = Double.valueOf(tf_montantpaye.getText().isEmpty() ? "0" : tf_montantpaye.getText());
+            double pyd = Double.parseDouble(tf_montantpaye.getText().isEmpty() ? "0" : tf_montantpaye.getText());
             newl.setPayed(pyd);
             String dt = Constants.TIMESTAMPED_FORMAT.format(new Date());
             dt = dt.substring(dt.length() - 8, dt.length());
-            newl.setReference("TXN" + ((int) (Math.random() * 1000)) + dt + "STK");
+            if (winCaller.equals(Constants.PRODUCTION)) {
+                newl.setReference("TXN" + ((int) (Math.random() * 1000)) + dt + "MAT");
+            } else if(winCaller.equals(Constants.STORAGE)){
+                newl.setReference("TXN" + ((int) (Math.random() * 1000)) + dt + "STK");
+            } else if(winCaller.equals(Constants.POS)){
+                newl.setReference("TXN" + ((int) (Math.random() * 1000)) + dt + "RQ");
+            }
             newl.setRegion(region);
             double topay = Double.valueOf(tf_montantfss.getText());
             newl.setTopay(topay);
@@ -190,7 +204,7 @@ public class DeliveryController implements Initializable {
                     red = 0;
                 }
             } else {
-                red = Double.valueOf(tf_reduction.getText().isEmpty() ? "0" : tf_reduction.getText());
+                red = Double.parseDouble(tf_reduction.getText().isEmpty() ? "0" : tf_reduction.getText());
             }
             newl.setReduction(red);
             newl.setRemained(((topay - pyd) - red) < 0 ? 0 : ((topay - pyd) - red));
@@ -198,16 +212,19 @@ public class DeliveryController implements Initializable {
             Livraison svl = LivraisonDelegate.saveLivraison(newl);
             saveLivraisonByHttp(newl);
             if (svl != null) {
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(svl, Constants.ACTION_CREATE, Tables.LIVRAISON);
-                        });
-                GoodstorageController.getInstance().populateDelivery(Constants.ACTION_CREATE, svl);
                 MainUI.notify(null, "Succes", "Facture enregistrer avec success", 3, "info");
-                MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, svl, tools.Constants.ACTION_CREATE, ent, null);
+                if (winCaller.equals(Constants.STORAGE)) {
+                    GoodstorageController.getInstance().populateDelivery(Constants.ACTION_CREATE, svl);
+                    MainUI.floatDialog(tools.Constants.STOCKAGE_DLG, 716, 746, null, kazisafe, newl, tools.Constants.ACTION_CREATE, ent, null);
+                }else if (winCaller.equals(Constants.POS)) {
+                    PosController.getInstance().addDelivery(svl);
+                    MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, tools.Constants.ACTION_CREATE, null,ent,"Achat",newl);
+                } else {
+                    ProductionController.getInstance().addLivraison(svl);
+                }
                 close(e);
             }
-          } else {
+        } else {
             if (tf_numpiece.getText().isEmpty()
                     || tf_libelle.getText().isEmpty()
                     || tf_montantfss.getText().isEmpty() || choosenSupplier == null) {
@@ -235,7 +252,7 @@ public class DeliveryController implements Initializable {
                     red = 0;
                 }
             } else {
-                red = Double.valueOf(tf_reduction.getText().isEmpty() ? "0" : tf_reduction.getText());
+                red = Double.parseDouble(tf_reduction.getText().isEmpty() ? "0" : tf_reduction.getText());
             }
             choosenLivraison.setReduction(red);
             choosenLivraison.setRemained(((topay - pyd) - red) < 0 ? 0 : ((topay - pyd) - red));
@@ -270,33 +287,39 @@ public class DeliveryController implements Initializable {
         Stage st = (Stage) n.getScene().getWindow();
         st.close();
     }
-    /**  @Field("npiece") String numPiece,
-            @Field("dateLivr") String dateLivr,
-            @Field("reference") String reference,
-            @Field("libelle") String libelle,
-            @Field("reduction") String reduction,
-            @Field("observation") String observation,
-            @Field("topay") String topay,
-            @Field("payed") String payed,
-            @Field("ramained") String remained,
-            @Field("toreceive") String toreceive,
-            @Field("fournId") String fournId**/
-    
-    private void saveLivraisonByHttp(Livraison l){
-        kazisafe.syncDelivery(l.getUid(),l.getNumPiece(),l.getDateLivr().toString(),
-                l.getReference(),l.getLibelle(),l.getReduction().toString(),l.getObservation(), 
-                l.getTopay().toString(),l.getPayed().toString(),l.getRemained().toString(),
-                l.getToreceive().toString(),l.getFournId().getUid())
-                .enqueue(new Callback<Livraison>() {
-            @Override
-            public void onResponse(Call<Livraison> call, Response<Livraison> rspns) {
-                System.out.println("Livraison "+rspns.code());
-            }
 
-            @Override
-            public void onFailure(Call<Livraison> call, Throwable thrwbl) {
-               thrwbl.printStackTrace();
-            }
-        });
+    /**
+     * @Field("npiece") String numPiece,
+     * @Field("dateLivr") String dateLivr,
+     * @Field("reference") String reference,
+     * @Field("libelle") String libelle,
+     * @Field("reduction") String reduction,
+     * @Field("observation") String observation,
+     * @Field("topay") String topay,
+     * @Field("payed") String payed,
+     * @Field("ramained") String remained,
+     * @Field("toreceive") String toreceive,
+     * @Field("fournId") String fournId*
+     */
+    private void saveLivraisonByHttp(Livraison l) {
+        kazisafe.syncDelivery(l.getUid(), l.getNumPiece(), l.getDateLivr().toString(),
+                l.getReference(), l.getLibelle(), l.getReduction().toString(), l.getObservation(),
+                l.getTopay().toString(), l.getPayed().toString(), l.getRemained().toString(),
+                l.getToreceive().toString(), l.getFournId().getUid())
+                .enqueue(new Callback<Livraison>() {
+                    @Override
+                    public void onResponse(Call<Livraison> call, Response<Livraison> rspns) {
+                        System.out.println("Livraison " + rspns.code());
+                    }
+
+                    @Override
+                    public void onFailure(Call<Livraison> call, Throwable thrwbl) {
+                        thrwbl.printStackTrace();
+                    }
+                });
+    }
+
+    public void setWinCaller(String winCaller) {
+        this.winCaller = winCaller;
     }
 }

@@ -5,6 +5,7 @@
  */
 package tools;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Objects;
@@ -14,7 +15,7 @@ import java.util.Objects;
  * @author eroot
  */
 public class StockerComparator implements Comparator<StockerComparator>  {
-    private Date stockDate;
+    private LocalDateTime stockDate;
     private String uid;
     private String mesureId;
     private String productId;
@@ -22,7 +23,7 @@ public class StockerComparator implements Comparator<StockerComparator>  {
     public StockerComparator() {
     }
 
-    public StockerComparator(Date stockDate, String uid, String mesureId, String productId) {
+    public StockerComparator(LocalDateTime stockDate, String uid, String mesureId, String productId) {
         this.stockDate = stockDate;
         this.uid = uid;
         this.mesureId = mesureId;
@@ -36,11 +37,11 @@ public class StockerComparator implements Comparator<StockerComparator>  {
         return o1.stockDate.compareTo(o2.stockDate);
     }
 
-    public Date getStockDate() {
+    public LocalDateTime getStockDate() {
         return stockDate;
     }
 
-    public void setStockDate(Date stockDate) {
+    public void setStockDate(LocalDateTime stockDate) {
         this.stockDate = stockDate;
     }
 

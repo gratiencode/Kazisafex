@@ -15,7 +15,6 @@ import delegates.DepenseDelegate;
 import delegates.DestockerDelegate;
 import delegates.FactureDelegate;
 import delegates.FournisseurDelegate;
-import delegates.JournalDelegate;
 import delegates.LigneVenteDelegate;
 import delegates.LivraisonDelegate;
 import delegates.MesureDelegate;
@@ -93,94 +92,94 @@ public class Consumer implements Runnable {
         if (obj instanceof Category) {
             Category ins = (Category) obj;
             CategoryDelegate.updateCategory(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Produit ins) {
             Category exist = CategoryDelegate.findCategory(ins.getCategoryId().getUid());
             if (exist != null) {
                 ProduitDelegate.updateProduit(ins);
             }
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Mesure ins) {
             Produit p = ProduitDelegate.findProduit(ins.getProduitId().getUid());
             if (p != null) {
                 MesureDelegate.updateMesure(ins);
             }
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Fournisseur ins) {
             FournisseurDelegate.updateFournisseur(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Livraison) {
             Livraison ins = (Livraison) obj;
             LivraisonDelegate.updateLivraison(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Stocker) {
             Stocker ins = (Stocker) obj;
             StockerDelegate.updateStocker(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Destocker) {
             Destocker ins = (Destocker) obj;
             DestockerDelegate.updateDestocker(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Recquisition) {
             Recquisition ins = (Recquisition) obj;
             RecquisitionDelegate.updateRecquisition(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof PrixDeVente) {
             PrixDeVente ins = (PrixDeVente) obj;
             PrixDeVenteDelegate.updatePrixDeVente(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Client) {
             Client ins = (Client) obj;
             ClientDelegate.updateClient(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof ClientAppartenir) {
             ClientAppartenir ins = (ClientAppartenir) obj;
             ClientAppartenirDelegate.updateClientAppartenir(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof ClientOrganisation) {
             ClientOrganisation ins = (ClientOrganisation) obj;
             ClientOrganisationDelegate.updateClientOrganisation(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Vente) {
             Vente ins = (Vente) obj;
             VenteDelegate.updateVente(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof LigneVente) {
             LigneVente ins = (LigneVente) obj;
             LigneVenteDelegate.updateLigneVente(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof RetourMagasin) {
             RetourMagasin ins = (RetourMagasin) obj;
             RetourMagasinDelegate.updateRetourMagasin(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof RetourDepot) {
             RetourDepot ins = (RetourDepot) obj;
             RetourDepotDelegate.updateRetourDepot(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Aretirer) {
             Aretirer ins = (Aretirer) obj;
             AretirerDelegate.updateAretirer(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof CompteTresor) {
             CompteTresor ins = (CompteTresor) obj;
             CompteTresorDelegate.updateCompteTresor(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Depense) {
             Depense ins = (Depense) obj;
             DepenseDelegate.updateDepense(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Traisorerie) {
             Traisorerie ins = (Traisorerie) obj;
             TraisorerieDelegate.updateTraisorerie(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Operation) {
             Operation ins = (Operation) obj;
             OperationDelegate.updateOperation(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         } else if (obj instanceof Facture) {
             Facture ins = (Facture) obj;
             FactureDelegate.updateFacture(ins);
-            JournalDelegate.updateJournal(Util.createJournal(ins.getUid(), ins, true));
+            
         }
     }
 

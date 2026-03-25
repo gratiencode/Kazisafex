@@ -8,6 +8,7 @@ package delegates;
 import IServices.AretirerStorage;
 import java.util.List;
 import data.Aretirer;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -49,5 +50,17 @@ public class AretirerDelegate {
 
    public static Long getCount() {
         return getStorage().getCount();
+    }
+
+    public static List<Aretirer> findUnSyncedAretirers(long disconnected_at) {
+        return getStorage().findUnSyncedAretirers(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

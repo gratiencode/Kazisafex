@@ -5,10 +5,11 @@
  */
 package tools;
 
-import java.util.Date;
+
 import java.util.Objects;
 import data.Mesure;
 import data.Produit;
+import java.time.LocalDate;
 
 /**
  *
@@ -22,7 +23,7 @@ public class ListViewItem {
     private Double detailPrice;
     private Mesure mesureGros,mesureAchat,mesureDetail;
     private Double coutAchat;
-    private Date peremption;
+    private LocalDate peremption;
     private String numlot;
     private String achatQuantity;
 
@@ -61,11 +62,11 @@ public class ListViewItem {
         this.coutAchat = coutAchat;
     }
 
-    public Date getPeremption() {
+    public LocalDate getPeremption() {
         return peremption;
     }
 
-    public void setPeremption(Date peremption) {
+    public void setPeremption(LocalDate peremption) {
         this.peremption = peremption;
     }
 

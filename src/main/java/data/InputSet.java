@@ -3,14 +3,15 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
+
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
  import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
 
 /**
  *
@@ -22,11 +23,8 @@ public class InputSet extends BaseModel implements Serializable {
     private String numeroPiece;
     private Entreprise entreprise;
     private Livraison livraison;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    private Date dateLivraison;
+    
+    private LocalDate dateLivraison;
     private List<Input> entrees;
 
     public InputSet() {
@@ -48,11 +46,11 @@ public class InputSet extends BaseModel implements Serializable {
         this.numeroPiece = numeroPiece;
     }
 
-    public Date getDateLivraison() {
+    public LocalDate getDateLivraison() {
         return dateLivraison;
     }
 
-    public void setDateLivraison(Date dateLivraison) {
+    public void setDateLivraison(LocalDate dateLivraison) {
         this.dateLivraison = dateLivraison;
     }
 

@@ -4,22 +4,19 @@
  * and open the template in the editor.
  */
 package data;
-
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
-  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
-
- import jakarta.xml.bind.annotation.XmlRootElement;
-
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 
 /**
  *
@@ -27,36 +24,30 @@ import jakarta.persistence.Table;
  */
 @Entity
 @Table(name = "role")
-
- @XmlRootElement
+@XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Role.findAll", query = "SELECT DISTINCT  r FROM Role r")
-    , @NamedQuery(name = "Role.findByUid", query = "SELECT DISTINCT  r FROM Role r WHERE r.uid = :uid")
-    , @NamedQuery(name = "Role.findByRolename", query = "SELECT DISTINCT  r FROM Role r WHERE r.rolename = :rolename")})
+    @NamedQuery(name = "Role.findAll", query = "SELECT DISTINCT  r FROM Role r"),
+    @NamedQuery(name = "Role.findByUid", query = "SELECT DISTINCT  r FROM Role r WHERE r.uid = :uid"),
+    @NamedQuery(name = "Role.findByRolename", query = "SELECT DISTINCT  r FROM Role r WHERE r.rolename = :rolename")})
 public class Role extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
-    
-   
-   
-    @Column(name = "uid", updatable = false, nullable = false)
-  
+    @Column(name = "uid")
     private String uid;
-   
     @Column(name = "rolename")
     private String rolename;
-   @JsonManagedReference
+     @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+    
     @OneToMany(mappedBy = "roleId")
     private List<Affecter> affecterList;
 
     public Role() {
     }
 
-    
-    
-    
-    
     public Role(String uid) {
         this.uid = uid;
     }
@@ -77,8 +68,24 @@ public class Role extends BaseModel implements Serializable {
         this.rolename = rolename;
     }
 
- 
-     @JsonbTransient public List<Affecter> getAffecterList() {
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    
+    public List<Affecter> getAffecterList() {
         return affecterList;
     }
 
@@ -110,5 +117,5 @@ public class Role extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Role[ uid=" + uid + " ]";
     }
-    
+
 }

@@ -7,15 +7,12 @@ package data;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import java.io.Serializable;
-import java.util.Date;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -25,16 +22,9 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
-
-
- import org.hibernate.annotations.UuidGenerator;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import org.hibernate.annotations.Immutable;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -42,17 +32,16 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "traisorerie")
- @XmlRootElement 
-
 @NamedQueries({
-    @NamedQuery(name = "Traisorerie.findAll", query = "SELECT DISTINCT  t FROM Traisorerie t")
-    , @NamedQuery(name = "Traisorerie.findByUid", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.uid = :uid")
-    , @NamedQuery(name = "Traisorerie.findByReference", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.reference = :reference")
-    , @NamedQuery(name = "Traisorerie.findByRegion", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.region = :region")
-    , @NamedQuery(name = "Traisorerie.findByDate", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.date = :date")
-    , @NamedQuery(name = "Traisorerie.findByMontantUsd", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantUsd = :montantUsd")
-    , @NamedQuery(name = "Traisorerie.findByMontantCdf", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantCdf = :montantCdf")
-    , @NamedQuery(name = "Traisorerie.findByTypeTresorerie", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.typeTresorerie = :typeTresorerie")})
+    @NamedQuery(name = "Traisorerie.findAll", query = "SELECT DISTINCT  t FROM Traisorerie t ORDER BY t.date DESC"),
+    @NamedQuery(name = "Traisorerie.findByUid", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.uid = :uid"),
+    @NamedQuery(name = "Traisorerie.findByReference", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.reference = :reference"),
+    @NamedQuery(name = "Traisorerie.findByRegion", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.region = :region ORDER BY t.date DESC"),
+    @NamedQuery(name = "Traisorerie.findByDate", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.date = :date"),
+    @NamedQuery(name = "Traisorerie.findByMontantUsd", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantUsd = :montantUsd"),
+    @NamedQuery(name = "Traisorerie.findByMontantCdf", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantCdf = :montantCdf"),
+    @NamedQuery(name = "Traisorerie.findByTypeTresorerie", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.typeTresorerie = :typeTresorerie")})
+
 public class Traisorerie extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -61,42 +50,51 @@ public class Traisorerie extends BaseModel implements Serializable {
     private String uid;
     private String reference;
     private String region;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date date;
+    @Column(name = "date", columnDefinition = "DATETIME")
+    private LocalDateTime date;
     private String libelle;
     private double montantUsd;
     private double montantCdf;
+    @Column(name = "soldeCdf",columnDefinition = "DOUBLE")
+    private Double soldeCdf=0d;
+    @Column(name = "soldeUsd",columnDefinition = "DOUBLE")
+    private Double soldeUsd=0d;
     private String mouvement;
     private String typeTresorerie;
     @JoinColumn(name = "tresor_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private CompteTresor tresorId;
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "caisseOpId")
-    @JsonManagedReference
+    @JsonBackReference(value = "trz-ops")
     private List<Operation> operationList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
-@PrePersist
+    @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
     public Traisorerie() {
-        this.type=Tables.TRAISORERIE.name();
+        this.type = Tables.TRAISORERIE.name();
     }
 
     public Traisorerie(String uid) {
         this.uid = uid;
-        this.type=Tables.TRAISORERIE.name();
+        this.type = Tables.TRAISORERIE.name();
     }
 
-    public Traisorerie(String uid, String reference, Date date, String libelle, double montantUsd, double montantCdf, String mouvement, String typeTresorerie) {
+    public Traisorerie(String uid, String reference, LocalDateTime date, String libelle, double montantUsd, double montantCdf, String mouvement, String typeTresorerie) {
         this.uid = uid;
         this.reference = reference;
         this.date = date;
@@ -105,7 +103,7 @@ public class Traisorerie extends BaseModel implements Serializable {
         this.montantCdf = montantCdf;
         this.mouvement = mouvement;
         this.typeTresorerie = typeTresorerie;
-        this.type=Tables.TRAISORERIE.name();
+        this.type = Tables.TRAISORERIE.name();
     }
 
     public String getUid() {
@@ -132,11 +130,11 @@ public class Traisorerie extends BaseModel implements Serializable {
         this.region = region;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDateTime date) {
         this.date = date;
     }
 
@@ -180,7 +178,6 @@ public class Traisorerie extends BaseModel implements Serializable {
         this.typeTresorerie = typeTresorerie;
     }
 
-   
     public CompteTresor getTresorId() {
         return tresorId;
     }
@@ -188,12 +185,8 @@ public class Traisorerie extends BaseModel implements Serializable {
     public void setTresorId(CompteTresor tresorId) {
         this.tresorId = tresorId;
     }
-    
- 
-   
-    
-     @JsonbTransient
-     public List<Operation> getOperationList() {
+
+    public List<Operation> getOperationList() {
         return operationList;
     }
 
@@ -225,5 +218,35 @@ public class Traisorerie extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Traisorerie[ uid=" + uid + " ]";
     }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
+    }
+
+    public Double getSoldeUsd() {
+        return soldeUsd;
+    }
+
+    public void setSoldeUsd(Double soldeUsd) {
+        this.soldeUsd = soldeUsd;
+    }
+
+    public Double getSoldeCdf() {
+        return soldeCdf;
+    }
+
+    public void setSoldeCdf(Double soldeCdf) {
+        this.soldeCdf = soldeCdf;
+    }
     
+    
+
 }

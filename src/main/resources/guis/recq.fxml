@@ -4,18 +4,27 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Hyperlink?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.effect.DropShadow?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.TilePane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="728.0" prefWidth="531.0" style="-fx-background-color: white;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.RecqController">
+<AnchorPane id="AnchorPane" prefHeight="746.0" prefWidth="716.0" style="-fx-background-color: white;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.RecqController">
    <children>
-      <Separator layoutY="65.0" prefHeight="4.0" prefWidth="531.0" />
+      <Separator layoutY="65.0" prefHeight="4.0" prefWidth="716.0" />
       <ImageView fitHeight="41.0" fitWidth="41.0" layoutX="14.0" layoutY="13.0" pickOnBounds="true" preserveRatio="true">
          <image>
             <Image url="@../icons/request.png" />
@@ -26,7 +35,7 @@
             <Font size="24.0" />
          </font>
       </Label>
-      <ImageView fitHeight="25.0" fitWidth="21.0" layoutX="497.0" layoutY="14.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+      <ImageView fitHeight="25.0" fitWidth="21.0" layoutX="684.0" layoutY="14.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
          <image>
             <Image url="@../icons/Cancel_32px_1.png" />
          </image>
@@ -34,31 +43,17 @@
             <Cursor fx:constant="HAND" />
          </cursor>
       </ImageView>
-      <ComboBox fx:id="cbx_ref_req" editable="true" layoutX="80.0" layoutY="102.0" prefHeight="30.0" prefWidth="238.0" promptText="Reference depot" />
-      <Label layoutX="26.0" layoutY="73.0" text="Reference" />
-      <Label layoutX="30.0" layoutY="168.0" text="Produit :" />
-      <Separator layoutY="156.0" prefHeight="4.0" prefWidth="531.0" />
-      <TextField fx:id="tf_prod_req" editable="false" layoutX="81.0" layoutY="190.0" prefHeight="30.0" prefWidth="197.0" promptText="Produit" />
-      <TextField fx:id="tf_quant_req" layoutX="80.0" layoutY="276.0" prefHeight="30.0" prefWidth="122.0" promptText="Quantite" />
-      <Label layoutX="30.0" layoutY="244.0" text="Emmagasinage" />
-      <Separator layoutY="232.0" prefHeight="4.0" prefWidth="531.0" />
-      <ComboBox fx:id="cbx_mesure_req" editable="true" layoutX="215.0" layoutY="276.0" prefHeight="30.0" prefWidth="122.0" promptText="Mesure" />
-      <DatePicker fx:id="dpk_date_req" layoutX="333.0" layoutY="102.0" prefHeight="30.0" prefWidth="160.0" promptText="Date " />
-      <DatePicker fx:id="dpk_date_expiry_req" layoutX="292.0" layoutY="322.0" prefHeight="30.0" prefWidth="197.0" promptText="Date d'expiration" />
-      <TextField fx:id="tf_alerte_req" layoutX="80.0" layoutY="322.0" prefHeight="30.0" prefWidth="197.0" promptText="Stock d'alerte" />
-      <Separator layoutY="361.0" prefHeight="4.0" prefWidth="531.0" />
+      <ComboBox fx:id="cbx_ref_req" editable="true" layoutX="135.0" layoutY="79.0" prefHeight="30.0" prefWidth="406.0" promptText="Reference depot" />
+      <Label layoutX="13.0" layoutY="84.0" text="De l'entrepot" />
+      <Separator layoutY="122.0" prefHeight="4.0" prefWidth="716.0" />
+<TextField fx:id="tf_prod_req" editable="false" layoutX="123.0" layoutY="174.0" prefHeight="26.0" prefWidth="254.0" visible="false" AnchorPane.leftAnchor="123.0" />
+<TextField fx:id="search_produit" layoutX="123.0" layoutY="174.0" prefHeight="26.0" prefWidth="254.0" promptText="Recherche..." visible="false" />
+      <Separator layoutY="405.0" prefHeight="4.0" prefWidth="716.0" />
+      <DatePicker fx:id="dpk_date_req" layoutX="553.0" layoutY="80.0" prefHeight="30.0" prefWidth="145.0" promptText="Date " />
       <Label layoutX="36.0" layoutY="375.0" text="Vente" />
-      <TextField fx:id="tf_prix_vent_req" layoutX="82.0" layoutY="440.0" prefHeight="30.0" prefWidth="222.0" promptText="Prix de vente" />
-      <TextField fx:id="tf_quant_max_req" layoutX="229.0" layoutY="400.0" prefHeight="30.0" prefWidth="141.0" promptText="Quantite maximale" />
-      <TextField fx:id="tf_quant_min_req" layoutX="82.0" layoutY="400.0" prefHeight="30.0" prefWidth="141.0" promptText="Quantite minimale" />
-      <ComboBox fx:id="cbx_devise_req" editable="true" layoutX="315.0" layoutY="440.0" prefHeight="30.0" prefWidth="122.0" promptText="Devise" />
-      <ListView fx:id="list_prix_devente_req" layoutX="79.0" layoutY="513.0" prefHeight="117.0" prefWidth="418.0" />
-      <Separator layoutY="643.0" prefHeight="4.0" prefWidth="531.0" />
-      <Button layoutX="275.0" layoutY="658.0" mnemonicParsing="false" onAction="#close" prefHeight="41.0" prefWidth="81.0" style="-fx-background-color: #cccccc;" text="Annuler" textFill="#eeeaea" />
-      <Button layoutX="365.0" layoutY="658.0" mnemonicParsing="false" onAction="#createRecqusition" prefHeight="41.0" prefWidth="134.0" style="-fx-background-color: #44cef5;" text="ENREGISTRER" textFill="WHITE" />
-      <Label fx:id="txt_equivalent_req" graphicTextGap="0.0" layoutX="248.0" layoutY="486.0" text="Equivalent" />
-      <Button layoutX="452.0" layoutY="443.0" mnemonicParsing="false" onAction="#createPrice" prefHeight="10.0" prefWidth="27.0" style="-fx-background-color: #44cef5; -fx-background-radius: 12;" text="+" textFill="WHITE" />
-      <ComboBox fx:id="cbx_mesure_vente_req" editable="true" layoutX="375.0" layoutY="400.0" prefHeight="30.0" prefWidth="111.0" promptText="Mesure" />
+      <Separator layoutY="673.0" prefHeight="4.0" prefWidth="716.0" />
+      <Button layoutX="445.0" layoutY="690.0" mnemonicParsing="false" onAction="#close" prefHeight="41.0" prefWidth="81.0" style="-fx-background-color: #cccccc;" text="Annuler" textFill="#eeeaea" />
+      <Button fx:id="saveBtn" layoutX="535.0" layoutY="690.0" mnemonicParsing="false" onAction="#createRecqusition" prefHeight="41.0" prefWidth="134.0" style="-fx-background-color: #44cef5;" text="ENREGISTRER" textFill="WHITE" />
       <Button layoutX="82.0" layoutY="370.0" mnemonicParsing="false" onAction="#applySamePrice" prefHeight="24.0" prefWidth="230.0" style="-fx-background-color: #44cef5;" text="Appliquer les prix actuels" textFill="WHITE">
          <cursor>
             <Cursor fx:constant="HAND" />
@@ -68,7 +63,147 @@
             <Image url="@../icons/price-tag(3).png" />
          </image>
       </ImageView>
-      <Label fx:id="txt_lot_req" layoutX="290.0" layoutY="189.0" prefHeight="30.0" prefWidth="197.0" style="-fx-border-color: #44cef5;" text="lot..." />
-      <Label fx:id="txt_lot_req1" layoutX="352.0" layoutY="277.0" prefHeight="30.0" prefWidth="134.0" style="-fx-border-color: #44cef5;" text="lot..." />
+      <Label layoutX="24.0" layoutY="177.0" text="Acrticle :" />
+      <ComboBox fx:id="cbx_choose_produit_req" editable="true" layoutX="136.0" layoutY="172.0" prefHeight="30.0" prefWidth="382.0" promptText="%xlbel.produx" />
+      <Button layoutX="586.0" layoutY="175.0" mnemonicParsing="false" prefHeight="24.0" prefWidth="111.0" style="-fx-background-color: #44cef5;" text="%xbtn.fill_last" textFill="WHITE" />
+      <Button layoutX="536.0" layoutY="175.0" mnemonicParsing="false" onAction="#createNewProductIfnotExist" prefHeight="24.0" prefWidth="27.0" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" />
+      <Label layoutX="19.0" layoutY="136.0" text="%xlivr" />
+      <ComboBox fx:id="cbx_choose_livraison" editable="true" layoutX="135.0" layoutY="132.0" prefHeight="30.0" prefWidth="448.0" promptText="%xlivrz" />
+      <TabPane fx:id="tabPanelot" layoutX="8.0" layoutY="209.0" prefHeight="189.0" prefWidth="702.0" style="-fx-background-color: #ffffff; -fx-border-color: #44cef5;" tabClosingPolicy="UNAVAILABLE">
+         <tabs>
+            <Tab fx:id="lottab" text="%xlot_serie">
+               <content>
+                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="241.0" prefWidth="700.0">
+                     <children>
+                        <DatePicker fx:id="dpk_date_expiry_req" layoutX="222.0" layoutY="14.0" prefHeight="30.0" prefWidth="251.0" promptText="%xdate_expir_oblig" AnchorPane.leftAnchor="222.0" AnchorPane.rightAnchor="226.0" />
+                        <ComboBox fx:id="cbx_mesure_req" layoutX="224.0" layoutY="54.0" prefHeight="30.0" prefWidth="115.0" />
+                        <TextField fx:id="tf_quant_req" layoutX="26.0" layoutY="54.0" prefHeight="30.0" prefWidth="187.0" promptText="%xcol.quantite" AnchorPane.leftAnchor="26.0" />
+                        <TextField fx:id="tf_cout_achat_req" layoutX="352.0" layoutY="54.0" prefHeight="30.0" prefWidth="122.0" promptText="%xcout_achat_unitaire" />
+                        <TextField fx:id="tf_obs_req" layoutX="480.0" layoutY="14.0" prefHeight="30.0" prefWidth="192.0" promptText="Observation (facultatif)" AnchorPane.rightAnchor="27.0" />
+                        <TextField fx:id="tf_numlot_req" layoutX="26.0" layoutY="14.0" prefHeight="30.0" prefWidth="188.0" promptText="%xcol.lot" AnchorPane.leftAnchor="26.0" />
+                        <Label layoutX="481.0" layoutY="58.0" text="USD">
+                           <font>
+                              <Font size="16.0" />
+                           </font>
+                        </Label>
+                        <Label fx:id="txt_somme_ct_lot1" layoutX="27.0" layoutY="111.0" prefHeight="30.0" prefWidth="234.0" style="-fx-border-color: #44cef5;" text="%xtotal">
+                           <font>
+                              <Font size="16.0" />
+                           </font>
+                        </Label>
+                        <Separator layoutX="-2.0" layoutY="99.0" prefHeight="3.0" prefWidth="702.0" AnchorPane.leftAnchor="-2.0" AnchorPane.rightAnchor="-1.0" />
+                        <TextField fx:id="tf_alerte_req" layoutX="525.0" layoutY="54.0" prefHeight="30.0" prefWidth="148.0" promptText="%xalerte_stk" AnchorPane.rightAnchor="27.0" />
+                     </children>
+                  </AnchorPane>
+               </content>
+            </Tab>
+         </tabs>
+      </TabPane>
+      <Label fx:id="txt_somme_global_stk" alignment="CENTER_RIGHT" layoutX="382.0" layoutY="641.0" prefHeight="20.0" prefWidth="314.0" text="%xcot_total" textAlignment="RIGHT">
+         <font>
+            <Font name="System Bold" size="16.0" />
+         </font>
+      </Label>
+      <TableView fx:id="t_requisitions" layoutX="17.0" layoutY="463.0" prefHeight="166.0" prefWidth="689.0" tableMenuButtonVisible="true">
+         <columns>
+            <TableColumn fx:id="col_date_lot" prefWidth="75.0" text="%xlbl.date" />
+            <TableColumn fx:id="col_ref_lot" prefWidth="75.0" text="%xreference" />
+            <TableColumn fx:id="col_produit_lot" prefWidth="75.0" text="%xlbel.produx" />
+            <TableColumn fx:id="col_numero_lot" prefWidth="75.0" text="%xcol.lot" />
+            <TableColumn fx:id="col_quant_lot" prefWidth="75.0" text="%xcol.quantite" />
+            <TableColumn fx:id="col_cout_ach_lot" prefWidth="75.0" text="%xcout_achat_unitaire" />
+            <TableColumn fx:id="col_cout_total_lot" prefWidth="75.0" text="%xtotal" />
+            <TableColumn fx:id="col_observation_lot" prefWidth="75.0" text="Observation" />
+            <TableColumn fx:id="col_date_expir_lot" prefWidth="75.0" text="%xdate_expir_oblig" />
+         </columns>
+         <columnResizePolicy>
+            <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+         </columnResizePolicy>
+      </TableView>
+      <Label fx:id="txt_totalot" layoutX="24.0" layoutY="422.0" text="%xnlot" />
+      <Button fx:id="btn_add_lot" layoutX="509.0" layoutY="416.0" mnemonicParsing="false" onAction="#addLot" prefHeight="30.0" prefWidth="177.0" style="-fx-background-color: #44cef5;" text="%xadd_price" textFill="WHITE">
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </Button>
+      <Separator layoutX="87.0" layoutY="424.0" prefHeight="16.0" prefWidth="73.0" />
+      <TextField fx:id="searchlot" layoutX="174.0" layoutY="417.0" prefHeight="30.0" prefWidth="326.0" promptText="Rechercher un lot" style="-fx-border-radius: 12; -fx-background-radius: 12;" />
+      <Hyperlink layoutX="34.0" layoutY="698.0" onAction="#openNunua" text="Vendre en ligne sur https://nunua.markets" />
+      <Pane fx:id="pricepane" layoutX="220.0" layoutY="343.0" prefHeight="399.0" prefWidth="476.0" style="-fx-background-color: white; -fx-border-color: #44cef5; -fx-background-radius: 12; -fx-border-radius: 12;" AnchorPane.bottomAnchor="4.0" AnchorPane.rightAnchor="20.0">
+         <children>
+            <ImageView fitHeight="25.0" fitWidth="21.0" layoutX="439.0" layoutY="11.0" onMouseClicked="#closeFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/Cancel_32px_1.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+            <Separator layoutX="-1.0" layoutY="36.0" prefHeight="16.0" prefWidth="476.0" />
+            <ComboBox fx:id="cbx_choose_mesure_vente" layoutX="317.0" layoutY="68.0" prefHeight="30.0" prefWidth="145.0" promptText="Mesure" />
+            <TextField fx:id="tf_qte_min" layoutX="14.0" layoutY="68.0" prefHeight="30.0" prefWidth="123.0" promptText="Qte minimum" />
+            <TextField fx:id="tf_qte_max" layoutX="179.0" layoutY="68.0" prefHeight="30.0" prefWidth="123.0" promptText="Qte maximale" />
+            <TextField fx:id="tf_prix_de_vente" layoutX="14.0" layoutY="116.0" prefHeight="30.0" prefWidth="123.0" promptText="Prix de vente" />
+            <ComboBox fx:id="cbx_devise_price" layoutX="180.0" layoutY="116.0" prefHeight="30.0" prefWidth="123.0" promptText="Devise" />
+            <Label layoutX="19.0" layoutY="10.0" text="Prix de vente">
+               <font>
+                  <Font name="System Bold" size="20.0" />
+               </font>
+            </Label>
+            <Label layoutX="151.0" layoutY="63.0" prefHeight="35.0" prefWidth="11.0" text="-">
+               <font>
+                  <Font size="28.0" />
+               </font>
+            </Label>
+            <Label fx:id="txt_equivalent_req" layoutX="317.0" layoutY="122.0" text="equivalent">
+               <font>
+                  <Font size="15.0" />
+               </font>
+            </Label>
+            <ImageView fitHeight="30.0" fitWidth="41.0" layoutX="380.0" layoutY="164.0" onMouseClicked="#clearAllprices" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/effacer-le-fichier.png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+            <ImageView fitHeight="30.0" fitWidth="41.0" layoutX="424.0" layoutY="164.0" onMouseClicked="#appendPrix" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+               <image>
+                  <Image url="@../icons/price-tag(3).png" />
+               </image>
+               <cursor>
+                  <Cursor fx:constant="HAND" />
+               </cursor>
+            </ImageView>
+            <Separator layoutY="147.0" prefHeight="16.0" prefWidth="476.0" />
+            <Separator layoutX="-1.0" layoutY="335.0" prefHeight="16.0" prefWidth="476.0" />
+            <Button layoutX="328.0" layoutY="352.0" mnemonicParsing="false" onAction="#closeProperly" prefHeight="35.0" prefWidth="134.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
+            <Button layoutX="213.0" layoutY="352.0" mnemonicParsing="false" onAction="#closeFloatingPane" prefHeight="35.0" prefWidth="111.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="#eeeaea" />
+            <Label layoutX="423.0" layoutY="160.0" onMouseClicked="#appendPrix" text="+">
+               <font>
+                  <Font size="15.0" />
+               </font>
+               <tooltip>
+                  <Tooltip text="Ajouter le prix" />
+               </tooltip>
+            </Label>
+            <ScrollPane layoutX="7.0" layoutY="214.0" prefHeight="118.0" prefWidth="460.0">
+               <content>
+                  <TilePane fx:id="tilepn_prices1" prefHeight="116.0" prefWidth="459.0" style="-fx-border-color: #44cef5;" />
+               </content>
+            </ScrollPane>
+            <Separator layoutX="1.0" layoutY="202.0" prefHeight="4.0" prefWidth="476.0" />
+         </children>
+         <effect>
+            <DropShadow />
+         </effect>
+      </Pane>
+      <Label fx:id="sumlivraiz" layoutX="609.0" layoutY="137.0" prefHeight="19.0" prefWidth="86.0" text="...." AnchorPane.rightAnchor="21.0" AnchorPane.topAnchor="137.0">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Label>
+      <Label fx:id="txt_ref_livr" layoutX="451.0" layoutY="46.0" prefHeight="16.0" prefWidth="196.0" text="Reference...." />
    </children>
 </AnchorPane>

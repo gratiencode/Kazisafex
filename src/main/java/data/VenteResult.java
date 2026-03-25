@@ -1,10 +1,11 @@
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 
 public class VenteResult extends BaseModel implements Serializable {
+
     private Vente vente;
     private String region;
     private String contenu;
@@ -90,8 +91,6 @@ public class VenteResult extends BaseModel implements Serializable {
         return hash;
     }
 
-   
-
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -100,7 +99,7 @@ public class VenteResult extends BaseModel implements Serializable {
         } else if (this.getClass() != obj.getClass()) {
             return false;
         } else {
-            VenteResult other = (VenteResult)obj;
+            VenteResult other = (VenteResult) obj;
             if (!Objects.equals(this.region, other.region)) {
                 return false;
             } else if (!Objects.equals(this.saler, other.saler)) {
@@ -111,7 +110,7 @@ public class VenteResult extends BaseModel implements Serializable {
         }
     }
 
-   public List<LigneVente> getLigneVente() {
+    public List<LigneVente> getLigneVente() {
         return ligneVente;
     }
 
@@ -119,4 +118,3 @@ public class VenteResult extends BaseModel implements Serializable {
         this.ligneVente = ligneVente;
     }
 }
-

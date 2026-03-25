@@ -5,9 +5,10 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; 
 import java.util.Set;
 import data.Category;
+import java.time.LocalDateTime;
 
 /**
  *
@@ -25,4 +26,7 @@ public interface CategoryStorage {
     public List<Category> setCategories(List<Category> c);
     public List<Category> updateCategorySet(Set<Category> lc);
     public List<Category> findCategories(String divers);
+    public boolean isExists(String uid);
+    public boolean isExists(String uid, LocalDateTime atime);
+    public List<Category> findUnSyncedCategories(long disconnected_at);
 }

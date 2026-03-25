@@ -11,9 +11,9 @@ import java.util.List;
 import data.Stocker;
 import tools.ServiceLocator;
 import tools.Tables;
-import static delegates.StockerDelegate.getStorage;
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.Set;
+import services.StockerService;
 
 /**
  *
@@ -98,7 +98,7 @@ public class StockerDelegate {
         return getStorage().findStockerByLivrAndProduit(uid, uid0);
     }
 
-    public static List<Stocker> findByDateExpInterval(Date time, Date darg) {
+    public static List<Stocker> findByDateExpInterval(LocalDate time, LocalDate darg) {
         return getStorage().findByDateExpInterval(time, darg);
     }
 
@@ -129,9 +129,41 @@ public class StockerDelegate {
     public static List<Stocker> toFifoOrdering(String uid) {
         return getStorage().toFefoOrdering(uid);
     }
+    
+    public static List<Stocker> getStockers(){
+        return StockerService.getStockers();
+    }
 
 
     public static double sum(String uid) { 
         return getStorage().sum(uid);
+    }
+    
+    public static List<Stocker> findUnSyncedStockers(long disconnected_at) {
+       return getStorage().findUnSyncedStockers(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
+    }
+
+    public static double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
+        return getStorage().sommeEntreeSurPeriode(uid, datedebut, datefin, region);
+    }
+
+    public static double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
+        return getStorage().sommeSortieSurPeriode(uid, datedebut, datefin, region);
+    }
+
+    public static double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region) {
+        return getStorage().calculerStockInitialEnUnite(uid, datedebut, region);
+    }
+
+    public static void rectifyStockDepot(data.Produit produit, LocalDate dte, String region, double coutAch) {
+        getStorage().rectifyStockDepot(produit, dte, region, coutAch);
     }
 }

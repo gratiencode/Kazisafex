@@ -6,18 +6,16 @@
 package IServices;
 
 import java.time.LocalDate;
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Destocker;
-import data.Destocker;
-import java.util.Date;
-
+import java.time.LocalDateTime;
 /**
  *
  * @author eroot
  */
 public interface DestockerStorage {
-     public Destocker createDestocker(Destocker obj);
+    public Destocker createDestocker(Destocker obj);
     public Destocker updateDestocker(Destocker obj);
     public void deleteDestocker(Destocker obj);
     public Long getCount();
@@ -52,6 +50,11 @@ public interface DestockerStorage {
 
     public double sum(String uid);
 
-    public Destocker findCustomised(String uid, String numlot, String ref, Date dateStocker);
+    public Destocker findCustomised(String uid, String numlot, String ref, LocalDateTime dateStocker);
+
+    public List<Destocker> findUnSyncedDestockers(long disconnected_at);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
+
+    public void removeOrphans();
 
 }

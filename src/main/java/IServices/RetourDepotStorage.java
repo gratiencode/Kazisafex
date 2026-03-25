@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.RetourDepot;
 
@@ -22,4 +22,8 @@ public interface RetourDepotStorage {
     public List<RetourDepot> findRetourDepots();
     public List<RetourDepot> findRetourDepots(int start,int max);
      public List<RetourDepot> mergeSet(Set<RetourDepot> bulk);
+
+    public List<RetourDepot> findUnSyncedRetourDepots(long disconnected_at);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
+
 }

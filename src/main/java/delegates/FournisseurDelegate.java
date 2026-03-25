@@ -6,11 +6,13 @@
 package delegates;
 
 import IServices.FournisseurStorage;
+import data.Entreprise;
 import java.util.List;
 import data.Fournisseur;
 import tools.ServiceLocator;
 import tools.Tables;
 import static delegates.FournisseurDelegate.getStorage;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
@@ -33,23 +35,22 @@ public class FournisseurDelegate {
     public static Fournisseur findFournisseur(String objId) {
         return getStorage().findFournisseur(objId);
     }
-    
-    
-    public static List<Fournisseur> findFournisseurs(){
-       return getStorage().findFournisseurs();
+
+    public static List<Fournisseur> findFournisseurs() {
+        return getStorage().findFournisseurs();
     }
-    
-      public static List<Fournisseur> findFournisseurs(int s,int m){
-       return getStorage().findFournisseurs(s,m);
+
+    public static List<Fournisseur> findFournisseurs(int s, int m) {
+        return getStorage().findFournisseurs(s, m);
     }
-    
-    public static FournisseurStorage getStorage(){
-        FournisseurStorage cats=(FournisseurStorage)ServiceLocator.getInstance().getService(Tables.FOURNISSEUR);
+
+    public static FournisseurStorage getStorage() {
+        FournisseurStorage cats = (FournisseurStorage) ServiceLocator.getInstance().getService(Tables.FOURNISSEUR);
         return cats;
     }
 
     public static List<Fournisseur> findByPhone(String text) {
-       return getStorage().findByPhone(text);
+        return getStorage().findByPhone(text);
     }
 
     public static Long getCount() {
@@ -57,6 +58,26 @@ public class FournisseurDelegate {
     }
 
     public static List<Fournisseur> mergeSet(Set<Fournisseur> fs) {
-       return getStorage().mergeSet(fs);
+        return getStorage().mergeSet(fs);
+    }
+
+    public static List<Fournisseur> findUnSyncedFournisseurs(long disconnected_at) {
+        return getStorage().findUnSyncedFournisseurs(disconnected_at);
+    }
+
+    public static Fournisseur findOrCreate(Entreprise entreprise) {
+        return getStorage().findOrCreate(entreprise);
+    }
+
+    public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
+    }
+
+    public static double getTotalDebt() {
+        return getStorage().getTotalDebt();
     }
 }

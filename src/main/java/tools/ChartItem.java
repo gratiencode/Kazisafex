@@ -5,8 +5,8 @@
  */
 package tools;
 
+import java.time.LocalDate;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.Objects;
 
 /**
@@ -15,14 +15,14 @@ import java.util.Objects;
  */
 public class ChartItem implements Comparator<ChartItem>{
     private String absices;
-    private Date date;
+    private LocalDate date;
     private double ammount;
     private String serieName;
 
     public ChartItem() {
     }
 
-    public ChartItem(String absices, Date date, double ammount, String serieName) {
+    public ChartItem(String absices, LocalDate date, double ammount, String serieName) {
         this.absices = absices;
         this.date = date;
         this.ammount = ammount;
@@ -45,11 +45,11 @@ public class ChartItem implements Comparator<ChartItem>{
         this.absices = absices;
     }
 
-    public Date getDate() {
+    public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDate date) {
         this.date = date;
     }
 

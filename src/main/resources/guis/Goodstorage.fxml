@@ -25,7 +25,7 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="568.0" prefWidth="1242.0" style="-fx-background-color: white; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.GoodstorageController">
+<AnchorPane id="AnchorPane" prefHeight="568.0" prefWidth="1242.0" style="-fx-background-color: white; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.GoodstorageController">
    <children>
       <TabPane fx:id="tabs_gs" layoutY="-1.0" prefHeight="562.0" prefWidth="1242.0" style="-fx-background-color: white; -fx-background-radius: 12;" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
         <tabs>
@@ -65,7 +65,7 @@
                                                       <Pane layoutX="261.0" layoutY="76.0" prefHeight="27.0" prefWidth="26.0" AnchorPane.leftAnchor="261.0" AnchorPane.rightAnchor="14.0" />
                                                       <ListView fx:id="list_livraison" layoutX="8.0" layoutY="52.0" prefHeight="385.0" prefWidth="285.0" AnchorPane.bottomAnchor="40.0" AnchorPane.leftAnchor="8.0" AnchorPane.rightAnchor="8.0" AnchorPane.topAnchor="52.0" />
                                                       <Label fx:id="count_livraizon" layoutX="12.0" layoutY="446.0" text="....." AnchorPane.bottomAnchor="15.0" />
-                                                      <Pane layoutX="6.0" layoutY="4.0" prefHeight="43.0" prefWidth="42.0" style="-fx-background-color: 20; -fx-border-color: #44cef5; -fx-border-radius: 20;" AnchorPane.leftAnchor="6.0" AnchorPane.topAnchor="4.0">
+                                                      <Pane layoutX="6.0" layoutY="4.0" prefHeight="43.0" prefWidth="42.0" style="-fx-background-radius: 20; -fx-border-color: #44cef5; -fx-border-radius: 20;" AnchorPane.leftAnchor="6.0" AnchorPane.topAnchor="4.0">
                                                          <children>
                                                             <ImageView fx:id="newdelivery" fitHeight="37.0" fitWidth="31.0" layoutX="5.0" layoutY="5.0" onMouseClicked="#gotoDelivery" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
                                                                <image>
@@ -120,7 +120,10 @@
                                                       <Insets left="3.0" right="3.0" />
                                                    </padding>
                                                 </Pagination>
-                                                <Label fx:id="global_achat" layoutX="747.0" layoutY="4.0" prefHeight="16.0" prefWidth="149.0" text="......." AnchorPane.rightAnchor="5.0" />
+                                                <Label fx:id="global_achat" layoutX="760.0" layoutY="3.0" prefHeight="16.0" prefWidth="149.0" text="......." AnchorPane.rightAnchor="5.0">
+                                                   <font>
+                                                      <Font name="System Bold" size="18.0" />
+                                                   </font></Label>
                                                 <TableView fx:id="table_stockage" layoutX="9.0" layoutY="45.0" prefHeight="333.0" prefWidth="892.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="55.0" AnchorPane.leftAnchor="9.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="45.0">
                                                    <columns>
                                                       <TableColumn fx:id="col_date_Stocker" minWidth="0.0" prefWidth="157.0" text="%xlbl.date" />
@@ -160,6 +163,11 @@
                                                       <Font name="Arial" size="13.0" />
                                                    </font>
                                                 </Label>
+                                                <ImageView fitHeight="29.0" fitWidth="29.0" layoutX="12.0" layoutY="396.0" onMouseClicked="#refreshFinAccount" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" rotate="180.0" AnchorPane.bottomAnchor="15.0" AnchorPane.leftAnchor="12.0">
+                                                   <image>
+                                                      <Image url="@../icons/cloud-computing.png" />
+                                                   </image>
+                                                </ImageView>
                                              </children>
                                           </AnchorPane>
                                        </center>
@@ -195,7 +203,7 @@
                                                 </Pane>
                                                 <Pane layoutX="769.0" layoutY="17.0" prefHeight="40.0" prefWidth="40.0" style="-fx-border-color: #66aaee; -fx-background-radius: 5; -fx-background-color: #ffffff;" AnchorPane.rightAnchor="95.0">
                                                    <children>
-                                                      <ImageView fx:id="btn_refresh" fitHeight="24.0" fitWidth="29.0" layoutX="9.0" layoutY="10.0" nodeOrientation="INHERIT" onMouseClicked="#refreshFinAccount" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                                      <ImageView fx:id="btn_refresh" fitHeight="24.0" fitWidth="29.0" layoutX="9.0" layoutY="10.0" nodeOrientation="INHERIT" onMouseClicked="#refreshLivrByHttp" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
                                                          <image>
                                                             <Image url="@../icons/refresh32.png" />
                                                          </image>
@@ -296,7 +304,7 @@
                               </Pane>
                               <Pane layoutX="1089.0" layoutY="98.0" prefHeight="40.0" prefWidth="40.0" style="-fx-border-color: #66aaee; -fx-background-radius: 5; -fx-background-color: #ffffff;" AnchorPane.rightAnchor="113.0" AnchorPane.topAnchor="98.0">
                                  <children>
-                                    <ImageView fx:id="btn_refresh_d" fitHeight="24.0" fitWidth="29.0" layoutX="9.0" layoutY="10.0" nodeOrientation="INHERIT" onMouseClicked="#refreshFinAccount" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                    <ImageView fx:id="btn_refresh_d" fitHeight="24.0" fitWidth="29.0" layoutX="9.0" layoutY="10.0" nodeOrientation="INHERIT" onMouseClicked="#refreshDestHttp" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
                                        <image>
                                           <Image url="@../icons/refresh32.png" />
                                        </image>
@@ -319,6 +327,11 @@
                                     <Font size="23.0" />
                                  </font>
                               </Label>
+                              <ImageView fitHeight="30.0" fitWidth="74.0" layoutX="502.0" layoutY="495.0" onMouseClicked="#refreshFinAccount" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" rotate="180.0" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="502.0">
+                                 <image>
+                                    <Image url="@../icons/cloud-computing.png" />
+                                 </image>
+                              </ImageView>
                            </children>
                         </AnchorPane>
                      </children>

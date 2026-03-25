@@ -5,12 +5,9 @@
  */
 package data;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,8 +20,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -36,15 +33,15 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "CompteTresor.findAll", query = "SELECT DISTINCT  c FROM CompteTresor c")
-    , @NamedQuery(name = "CompteTresor.findByUid", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.uid = :uid")
-    , @NamedQuery(name = "CompteTresor.findByIntitule", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.intitule = :intitule")
-    , @NamedQuery(name = "CompteTresor.findByTypeCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.typeCompte = :typeCompte")
-    , @NamedQuery(name = "CompteTresor.findByNumeroCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.numeroCompte = :numeroCompte")
-    , @NamedQuery(name = "CompteTresor.findByBankName", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.bankName = :bankName")
-    , @NamedQuery(name = "CompteTresor.findBySoldeMinimum", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.soldeMinimum = :soldeMinimum")
-    , @NamedQuery(name = "CompteTresor.findByRegion", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.region = :region")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+    @NamedQuery(name = "CompteTresor.findAll", query = "SELECT DISTINCT  c FROM CompteTresor c"),
+    @NamedQuery(name = "CompteTresor.findByUid", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.uid = :uid"),
+    @NamedQuery(name = "CompteTresor.findByIntitule", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.intitule = :intitule"),
+    @NamedQuery(name = "CompteTresor.findByTypeCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.typeCompte = :typeCompte"),
+    @NamedQuery(name = "CompteTresor.findByNumeroCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.numeroCompte = :numeroCompte"),
+    @NamedQuery(name = "CompteTresor.findByBankName", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.bankName = :bankName"),
+    @NamedQuery(name = "CompteTresor.findBySoldeMinimum", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.soldeMinimum = :soldeMinimum"),
+    @NamedQuery(name = "CompteTresor.findByRegion", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.region = :region")})
+
 public class CompteTresor extends BaseModel implements Serializable {
 
     @Column(name = "intitule")
@@ -58,36 +55,39 @@ public class CompteTresor extends BaseModel implements Serializable {
     @Column(name = "region")
     private String region;
     @OneToMany(mappedBy = "tresorId")
-    @JsonManagedReference
+    @JsonBackReference(value = "cpt-tr")
     private List<Traisorerie> traisorerieList;
     @OneToMany(mappedBy = "tresorId")
-    @JsonManagedReference
+    @JsonBackReference(value = "cpt-ops")
     private List<Operation> operationList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     private static final long serialVersionUID = 1L;
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-  
+
     private String uid;
     // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
     @Column(name = "solde_minimum")
     private Double soldeMinimum;
-    
 
     public CompteTresor() {
-         this.type = Tables.COMPTETRESOR.name();
+        this.type = Tables.COMPTETRESOR.name();
     }
 
-     
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
-    
+
     public CompteTresor(String uid) {
         this.uid = uid;
         this.type = Tables.COMPTETRESOR.name();
@@ -100,7 +100,6 @@ public class CompteTresor extends BaseModel implements Serializable {
     public void setUid(String uid) {
         this.uid = uid;
     }
-
 
     public String getTypeCompte() {
         return typeCompte;
@@ -133,7 +132,6 @@ public class CompteTresor extends BaseModel implements Serializable {
     public void setSoldeMinimum(Double soldeMinimum) {
         this.soldeMinimum = soldeMinimum;
     }
-
 
     @Override
     public int hashCode() {
@@ -168,8 +166,6 @@ public class CompteTresor extends BaseModel implements Serializable {
         this.intitule = intitule;
     }
 
-   
-
     public String getRegion() {
         return region;
     }
@@ -178,9 +174,7 @@ public class CompteTresor extends BaseModel implements Serializable {
         this.region = region;
     }
 
-  
-     @JsonbTransient 
-     public List<Traisorerie> getTraisorerieList() {
+    public List<Traisorerie> getTraisorerieList() {
         return traisorerieList;
     }
 
@@ -188,13 +182,28 @@ public class CompteTresor extends BaseModel implements Serializable {
         this.traisorerieList = traisorerieList;
     }
 
-     @JsonbTransient 
-     public List<Operation> getOperationList() {
+    public List<Operation> getOperationList() {
         return operationList;
     }
 
     public void setOperationList(List<Operation> operationList) {
         this.operationList = operationList;
     }
-    
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
 }

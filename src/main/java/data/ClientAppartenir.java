@@ -4,15 +4,12 @@
  * and open the template in the editor.
  */
 package data;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
+
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+  import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -21,10 +18,10 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 
@@ -41,6 +38,7 @@ import tools.Tables;
     , @NamedQuery(name = "ClientAppartenir.findByUid", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.uid = :uid")
     , @NamedQuery(name = "ClientAppartenir.findByDateAppartenir", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.dateAppartenir = :dateAppartenir")
     , @NamedQuery(name = "ClientAppartenir.findByRegion", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.region = :region")})
+
 public class ClientAppartenir extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -53,19 +51,22 @@ public class ClientAppartenir extends BaseModel implements Serializable {
         shape = JsonFormat.Shape.STRING,
         pattern = "yyyy-MM-dd"
     )
-    @Column(name = "date_appartenir")
-    @Temporal(TemporalType.DATE)
-    private Date dateAppartenir;
+    @Column(name = "date_appartenir",columnDefinition = "DATE")
+    private LocalDate dateAppartenir;
     @Column(name = "region")
     private String region;
     @JoinColumn(name = "client_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+    
     private Client clientId;
     @JoinColumn(name = "client_organisation_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+    
     private ClientOrganisation clientOrganisationId;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+     private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
     
 
     
@@ -74,8 +75,9 @@ public class ClientAppartenir extends BaseModel implements Serializable {
     @PreUpdate
     protected void onDataOperation(){
         if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+         this.updatedAt = LocalDateTime.now();
     }
 
     public ClientAppartenir() {
@@ -97,11 +99,11 @@ public class ClientAppartenir extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Date getDateAppartenir() {
+    public LocalDate getDateAppartenir() {
         return dateAppartenir;
     }
 
-    public void setDateAppartenir(Date dateAppartenir) {
+    public void setDateAppartenir(LocalDate dateAppartenir) {
         this.dateAppartenir = dateAppartenir;
     }
 
@@ -157,5 +159,22 @@ public class ClientAppartenir extends BaseModel implements Serializable {
     public String toString() {
         return "entities.ClientAppartenir[ uid=" + uid + " ]";
     }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+ public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+
+   public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     
 }

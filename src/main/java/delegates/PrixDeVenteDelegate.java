@@ -10,9 +10,9 @@ import java.util.List;
 import data.PrixDeVente;
 import tools.ServiceLocator;
 import tools.Tables;
-import static delegates.PrixDeVenteDelegate.getStorage;
 import data.Mesure;
 import data.Recquisition;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -92,7 +92,27 @@ public class PrixDeVenteDelegate {
        return getStorage().getCount();
     }
 
-    public static List<PrixDeVente> findPrixDeVente(Double qmin, String uid, String uid0) {
+    public static List<PrixDeVente> findPrixDeVentes(Double qmin, String uid, String uid0) {
        return getStorage().findPrixDeVente(qmin,uid,uid0);
+    }
+    
+    public static List<PrixDeVente> findPrixDeVentes(Double qmin, double quantContenuMesure, String recquisId) {
+       return getStorage().findPrixDeVentes(qmin, quantContenuMesure, recquisId);
+    }
+    
+    public static List<PrixDeVente> findPrixDeVentes(double qmin, double qmax, double quantContenuMesure, String recquisId) {
+       return getStorage().findPrixDeVentes(qmin, qmax, quantContenuMesure, recquisId);
+    }
+
+    public static List<PrixDeVente> findUnSyncedPrixDeVentes(long disconnected_at) {
+      return getStorage().findUnSyncedPrixDeVentes(disconnected_at);  
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

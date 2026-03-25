@@ -6,19 +6,20 @@
 package delegates;
 
 import IServices.OperationStorage;
-import java.util.Date;
+import data.Depense;
 import java.util.List;
 import data.Operation;
 import tools.ServiceLocator;
 import tools.Tables;
-import static delegates.OperationDelegate.getStorage;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  *
  * @author eroot
  */
 public class OperationDelegate {
-    
+
     public static Operation saveOperation(Operation cat) {
         return getStorage().createOperation(cat);
     }
@@ -34,24 +35,22 @@ public class OperationDelegate {
     public static Operation findOperation(String objId) {
         return getStorage().findOperation(objId);
     }
-    
-    
-    public static List<Operation> findOperations(){
-       return getStorage().findOperations();
-    }
-    
-    
-    public static List<Operation> findOperations(int s,int m){
-       return getStorage().findOperations(s,m);
-    }
-    
-   public static OperationStorage getStorage(){
-        OperationStorage cats=(OperationStorage)ServiceLocator.getInstance().getService(Tables.OPERATION);
-        return cats;
-    } 
 
-    public static List<Operation> findByDateInterval(Date date, Date addDays) {
-        return getStorage().findByDateInterval(date,addDays);
+    public static List<Operation> findOperations() {
+        return getStorage().findOperations();
+    }
+
+    public static List<Operation> findOperations(int s, int m) {
+        return getStorage().findOperations(s, m);
+    }
+
+    public static OperationStorage getStorage() {
+        OperationStorage cats = (OperationStorage) ServiceLocator.getInstance().getService(Tables.OPERATION);
+        return cats;
+    }
+
+    public static List<Operation> findByDateInterval(LocalDate date, LocalDate addDays) {
+        return getStorage().findByDateInterval(date, addDays);
     }
 
     public static Long getCount() {
@@ -59,10 +58,30 @@ public class OperationDelegate {
     }
 
     public static List<Operation> findOperations(String region) {
-      return getStorage().findOperations(region);
+        return getStorage().findOperations(region);
     }
 
-    public static List<Operation> findByDateInterval(Date d1, Date kesho, String region) {
-               return getStorage().findByDateInterval(d1,kesho,region);
+    public static List<Operation> findByDateInterval(LocalDate d1, LocalDate kesho, String region) {
+        return getStorage().findByDateInterval(d1, kesho, region);
+    }
+
+    public static List<Operation> findUnSyncedOperations(long disconnected_at) {
+        return getStorage().findUnSyncedOperations(disconnected_at);
+    }
+
+    public static List<Operation> findOperationByImputation(String DEPT) {
+        return getStorage().findOperationByImputation(DEPT);
+    }
+
+    public static List<Operation> findByDateInterval(Depense dep, LocalDate date1, LocalDate date2) {
+       return getStorage().findByDateInterval(dep,date1,date2);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

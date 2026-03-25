@@ -9,6 +9,8 @@ import IServices.RetourDepotStorage;
 import static delegates.RetourDepotDelegate.getRetourDepotStorage;
 import java.util.List;
 import data.RetourDepot;
+import static delegates.AretirerDelegate.getStorage;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -50,5 +52,17 @@ public class RetourDepotDelegate {
 
     public static Long getCount() {
         return getRetourDepotStorage().getCount();
+    }
+
+    public static List<RetourDepot> findUnSyncedRetourDepots(long disconnected_at) {
+       return getRetourDepotStorage().findUnSyncedRetourDepots(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getStorage().isExists(uid);
     }
 }

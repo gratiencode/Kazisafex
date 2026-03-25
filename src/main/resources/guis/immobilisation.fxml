@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="615.0" prefWidth="1211.0" style="-fx-background-color: #ffffff; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ImmobilisationController">
+   <children>
+      <Label layoutX="24.0" layoutY="17.0" text="Gestion des immobilisations">
+         <font>
+            <Font name="System Bold" size="22.0" />
+         </font>
+      </Label>
+      <Pane layoutX="24.0" layoutY="58.0" prefHeight="125.0" prefWidth="1165.0" style="-fx-background-color: #ffffff; -fx-border-color: #e5e7eb; -fx-border-radius: 10; -fx-background-radius: 10;">
+         <children>
+            <TextField fx:id="txt_libelle" layoutX="13.0" layoutY="20.0" prefHeight="30.0" prefWidth="260.0" promptText="Libelle immobilisation" />
+            <TextField fx:id="txt_categorie" layoutX="286.0" layoutY="20.0" prefHeight="30.0" prefWidth="210.0" promptText="Categorie" />
+            <TextField fx:id="txt_valeur" layoutX="509.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur origine USD" />
+            <TextField fx:id="txt_residuelle" layoutX="692.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur residuelle USD" />
+            <TextField fx:id="txt_duree" layoutX="875.0" layoutY="20.0" prefHeight="30.0" prefWidth="120.0" promptText="Duree (mois)" />
+            <Button fx:id="btn_create" layoutX="1008.0" layoutY="20.0" mnemonicParsing="false" onAction="#create" prefHeight="30.0" prefWidth="145.0" style="-fx-background-color: #44cef5;" text="Ajouter" textFill="WHITE" />
+            <Button layoutX="870.0" layoutY="73.0" mnemonicParsing="false" onAction="#openAmortissement" prefHeight="30.0" prefWidth="283.0" style="-fx-background-color: #0ea5e9;" text="Voir fiche d'amortissement (Rapports)" textFill="WHITE" />
+            <Label fx:id="lbl_status" layoutX="16.0" layoutY="80.0" prefHeight="20.0" prefWidth="700.0" text="..." />
+         </children>
+      </Pane>
+      <TableView fx:id="tb_immobilisation" layoutX="24.0" layoutY="197.0" prefHeight="393.0" prefWidth="1165.0">
+        <columns>
+          <TableColumn fx:id="col_libelle" prefWidth="177.0" text="Libelle" />
+          <TableColumn fx:id="col_categorie" prefWidth="112.0" text="Categorie" />
+          <TableColumn fx:id="col_region" prefWidth="94.0" text="Region" />
+            <TableColumn fx:id="col_date" prefWidth="105.0" text="Acquisition" />
+            <TableColumn fx:id="col_valeur" prefWidth="112.0" text="Valeur USD" />
+            <TableColumn fx:id="col_residuelle" prefWidth="124.0" text="Residuelle USD" />
+            <TableColumn fx:id="col_duree" prefWidth="92.0" text="Duree (mois)" />
+            <TableColumn fx:id="col_dotation" prefWidth="122.0" text="Dotation mensuelle" />
+            <TableColumn fx:id="col_actif" prefWidth="89.0" text="Actif" />
+        </columns>
+         <columnResizePolicy>
+            <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+         </columnResizePolicy>
+      </TableView>
+      <ImageView fitHeight="25.0" fitWidth="27.0" layoutX="1160.0" layoutY="18.0" onMouseClicked="#refresh" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@../icons/reverse32.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+   </children>
+</AnchorPane>

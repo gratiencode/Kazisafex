@@ -9,6 +9,7 @@ import IServices.DepenseStorage;
 import static delegates.DepenseDelegate.getDepenseStorage;
 import java.util.List;
 import data.Depense;
+import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
 
@@ -54,5 +55,17 @@ public class DepenseDelegate {
 
     public static Long getCount() {
         return getDepenseStorage().getCount();
+    }
+
+    public static List<Depense> findUnSyncedDepenses(long disconnected_at) {
+        return getDepenseStorage().findUnSyncedDepenses(disconnected_at);
+    }
+    
+     public static boolean isExists(String uid, LocalDateTime attime) {
+        return getDepenseStorage().isExists(uid, attime);
+    }
+
+    public static boolean isExists(String uid) {
+        return getDepenseStorage().isExists(uid);
     }
 }

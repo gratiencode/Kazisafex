@@ -6,14 +6,19 @@
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.effect.DropShadow?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<Pane fx:id="pane_fournisseur" prefHeight="355.0" prefWidth="1090.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.SuppliersController">
+<Pane fx:id="pane_fournisseur" prefHeight="513.0" prefWidth="1090.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.SuppliersController">
    <effect>
       <DropShadow />
    </effect>
@@ -24,7 +29,7 @@
             <Image url="@../icons/hotel-supplier.png" />
          </image>
       </ImageView>
-      <Label layoutX="54.0" layoutY="21.0" text="%xfourniss">
+      <Label layoutX="60.0" layoutY="19.0" text="%xfourniss">
          <font>
             <Font size="18.0" />
          </font>
@@ -37,36 +42,101 @@
             <Cursor fx:constant="OPEN_HAND" />
          </cursor>
       </ImageView>
-      <TextField fx:id="tf_nom_fourn" layoutX="110.0" layoutY="75.0" prefHeight="24.0" prefWidth="373.0" promptText="%xfourniss" />
-      <Label layoutX="12.0" layoutY="78.0" prefHeight="16.0" prefWidth="45.0" text="%xfourniss" />
-      <TextField fx:id="tf_phone_fourn" layoutX="109.0" layoutY="116.0" prefHeight="24.0" prefWidth="373.0" promptText="%xlbl.phone" />
-      <TextField fx:id="tf_identif_fourn" layoutX="109.0" layoutY="155.0" prefHeight="24.0" prefWidth="373.0" promptText="%xid_fourniss" />
-      <TextField fx:id="tf_adresse_fourn" layoutX="109.0" layoutY="191.0" prefHeight="24.0" prefWidth="373.0" promptText="%xadresse" />
-      <Label layoutX="9.0" layoutY="118.0" prefHeight="16.0" prefWidth="92.0" text="%xlbl.phone" />
-      <Label layoutX="9.0" layoutY="160.0" prefHeight="16.0" prefWidth="92.0" text="%xid_fourniss" />
-      <Label layoutX="9.0" layoutY="196.0" prefHeight="16.0" prefWidth="67.0" text="%xadresse" />
-      <Separator layoutX="-2.0" layoutY="270.0" prefHeight="3.0" prefWidth="1090.0" />
-      <ListView fx:id="listvu_list_fournisseurs" layoutX="526.0" layoutY="73.0" prefHeight="186.0" prefWidth="533.0" />
-      <Button layoutX="715.0" layoutY="288.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="76.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="#fcf7f7" />
-      <Button layoutX="813.0" layoutY="288.0" mnemonicParsing="false" onAction="#saveSupplier" prefHeight="37.0" prefWidth="246.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
-      <TextField fx:id="tf_search2cloud" layoutX="527.0" layoutY="27.0" onAction="#searchSupplyOnCloud" prefHeight="31.0" prefWidth="451.0" promptText="%xserach_supplier" style="-fx-background-radius: 25;" />
-      <Separator layoutX="508.0" layoutY="75.0" orientation="VERTICAL" prefHeight="186.0" prefWidth="3.0" />
-      <Pane fx:id="pane_progress_fourn" layoutX="668.0" layoutY="146.0" prefHeight="37.0" prefWidth="267.0" style="-fx-background-radius: 25; -fx-background-color: #ffffff;" visible="false">
-         <children>
-            <ProgressIndicator layoutX="7.0" layoutY="1.0" prefHeight="37.0" prefWidth="28.0" />
-            <Label layoutX="45.0" layoutY="10.0" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" prefHeight="16.0" prefWidth="186.0" text="Chargement des données..." />
-         </children>
-         <effect>
-            <DropShadow />
-         </effect>
-      </Pane>
-      <ImageView fx:id="img_btn_search" fitHeight="21.0" fitWidth="21.0" layoutX="948.0" layoutY="31.0" onMouseClicked="#searchSupplyOnCloud" pickOnBounds="true" preserveRatio="true">
-         <image>
-            <Image url="@../icons/cloud.png" />
-         </image>
-         <cursor>
-            <Cursor fx:constant="HAND" />
-         </cursor>
-      </ImageView>
+      <TabPane layoutX="7.0" layoutY="69.0" prefHeight="437.0" prefWidth="1076.0" tabClosingPolicy="UNAVAILABLE">
+        <tabs>
+          <Tab text="%xfourniss">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <TextField fx:id="tf_nom_fourn" layoutX="109.0" layoutY="44.0" prefHeight="24.0" prefWidth="373.0" promptText="%xfourniss" />
+                        <Label layoutX="11.0" layoutY="47.0" prefHeight="16.0" prefWidth="45.0" text="%xfourniss" />
+                        <TextField fx:id="tf_phone_fourn" layoutX="108.0" layoutY="85.0" prefHeight="24.0" prefWidth="373.0" promptText="%xlbl.phone" />
+                        <TextField fx:id="tf_identif_fourn" layoutX="108.0" layoutY="124.0" prefHeight="24.0" prefWidth="373.0" promptText="%xid_fourniss" />
+                        <TextField fx:id="tf_adresse_fourn" layoutX="108.0" layoutY="160.0" prefHeight="24.0" prefWidth="373.0" promptText="%xadresse" />
+                        <Label layoutX="8.0" layoutY="87.0" prefHeight="16.0" prefWidth="92.0" text="%xlbl.phone" />
+                        <Label layoutX="8.0" layoutY="129.0" prefHeight="16.0" prefWidth="92.0" text="%xid_fourniss" />
+                        <Label layoutX="8.0" layoutY="165.0" prefHeight="16.0" prefWidth="67.0" text="%xadresse" />
+                        <ListView fx:id="listvu_list_fournisseurs" layoutX="525.0" layoutY="42.0" prefHeight="265.0" prefWidth="533.0" />
+                        <Button layoutX="714.0" layoutY="350.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="76.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="#fcf7f7" />
+                        <Button layoutX="812.0" layoutY="350.0" mnemonicParsing="false" onAction="#saveSupplier" prefHeight="37.0" prefWidth="246.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
+                        <TextField fx:id="tf_search2cloud" layoutX="526.0" layoutY="6.0" onAction="#searchSupplyOnCloud" prefHeight="31.0" prefWidth="451.0" promptText="%xserach_supplier" style="-fx-background-radius: 25;" />
+                        <Separator layoutX="507.0" layoutY="44.0" orientation="VERTICAL" prefHeight="263.0" prefWidth="3.0" />
+                        <ImageView fx:id="img_btn_search" fitHeight="21.0" fitWidth="21.0" layoutX="947.0" layoutY="10.0" onMouseClicked="#searchSupplyOnCloud" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/cloud.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Pane fx:id="pane_progress_fourn" layoutX="667.0" layoutY="115.0" prefHeight="37.0" prefWidth="267.0" style="-fx-background-radius: 25; -fx-background-color: #ffffff;" visible="false">
+                           <children>
+                              <ProgressIndicator layoutX="7.0" layoutY="1.0" prefHeight="37.0" prefWidth="28.0" />
+                              <Label layoutX="45.0" layoutY="10.0" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" prefHeight="16.0" prefWidth="186.0" text="Chargement des données..." />
+                           </children>
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                        </Pane>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+          <Tab text="Gestion des Dettes">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <TextField fx:id="tf_filter_supplier_debt" layoutX="14.0" layoutY="14.0" prefHeight="31.0" prefWidth="361.0" promptText="%xserach_supplier" style="-fx-background-radius: 25;" />
+                        <ListView fx:id="listvu_suppliers_debt" layoutX="14.0" layoutY="56.0" prefHeight="274.0" prefWidth="361.0" />
+                        <TableView fx:id="tb_debt_details" layoutX="389.0" layoutY="56.0" prefHeight="274.0" prefWidth="673.0">
+                          <columns>
+                            <TableColumn fx:id="col_date" prefWidth="100.0" text="Date" />
+                            <TableColumn fx:id="col_numpiece" prefWidth="104.0" text="Num Piece" />
+                              <TableColumn fx:id="col_libelle" prefWidth="106.0" text="Libellé" />
+                              <TableColumn fx:id="col_topay" prefWidth="100.0" text="Facturé" />
+                              <TableColumn fx:id="col_payed" prefWidth="100.0" text="Payé" />
+                              <TableColumn fx:id="col_remained" prefWidth="121.0" text="Reste à payer" />
+                          </columns>
+                           <columnResizePolicy>
+                              <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                           </columnResizePolicy>
+                        </TableView>
+                        <Label layoutX="389.0" layoutY="348.0" text="Total Dette:">
+                           <font>
+                              <Font name="System Bold" size="14.0" />
+                           </font>
+                        </Label>
+                        <Label fx:id="lbl_total_debt" layoutX="485.0" layoutY="348.0" text="0.00 USD" textFill="#f20707">
+                           <font>
+                              <Font name="System Bold" size="14.0" />
+                           </font>
+                        </Label>
+                        <ImageView fx:id="btn_export" fitHeight="37.0" fitWidth="43.0" layoutX="1025.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebt" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/ms_excel_48px.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <ImageView fx:id="btn_export_pdf" fitHeight="37.0" fitWidth="43.0" layoutX="975.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebtPdf" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/pdf_48px.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Label layoutX="878.0" layoutY="349.0" text="Produire un relevée">
+                           <font>
+                              <Font size="14.0" />
+                           </font>
+                        </Label>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+        </tabs>
+      </TabPane>
    </children>
 </Pane>

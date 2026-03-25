@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Livraison;
 import data.Livraison;
@@ -24,6 +24,9 @@ public interface LivraisonStorage {
     public Long getCount();
     public List<Livraison> findLivraisons(int start,int max);
     public List<Livraison> findLivraisonBySupplier(String objId);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
+    
+    public List<Livraison> findLivraisonByReference(String ref);
 
     public List<Livraison> findDescSortedByDate(String region, int offset, int intValue);
 
@@ -35,5 +38,7 @@ public interface LivraisonStorage {
 
     public Double sumBySupplier(String uid);
      public List<Livraison> mergeSet(Set<Livraison> bulk);
+
+    public List<Livraison> findUnSyncedLivraisons(long disconnected_at);
     
 }

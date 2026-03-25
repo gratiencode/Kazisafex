@@ -5,8 +5,8 @@
  */
 package com.endeleya.kazisafex;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import delegates.CompteTresorDelegate;
-import delegates.DepenseDelegate;
 import delegates.FactureDelegate;
 import delegates.OperationDelegate;
 import delegates.TraisorerieDelegate;
@@ -15,10 +15,13 @@ import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URL;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -71,13 +74,18 @@ import javafx.util.StringConverter;
 import data.Client;
 import data.ClientOrganisation;
 import data.CompteTresor;
-import data.Depense;
+import data.DepenseAgregate;
+import delegates.DepenseDelegate;
+import delegates.DepenseAgregateDelegate;
 import data.Entreprise;
 import data.Facture;
 import data.Operation;
 import data.Refresher;
 import data.Traisorerie;
+import data.Depense;
+import data.LigneVente;
 import data.Vente;
+import data.VenteHelper;
 import data.helpers.Mouvment;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -93,6 +101,7 @@ import tools.Util;
 import data.helpers.Role;
 import data.helpers.TypeTraisorerie;
 import data.network.Kazisafe;
+import javafx.scene.layout.HBox;
 
 /**
  * FXML Controller class
@@ -107,6 +116,7 @@ public class TresorerieController implements Initializable {
         }
         return instance;
     }
+
     @FXML
     ImageView imgbtn_clean;
     @FXML
@@ -155,10 +165,8 @@ public class TresorerieController implements Initializable {
     ComboBox<Depense> cbx_depenses;
     @FXML
     private ComboBox<String> cbx_fonction_imput_dep;
-    @FXML
-    private Label txt_reference_trans11;
-//    @FXML
-//    private ListView<SMSNotification> list_sms_recov;
+    // @FXML
+    // private ListView<SMSNotification> list_sms_recov;
     @FXML
     private Tab tab_recov_trans;
     @FXML
@@ -186,8 +194,6 @@ public class TresorerieController implements Initializable {
     @FXML
     private Label txt_eval_cdf_recov;
     @FXML
-    private Label txt_choosen_account_trans12;
-    @FXML
     private Label txt_arembourser_usd_recov;
     @FXML
     private Label txt_arembourser_cdf_recov;
@@ -200,11 +206,43 @@ public class TresorerieController implements Initializable {
     @FXML
     private Label txt_client_count;
     @FXML
+    private TableView<DepenseAgregate> tbl_depenses_realisees;
+    @FXML
+    private TableColumn<DepenseAgregate, String> col_date_depense_real;
+    @FXML
+    private TableColumn<DepenseAgregate, String> col_ref_depense_real;
+    @FXML
+    private TableColumn<DepenseAgregate, String> col_categorie_depense_real;
+    @FXML
+    private TableColumn<DepenseAgregate, Number> col_usd_depense_real;
+    @FXML
+    private TableColumn<DepenseAgregate, Number> col_cdf_depense_real;
+    @FXML
+    private Label lbl_somme_depense_usd;
+    @FXML
+    private Label lbl_somme_depense_cdf;
+    @FXML
+    private Label lbl_some_debitusd;
+    @FXML
+    private Label lbl_some_debitcdf;
+    @FXML
+    private Label lbl_some_creditusd;
+    @FXML
+    private Label lbl_some_creditcdf;
+    @FXML
+    private Label lbl_soldeusd;
+    @FXML
+    private Label lbl_soldecdf;
+    @FXML
+    private javafx.scene.layout.Region reg_spacer;
+    @FXML
     private TableView<Transaction> tbl_transaction;
     @FXML
     private TableColumn<Transaction, String> col_date_trans;
     @FXML
-    private TableColumn<Transaction, String> col_libelle_trans, col_reference;
+    private TableColumn<Transaction, String> col_libelle_trans;
+    @FXML
+    private TableColumn<Transaction, String> col_reference;
     @FXML
     private TableColumn<Transaction, Number> col_debit_usd_trans;
     @FXML
@@ -217,6 +255,8 @@ public class TresorerieController implements Initializable {
     private TableColumn<Transaction, Number> col_solde_usd_trans;
     @FXML
     private TableColumn<Transaction, Number> col_solde_cdf_trans;
+    @FXML
+    private TableColumn<Transaction, String> col_region_trans;
     @FXML
     private Label txt_choosen_account_trans, txt_count_rappel;
     @FXML
@@ -256,17 +296,17 @@ public class TresorerieController implements Initializable {
     Facture fact;
 
     Preferences pref;
-    //JpaStorage database;
+    // JpaStorage database;
 
     ObservableList<Transaction> lstransaction;
-//    ObservableList<SMSNotification> listSMS;
     ObservableList<String> regions;
-    ObservableList<CompteTresor> comptes;
+    ObservableList<DepenseAgregate> depensesRealisees;
     ObservableList<Depense> depenses;
+    ObservableList<CompteTresor> comptes;
     List<Traisorerie> lstrz;
     List<Vente> lvente;
     Traisorerie trx;
-    Vente vtx;
+    Vente venteACredit;
     double taux2change;
     double somme = 0;
     double cdf = 0, revertCdf, ff, fd;
@@ -274,7 +314,7 @@ public class TresorerieController implements Initializable {
     static double soldecdf, soldeusd;
     String math;
     Kazisafe kazisafe;
-//    SMSNotification choosen;
+    // SMSNotification choosen;
     String token, region, role, entr;
     Entreprise entreprise;
     CompteTresor choosenComptetr;
@@ -284,6 +324,46 @@ public class TresorerieController implements Initializable {
 
     private static TresorerieController instance;
     private ResourceBundle bundle;
+    @FXML
+    private ComboBox<?> cbx_frequence_depense;
+    @FXML
+    private TextField tf_montant_depense_fix;
+    @FXML
+    private ComboBox<?> cbx_depense_devise;
+    @FXML
+    private Label txt_choosen_account_trans121;
+    @FXML
+    private Tab tab_virement_trans;
+    @FXML
+    private ComboBox<CompteTresor> cbx_compte_source;
+    @FXML
+    private Label lbl_solde_usd_src;
+    @FXML
+    private Label lbl_solde_cdf_src;
+    @FXML
+    private ComboBox<CompteTresor> cbx_compte_dest;
+    @FXML
+    private Label lbl_solde_usd_dest;
+    @FXML
+    private Label lbl_solde_cdf_dest;
+    @FXML
+    private TextField tf_montant_usd_vir;
+    @FXML
+    private TextField tf_montant_cdf_vir;
+    @FXML
+    private TextArea txtArea_motif_vir;
+
+    @FXML
+    private HBox footer_totals;
+    @FXML
+    private Label txt_choosen_account_trans1211;
+    @FXML
+    private ListView<?> list_sms_recov;
+    @FXML
+    private DatePicker dpk_debut_depense_real;
+    @FXML
+    private DatePicker dpk_fin_depense_real;
+    private String devise;
 
     @FXML
     private void closeFloatingPane(Event evt) {
@@ -302,40 +382,43 @@ public class TresorerieController implements Initializable {
     }
 
     public void addTraisorerie(Traisorerie liv) {
-        Traisorerie l = TraisorerieDelegate.findTraisorerie(liv.getUid());// database.findByUid(Traisorerie.class, liv.getUid());
+        Traisorerie l = TraisorerieDelegate.findTraisorerie(liv.getUid());// database.findByUid(Traisorerie.class,
+        // liv.getUid());
         if (l == null) {
-            l = TraisorerieDelegate.saveTraisorerie(liv);//database.insertOnly(liv);
+            l = TraisorerieDelegate.saveTraisorerie(liv);// database.insertOnly(liv);
         } else {
-            l = TraisorerieDelegate.updateTraisorerie(liv);//database.updateOnly(liv);
+            l = TraisorerieDelegate.updateTraisorerie(liv);// database.updateOnly(liv);
         }
         lstrz.add(l);
         fillTransactions(lstrz);
     }
 
     public void addOperation(Operation liv) {
-        Operation l = OperationDelegate.findOperation(liv.getUid());//database.findByUid(Operation.class, liv.getUid());
+        Operation l = OperationDelegate.findOperation(liv.getUid());// database.findByUid(Operation.class,
+        // liv.getUid());
         if (l == null) {
-            OperationDelegate.saveOperation(liv);//database.insertOnly(liv);
+            OperationDelegate.saveOperation(liv);// database.insertOnly(liv);
         } else {
-            OperationDelegate.updateOperation(liv);//database.updateOnly(liv);
+            OperationDelegate.updateOperation(liv);// database.updateOnly(liv);
         }
     }
 
     public void addAccount(CompteTresor cpt) {
-        CompteTresor cp = CompteTresorDelegate.findCompteTresor(cpt.getUid());//database.findByUid(CompteTresor.class, cpt.getUid());
+        CompteTresor cp = CompteTresorDelegate.findCompteTresor(cpt.getUid());// database.findByUid(CompteTresor.class,
+        // cpt.getUid());
         if (cp == null) {
-            CompteTresorDelegate.saveCompteTresor(cpt);//database.insertOnly(cpt);
+            CompteTresorDelegate.saveCompteTresor(cpt);// database.insertOnly(cpt);
         } else {
-            CompteTresorDelegate.updateCompteTresor(cpt);//database.updateOnly(cpt);
+            CompteTresorDelegate.updateCompteTresor(cpt);// database.updateOnly(cpt);
         }
     }
 
     public void addDepense(Depense d) {
-        Depense cp = DepenseDelegate.findDepense(d.getUid());//database.findByUid(Depense.class, d.getUid());
+        Depense cp = DepenseDelegate.findDepense(d.getUid());// database.findByUid(Depense.class, d.getUid());
         if (cp == null) {
-            DepenseDelegate.saveDepense(d);//database.insertOnly(d);
+            DepenseDelegate.saveDepense(d);// database.insertOnly(d);
         } else {
-            DepenseDelegate.updateDepense(d);//database.updateOnly(d);
+            DepenseDelegate.updateDepense(d);// database.updateOnly(d);
         }
     }
 
@@ -366,7 +449,7 @@ public class TresorerieController implements Initializable {
             return;
         }
         if (choosenComptetr == null) {
-            CompteTresor compte = CompteTresorDelegate.saveCompteTresor(cpt);//database.insertAndSync(cpt);
+            CompteTresor compte = CompteTresorDelegate.saveCompteTresor(cpt);// database.insertAndSync(cpt);
             if (compte != null) {
                 comptes.add(compte);
                 Executors.newCachedThreadPool()
@@ -377,7 +460,7 @@ public class TresorerieController implements Initializable {
 
             }
         } else {
-            CompteTresor compte = CompteTresorDelegate.updateCompteTresor(cpt);//database.update(cpt);
+            CompteTresor compte = CompteTresorDelegate.updateCompteTresor(cpt);// database.update(cpt);
             if (compte != null) {
                 comptes.set(comptes.indexOf(choosenComptetr), compte);
                 Executors.newCachedThreadPool()
@@ -412,7 +495,7 @@ public class TresorerieController implements Initializable {
         d.setNomDepense(depensename.getText());
         d.setRegion(cbx_rgion_deps.getValue());
         if (choosenDepense == null) {
-            Depense dx = DepenseDelegate.saveDepense(d);//database.insertAndSync(d);
+            Depense dx = DepenseDelegate.saveDepense(d);// database.insertAndSync(d);
             if (dx != null) {
                 MainUI.notify(null, "Succes", "Depense creee avec succes", 3, "info");
                 depenses.add(dx);
@@ -422,7 +505,7 @@ public class TresorerieController implements Initializable {
                         });
             }
         } else {
-            Depense dx = DepenseDelegate.updateDepense(d);//database.update(d);
+            Depense dx = DepenseDelegate.updateDepense(d);// database.update(d);
             if (dx != null) {
                 MainUI.notify(null, "Succes", "Depense modifiee avec succes", 3, "info");
                 depenses.set(depenses.indexOf(choosenDepense), dx);
@@ -438,6 +521,26 @@ public class TresorerieController implements Initializable {
     }
 
     private void configtab() {
+
+        col_ref_depense_real.setText("Imputation");
+        col_categorie_depense_real.setText("Nom de la Depense");
+
+        col_date_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
+            return new SimpleStringProperty(Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(param.getValue().getDate())));
+        });
+        col_ref_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
+            return new SimpleStringProperty(param.getValue().getImputation()); // using imputation for Reference / Nom Depense
+        });
+        col_categorie_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
+            return new SimpleStringProperty(param.getValue().getDepenseId() != null ? param.getValue().getDepenseId().getNomDepense() : param.getValue().getUid()); // maybe Depense ID or category string later. Default emptyish if not set
+        });
+        col_usd_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, Number> param) -> {
+            return new SimpleDoubleProperty(param.getValue().getMontantUsd());
+        });
+        col_cdf_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, Number> param) -> {
+            return new SimpleDoubleProperty(param.getValue().getMontantCdf() == null ? 0.0 : param.getValue().getMontantCdf());
+        });
+
         col_credit_cdf_trans.setCellValueFactory((TableColumn.CellDataFeatures<Transaction, Number> param) -> {
             return new SimpleDoubleProperty(param.getValue().getCredit_cdf());
         });
@@ -457,7 +560,7 @@ public class TresorerieController implements Initializable {
             return new SimpleDoubleProperty(param.getValue().getSolde_usd());
         });
         col_date_trans.setCellValueFactory((TableColumn.CellDataFeatures<Transaction, String> param) -> {
-            return new SimpleStringProperty(Constants.DATE_HEURE_FORMAT.format(param.getValue().getDate()));
+            return new SimpleStringProperty(param.getValue().getDate().toString());
         });
         col_reference.setCellValueFactory((TableColumn.CellDataFeatures<Transaction, String> param) -> {
             return new SimpleStringProperty(param.getValue().getReference());
@@ -465,54 +568,47 @@ public class TresorerieController implements Initializable {
         col_libelle_trans.setCellValueFactory((TableColumn.CellDataFeatures<Transaction, String> param) -> {
             return new SimpleStringProperty(param.getValue().getLibelle());
         });
+        col_region_trans.setCellValueFactory((TableColumn.CellDataFeatures<Transaction, String> param) -> {
+            return new SimpleStringProperty(param.getValue().getRegion());
+        });
 
-        cbx_compte_trans.setConverter(new StringConverter<CompteTresor>() {
+        // Responsive UI Bindings for tbl_transaction footer
+        reg_spacer.prefWidthProperty().bind(col_date_trans.widthProperty().add(col_reference.widthProperty()).add(col_libelle_trans.widthProperty()));
+        lbl_some_debitusd.prefWidthProperty().bind(col_debit_usd_trans.widthProperty());
+        lbl_some_debitcdf.prefWidthProperty().bind(col_debit_cdf_trans.widthProperty());
+        lbl_some_creditusd.prefWidthProperty().bind(col_credit_usd_trans.widthProperty());
+        lbl_some_creditcdf.prefWidthProperty().bind(col_credit_cdf_trans.widthProperty());
+        lbl_soldeusd.prefWidthProperty().bind(col_solde_usd_trans.widthProperty());
+        lbl_soldecdf.prefWidthProperty().bind(col_solde_cdf_trans.widthProperty());
+
+        // Responsive UI Bindings for tbl_depenses_realisees footer
+        lbl_somme_depense_usd.prefWidthProperty().bind(col_usd_depense_real.widthProperty());
+        lbl_somme_depense_cdf.prefWidthProperty().bind(col_cdf_depense_real.widthProperty());
+
+        StringConverter<CompteTresor> cptConverter = new StringConverter<CompteTresor>() {
             @Override
             public String toString(CompteTresor item) {
-                return item == null ? null : item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule();
+                return item == null ? null
+                        : item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " "
+                        + item.getIntitule();
             }
 
             @Override
             public CompteTresor fromString(String string) {
                 return cbx_compte_trans.getItems()
                         .stream()
-                        .filter(item -> (item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule())
+                        .filter(item -> (item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte()
+                        + " " + item.getIntitule())
                         .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
-        });
+        };
 
-        cbx_compte_dep.setConverter(new StringConverter<CompteTresor>() {
-            @Override
-            public String toString(CompteTresor item) {
-                return item == null ? null : item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule();
-            }
-
-            @Override
-            public CompteTresor fromString(String string) {
-                return cbx_compte_dep.getItems()
-                        .stream()
-                        .filter(item -> (item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule())
-                        .equalsIgnoreCase(string))
-                        .findFirst().orElse(null);
-            }
-        });
-
-        cbx_compte_recov.setConverter(new StringConverter<CompteTresor>() {
-            @Override
-            public String toString(CompteTresor item) {
-                return item == null ? null : item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule();
-            }
-
-            @Override
-            public CompteTresor fromString(String string) {
-                return cbx_compte_recov.getItems()
-                        .stream()
-                        .filter(item -> (item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule())
-                        .equalsIgnoreCase(string))
-                        .findFirst().orElse(null);
-            }
-        });
+        cbx_compte_trans.setConverter(cptConverter);
+        cbx_compte_dep.setConverter(cptConverter);
+        cbx_compte_recov.setConverter(cptConverter);
+        cbx_compte_source.setConverter(cptConverter);
+        cbx_compte_dest.setConverter(cptConverter);
 
         cbx_depenses.setConverter(new StringConverter<Depense>() {
             @Override
@@ -540,7 +636,8 @@ public class TresorerieController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    String com = item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " " + item.getIntitule();
+                    String com = item.getBankName() + " " + item.getTypeCompte() + ", " + item.getNumeroCompte() + " "
+                            + item.getIntitule();
                     setText(com);
                     imageView.setFitHeight(30);
                     imageView.setFitWidth(30);
@@ -567,7 +664,8 @@ public class TresorerieController implements Initializable {
                     imageView.setFitHeight(30);
                     imageView.setFitWidth(30);
                     imageView.setPreserveRatio(true);
-                    imageView.setImage(new Image(TresorerieController.class.getResourceAsStream("/icons/depenses.png")));
+                    imageView
+                            .setImage(new Image(TresorerieController.class.getResourceAsStream("/icons/depenses.png")));
                     setGraphic(imageView);
                 }
             }
@@ -600,12 +698,17 @@ public class TresorerieController implements Initializable {
         regions = FXCollections.observableArrayList();
         comptes = FXCollections.observableArrayList();
         depenses = FXCollections.observableArrayList();
+        depensesRealisees = FXCollections.observableArrayList();
         cbx_region.setItems(regions);
         cbx_region_compte.setItems(regions);
         cbx_rgion_deps.setItems(regions);
-        cbx_type_compte.setItems(FXCollections.observableArrayList(TypeTraisorerie.CAISSE.name(), TypeTraisorerie.BANQUE.name(), TypeTraisorerie.ELECTRONIQUE.name()));
+        cbx_type_compte.setItems(FXCollections.observableArrayList(TypeTraisorerie.CAISSE.name(),
+                TypeTraisorerie.BANQUE.name(), TypeTraisorerie.ELECTRONIQUE.name()));
         tresors.setItems(comptes);
         ls_depense.setItems(depenses);
+        tbl_depenses_realisees.setItems(depensesRealisees);
+        System.out.println("DEBUG depenses size: " + depenses.size());
+        System.out.println("DEBUG ls_depense.setItems appelé");
         cbx_depenses.setItems(depenses);
         lstrz = new ArrayList<>();
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
@@ -613,11 +716,15 @@ public class TresorerieController implements Initializable {
             lstrz.addAll(TraisorerieDelegate.findTraisoreries());
             comptes.addAll(CompteTresorDelegate.findCompteTresors());
             depenses.addAll(DepenseDelegate.findDepenses());
+            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates());
         } else {
             cbx_region.setVisible(false);
-            lstrz.addAll(TraisorerieDelegate.findTraisoreries(region));//.fidatabase.findAllByRegion(Traisorerie.class, region));
-            comptes.addAll(CompteTresorDelegate.findCompteTresors(region));//database.findAllByRegion(CompteTresor.class, region));
-            depenses.addAll(DepenseDelegate.findDepenses(region));//database.findAllByRegion(Depense.class, region));
+            lstrz.addAll(TraisorerieDelegate.findTraisoreries(region));// .fidatabase.findAllByRegion(Traisorerie.class,
+            // region));
+            comptes.addAll(CompteTresorDelegate.findCompteTresors(region));// database.findAllByRegion(CompteTresor.class,
+            // region));
+            depenses.addAll(DepenseDelegate.findDepenses(region));// database.findAllByRegion(Depense.class, region));
+            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates(region));
         }
 
         Platform.runLater(() -> {
@@ -627,11 +734,11 @@ public class TresorerieController implements Initializable {
             count_depense.setText(String.format(bundle.getString("xitems"), depenses.size()));
         });
         fillTransactions(lstrz);
-//        listSMS = FXCollections.observableArrayList();
+        // listSMS = FXCollections.observableArrayList();
         math = String.valueOf(((int) (Math.random() * 100001)));
         txt_reference_trans.setText("Reference: " + math);
         txt_reference_dep.setText("Reference: " + math);
-        kazisafe.getRegions(entr).enqueue(new Callback<List<String>>() {
+        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
             @Override
             public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
                 if (rspns.isSuccessful()) {
@@ -660,17 +767,21 @@ public class TresorerieController implements Initializable {
         cbx_region_compte.getSelectionModel().selectFirst();
         cbx_type_compte.getSelectionModel().selectFirst();
         tbl_transaction.setItems(lstransaction);
-//        list_sms_recov.setItems(listSMS);
+        // list_sms_recov.setItems(listSMS);
         ToggleGroup tg = new ToggleGroup();
         rdbtn_decaiss_trans.setToggleGroup(tg);
         rdbtn_encaiss_trans.setToggleGroup(tg);
         cbx_compte_dep.setItems(comptes);
         cbx_compte_recov.setItems(comptes);
         cbx_compte_trans.setItems(comptes);
-        cbx_fonction_imput_dep.setItems(FXCollections.observableArrayList("Distribution", "Approvisionnement", "Admin. et Finance", "Production"));
-        //new ComboBoxAutoCompletion<>(cbx_compte_trans);
+        cbx_compte_source.setItems(comptes);
+        cbx_compte_dest.setItems(comptes);
+        cbx_fonction_imput_dep.setItems(FXCollections.observableArrayList("Distribution", "Approvisionnement",
+                "Admin. et Finance", "Production"));
+        // new ComboBoxAutoCompletion<>(cbx_compte_trans);
         txt_sum_arecov_recov.setText("A recouvrer : " + calculDette());
-        txt_recoved_sum_recov.setText("Déjà récouvré : " + Util.sumAllCurency(Util.collectPaidDebt(lstrz), taux2change));
+        txt_recoved_sum_recov
+                .setText("Déjà récouvré : " + Util.sumAllCurency(Util.collectPaidDebt(lstrz), taux2change));
         if (f != null) {
             tab_pn_tresor.getSelectionModel().select(tab_recov_trans);
             Double pd = TraisorerieDelegate.sumByReference(f.getNumero(), taux2change);
@@ -688,7 +799,8 @@ public class TresorerieController implements Initializable {
             System.out.println("Client recov " + clt);
             txt_client_recov.setText("Client : " + clt.getPhoneOrganisation() + " (" + f.getNumero() + ")");
             txt_eval_usd_recov.setText(String.valueOf(somme));
-            txt_eval_cdf_recov.setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+            txt_eval_cdf_recov
+                    .setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
             tf_montant_usd_recov.textProperty().addListener(new ChangeListener<String>() {
                 @Override
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -697,13 +809,16 @@ public class TresorerieController implements Initializable {
                         dt = usd;
                         ff = 0;
                         fd = 0;
-                        txt_eval_usd_recov.setText(String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_eval_cdf_recov.setText(String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
+                        txt_eval_usd_recov.setText(
+                                String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
+                        txt_eval_cdf_recov.setText(
+                                String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
                         txt_arembourser_usd_recov.setText("0");
                         txt_arembourser_cdf_recov.setText("0");
                     } else if (!newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
                         double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -720,14 +835,16 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
 
                         trx.setMontantUsd(fd);
                     } else if (newValue.isEmpty() && !tf_montant_cdf_recov.getText().isEmpty()) {
                         double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
                         double restCdf = new BigDecimal(cdf - inCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -744,15 +861,18 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     } else {
                         double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         double nwInUsd = (in_usd + converted);
                         double restUsd = new BigDecimal(usd - nwInUsd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -769,7 +889,8 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantUsd(fd);
                     }
@@ -781,17 +902,21 @@ public class TresorerieController implements Initializable {
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                     double in_cdf = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
                     if (newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        txt_eval_cdf_recov.setText(String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        txt_eval_usd_recov.setText(String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        txt_eval_cdf_recov.setText(
+                                String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        txt_eval_usd_recov.setText(
+                                String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
                         dt = usd;
                         ff = 0;
                         fd = 0;
                         txt_arembourser_usd_recov.setText("0.0");
                         txt_arembourser_cdf_recov.setText("0.0");
                     } else if (!newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-//                    double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" : editable.toString()));
+                        // double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" :
+                        // editable.toString()));
                         double restCdf = new BigDecimal(cdf - in_cdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -808,13 +933,15 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     } else if (newValue.isEmpty() && !tf_montant_usd_recov.getText().isEmpty()) {
                         double in_usd = Double.parseDouble(tf_montant_usd_recov.getText());
                         double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -831,15 +958,18 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantUsd(fd);
                     } else {
                         double inUsd = Double.parseDouble(tf_montant_usd_recov.getText().toString());
-                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         double nwInCdf = (in_cdf + converted);
                         double restCdf = new BigDecimal(cdf - nwInCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -856,7 +986,8 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     }
@@ -867,22 +998,22 @@ public class TresorerieController implements Initializable {
 
         if (v != null) {
             tab_pn_tresor.getSelectionModel().select(tab_recov_trans);
-            Double pd = TraisorerieDelegate.sumByReference(v.getUid() + "-" + v.getReference(), taux2change);//database.sumRecoveredByVente(v.getUid(), taux2change);
-            // Util.sumAllCurency(collectPaidDebt(lstrz, "BIL"+v.getReference()), taux2change);
-            somme = v.getMontantDette() - (pd == null ? 0 : pd);
-            cdf = somme * taux2change;
-            usd = somme;
+            TraisorerieDelegate.sumByReference("F-" + v.getReference(), taux2change);
+            somme = v.getMontantDette();
+            cdf = devise.equalsIgnoreCase("USD") ? (somme * taux2change) : somme;
+            usd = devise.equalsIgnoreCase("USD") ? somme : (somme / taux2change);
             revertUsd = usd;
             revertCdf = cdf;
             tf_reference_recov.setText(String.valueOf(math));
             trx = new Traisorerie(DataId.generate());
-            trx.setReference(v.getUid() + "-" + v.getReference());
-            vtx = v;
+            trx.setReference("F-" + v.getReference());
+            venteACredit = v;
             Client clt = v.getClientId();
             System.out.println("Client recov " + clt);
-            txt_client_recov.setText("Client : " + clt.getPhone() + " (" + v.getReference() + ")");
+            txt_client_recov.setText("Client : " + clt.getPhone() + " " + clt.getNomClient() + " (" + v.getReference() + ")");
             txt_eval_usd_recov.setText(String.valueOf((somme)));
-            txt_eval_cdf_recov.setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+            txt_eval_cdf_recov
+                    .setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
             tf_montant_usd_recov.textProperty().addListener(new ChangeListener<String>() {
                 @Override
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -891,13 +1022,16 @@ public class TresorerieController implements Initializable {
                         dt = usd;
                         ff = 0;
                         fd = 0;
-                        txt_eval_usd_recov.setText(String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_eval_cdf_recov.setText(String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
+                        txt_eval_usd_recov.setText(
+                                String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
+                        txt_eval_cdf_recov.setText(
+                                String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
                         txt_arembourser_usd_recov.setText("0");
                         txt_arembourser_cdf_recov.setText("0");
                     } else if (!newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
                         double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -914,14 +1048,16 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
 
                         trx.setMontantUsd(fd);
                     } else if (newValue.isEmpty() && !tf_montant_cdf_recov.getText().isEmpty()) {
                         double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
                         double restCdf = new BigDecimal(cdf - inCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -938,15 +1074,18 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     } else {
                         double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         double nwInUsd = (in_usd + converted);
                         double restUsd = new BigDecimal(usd - nwInUsd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -963,7 +1102,8 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
 
                         trx.setMontantUsd(fd);
@@ -983,17 +1123,21 @@ public class TresorerieController implements Initializable {
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                     double in_cdf = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
                     if (newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        txt_eval_cdf_recov.setText(String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        txt_eval_usd_recov.setText(String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        txt_eval_cdf_recov.setText(
+                                String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        txt_eval_usd_recov.setText(
+                                String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
                         dt = usd;
                         ff = 0;
                         fd = 0;
                         txt_arembourser_usd_recov.setText("0.0");
                         txt_arembourser_cdf_recov.setText("0.0");
                     } else if (!newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-//                    double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" : editable.toString()));
+                        // double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" :
+                        // editable.toString()));
                         double restCdf = new BigDecimal(cdf - in_cdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -1010,13 +1154,15 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     } else if (newValue.isEmpty() && !tf_montant_usd_recov.getText().toString().isEmpty()) {
                         double in_usd = Double.parseDouble(tf_montant_usd_recov.getText().toString());
                         double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restUsd >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -1033,15 +1179,18 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantUsd(fd);
                     } else {
                         double inUsd = Double.parseDouble(tf_montant_usd_recov.getText());
-                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         double nwInCdf = (in_cdf + converted);
                         double restCdf = new BigDecimal(cdf - nwInCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue();
+                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
                         if (restCdf >= 0) {
                             txt_eval_usd_recov.setText(String.valueOf(restUsd));
                             txt_eval_cdf_recov.setText(String.valueOf(restCdf));
@@ -1058,7 +1207,8 @@ public class TresorerieController implements Initializable {
                             txt_eval_usd_recov.setText("0.0");
                             txt_eval_cdf_recov.setText("0.0");
                             txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
+                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
                         }
                         trx.setMontantCdf(ff);
                     }
@@ -1074,64 +1224,20 @@ public class TresorerieController implements Initializable {
             });
 
         }
-//        list_sms_recov.setCellFactory((ListView<SMSNotification> param) -> new ListCell<SMSNotification>() {
-//            private ImageView imageView = new ImageView();
-//
-//            @Override
-//            protected void updateItem(SMSNotification item, boolean empty) {
-//                super.updateItem(item, empty);
-//                if (empty || item == null) {
-//                    setText(null);
-//                    setGraphic(null);
-//                } else {
-//                    Platform.runLater(new Runnable() {
-//                        @Override
-//                        public void run() {
-//                            setText("Rappel à : " + item.getAdressNumber() + ", le " + item.getDate());
-//                            imageView.setFitHeight(24);
-//                            imageView.setFitWidth(24);
-//                            imageView.setPreserveRatio(true);
-//                            imageView.setImage(new Image(AgentController.class.getResourceAsStream("/icons/smartphone32.png")));
-//                            setGraphic(imageView);
-//                        }
-//                    });
-//
-//                }
-//            }
-//
-//        });
-
-//        ContextMenu cm = new ContextMenu();
-//        MenuItem mi = new MenuItem("Voir le contenu");
-//        cm.getItems().add(mi);
-//        mi.setOnAction(new EventHandler<ActionEvent>() {
-//            @Override
-//            public void handle(ActionEvent event) {
-//                if (choosen != null) {
-//                    MainUI.notify(null, "Message", choosen.getMessage(), 9, "info");
-//                }
-//            }
-//        });
-//        list_sms_recov.setContextMenu(cm);
-//        list_sms_recov.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<SMSNotification>() {
-//            @Override
-//            public void changed(ObservableValue<? extends SMSNotification> observable, SMSNotification oldValue, SMSNotification newValue) {
-//                if (newValue != null) {
-//                    choosen = newValue;
-//                }
-//            }
-//        });
         tbl_transaction.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Transaction>() {
             @Override
-            public void changed(ObservableValue<? extends Transaction> observable, Transaction oldValue, Transaction newValue) {
+            public void changed(ObservableValue<? extends Transaction> observable, Transaction oldValue,
+                    Transaction newValue) {
                 if (newValue != null) {
-                    trx = TraisorerieDelegate.findTraisorerie(newValue.getUid());//database.findByUid(Traisorerie.class, newValue.getUid());
+                    trx = TraisorerieDelegate.findTraisorerie(newValue.getUid());// database.findByUid(Traisorerie.class,
+                    // newValue.getUid());
                 }
             }
         });
         tresors.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
             @Override
-            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue, CompteTresor newValue) {
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
                 if (newValue != null) {
                     choosenComptetr = newValue;
                     bankname.setText(choosenComptetr.getBankName());
@@ -1166,7 +1272,9 @@ public class TresorerieController implements Initializable {
                 if (newValue != null) {
                     ObservableList<CompteTresor> rslt = FXCollections.observableArrayList();
                     for (CompteTresor compte : comptes) {
-                        String pr = compte.getBankName() + " " + compte.getIntitule() + " " + compte.getNumeroCompte() + " " + compte.getRegion() + " " + compte.getTypeCompte() + " " + compte.getSoldeMinimum();
+                        String pr = compte.getBankName() + " " + compte.getIntitule() + " " + compte.getNumeroCompte()
+                                + " " + compte.getRegion() + " " + compte.getTypeCompte() + " "
+                                + compte.getSoldeMinimum();
                         if (pr.toUpperCase().contains(newValue.toLowerCase())) {
                             rslt.add(compte);
                         }
@@ -1200,7 +1308,7 @@ public class TresorerieController implements Initializable {
                 });
             }
         });
-        //  new ComboBoxAutoCompletion<>(cbx_compte_trans);
+        // new ComboBoxAutoCompletion<>(cbx_compte_trans);
 
     }
 
@@ -1233,7 +1341,7 @@ public class TresorerieController implements Initializable {
         for (Traisorerie t : lstrz) {
             String value = t.getLibelle() + " " + t.getReference() + " "
                     + t.getTypeTresorerie() + " " + t.getMouvement() + ""
-                    + " " + Constants.DATE_ONLY_FORMAT.format(t.getDate());
+                    + " " + t.getDate().toString();
             if (value.toUpperCase().contains(query.toUpperCase())) {
                 result.add(t);
             }
@@ -1244,13 +1352,20 @@ public class TresorerieController implements Initializable {
     private void configCbx() {
         cbx_compte_trans.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
             @Override
-            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue, CompteTresor newValue) {
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
                 if (newValue != null) {
                     choosenComptetr = newValue;
                     txt_choosen_account_trans.setText(newValue.getTypeCompte() + " " + newValue.getBankName());
-                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());//database.findWithAndClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                            newValue.getTypeCompte());// database.findWithAndClause(Traisorerie.class, new
+                    // String[]{"typeTresorerie", "tresor_id"}, new
+                    // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     if (lts.isEmpty()) {
-                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());// database.findWithOrClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                                newValue.getTypeCompte());// database.findWithOrClause(Traisorerie.class, new
+                        // String[]{"typeTresorerie", "tresor_id"}, new
+                        // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     }
                     fillTransactions(lts);
                 }
@@ -1258,13 +1373,20 @@ public class TresorerieController implements Initializable {
         });
         cbx_compte_dep.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
             @Override
-            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue, CompteTresor newValue) {
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
                 if (newValue != null) {
                     choosenComptetr = newValue;
                     txt_choosen_account_trans.setText(newValue.getTypeCompte() + " " + newValue.getBankName());
-                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());//database.findWithAndClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                            newValue.getTypeCompte());// database.findWithAndClause(Traisorerie.class, new
+                    // String[]{"typeTresorerie", "tresor_id"}, new
+                    // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     if (lts.isEmpty()) {
-                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());// database.findWithOrClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                                newValue.getTypeCompte());// database.findWithOrClause(Traisorerie.class, new
+                        // String[]{"typeTresorerie", "tresor_id"}, new
+                        // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     }
                     fillTransactions(lts);
                 }
@@ -1272,15 +1394,66 @@ public class TresorerieController implements Initializable {
         });
         cbx_compte_recov.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
             @Override
-            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue, CompteTresor newValue) {
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
                 if (newValue != null) {
                     choosenComptetr = newValue;
                     txt_choosen_account_trans.setText(newValue.getTypeCompte() + " " + newValue.getBankName());
-                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());//database.findWithAndClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                            newValue.getTypeCompte());// database.findWithAndClause(Traisorerie.class, new
+                    // String[]{"typeTresorerie", "tresor_id"}, new
+                    // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     if (lts.isEmpty()) {
-                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(), newValue.getTypeCompte());//database.findWithOrClause(Traisorerie.class, new String[]{"typeTresorerie", "tresor_id"}, new String[]{newValue.getTypeCompte(), newValue.getUid()});
+                        lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                                newValue.getTypeCompte());// database.findWithOrClause(Traisorerie.class, new
+                        // String[]{"typeTresorerie", "tresor_id"}, new
+                        // String[]{newValue.getTypeCompte(), newValue.getUid()});
                     }
                     fillTransactions(lts);
+                }
+            }
+        });
+
+        cbx_compte_source.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
+            @Override
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
+                if (newValue != null) {
+                    choosenComptetr = newValue;
+                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                            newValue.getTypeCompte());
+                    fillTransactions(lts);
+                    lbl_solde_usd_src.setText(String.format("%.2f", soldeusd) + " $");
+                    lbl_solde_cdf_src.setText(String.format("%.2f", soldecdf) + " FC");
+                } else {
+                    lbl_solde_usd_src.setText("0.00 $");
+                    lbl_solde_cdf_src.setText("0.00 FC");
+                }
+            }
+        });
+
+        cbx_compte_dest.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<CompteTresor>() {
+            @Override
+            public void changed(ObservableValue<? extends CompteTresor> observable, CompteTresor oldValue,
+                    CompteTresor newValue) {
+                if (newValue != null) {
+                    List<Traisorerie> lts = TraisorerieDelegate.findTraisorByCompteTresor(newValue.getUid(),
+                            newValue.getTypeCompte());
+                    double sUsd = 0, sCdf = 0;
+                    for (Traisorerie t : lts) {
+                        if (t.getMouvement().equals(Mouvment.AUGMENTATION.name())) {
+                            sUsd += t.getMontantUsd();
+                            sCdf += t.getMontantCdf();
+                        } else {
+                            sUsd -= t.getMontantUsd();
+                            sCdf -= t.getMontantCdf();
+                        }
+                    }
+                    lbl_solde_usd_dest.setText(String.format("%.2f", sUsd) + " $");
+                    lbl_solde_cdf_dest.setText(String.format("%.2f", sCdf) + " FC");
+                } else {
+                    lbl_solde_usd_dest.setText("0.00 $");
+                    lbl_solde_cdf_dest.setText("0.00 FC");
                 }
             }
         });
@@ -1302,15 +1475,24 @@ public class TresorerieController implements Initializable {
         if (dpk_date_debut_trans.getValue() == null || dpk_fin_trans.getValue() == null) {
             return;
         }
-        List<Traisorerie> trzls = Util.filterTransactionByDate(lstrz, Constants.Datetime.toUtilDate(dpk_date_debut_trans.getValue()),
-                Constants.Datetime.toUtilDate(dpk_fin_trans.getValue()));
+        List<Traisorerie> trzls = new ArrayList<>();
+        for (Traisorerie tr : lstrz) {
+            LocalDateTime trDate = tr.getDate();
+            if (trDate != null
+                    && !trDate.isBefore(dpk_date_debut_trans.getValue().atStartOfDay())
+                    && !trDate.isAfter(dpk_fin_trans.getValue().atTime(23, 59, 59))) {
+                trzls.add(tr);
+            }
+        }
         fillTransactions(trzls);
 
     }
 
     public void fillTransactions(List<Traisorerie> trs) {
+        System.out.println("DEBUG fillTransactions appelé avec " + trs.size() + " transactions");
         List<Transaction> ltx = new ArrayList<>();
         lstransaction.clear();
+        System.out.println("DEBUG lstransaction vidé, taille: " + lstransaction.size());
         List<Transaction> calc = new ArrayList<>();
         for (Traisorerie tr : trs) {
             Transaction t = new Transaction();
@@ -1325,6 +1507,7 @@ public class TresorerieController implements Initializable {
                 t.setCredit_usd(tr.getMontantUsd());
                 t.setCredit_cdf(tr.getMontantCdf());
             }
+            t.setRegion(tr.getRegion());
             ltx.add(t);
 
         }
@@ -1346,7 +1529,22 @@ public class TresorerieController implements Initializable {
             lstransaction.add(tx);
         }
         Collections.reverse(lstransaction);
+        System.out.println("DEBUG lstransaction final size: " + lstransaction.size());
+        tbl_transaction.setItems(lstransaction);
+        System.out.println("DEBUG tbl_transaction.setItems appelé");
 
+        // Update footer labels
+        double totalDebitUsd = sumDebitUsd(ltx);
+        double totalDebitCdf = sumDebitCdf(ltx);
+        double totalCreditUsd = sumCreditUsd(ltx);
+        double totalCreditCdf = sumCreditCdf(ltx);
+
+        lbl_some_debitusd.setText(String.format("%.2f", totalDebitUsd));
+        lbl_some_debitcdf.setText(String.format("%.2f", totalDebitCdf));
+        lbl_some_creditusd.setText(String.format("%.2f", totalCreditUsd));
+        lbl_some_creditcdf.setText(String.format("%.2f", totalCreditCdf));
+        lbl_soldeusd.setText(String.format("%.2f", soldeusd));
+        lbl_soldecdf.setText(String.format("%.2f", soldecdf));
     }
 
     public boolean isExist(List<Transaction> ltr, String ref) {
@@ -1395,7 +1593,14 @@ public class TresorerieController implements Initializable {
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        pref = Preferences.userNodeForPackage(SyncEngine.class);
+        taux2change = pref.getDouble("taux2change", 2000);
         bundle = rb;
+        token = pref.get("token", null);
+        role = pref.get("priv", null);
+        region = pref.get("region", "...");
+        entr = pref.get("eUid", "unknown");
+        devise = pref.get("mainCur", "USD");
         configtab();
         configCbx();
         MainUI.setPattern(dpk_date_dep);
@@ -1404,16 +1609,12 @@ public class TresorerieController implements Initializable {
         MainUI.setPattern(dpk_fin_trans);
         MainUI.setPattern(dpk_date_recov);
         MainUI.setPattern(dpk_date_ech_recov);
-        pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux2change = pref.getDouble("taux2change", 2000);
+
         dpk_date_trans.setValue(LocalDate.now());
         dpk_date_dep.setValue(LocalDate.now());
         dpk_date_recov.setValue(LocalDate.now());
         dpk_date_ech_recov.setDisable(true);
-        token = pref.get("token", null);
-        role = pref.get("priv", null);
-        region = pref.get("region", "...");
-        entr = pref.get("eUid", "unknown");
+
         ComboBoxAutoCompletion<CompteTresor> comboBoxAutoCompletion = new ComboBoxAutoCompletion<>(cbx_compte_dep);
         ComboBoxAutoCompletion<CompteTresor> comboBoxAutoCompletion1 = new ComboBoxAutoCompletion<>(cbx_compte_recov);
         ComboBoxAutoCompletion<Depense> comboBoxAutoCompletion2 = new ComboBoxAutoCompletion<>(cbx_depenses);
@@ -1428,20 +1629,25 @@ public class TresorerieController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 if (choosenComptetr != null) {
-                    Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous supprimer le compte ?, les transactions de ce compte risque d'etre perdue", ButtonType.YES, ButtonType.CANCEL);
+                    Alert alert = new Alert(Alert.AlertType.WARNING,
+                            "Voulez vous supprimer le compte ?, les transactions de ce compte risque d'etre perdue",
+                            ButtonType.YES, ButtonType.CANCEL);
                     alert.setTitle("Attention");
                     alert.setHeaderText(null);
                     Optional<ButtonType> clkbtn = alert.showAndWait();
                     if (clkbtn.get() == ButtonType.YES) {
                         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-                            List<Traisorerie> transx = TraisorerieDelegate.findTraisorByCompteTresor(choosenComptetr.getUid());
+                            List<Traisorerie> transx = TraisorerieDelegate
+                                    .findTraisorByCompteTresor(choosenComptetr.getUid());
                             if (transx == null ? true : transx.isEmpty()) {
-                                CompteTresorDelegate.deleteCompteTresor(choosenComptetr);//database.delete(choosenComptetr);
+                                CompteTresorDelegate.deleteCompteTresor(choosenComptetr);// database.delete(choosenComptetr);
                                 MainUI.notify(null, "Succes", "Compte supprime avec succes", 3, "info");
                                 comptes.remove(choosenComptetr);
                             }
                         } else {
-                            MainUI.notify(null, "Erreur", "Vous n'avez pas des privileges necessaire pour supprimer les elements", 3, "error");
+                            MainUI.notify(null, "Erreur",
+                                    "Vous n'avez pas des privileges necessaire pour supprimer les elements", 3,
+                                    "error");
                         }
                     }
                 }
@@ -1459,7 +1665,7 @@ public class TresorerieController implements Initializable {
                 return;
             }
             Traisorerie tr = new Traisorerie(DataId.generate());
-            tr.setDate(Constants.Datetime.toUtilDate(dpk_date_trans.getValue()));
+            tr.setDate(dpk_date_trans.getValue().atTime(LocalTime.now()));
             tr.setLibelle(txtArea_motif_trans.getText());
             if (!tf_montant_cdf_trans.getText().isEmpty()) {
                 tr.setMontantCdf(Double.parseDouble(tf_montant_cdf_trans.getText()));
@@ -1469,7 +1675,9 @@ public class TresorerieController implements Initializable {
             }
             if (rdbtn_decaiss_trans.isSelected()) {
                 if (tr.getMontantUsd() > soldeusd) {
-                    Alert alert = new Alert(Alert.AlertType.WARNING, "Le montant USD solicité au decaissement est superieur au solde actuel, continuer malgré tout ?", ButtonType.YES, ButtonType.CANCEL);
+                    Alert alert = new Alert(Alert.AlertType.WARNING,
+                            "Le montant USD solicité au decaissement est superieur au solde actuel, continuer malgré tout ?",
+                            ButtonType.YES, ButtonType.CANCEL);
                     alert.setTitle("Attention");
                     alert.setHeaderText(null);
                     Optional<ButtonType> clkbtn = alert.showAndWait();
@@ -1479,7 +1687,9 @@ public class TresorerieController implements Initializable {
                     }
                 }
                 if (tr.getMontantCdf() > soldecdf) {
-                    Alert alert = new Alert(Alert.AlertType.WARNING, "Le montant CDF solicité au decaissement est superieur au solde actuel, continuer malgré tout ?", ButtonType.YES, ButtonType.CANCEL);
+                    Alert alert = new Alert(Alert.AlertType.WARNING,
+                            "Le montant CDF solicité au decaissement est superieur au solde actuel, continuer malgré tout ?",
+                            ButtonType.YES, ButtonType.CANCEL);
                     alert.setTitle("Attention");
                     alert.setHeaderText(null);
                     Optional<ButtonType> clkbtn = alert.showAndWait();
@@ -1497,7 +1707,7 @@ public class TresorerieController implements Initializable {
             tr.setTypeTresorerie(cbx_compte_trans.getValue().getTypeCompte());
             tr.setRegion(region);
             tr.setTresorId(choosenComptetr);
-            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(tr);//database.insertAndSync(tr);
+            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(tr);// database.insertAndSync(tr);
             if (trz != null) {
                 lstrz.add(trz);
                 fillTransactions(lstrz);
@@ -1511,6 +1721,7 @@ public class TresorerieController implements Initializable {
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             Util.sync(trz, Constants.ACTION_CREATE, Tables.TRAISORERIE);
+                            saveCashByHttp(trz);
                         });
             }
         } else if (tab_depanse_trans.isSelected()) {
@@ -1521,7 +1732,7 @@ public class TresorerieController implements Initializable {
                 return;
             }
             Traisorerie tr = new Traisorerie(DataId.generate());
-            tr.setDate(Constants.Datetime.toUtilDate(dpk_date_dep.getValue()));
+            tr.setDate(dpk_date_dep.getValue().atTime(LocalTime.now()));
             tr.setLibelle(txtArea_motif_dep.getText());
             if (!tf_montant_cdf_dep.getText().isEmpty()) {
                 tr.setMontantCdf(Double.parseDouble(tf_montant_cdf_dep.getText()));
@@ -1529,15 +1740,25 @@ public class TresorerieController implements Initializable {
             if (!tf_montant_usd_dep.getText().isEmpty()) {
                 tr.setMontantUsd(Double.parseDouble(tf_montant_usd_dep.getText()));
             }
+
+            // Strict Balance Validation for Expenses
+            if (tr.getMontantUsd() > soldeusd) {
+                MainUI.notify(null, "Solde Insuffisant", "Le solde actuel (" + soldeusd + " USD) est insuffisant pour cette dépense.", 4, "error");
+                return;
+            }
+            if (tr.getMontantCdf() > soldecdf) {
+                MainUI.notify(null, "Solde Insuffisant", "Le solde actuel (" + soldecdf + " CDF) est insuffisant pour cette dépense.", 4, "error");
+                return;
+            }
             tr.setMouvement(Mouvment.DIMINUTION.name());
             tr.setReference(txt_reference_dep.getText().split(" ")[1]);
             tr.setTypeTresorerie(cbx_compte_dep.getValue().getTypeCompte());
             tr.setRegion(region);
             tr.setTresorId(choosenComptetr);
-            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(tr);//database.insertAndSync(tr);
+            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(tr);// database.insertAndSync(tr);
             Executors.newCachedThreadPool()
                     .submit(() -> {
-                        Util.sync(trz, Constants.ACTION_CREATE, Tables.TRAISORERIE);
+                        saveCashByHttp(trz);
                     });
             if (trz != null) {
                 lstrz.add(trz);
@@ -1554,11 +1775,14 @@ public class TresorerieController implements Initializable {
                 ops.setRegion(region);
                 ops.setTresorId(choosenComptetr);
                 ops.setDepenseId(choosenDepense);
+                Operation op = OperationDelegate.saveOperation(ops);
+
+                // Aggregate DepenseAgregate
+                DepenseAgregateDelegate.aggregateDepense(op.getDate(), op.getImputation(), op.getMontantUsd(), op.getMontantCdf(), choosenDepense);
                 Executors.newCachedThreadPool()
                         .submit(() -> {
-                            Util.sync(OperationDelegate.saveOperation(ops), Constants.ACTION_CREATE, Tables.OPERATION);
+                            saveOperationByHttp(op);
                         });
-                //database.insertAndSync(ops);
                 tf_montant_cdf_dep.clear();
                 tf_montant_usd_dep.clear();
                 txtArea_motif_dep.clear();
@@ -1570,41 +1794,58 @@ public class TresorerieController implements Initializable {
         } else if (tab_recov_trans.isSelected()) {
             if ((tf_montant_usd_recov.getText().isEmpty()
                     && tf_montant_cdf_recov.getText().isEmpty()) || choosenComptetr == null) {
-                MainUI.notify(null, "Erreur", "Completer au moins un champs", 4, "error");
+                MainUI.notify(null, "Erreur", "Completer les champs (montant USD||CDF et Compte de tresorerie )", 4, "error");
                 return;
             }
             if (trx == null) {
                 MainUI.notify(null, "Erreur", "Selectionner une vente à crédit, puis continuer", 4, "error");
                 return;
             }
-            trx.setDate(Constants.Datetime.toUtilDate(dpk_date_recov.getValue()));
-            trx.setLibelle("Recouvrement dette " + ((vtx == null) ? fact.getNumero() : (vtx.getReference() + " - " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(vtx.getDateVente()))));
+            if (!dpk_date_ech_recov.isDisabled() && dpk_date_ech_recov.getValue() == null) {
+                MainUI.notify(null, "Erreur", "Selectionner une date de nouvelle échéance, puis continuer", 4, "error");
+                return;
+            }
+            trx.setDate(dpk_date_recov.getValue().atTime(LocalTime.now()));
+            trx.setLibelle("Recouvrement dette " + ((venteACredit == null) ? fact.getNumero()
+                    : (venteACredit.getReference() + " - "
+                    + venteACredit.getDateVente())));
             trx.setMouvement(Mouvment.AUGMENTATION.name());
 
             trx.setRegion(region);
             trx.setTresorId(choosenComptetr);
             trx.setTypeTresorerie(cbx_compte_recov.getValue().getTypeCompte());
-            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(trx);//database.insertAndSync(trx);
+
+            Traisorerie trz = TraisorerieDelegate.saveTraisorerie(trx);// database.insertAndSync(trx);
             if (trz != null) {
                 lstrz.add(trz);
                 fillTransactions(lstrz);
                 Executors.newCachedThreadPool()
                         .submit(() -> {
-                            Util.sync(trz, Constants.ACTION_CREATE, Tables.TRAISORERIE);
+                            saveCashByHttp(trz);
                         });
                 math = String.valueOf(((int) (Math.random() * 100001)));
-//                Vente vt=new Vente(Integer.parseInt(tf_reference_recov.getText()));
-                if (dpk_date_ech_recov.getValue() != null) {
-                    if (vtx != null) {
-                        vtx.setEcheance(Constants.Datetime.toUtilDate(dpk_date_ech_recov.getValue()));//tf_reference_recov.getText()
-                        Vente updrst = VenteDelegate.updateVente(vtx);//database.update(vtx);
-                        Executors.newCachedThreadPool()
-                                .submit(() -> {
-                                    Util.sync(updrst, Constants.ACTION_UPDATE, Tables.VENTE);
-                                });
-                        System.err.println("Upd result local " + updrst.getReference());
+                if (venteACredit != null) {
+                    venteACredit.setEcheance(dpk_date_ech_recov.getValue());
+                    double oldP_usd = venteACredit.getMontantUsd();
+                    double oldP_cdf = venteACredit.getMontantCdf();
+                    double newDette = devise.equals("USD") ? (venteACredit.getMontantDette() - (trx.getMontantUsd() + (trx.getMontantCdf() / taux2change)))
+                            : (venteACredit.getMontantDette() - ((trx.getMontantUsd() * taux2change) + trx.getMontantCdf()));
+                    double newP_usd = trx.getMontantUsd() + oldP_usd;
+                    double newP_cdf = trx.getMontantCdf() + oldP_cdf;
+                    venteACredit.setMontantCdf(newP_cdf);
+                    venteACredit.setMontantDette(newDette);
+                    venteACredit.setMontantUsd(newP_usd);
+                    Vente updrst = VenteDelegate.updateVente(venteACredit);
+                    Executors.newSingleThreadExecutor()
+                            .submit(() -> {
+                                try {
+                                    modifyVenteByHttp(updrst, venteACredit.getClientId());
+                                } catch (IOException ex) {
+                                    Logger.getLogger(TresorerieController.class.getName()).log(Level.SEVERE, null, ex);
+                                }
+                                System.err.println("Upd result local " + updrst.getReference());
+                            });
 
-                    }
                 }
                 if (fact != null) {
                     double past = fact.getPayedamount();
@@ -1612,8 +1853,9 @@ public class TresorerieController implements Initializable {
                     double am = past + payed;
                     double rest = (fact.getTotalamount() - am);
                     fact.setPayedamount(rest < 0 ? fact.getTotalamount() : am);
-                    fact.setStatus(rest <= 0 ? Constants.BILL_STATUS_PAID : rest > 0 ? Constants.BILL_STATUS_INPAYMENT : Constants.BILL_STATUS_UNPAID);
-                    Facture ff = FactureDelegate.updateFacture(fact);//database.update(fact);
+                    fact.setStatus(rest <= 0 ? Constants.BILL_STATUS_PAID
+                            : rest > 0 ? Constants.BILL_STATUS_INPAYMENT : Constants.BILL_STATUS_UNPAID);
+                    Facture ff = FactureDelegate.updateFacture(fact);// database.update(fact);
                     if (ff != null) {
                         Executors.newCachedThreadPool()
                                 .submit(() -> {
@@ -1627,12 +1869,72 @@ public class TresorerieController implements Initializable {
                 tf_montant_usd_recov.clear();
                 MainUI.notify(null, "Succès", "Recouvrement enregistré avec succès", 4, "info");
             }
-        }
+        } else if (tab_virement_trans.isSelected()) {
+            if ((tf_montant_usd_vir.getText().isEmpty()
+                    && tf_montant_cdf_vir.getText().isEmpty())
+                    || cbx_compte_source.getValue() == null || cbx_compte_dest.getValue() == null) {
+                MainUI.notify(null, "Erreur", "Veuillez sélectionner les deux comptes et saisir un montant", 4, "error");
+                return;
+            }
 
+            CompteTresor src = cbx_compte_source.getValue();
+            CompteTresor dest = cbx_compte_dest.getValue();
+            double mUsd = tf_montant_usd_vir.getText().isEmpty() ? 0 : Double.parseDouble(tf_montant_usd_vir.getText());
+            double mCdf = tf_montant_cdf_vir.getText().isEmpty() ? 0 : Double.parseDouble(tf_montant_cdf_vir.getText());
+            String motif = txtArea_motif_vir.getText();
+            String ref = "VIR-" + math;
+
+            // Retrait du compte source
+            Traisorerie trSrc = new Traisorerie(DataId.generate());
+            trSrc.setDate(LocalDateTime.now());
+            trSrc.setLibelle("Virement interne vers " + dest.getIntitule() + " : " + motif);
+            trSrc.setMontantUsd(mUsd);
+            trSrc.setMontantCdf(mCdf);
+            trSrc.setMouvement(Mouvment.DIMINUTION.name());
+            trSrc.setReference(ref);
+            trSrc.setTypeTresorerie(src.getTypeCompte());
+            trSrc.setRegion(region);
+            trSrc.setTresorId(src);
+
+            // Versement sur le compte destination
+            Traisorerie trDest = new Traisorerie(DataId.generate());
+            trDest.setDate(LocalDateTime.now());
+            trDest.setLibelle("Virement interne de " + src.getIntitule() + " : " + motif);
+            trDest.setMontantUsd(mUsd);
+            trDest.setMontantCdf(mCdf);
+            trDest.setMouvement(Mouvment.AUGMENTATION.name());
+            trDest.setReference(ref);
+            trDest.setTypeTresorerie(dest.getTypeCompte());
+            trDest.setRegion(region);
+            trDest.setTresorId(dest);
+
+            Traisorerie s1 = TraisorerieDelegate.saveTraisorerie(trSrc);
+            Traisorerie s2 = TraisorerieDelegate.saveTraisorerie(trDest);
+
+            if (s1 != null && s2 != null) {
+                lstrz.add(s1);
+                lstrz.add(s2);
+                fillTransactions(TraisorerieDelegate.findTraisorByCompteTresor(src.getUid(), src.getTypeCompte()));
+
+                tf_montant_usd_vir.clear();
+                tf_montant_cdf_vir.clear();
+                txtArea_motif_vir.clear();
+                math = String.valueOf(((int) (Math.random() * 100001)));
+                txt_reference_trans.setText("Reference: " + math);
+                txt_reference_dep.setText("Reference: " + math);
+
+                MainUI.notify(null, "Succès", "Virement effectué avec succès", 4, "info");
+
+                Executors.newCachedThreadPool().submit(() -> {
+                    saveCashByHttp(s1);
+                    saveCashByHttp(s2);
+                });
+            }
+        }
     }
 
     private double calculDette() {
-        lvente = VenteDelegate.findVentes();//database.findAll(Vente.class);
+        lvente = VenteDelegate.findVentes();// database.findAll(Vente.class);
         if (lvente == null) {
             return 0;
         }
@@ -1670,22 +1972,28 @@ public class TresorerieController implements Initializable {
         SyncEngine.getInstance().shutdown();
         List<Traisorerie> lts = new ArrayList<>();
         if (tab_ecriture_trans.isSelected()) {
-            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_trans.getValue().getUid(), cbx_compte_trans.getValue().getTypeCompte()));
+            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_trans.getValue().getUid(),
+                    cbx_compte_trans.getValue().getTypeCompte()));
             if (lts.isEmpty()) {
-                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_trans.getValue().getUid(), cbx_compte_trans.getValue().getTypeCompte()));
+                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_trans.getValue().getUid(),
+                        cbx_compte_trans.getValue().getTypeCompte()));
             }
         } else if (tab_depanse_trans.isSelected()) {
-            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_dep.getValue().getUid(), cbx_compte_dep.getValue().getTypeCompte()));
+            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_dep.getValue().getUid(),
+                    cbx_compte_dep.getValue().getTypeCompte()));
 
             if (lts.isEmpty()) {
-                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_dep.getValue().getUid(), cbx_compte_dep.getValue().getTypeCompte()));
+                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_dep.getValue().getUid(),
+                        cbx_compte_dep.getValue().getTypeCompte()));
             }
 
         } else if (tab_recov_trans.isSelected()) {
-            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_recov.getValue().getUid(), cbx_compte_recov.getValue().getTypeCompte()));
+            lts.addAll(TraisorerieDelegate.findTraisorByCompteTresor(cbx_compte_recov.getValue().getUid(),
+                    cbx_compte_recov.getValue().getTypeCompte()));
 
             if (lts.isEmpty()) {
-                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_recov.getValue().getUid(), cbx_compte_recov.getValue().getTypeCompte()));
+                lts.addAll(TraisorerieDelegate.findTraisorByCompteTresOR(cbx_compte_recov.getValue().getUid(),
+                        cbx_compte_recov.getValue().getTypeCompte()));
             }
 
         }
@@ -1705,7 +2013,8 @@ public class TresorerieController implements Initializable {
 
     @FXML
     private void deleteTransaction(MouseEvent e) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment supprimer la transaction séléctionnée", ButtonType.YES, ButtonType.CANCEL);
+        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment supprimer la transaction séléctionnée",
+                ButtonType.YES, ButtonType.CANCEL);
         alert.setTitle("Attention");
         alert.setHeaderText(null);
         Optional<ButtonType> clkbtn = alert.showAndWait();
@@ -1713,10 +2022,11 @@ public class TresorerieController implements Initializable {
             if (trx != null) {
                 if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
                     TraisorerieDelegate.deleteTraisorerie(trx);
-                    //database.delete(trx);
+                    // database.delete(trx);
                     MainUI.notify(null, "Succes", "Transaction supprimee avec succes", 3, "info");
                 } else {
-                    MainUI.notify(null, "Erreur", "Vous n'avez pas les privileges necessaire pour effectuer une supression", 3, "error");
+                    MainUI.notify(null, "Erreur",
+                            "Vous n'avez pas les privileges necessaire pour effectuer une supression", 3, "error");
                 }
             }
         }
@@ -1730,7 +2040,8 @@ public class TresorerieController implements Initializable {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                File xlsInv = Util.exportXlsTransactions(tbl_transaction.getItems());
+                File xlsInv = Util.exportXlsTransactions(new ArrayList<>(tbl_transaction.getItems()),
+                        choosenComptetr, soldeusd, soldecdf);
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
@@ -1757,8 +2068,31 @@ public class TresorerieController implements Initializable {
         });
     }
 
+    private boolean saveCashByHttp(Traisorerie tr) {
+        try {
+            Response<Traisorerie> excuted = kazisafe.saveCash(tr).execute();
+            return excuted.isSuccessful();
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private Response<Vente> modifyVenteByHttp(Vente vente, Client client) throws IOException {
+        try {
+            VenteHelper hlp = new VenteHelper();
+            hlp.setClient(client);
+            hlp.setVente(vente);
+            Response<Vente> exe = kazisafe.modifySale(hlp).execute();
+            System.out.println("Vente modify response Http : " + exe);
+            return exe;
+        } catch (JsonProcessingException ex) {
+            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
+
     private void saveCompteTresorByHttp(CompteTresor ctr) {
-        kazisafe.saveCompteTesor(ctr.getUid(),ctr).enqueue(new Callback<CompteTresor>() {
+        kazisafe.saveCompteTesor(ctr.getUid(), ctr).enqueue(new Callback<CompteTresor>() {
             @Override
             public void onResponse(Call<CompteTresor> call, Response<CompteTresor> rspns) {
                 System.out.println("Compte Tresor " + rspns.message());
@@ -1775,7 +2109,7 @@ public class TresorerieController implements Initializable {
     }
 
     private void saveDepenseByHttp(Depense d) {
-        kazisafe.saveDepense(d.getUid(),d).enqueue(new Callback<Depense>() {
+        kazisafe.saveDepense(d.getUid(), d).enqueue(new Callback<Depense>() {
             @Override
             public void onResponse(Call<Depense> call, Response<Depense> rspns) {
                 System.out.println("Depense " + rspns.message());
@@ -1789,6 +2123,82 @@ public class TresorerieController implements Initializable {
                 thrwbl.printStackTrace();
             }
         });
+    }
+
+    private void saveOperationByHttp(Operation op) {
+        kazisafe.saveOperation(op).enqueue(new Callback<Operation>() {
+            @Override
+            public void onResponse(Call<Operation> call, Response<Operation> rspns) {
+                System.out.println("Operation " + rspns.message());
+                if (rspns.isSuccessful()) {
+                    System.out.println("Operation saved on server");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Operation> call, Throwable thrwbl) {
+                thrwbl.printStackTrace();
+            }
+        });
+    }
+
+    @FXML
+    private void refreshDepensesRealisees(MouseEvent event) {
+        // Rafraîchir la liste des dépenses réalisées
+        depensesRealisees.clear();
+        depenses.clear();
+        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates());
+            depenses.addAll(DepenseDelegate.findDepenses());
+        } else {
+            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates(region));
+            depenses.addAll(DepenseDelegate.findDepenses(region));
+        }
+        tbl_depenses_realisees.setItems(depensesRealisees);
+        cbx_depenses.setItems(depenses);
+        computeDepensesRealiseesTotal();
+        MainUI.notify(null, "Succès", "Liste des dépenses rafraîchie", 2, "info");
+    }
+
+    private void computeDepensesRealiseesTotal() {
+        if (lbl_somme_depense_usd == null || lbl_somme_depense_cdf == null) {
+            return;
+        }
+        double sumUsd = 0;
+        double sumCdf = 0;
+        for (DepenseAgregate d : depensesRealisees) {
+            sumUsd += d.getMontantUsd() == null ? 0.0 : d.getMontantUsd();
+            sumCdf += d.getMontantCdf() == null ? 0.0 : d.getMontantCdf();
+        }
+        lbl_somme_depense_usd.setText(String.format(java.util.Locale.US, "%.2f", sumUsd) + " $");
+        lbl_somme_depense_cdf.setText(String.format(java.util.Locale.US, "%.2f", sumCdf) + " FC");
+    }
+
+    @FXML
+    private void exportDepensesRealisees(MouseEvent event) {
+        // Exporter les dépenses réalisées en Excel
+        if (depensesRealisees.isEmpty()) {
+            MainUI.notify(null, "Information", "Aucune dépense à exporter", 2, "info");
+            return;
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File file = Util.exportXlsDepensesRealisees(depensesRealisees);
+                    if (file != null) {
+                        Desktop.getDesktop().open(file);
+                        MainUI.notify(null, "Succès", "Dépenses exportées avec succès", 2, "info");
+                    } else {
+                        MainUI.notify(null, "Erreur", "Erreur lors de l'export des dépenses", 3, "error");
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(TresorerieController.class.getName()).log(Level.SEVERE, null, ex);
+                    MainUI.notify(null, "Erreur", "Erreur lors de l'export des dépenses", 3, "error");
+                }
+            }
+        }).start();
     }
 
 }

@@ -1,35 +1,30 @@
-
-
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonFormat.Shape;
 import java.io.Serializable;
-import java.util.Date;
-import java.util.List;
+
 import java.util.Objects;
-import jakarta.json.bind.annotation.JsonbTransient;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
 
- @XmlRootElement
-@Entity 
+@XmlRootElement
+@Entity
 public class Module extends BaseModel implements Serializable {
+
     private String nomModule;
     @JsonFormat(
-        shape = Shape.STRING,
-        pattern = "yyyy-MM-dd"
+            shape = Shape.STRING,
+            pattern = "yyyy-MM-dd"
     )
-    @Temporal(TemporalType.DATE)
-    private Date dateLancer;
+    private LocalDate dateLancer;
     private String version;
     private static final long serialVersionUID = 1L;
     @jakarta.persistence.Id
     private String uid;
-    
-    
 
     public Module() {
     }
@@ -38,7 +33,7 @@ public class Module extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Module(String uid, String nomModule, Date dateLancer, String version) {
+    public Module(String uid, String nomModule, LocalDate dateLancer, String version) {
         this.uid = uid;
         this.nomModule = nomModule;
         this.dateLancer = dateLancer;
@@ -61,11 +56,11 @@ public class Module extends BaseModel implements Serializable {
         this.nomModule = nomModule;
     }
 
-    public Date getDateLancer() {
+    public LocalDate getDateLancer() {
         return this.dateLancer;
     }
 
-    public void setDateLancer(Date dateLancer) {
+    public void setDateLancer(LocalDate dateLancer) {
         this.dateLancer = dateLancer;
     }
 
@@ -76,13 +71,11 @@ public class Module extends BaseModel implements Serializable {
         return hash;
     }
 
-   
-
     public boolean equals(Object object) {
         if (!(object instanceof Module)) {
             return false;
         } else {
-            Module other = (Module)object;
+            Module other = (Module) object;
             return (this.uid != null || other.uid == null) && (this.uid == null || this.uid.equals(other.uid));
         }
     }
@@ -99,4 +92,3 @@ public class Module extends BaseModel implements Serializable {
         this.version = version;
     }
 }
-

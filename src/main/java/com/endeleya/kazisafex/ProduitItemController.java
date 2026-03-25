@@ -93,6 +93,7 @@ import data.Entreprise;
 import data.Mesure;
 import data.Produit;
 import data.ProduitHelper;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import okhttp3.ResponseBody;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -178,10 +179,10 @@ public class ProduitItemController implements Initializable {
     ObservableList<Category> categoriesx;
     List<String> lss = new ArrayList<>();
 
-    File choosenFile; 
+    File choosenFile;
     String meth;
     private String token;
-  
+
     Preferences pref;
 
     @FXML
@@ -215,7 +216,7 @@ public class ProduitItemController implements Initializable {
         printerGroup = new ToggleGroup();
         thermal.setToggleGroup(printerGroup);
         jet.setToggleGroup(printerGroup);
-       
+
         // TODO 
         meth = pref.get("meth", "fifo");
     }
@@ -265,7 +266,7 @@ public class ProduitItemController implements Initializable {
                 MainUI.notify(null, "Erreur", "Veuillez remplir les deux champs de mesure, puis continuer", 4, "error");
                 return;
             }
-            Double.parseDouble(tf_quant_mzr.getText());
+            Double.valueOf(tf_quant_mzr.getText());
             String mes = cbx_descr_mzr.getValue() + ":" + tf_quant_mzr.getText();
             addMesure(mes);
         } catch (NumberFormatException ex) {
@@ -303,7 +304,6 @@ public class ProduitItemController implements Initializable {
         if (pr) {
             pj.endJob();
         }
-
     }
 
     private void showcodebar(String text) {
@@ -462,7 +462,6 @@ public class ProduitItemController implements Initializable {
 
     public void setProduct(Produit prod) {
         ObservableSet<Printer> osp = Printer.getAllPrinters();
-//        System.out.println("Printewrs count " + osp.size());
         cbx_printers.setItems(setToList(osp));
         defaultPrinter = Printer.getDefaultPrinter();
         cbx_printers.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Printer> observable, Printer oldValue, Printer newValue) -> {
@@ -553,7 +552,7 @@ public class ProduitItemController implements Initializable {
                     imgp.setIdProduit(produit.getUid());
                     String base64 = DatatypeConverter.printBase64Binary(pixa);
                     imgp.setImageBase64(base64);
-                    Util.syncImage(imgp);
+//                    Util.syncImage(imgp);
                 }
             } catch (IOException ex) {
                 Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
@@ -561,8 +560,19 @@ public class ProduitItemController implements Initializable {
         }).start();
 
         Produit p = new Produit(produit.getUid());
+
+        try {
+            byte[] pixa = null;
+            if (choosenFile != null) {
+                pixa = FileUtils.readFromFile(choosenFile);
+                FileUtils.byteToFile(p.getUid(), pixa);
+                p.setImage(pixa);
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
+        }
         p.setCategoryId(cbx_choose_category.getValue());
-        p.setDateCreation(new Date());
+        p.setDateCreation(LocalDateTime.now());
         String value = tf_input_codebarproduit.getText();
         p.setCodebar(value == null ? produit.getCodebar() : value);
         value = tf_input_nomproduit.getText();
@@ -577,8 +587,12 @@ public class ProduitItemController implements Initializable {
         value = tf_input_tailleproduit.getText();
         p.setTaille(value == null ? produit.getTaille() : value);
         Produit prodi = ProduitDelegate.updateProduit(p);//jpas.update(p);
+
         if (prodi != null) {
             ProduitsController.getInstance().replaceElemnt(produit, prodi);
+            List<Mesure> mzs = MesureDelegate.findMesureByProduit(prodi.getUid());
+            sendProduitIfNotExist(p, mzs);
+            mzs.forEach(m->saveMesureByHttp(m));
             MainUI.notify(null, "INFO", "La modification du produit faite avec succes", 3, "info");
         }
 
@@ -786,7 +800,7 @@ public class ProduitItemController implements Initializable {
                 pixa = FileUtils.readAllBytes(is);
             }
             p.setCategoryId(cbx_choose_category.getValue());
-            p.setDateCreation(new Date());
+            p.setDateCreation(LocalDateTime.now());
             p.setCodebar(tf_input_codebarproduit.getText());
             p.setNomProduit(tf_input_nomproduit.getText());
             p.setMarque(tf_input_markproduit.getText());
@@ -810,14 +824,12 @@ public class ProduitItemController implements Initializable {
 
             if (prodi != null) {
 
-                prodi.setType(Tables.PRODUIT.name());
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.syncModel(prodi, Constants.ACTION_CREATE);
-                        });
                 tf_input_codebarproduit.clear();
                 tf_input_markproduit.clear();
-                ProduitsController.getInstance().addElemnt(p);
+                ProduitsController pc = ProduitsController.getInstance();
+                if (pc != null) {
+                    pc.addElemnt(p);
+                }
                 List<Mesure> mesureSaved = new ArrayList<>();
                 for (Node n : tile_pn_mesures.getChildren()) {
                     Label l = (Label) n;
@@ -828,24 +840,25 @@ public class ProduitItemController implements Initializable {
                     mez.setProduitId(new Produit(prodi.getUid()));
                     mez.setQuantContenu(Double.valueOf(text.split(":")[1]));
                     Mesure sm = MesureDelegate.saveMesure(mez);
-                    mesureSaved.add(mez);
-                    if (sm != null) {
-                        sm.setType(Tables.MESURE.name());
-                        Executors.newCachedThreadPool()
-                                .submit(() -> {
-                                    Util.syncModel(sm, Constants.ACTION_CREATE);
-                                });
-                    }
+                    mesureSaved.add(sm);
+                    
                 }
-                saveProduitByHttp(prodi, Base64.getEncoder().encodeToString(pixa), mesureSaved);
+
+                sendProduitIfNotExist(prodi, mesureSaved);
+                mesureSaved.forEach(m->saveMesureByHttp(m));
                 MainUI.notify(null, "Succes", "Produit enregistre avec succes", 6, "Info");
 
                 StoreformController sfc = StoreformController.getInstance();
                 if (sfc != null) {
                     sfc.addProduit(prodi);
                 }
-                MainuiController.getInstance().getInstance().switchToProduct(et);
-//                MainuiController.getInstance().getInstance().startSync();
+                PosController pos = PosController.getInstance();
+                if (pos != null) {
+                    pos.addProductItem(prodi);
+                }
+                if (pc != null) {
+                    MainuiController.getInstance().getInstance().switchToProduct(et);
+                }
             }
             tile_pn_mesures.getChildren().clear();
         } catch (IOException ex) {
@@ -853,40 +866,6 @@ public class ProduitItemController implements Initializable {
         }
     }
 
-//    private boolean updateProduit(final Produit produit, List<Mesure> mesures) {
-//        InputStream is = null;
-//        File filex = FileUtils.pointFile(produit.getUid() + ".jpeg");
-//        if (!filex.exists()) {
-//            is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-//            filex = FileUtils.streamTofile(is);
-//        }
-//        System.out.println("file name " + filex.getPath());
-//        String cat = produit.getCategoryId() != null ? produit.getCategoryId().getDescritption() : "Sac";
-//        RequestBody reqUid = RequestBody.create(MediaType.parse("text/plain"), produit.getUid());
-//        RequestBody reqCodebar = RequestBody.create(MediaType.parse("text/plain"), produit.getCodebar());
-//        RequestBody reqNom = RequestBody.create(MediaType.parse("text/plain"),produit.getNomProduit() );
-//        RequestBody reqMarque = RequestBody.create(MediaType.parse("text/plain"),produit.getMarque() );
-//        RequestBody reqModele = RequestBody.create( MediaType.parse("text/plain"),produit.getModele());
-//        RequestBody reqTaille = RequestBody.create(MediaType.parse("text/plain"), (produit.getTaille() != null ? produit.getTaille() : ""));
-//        RequestBody reqCouleur = RequestBody.create( MediaType.parse("text/plain"),(produit.getCouleur() != null ? produit.getCouleur() : ""));
-//        RequestBody reqEntuid = RequestBody.create(MediaType.parse("text/plain"), entreprise.getUid());
-//        RequestBody reqCateg = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(cat));
-//        RequestBody reqInv = RequestBody.create(MediaType.parse("text/plain"),meth );
-//        RequestBody reqDesc = RequestBody.create(MediaType.parse("text/plain"),filex.getName() );
-//        MultipartBody.Part reqFile = MultipartBody.Part.createFormData("file", filex.getName(), RequestBody.create(MediaType.parse("image/jpg"),filex));
-//        try {
-//            Response<List<Mesure>> response = kazisafe.updateProduit(reqFile,
-//                    reqDesc, reqCodebar,
-//                    reqInv, reqMarque, reqModele, reqNom,
-//                    reqTaille, reqCouleur, reqCateg, mesuresToBodyParts(mesures),
-//                    reqEntuid, produit.getUid()).execute();
-//            System.err.println("UPDATED PRODUIT resp " + response.message());
-//            return response.isSuccessful();
-//        } catch (IOException ex) {
-//            System.err.println("UP sync Produit Error " + ex.getMessage());
-//            return false;
-//        }
-//    }
     @FXML
     private void deleteCategory(Event e) {
         if (choosenCat == null) {
@@ -993,8 +972,6 @@ public class ProduitItemController implements Initializable {
     }
 
     public void setEntreprise(Entreprise entreprise) {
-        this.entreprise = entreprise;
-        //jpas=JpaStorage.getInstance();
         conf();
         categoriesx = FXCollections.observableArrayList();
         List<Category> cats = CategoryDelegate.findCategories();//jpas.findAll(Category.class);
@@ -1002,6 +979,23 @@ public class ProduitItemController implements Initializable {
         cbx_choose_category.setItems(categoriesx);
         cats.forEach(k -> {
             categoriesx.add(k);
+        });
+    }
+
+    private void saveMesureByHttp(Mesure c) {
+        kazisafe.saveMesure(c).enqueue(new Callback<Mesure>() {
+            @Override
+            public void onResponse(Call<Mesure> call, Response<Mesure> response) {
+                System.out.println("http mesure " + response);
+                if (response.isSuccessful()) {
+                    System.out.println("mesure ok");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Mesure> call, Throwable t) {
+                System.err.println("erreur http msure " + t.getMessage());
+            }
         });
     }
 
@@ -1019,45 +1013,60 @@ public class ProduitItemController implements Initializable {
         });
     }
 
-    private void saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures) {
-        ProduitHelper ph = new ProduitHelper();
-        ph.setUid(produit.getUid());
-        ph.setCategoryId(produit.getCategoryId().getUid());
-        ph.setCodebar(produit.getCodebar());
-        ph.setCouleur(produit.getCouleur());
-        ph.setMarque(produit.getMarque());
-        ph.setModele(produit.getModele());
-        ph.setNomProduit(produit.getNomProduit());
-        ph.setImage("data:image/jpeg;base64,"+base64Image);
-        ph.setTaille(produit.getTaille());
-        ph.setMethodeInventaire(produit.getMethodeInventaire());
-        ph.setMesureList(mesures);
-        kazisafe.saveLite(ph).enqueue(new Callback<Produit>() {
-            @Override
-            public void onResponse(Call<Produit> call, Response<Produit> rspns) {
-                System.out.println("Produit " + rspns.code());
+    private void sendProduitIfNotExist(Produit produit, List<Mesure> mesures) {
+        byte[] imageBytes = produit.getImage();
+        if (choosenFile != null) {
+            try {
+                imageBytes = FileUtils.readFromFile(choosenFile);
+            } catch (IOException ex) {
+                Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
             }
+        }
 
-            @Override
-            public void onFailure(Call<Produit> call, Throwable thrwbl) {
-                thrwbl.printStackTrace();
-            }
-        });
+        if (imageBytes == null) {
+            imageBytes = loadDefaultImage();
+        }
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+        saveProduitByHttps(produit, base64Image, mesures);
     }
 
-//    private void saveMesureByHttp(Mesure mesure) {
-//
-//        kazisafe.saveMesure(mesure).enqueue(new Callback<Mesure>() {
-//            @Override
-//            public void onResponse(Call<Mesure> call, Response<Mesure> rspns) {
-//                System.out.println("Mesure " + rspns.code());
-//            }
-//
-//            @Override
-//            public void onFailure(Call<Mesure> call, Throwable thrwbl) {
-//                thrwbl.printStackTrace();
-//            }
-//        });
-//    }
-    
+    private byte[] loadDefaultImage() {
+        try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
+            return FileUtils.readAllBytes(is);
+        } catch (IOException e) {
+            System.err.println("Erreur lors du chargement de l'image par défaut" + e.getMessage());
+            return new byte[0];
+        }
+    }
+
+    private void saveProduitByHttps(Produit produit, String base64Image, List<Mesure> mesures) {
+        ProduitHelper produitHelper = createProduitHelper(produit, base64Image, mesures);
+        try {
+            Response<Produit> response = kazisafe.saveLite(produitHelper).execute();
+            if (response.isSuccessful()) {
+                System.out.println("Save synchrone Produit " + response.code());
+            } else {
+                System.err.println("Erreur lors de l'enregistrement du produit : " + response.code());
+            }
+        } catch (IOException e) {
+            System.err.println("Erreur lors de l'enregistrement du produit" + e.getMessage());
+        }
+    }
+
+    private ProduitHelper createProduitHelper(Produit produit, String base64Image, List<Mesure> mesures) {
+        ProduitHelper produitHelper = new ProduitHelper();
+        produitHelper.setUid(produit.getUid());
+        produitHelper.setCategoryId(produit.getCategoryId().getUid());
+        produitHelper.setCodebar(produit.getCodebar());
+        produitHelper.setCouleur(produit.getCouleur());
+        produitHelper.setMarque(produit.getMarque());
+        produitHelper.setModele(produit.getModele());
+        produitHelper.setNomProduit(produit.getNomProduit());
+        produitHelper.setImage("data:image/jpeg;base64," + base64Image);
+        produitHelper.setTaille(produit.getTaille());
+        produitHelper.setMethodeInventaire(produit.getMethodeInventaire());
+        produitHelper.setMesureList(mesures);
+        return produitHelper;
+    }
+
 }

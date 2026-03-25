@@ -29,7 +29,7 @@
                 <goal>org.codehaus.mojo:exec-maven-plugin:3.1.0:exec</goal>
             </goals>
             <properties>
-                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls --enable-preview</exec.vmArgs>
+                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls,javafx.web --enable-preview</exec.vmArgs>
                 <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
                 <exec.appArgs></exec.appArgs>
                 <exec.mainClass>com.endeleya.kazisafex.Kazisafex</exec.mainClass>
@@ -47,7 +47,7 @@
                 <goal>org.codehaus.mojo:exec-maven-plugin:3.1.0:exec</goal>
             </goals>
             <properties>
-                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls --enable-preview -agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address}</exec.vmArgs>
+                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls,javafx.web --enable-preview -agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address}</exec.vmArgs>
                 <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
                 <exec.appArgs></exec.appArgs>
                 <exec.mainClass>com.endeleya.kazisafex.Kazisafex</exec.mainClass>
@@ -66,7 +66,7 @@
                 <goal>org.codehaus.mojo:exec-maven-plugin:3.1.0:exec</goal>
             </goals>
             <properties>
-                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls --enable-preview</exec.vmArgs>
+                <exec.vmArgs>--module-path  /home/endeleya/javafx-sdk-22.0.1/lib --add-modules  javafx.fxml,javafx.graphics,javafx.controls,javafx.web --enable-preview</exec.vmArgs>
                 <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
                 <exec.mainClass>com.endeleya.kazisafex.Kazisafex</exec.mainClass>
                 <exec.executable>java</exec.executable>

@@ -3,12 +3,14 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
@@ -23,6 +25,7 @@ import jakarta.persistence.Table;
 import java.util.UUID;
  import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 
@@ -46,6 +49,7 @@ import tools.Tables;
     , @NamedQuery(name = "ClientOrganisation.findByEmailOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.emailOrganisation = :emailOrganisation")
     , @NamedQuery(name = "ClientOrganisation.findByRccmOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.rccmOrganisation = :rccmOrganisation")
     , @NamedQuery(name = "ClientOrganisation.findByBoitePostalOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.boitePostalOrganisation = :boitePostalOrganisation")})
+
 public class ClientOrganisation extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -72,9 +76,30 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     private String rccmOrganisation;
     @Column(name = "boite_postal_organisation")
     private String boitePostalOrganisation;
-    @JsonManagedReference
+    
     @OneToMany(mappedBy = "clientOrganisationId")
     private List<ClientAppartenir> clientAppartenirList;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+     private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+ public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+
+   public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     
 
     
@@ -82,8 +107,9 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     @PreUpdate
     protected void onDataOperation(){
         if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+         this.updatedAt = LocalDateTime.now();
     }
 
    
@@ -180,7 +206,7 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     }
 
    
-     @JsonbTransient
+     
      public List<ClientAppartenir> getClientAppartenirList() {
         return clientAppartenirList;
     }

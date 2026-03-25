@@ -3,12 +3,12 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 
 import java.io.Serializable;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
  import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
 
 /**
@@ -28,7 +28,7 @@ public class Input extends BaseModel implements Serializable{
         
     }
 
-     @JsonbTransient 
+      
      public List<PVUnit> getPvus() {
         return pvus;
     }
@@ -53,11 +53,11 @@ public class Input extends BaseModel implements Serializable{
         this.stock = stock;
     }
 
-     @JsonbTransient public List<PrixDeVente> getPrixdevents() {
+      public List<PrixDeVente> getPrixdevents() {
         return prixdevents;
     }
 
-     @JsonbTransient public List<PVUnit> getReturnedPrices() {
+      public List<PVUnit> getReturnedPrices() {
         return pvus;
     }
 

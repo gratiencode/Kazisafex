@@ -3,22 +3,21 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
-import jakarta.json.bind.annotation.JsonbDateFormat;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.util.Date;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Column;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQueries;
@@ -27,14 +26,12 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
 
 import jakarta.xml.bind.annotation.XmlRootElement;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -42,22 +39,17 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "livraison")
- @XmlRootElement 
+@XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Livraison.findAll", query = "SELECT DISTINCT  l FROM Livraison l ORDER BY l.dateLivr DESC")
-    , @NamedQuery(name = "Livraison.findByUid", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.uid = :uid")
-    , @NamedQuery(name = "Livraison.findByDateLivr", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.dateLivr = :dateLivr")
-    , @NamedQuery(name = "Livraison.findByReference", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.reference = :reference")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+    @NamedQuery(name = "Livraison.findAll", query = "SELECT DISTINCT  l FROM Livraison l ORDER BY l.dateLivr DESC"),
+    @NamedQuery(name = "Livraison.findByUid", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.uid = :uid"),
+    @NamedQuery(name = "Livraison.findByDateLivr", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.dateLivr = :dateLivr"),
+    @NamedQuery(name = "Livraison.findByReference", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.reference = :reference")})
+
 public class Livraison extends BaseModel implements Serializable {
 
     private String numPiece;
-//    @JsonFormat(
-//        shape = JsonFormat.Shape.STRING,
-//        pattern = "yyyy-MM-dd"
-//    )
-//    @Temporal(TemporalType.DATE)
-    @JsonbDateFormat("yyyy-MM-dd")
+    @JsonFormat(shape=JsonFormat.Shape.STRING, pattern="yyyy-MM-dd")
     private LocalDate dateLivr;
     private String reference;
     private String libelle;
@@ -66,41 +58,52 @@ public class Livraison extends BaseModel implements Serializable {
     private Double reduction;
     private Double topay;
     private Double payed;
-    private Double remained=0d;
-    private Double toreceive=0d;
+    private Double remained = 0d;
+    private Double toreceive = 0d;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
 
     private static final long serialVersionUID = 1L;
     @Id
     private String uid;
-    @JsonManagedReference
     @OneToMany(mappedBy = "livraisId")
+     @JsonBackReference(value = "liv-stk")
     private List<Stocker> stockerList;
+     @JsonBackReference(value = "liv-entrpoz")
+    @OneToMany(mappedBy = "livraisonId")
+    private List<Entreposer> entreposerList;
+     @JsonBackReference(value = "liv-satisf")
+    @OneToMany(mappedBy = "livraisonId")
+    private List<Satisfaire> satisfaireList;
     @ManyToOne(optional = false)
-    @JsonBackReference
-    private Fournisseur fournId;
     
-     @PrePersist
+    private Fournisseur fournId;
+
+    @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Livraison() {
-         this.type=Tables.LIVRAISON.name();
+        this.type = Tables.LIVRAISON.name();
     }
 
     public Livraison(String uid) {
         this.uid = uid;
-         this.type=Tables.LIVRAISON.name();
+        this.type = Tables.LIVRAISON.name();
     }
 
     public Livraison(String uid, String numPiece, LocalDate dateLivr) {
         this.uid = uid;
         this.numPiece = numPiece;
         this.dateLivr = dateLivr;
-         this.type=Tables.LIVRAISON.name();
+        this.type = Tables.LIVRAISON.name();
     }
 
     public String getUid() {
@@ -127,10 +130,8 @@ public class Livraison extends BaseModel implements Serializable {
         this.dateLivr = dateLivr;
     }
 
-
     
-     @JsonbTransient 
-     public List<Stocker> getStockerList() {
+    public List<Stocker> getStockerList() {
         return stockerList;
     }
 
@@ -138,8 +139,6 @@ public class Livraison extends BaseModel implements Serializable {
         this.stockerList = stockerList;
     }
 
-   
-  
     public Fournisseur getFournId() {
         return fournId;
     }
@@ -173,8 +172,6 @@ public class Livraison extends BaseModel implements Serializable {
         return "entities.Livraison[ uid=" + uid + " ]";
     }
 
-
-
     public Double getTopay() {
         return topay;
     }
@@ -206,7 +203,6 @@ public class Livraison extends BaseModel implements Serializable {
     public void setToreceive(Double toreceive) {
         this.toreceive = toreceive;
     }
-
 
     public Double getReduction() {
         return reduction;
@@ -247,5 +243,30 @@ public class Livraison extends BaseModel implements Serializable {
     public void setObservation(String observation) {
         this.observation = observation;
     }
+
     
+    public List<Entreposer> getEntreposerList() {
+        return entreposerList;
+    }
+
+    public void setEntreposerList(List<Entreposer> entreposerList) {
+        this.entreposerList = entreposerList;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
 }

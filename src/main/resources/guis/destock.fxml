@@ -7,9 +7,10 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.effect.DropShadow?>
 <?import javafx.scene.image.Image?>
@@ -19,7 +20,7 @@
 <?import javafx.scene.layout.TilePane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="723.0" prefWidth="600.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.DestockController">
+<AnchorPane id="AnchorPane" prefHeight="723.0" prefWidth="600.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.DestockController">
    <children>
       <ImageView fitHeight="46.0" fitWidth="50.0" layoutX="23.0" layoutY="15.0" pickOnBounds="true" preserveRatio="true">
          <image>
@@ -45,8 +46,8 @@
       <Label layoutX="36.0" layoutY="92.0" text="%xlbel.produx" />
       <ComboBox fx:id="cbx_choose_product_dstk" editable="true" layoutX="130.0" layoutY="132.0" prefHeight="30.0" prefWidth="413.0" />
       <Separator layoutY="174.0" prefHeight="10.0" prefWidth="600.0" />
-      <ComboBox fx:id="cbx_choose_mesure_dstk" editable="true" layoutX="423.0" layoutY="310.0" prefHeight="30.0" prefWidth="153.0" promptText="%xmes_ure" />
-      <TextField fx:id="tf_quantite_dstk" layoutX="257.0" layoutY="311.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcol.quantite" />
+      <ComboBox fx:id="cbx_choose_mesure_dstk" editable="true" layoutX="449.0" layoutY="310.0" prefHeight="30.0" prefWidth="127.0" promptText="%xmes_ure" />
+      <TextField fx:id="tf_quantite_dstk" layoutX="280.0" layoutY="311.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcol.quantite" />
       <TextField fx:id="tf_cout_unitr_cump_dstk" layoutX="278.0" layoutY="270.0" prefHeight="30.0" prefWidth="153.0" promptText="%xcot_unitr" />
       <Label fx:id="txt_somme_ct_dstk" layoutX="130.0" layoutY="450.0" prefHeight="20.0" prefWidth="282.0" text="%xtotal">
          <font>
@@ -55,9 +56,23 @@
       </Label>
       <Separator layoutY="481.0" prefHeight="3.0" prefWidth="600.0" />
       <Button layoutX="432.0" layoutY="440.0" mnemonicParsing="false" onAction="#addDestocker" prefHeight="30.0" prefWidth="108.0" style="-fx-background-color: #44cef5;" text="%xaddingitem" textFill="WHITE" />
-      <ListView fx:id="listview_dstks" layoutX="33.0" layoutY="517.0" prefHeight="113.0" prefWidth="542.0" style="-fx-border-color: #44cef5; -fx-background-color: #ffffff;" />
+      <TableView fx:id="tb_destock_list" layoutX="33.0" layoutY="517.0" prefHeight="113.0" prefWidth="542.0" style="-fx-border-color: #44cef5; -fx-background-color: #ffffff;">
+         <columns>
+            <TableColumn fx:id="col_reference" prefWidth="70.0" text="Référence" />
+            <TableColumn fx:id="col_produit" prefWidth="100.0" text="Produit" />
+            <TableColumn fx:id="col_lot" prefWidth="60.0" text="Lot" />
+            <TableColumn fx:id="col_date_peremption" prefWidth="70.0" text="Péremption" />
+            <TableColumn fx:id="col_cout_achat" prefWidth="60.0" text="Coût Un." />
+            <TableColumn fx:id="col_prix_vente" prefWidth="60.0" text="Prix Vte" />
+            <TableColumn fx:id="col_quantite_mesure" prefWidth="80.0" text="Qté/Mesure" />
+            <TableColumn fx:id="col_cout_total" prefWidth="60.0" text="Coût Total" />
+            <TableColumn fx:id="col_prix_total" prefWidth="60.0" text="Prix Total" />
+            <TableColumn fx:id="col_marge" prefWidth="50.0" text="Marge" />
+            <TableColumn fx:id="col_region" prefWidth="60.0" text="Région" />
+         </columns>
+      </TableView>
       <Separator layoutX="-1.0" layoutY="665.0" prefHeight="3.0" prefWidth="600.0" />
-      <Button layoutX="427.0" layoutY="675.0" mnemonicParsing="false" onAction="#saveDestock" prefHeight="37.0" prefWidth="115.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
+      <Button layoutX="427.0" layoutY="675.0" mnemonicParsing="false" onAction="#saveAllDestockers" prefHeight="37.0" prefWidth="115.0" style="-fx-background-color: #44cef5;" text="%xbtn.save" textFill="WHITE" />
       <Button layoutX="297.0" layoutY="675.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="115.0" style="-fx-background-color: #cccccc;" text="%xbtn.close" textFill="WHITE" />
       <Label fx:id="txt_somme_global_dstk" alignment="CENTER_RIGHT" layoutX="247.0" layoutY="636.0" prefHeight="20.0" prefWidth="282.0" text="%xcot_total" textAlignment="RIGHT">
          <font>
@@ -86,11 +101,11 @@
       <Separator layoutX="1.0" layoutY="210.0" prefHeight="10.0" prefWidth="600.0" />
       <Label fx:id="methode" layoutX="28.0" layoutY="186.0" text="Methode" />
       <Label fx:id="value_stock" layoutX="449.0" layoutY="269.0" prefHeight="30.0" prefWidth="127.0" style="-fx-border-color: #44cef5;" text="%xvaleur_stock_dispo" />
-      <TextField fx:id="tf_quant_disponible" editable="false" layoutX="113.0" layoutY="270.0" prefHeight="30.0" prefWidth="153.0" promptText="%xquant_disponible" />
+      <TextField fx:id="tf_quant_disponible" layoutX="113.0" layoutY="270.0" prefHeight="30.0" prefWidth="153.0" promptText="%xquant_disponible" />
       <TextField fx:id="tf_observation" layoutX="113.0" layoutY="399.0" prefHeight="26.0" prefWidth="461.0" promptText="%xtxtf.prompt.observation" />
       <Label fx:id="alveol" layoutX="273.0" layoutY="236.0" text="%xalveole" />
-      <CheckBox fx:id="save_req" layoutX="369.0" layoutY="353.0" mnemonicParsing="false" prefHeight="26.0" prefWidth="218.0" text="%xsave_recq4pos" />
-      <Pane fx:id="pricepane" layoutX="83.0" layoutY="386.0" prefHeight="328.0" prefWidth="463.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5; -fx-border-color: #44cef5; -fx-border-radius: 5;">
+      <CheckBox fx:id="save_req" layoutX="369.0" layoutY="353.0" mnemonicParsing="false" prefHeight="26.0" prefWidth="218.0" text="%xsave_recq4pos" visible="false" />
+      <Pane fx:id="pricepane" layoutX="83.0" layoutY="386.0" prefHeight="328.0" prefWidth="463.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5; -fx-border-color: #44cef5; -fx-border-radius: 5;" visible="false">
          <children>
             <Pane layoutX="47.0" layoutY="181.0" prefHeight="37.0" prefWidth="31.0" style="-fx-border-color: #44cef5; -fx-background-color: white; -fx-background-radius: 12; -fx-border-radius: 12;" visible="false">
                <children>

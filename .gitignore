@@ -1,0 +1,16 @@
+target/
+*.class
+*.log
+*.err
+hs_err_pid*
+*.pid
+.recommenders/
+.mvn/
+mvnw
+mvnw.cmd
+mvn_out.txt
+mvn_verify_out.txt
+pos_run_out.txt
+deps.txt
+*.xlsx
+.vscode/

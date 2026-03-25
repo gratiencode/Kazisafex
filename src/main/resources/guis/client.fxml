@@ -6,6 +6,10 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.effect.DropShadow?>
 <?import javafx.scene.image.Image?>
@@ -14,31 +18,23 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane id="AnchorPane" prefHeight="635.0" prefWidth="521.0" style="-fx-background-color: #ffffff;" xmlns="http://javafx.com/javafx/18" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ClientController">
+<Pane fx:id="pane_client" prefHeight="537.0" prefWidth="1090.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ClientController">
+   <effect>
+      <DropShadow />
+   </effect>
    <children>
+      <Separator layoutY="66.0" prefHeight="3.0" prefWidth="1090.0" />
       <ImageView fitHeight="37.0" fitWidth="39.0" layoutX="15.0" layoutY="13.0" pickOnBounds="true" preserveRatio="true">
          <image>
             <Image url="@../icons/shopping-groceries.png" />
          </image>
       </ImageView>
-      <Separator layoutY="62.0" prefHeight="3.0" prefWidth="521.0" />
-      <TextField fx:id="tf_nom_client_" layoutX="57.0" layoutY="87.0" prefHeight="30.0" prefWidth="412.0" promptText="Nom du client" />
-      <TextField fx:id="tf_phone_client_" layoutX="58.0" layoutY="126.0" prefHeight="30.0" prefWidth="412.0" promptText="Telephone" />
-      <TextField fx:id="tf_adresse_client_" layoutX="58.0" layoutY="164.0" prefHeight="30.0" prefWidth="412.0" promptText="Adresse" />
-      <ComboBox fx:id="cbx_clients_parent" disable="true" editable="true" layoutX="256.0" layoutY="241.0" prefHeight="30.0" prefWidth="212.0" promptText="Parent" />
-      <ComboBox fx:id="cbx_type_client_" layoutX="57.0" layoutY="241.0" prefHeight="30.0" prefWidth="188.0" promptText="Type du client" />
-      <TextField fx:id="tf_search_client" layoutX="56.0" layoutY="339.0" prefHeight="30.0" prefWidth="412.0" promptText="Rechercher (en ligne)" style="-fx-background-radius: 20;" />
-      <Separator layoutX="-1.0" layoutY="328.0" prefHeight="3.0" prefWidth="521.0" />
-      <Separator layoutX="-1.0" layoutY="563.0" prefHeight="3.0" prefWidth="521.0" />
-      <ListView fx:id="list_vu_saved_client_" layoutX="53.0" layoutY="398.0" prefHeight="157.0" prefWidth="412.0" />
-      <Label layoutX="74.0" layoutY="20.0" text="Clients">
+      <Label layoutX="60.0" layoutY="19.0" text="Clients">
          <font>
             <Font size="18.0" />
          </font>
       </Label>
-      <Button layoutX="243.0" layoutY="572.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="83.0" style="-fx-background-color: #cccccc;" text="Annuler" textFill="WHITE" />
-      <Button layoutX="335.0" layoutY="572.0" mnemonicParsing="false" onAction="#saveClient" prefHeight="37.0" prefWidth="124.0" style="-fx-background-color: #44cef5;" text="Enregistrer" textFill="WHITE" />
-      <ImageView fitHeight="30.0" fitWidth="23.0" layoutX="471.0" layoutY="12.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+      <ImageView fitHeight="30.0" fitWidth="23.0" layoutX="1058.0" layoutY="12.0" onMouseClicked="#close" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
          <image>
             <Image url="@../icons/Cancel_32px_1.png" />
          </image>
@@ -46,53 +42,135 @@
             <Cursor fx:constant="HAND" />
          </cursor>
       </ImageView>
-      <TextField fx:id="tf_email_client_" layoutX="58.0" layoutY="202.0" prefHeight="30.0" prefWidth="412.0" promptText="Email (facultatif)" />
-      <Label layoutX="16.0" layoutY="65.0" text="Info sur le client" />
-      <Label fx:id="txt_count_client_" layoutX="53.0" layoutY="374.0" text="0 elements" />
-      <ImageView fitHeight="30.0" fitWidth="23.0" layoutX="436.0" layoutY="342.0" pickOnBounds="true" preserveRatio="true">
-         <image>
-            <Image url="@../icons/cloud.png" />
-         </image>
-      </ImageView>
-      <ComboBox fx:id="savedOrgs" disable="true" editable="true" layoutX="57.0" layoutY="284.0" prefHeight="30.0" prefWidth="301.0" promptText="Subscriber companies (Very Soon)" />
-      <Button fx:id="btnaddorg" disable="true" layoutX="370.0" layoutY="283.0" mnemonicParsing="false" onAction="#showorgapane" prefHeight="30.0" prefWidth="96.0" style="-fx-background-color: #44cef5;" text="Organisations" textFill="WHITE" />
-      <Pane fx:id="paneOrgan" layoutX="39.0" layoutY="17.0" prefHeight="586.0" prefWidth="469.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5; -fx-border-color: #44cef5; -fx-border-radius: 5;" visible="false">
-         <effect>
-            <DropShadow />
-         </effect>
-         <children>
-            <ImageView fitHeight="30.0" fitWidth="23.0" layoutX="438.0" layoutY="11.0" onMouseClicked="#closeFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-               <image>
-                  <Image url="@../icons/Cancel_32px_1.png" />
-               </image>
-               <cursor>
-                  <Cursor fx:constant="HAND" />
-               </cursor>
-            </ImageView>
-            <Separator layoutX="1.0" layoutY="49.0" prefHeight="3.0" prefWidth="469.0" />
-            <Label layoutX="18.0" layoutY="12.0" text="Organisation d'origine du client">
-               <font>
-                  <Font size="18.0" />
-               </font>
-            </Label>
-            <Separator layoutY="519.0" prefHeight="3.0" prefWidth="469.0" />
-            <Button layoutX="262.0" layoutY="532.0" mnemonicParsing="false" onAction="#closeFloatingPane" prefHeight="37.0" prefWidth="73.0" style="-fx-background-color: #dddddd;" text="Fermer" textFill="WHITE" />
-            <Button layoutX="348.0" layoutY="531.0" mnemonicParsing="false" onAction="#saveOrganiclient" prefHeight="37.0" prefWidth="96.0" style="-fx-background-color: #44cef5;" text="Enregistrer" textFill="WHITE" />
-            <TextField fx:id="tfnomorg" layoutX="45.0" layoutY="60.0" prefHeight="30.0" prefWidth="376.0" promptText="Nom de l'organisation" />
-            <Label fx:id="txtorgcount" layoutX="50.0" layoutY="347.0" text="Abonnés" />
-            <TextField fx:id="tfphone" layoutX="221.0" layoutY="101.0" prefHeight="30.0" prefWidth="202.0" promptText="Phone" />
-            <TextField fx:id="tfrccm" layoutX="45.0" layoutY="101.0" prefHeight="30.0" prefWidth="176.0" promptText="RCCM" />
-            <TextField fx:id="tfboitepostal" layoutX="222.0" layoutY="141.0" prefHeight="30.0" prefWidth="202.0" promptText="Boite postal (facultatif)" />
-            <TextField fx:id="tfmail" layoutX="43.0" layoutY="181.0" prefHeight="30.0" prefWidth="383.0" promptText="Email" />
-            <TextField fx:id="tfsiteweb" layoutX="43.0" layoutY="217.0" prefHeight="30.0" prefWidth="383.0" promptText="Site web (facultatif)" />
-            <TextField fx:id="tfadresse" layoutX="43.0" layoutY="257.0" prefHeight="30.0" prefWidth="383.0" promptText="Adresse" />
-            <ComboBox fx:id="cbxdomainorg" editable="true" layoutX="45.0" layoutY="141.0" prefHeight="30.0" prefWidth="176.0" promptText="Domaine d'intervention" />
-            <ListView fx:id="listOrganiz" layoutX="50.0" layoutY="376.0" prefHeight="129.0" prefWidth="383.0" />
-            <Separator layoutX="1.0" layoutY="293.0" prefHeight="3.0" prefWidth="469.0" />
-            <TextField fx:id="tfsearch" layoutX="43.0" layoutY="299.0" prefHeight="30.0" prefWidth="383.0" promptText="Rechercher" style="-fx-background-radius: 20; -fx-border-radius: 20;" />
-            <Separator layoutX="-1.0" layoutY="339.0" prefHeight="3.0" prefWidth="469.0" />
-            <Label layoutX="380.0" layoutY="352.0" text="Abonnés" />
-         </children>
-      </Pane>
+      <TabPane layoutX="1.0" layoutY="69.0" prefHeight="471.0" prefWidth="1090.0" tabClosingPolicy="UNAVAILABLE">
+        <tabs>
+          <Tab text="Clients">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <TextField fx:id="tf_nom_client_" layoutX="109.0" layoutY="44.0" prefHeight="30.0" prefWidth="373.0" promptText="Nom du client" />
+                        <Label layoutX="11.0" layoutY="47.0" prefHeight="16.0" prefWidth="92.0" text="Nom Client" />
+                        <TextField fx:id="tf_phone_client_" layoutX="108.0" layoutY="85.0" prefHeight="30.0" prefWidth="373.0" promptText="Telephone" />
+                        <TextField fx:id="tf_adresse_client_" layoutX="108.0" layoutY="124.0" prefHeight="30.0" prefWidth="373.0" promptText="Adresse" />
+                        <TextField fx:id="tf_email_client_" layoutX="108.0" layoutY="160.0" prefHeight="30.0" prefWidth="373.0" promptText="Email" />
+                        <Label layoutX="8.0" layoutY="87.0" prefHeight="16.0" prefWidth="92.0" text="Telephone" />
+                        <Label layoutX="8.0" layoutY="129.0" prefHeight="16.0" prefWidth="92.0" text="Adresse" />
+                        <Label layoutX="8.0" layoutY="165.0" prefHeight="16.0" prefWidth="67.0" text="Email" />
+                        
+                        <ComboBox fx:id="cbx_type_client_" layoutX="108.0" layoutY="200.0" prefHeight="30.0" prefWidth="176.0" promptText="Type client" />
+                        <ComboBox fx:id="cbx_clients_parent" disable="true" editable="true" layoutX="295.0" layoutY="200.0" prefHeight="30.0" prefWidth="186.0" promptText="Parent" />
+                        
+                        <ComboBox fx:id="savedOrgs" disable="true" editable="true" layoutX="108.0" layoutY="240.0" prefHeight="30.0" prefWidth="270.0" promptText="Organisations" />
+                        <Button fx:id="btnaddorg" disable="true" layoutX="385.0" layoutY="240.0" mnemonicParsing="false" onAction="#showorgapane" prefHeight="30.0" prefWidth="96.0" style="-fx-background-color: #44cef5;" text="Organisations" textFill="WHITE" />
+
+                        <ListView fx:id="list_vu_saved_client_" layoutX="525.0" layoutY="42.0" prefHeight="265.0" prefWidth="533.0" />
+                        <Button layoutX="714.0" layoutY="350.0" mnemonicParsing="false" onAction="#close" prefHeight="37.0" prefWidth="76.0" style="-fx-background-color: #cccccc;" text="Annuler" textFill="#fcf7f7" />
+                        <Button layoutX="812.0" layoutY="350.0" mnemonicParsing="false" onAction="#saveClient" prefHeight="37.0" prefWidth="246.0" style="-fx-background-color: #44cef5;" text="Enregistrer" textFill="WHITE" />
+                        
+                        <TextField fx:id="tf_search_client" layoutX="526.0" layoutY="6.0" prefHeight="31.0" prefWidth="451.0" promptText="Rechercher (en ligne)" style="-fx-background-radius: 25;" />
+                        <ImageView fitHeight="21.0" fitWidth="21.0" layoutX="947.0" layoutY="10.0" pickOnBounds="true" preserveRatio="true">
+                           <image>
+                              <Image url="@../icons/cloud.png" />
+                           </image>
+                        </ImageView>
+                        
+                        <Label fx:id="txt_count_client_" layoutX="525.0" layoutY="315.0" text="0 elements" />
+                        <Separator layoutX="507.0" layoutY="44.0" orientation="VERTICAL" prefHeight="263.0" prefWidth="3.0" />
+                        
+                        <Pane fx:id="paneOrgan" layoutX="100.0" layoutY="20.0" prefHeight="360.0" prefWidth="469.0" style="-fx-background-color: #ffffff; -fx-background-radius: 5; -fx-border-color: #44cef5; -fx-border-radius: 5;" visible="false">
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                           <children>
+                              <ImageView fitHeight="30.0" fitWidth="23.0" layoutX="438.0" layoutY="11.0" onMouseClicked="#closeFloatingPane" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/Cancel_32px_1.png" />
+                                 </image>
+                              </ImageView>
+                              <Label layoutX="18.0" layoutY="12.0" text="Organisation d'origine">
+                                 <font>
+                                    <Font size="16.0" />
+                                 </font>
+                              </Label>
+                              <Separator layoutX="1.0" layoutY="40.0" prefWidth="469.0" />
+                              <TextField fx:id="tfnomorg" layoutX="20.0" layoutY="50.0" prefHeight="25.0" prefWidth="200.0" promptText="Nom" />
+                              <TextField fx:id="tfrccm" layoutX="230.0" layoutY="50.0" prefHeight="25.0" prefWidth="210.0" promptText="RCCM" />
+                              <TextField fx:id="tfphone" layoutX="20.0" layoutY="85.0" prefHeight="25.0" prefWidth="200.0" promptText="Phone" />
+                              <ComboBox fx:id="cbxdomainorg" layoutX="230.0" layoutY="85.0" prefHeight="25.0" prefWidth="210.0" promptText="Domaine" />
+                              <TextField fx:id="tfadresse" layoutX="20.0" layoutY="120.0" prefHeight="25.0" prefWidth="420.0" promptText="Adresse" />
+                              <TextField fx:id="tfmail" layoutX="20.0" layoutY="155.0" prefHeight="25.0" prefWidth="200.0" promptText="Email" />
+                              <TextField fx:id="tfsiteweb" layoutX="230.0" layoutY="155.0" prefHeight="25.0" prefWidth="210.0" promptText="Site web" />
+                              <ListView fx:id="listOrganiz" layoutX="20.0" layoutY="190.0" prefHeight="120.0" prefWidth="420.0" />
+                              <Button layoutX="364.0" layoutY="320.0" onAction="#saveOrganiclient" style="-fx-background-color: #44cef5;" text="Enregistrer" textFill="WHITE" />
+                              <Button layoutX="290.0" layoutY="320.0" onAction="#closeFloatingPane" text="Fermer" />
+                           </children>
+                        </Pane>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+          <Tab text="Gestion des Dettes Client">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <TextField fx:id="tf_filter_client_debt" layoutX="14.0" layoutY="14.0" prefHeight="31.0" prefWidth="361.0" promptText="Rechercher un client" style="-fx-background-radius: 25;" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="14.0" />
+                        <ListView fx:id="listvu_clients_debt" layoutX="14.0" layoutY="56.0" prefHeight="274.0" prefWidth="361.0" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="56.0" />
+                        <TableView fx:id="tb_client_debt_details" layoutX="389.0" layoutY="56.0" prefHeight="274.0" prefWidth="683.0" AnchorPane.bottomAnchor="110.0" AnchorPane.leftAnchor="389.0" AnchorPane.rightAnchor="18.0" AnchorPane.topAnchor="56.0">
+                          <columns>
+                            <TableColumn fx:id="col_cli_date" prefWidth="100.0" text="Date" />
+                            <TableColumn fx:id="col_cli_numpiece" prefWidth="150.0" text="Num Facture" />
+                              <TableColumn fx:id="col_cli_libelle" prefWidth="200.0" text="Libellé" />
+                              <TableColumn fx:id="col_cli_topay" prefWidth="100.0" text="Net à payer" />
+                              <TableColumn fx:id="col_cli_payed" prefWidth="100.0" text="Déjà Payé" />
+                              <TableColumn fx:id="col_cli_remained" prefWidth="121.0" text="Reste" />
+                          </columns>
+                           <columnResizePolicy>
+                              <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                           </columnResizePolicy>
+                        </TableView>
+                        <Label layoutX="389.0" layoutY="348.0" text="Total Dette Client:" AnchorPane.bottomAnchor="74.0" AnchorPane.rightAnchor="555.0">
+                           <font>
+                              <Font name="System Bold" size="14.0" />
+                           </font>
+                        </Label>
+                        <Label fx:id="lbl_total_client_debt" layoutX="541.0" layoutY="348.0" text="0.00 USD" textFill="#f20707" AnchorPane.bottomAnchor="74.0" AnchorPane.rightAnchor="476.0">
+                           <font>
+                              <Font name="System Bold" size="14.0" />
+                           </font>
+                        </Label>
+                        <!-- PDF Export Button -->
+                        <ImageView fx:id="btn_export_cli_pdf" fitHeight="37.0" fitWidth="43.0" layoutX="1025.0" layoutY="339.0" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="64.0" AnchorPane.rightAnchor="28.0">
+                           <image>
+                              <Image url="@../icons/download-pdf.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Label layoutX="875.0" layoutY="349.0" text="Relevé PDF" AnchorPane.bottomAnchor="75.0" AnchorPane.rightAnchor="141.0">
+                           <font>
+                              <Font size="13.0" />
+                           </font>
+                        </Label>
+                        <!-- XLS Export Button -->
+                        <ImageView fx:id="btn_export_cli_xls" fitHeight="37.0" fitWidth="43.0" layoutX="1025.0" layoutY="385.0" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="18.0" AnchorPane.rightAnchor="28.0">
+                           <image>
+                              <Image url="@../icons/excel.png" />
+                           </image>
+                           <cursor>
+                              <Cursor fx:constant="HAND" />
+                           </cursor>
+                        </ImageView>
+                        <Label layoutX="875.0" layoutY="395.0" text="Relevé Excel" AnchorPane.bottomAnchor="29.0" AnchorPane.rightAnchor="131.0">
+                           <font>
+                              <Font size="13.0" />
+                           </font>
+                        </Label>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+        </tabs>
+      </TabPane>
    </children>
-</AnchorPane>
+</Pane>

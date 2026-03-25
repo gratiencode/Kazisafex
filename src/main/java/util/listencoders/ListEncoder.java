@@ -5,7 +5,7 @@
  */
 package util.listencoders;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+//import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -42,7 +42,7 @@ import data.Vente;
  *
  * @author eroot
  */
-public class ListEncoder implements Encoder.Text<List<Object>> {
+public class ListEncoder implements Encoder.Text<List<Object>> { 
 
     public ListEncoder() {
     }
@@ -64,7 +64,7 @@ public class ListEncoder implements Encoder.Text<List<Object>> {
     public String encode(List<Object> objects) throws EncodeException {
         try {
             ObjectMapper obm = new ObjectMapper();
-            obm.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+//            obm.setSerializationInclusion();
             StringBuilder sb=new StringBuilder();
             Object objt = objects.get(0);
             if (objt instanceof Fournisseur) {

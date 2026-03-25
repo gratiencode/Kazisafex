@@ -8,24 +8,36 @@ package IServices;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Set;
 import data.Stocker;
+import java.time.Year;
 
 /**
  *
  * @author eroot
  */
 public interface StockerStorage {
-     public Stocker createStocker(Stocker obj);
+
+    public Stocker createStocker(Stocker obj);
+
     public Stocker updateStocker(Stocker obj);
+
     public void deleteStocker(Stocker obj);
+
     public Long getCount();
+
     public Stocker findStocker(String objId);
+
     public List<Stocker> findStockers();
-    public List<Stocker> findStockers(int start,int max);
-     public List<Stocker> findStockerByProduit(String objId);
-     public List<Stocker> findStockerByProduitLot(String objId,String lot);
-     public Double sumByProduit(String idPro);
+
+    public List<Stocker> findStockers(int start, int max);
+
+    public List<Stocker> findStockerByProduit(String objId);
+
+    public List<Stocker> findStockerByProduitLot(String objId, String lot);
+
+    public Double sumByProduit(String idPro);
 
     public List<Stocker> findStockerByLivraison(String uid);
 
@@ -43,7 +55,7 @@ public interface StockerStorage {
 
     public List<Stocker> findStockerByLivrAndProduit(String livuid, String prouid0);
 
-    public List<Stocker> findByDateExpInterval(Date time, Date darg);
+    public List<Stocker> findByDateExpInterval(LocalDate time, LocalDate darg);
 
     public List<Stocker> findStockerByProduit(String pid, String region);
 
@@ -52,8 +64,8 @@ public interface StockerStorage {
     public List<Stocker> findStockers(String region);
 
     public List<Stocker> findDescSortedByDateStock(String uid, String region);
-    
-     public List<Stocker> mergeSet(Set<Stocker> bulk);
+
+    public List<Stocker> mergeSet(Set<Stocker> bulk);
 
     public List<Stocker> toFefoOrdering(String uid);
 
@@ -63,4 +75,17 @@ public interface StockerStorage {
 
     public double sum(String uid);
 
+    public boolean isExists(String uid, LocalDateTime atime);
+
+    public boolean isExists(String uid);
+
+    public List<Stocker> findUnSyncedStockers(long disconnected_at);
+
+    public double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region);
+
+    public double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region);
+
+    public double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region);
+
+    public void rectifyStockDepot(data.Produit produit, LocalDate dte, String region, double coutAch);
 }

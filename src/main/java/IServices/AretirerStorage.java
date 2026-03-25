@@ -5,9 +5,10 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; 
 import java.util.Set;
 import data.Aretirer;
+import java.time.LocalDateTime;
 
 /**
  *
@@ -23,4 +24,8 @@ public interface AretirerStorage {
     public List<Aretirer> findAretirer(int start,int max);
     public Aretirer findAretirerByReference(String catId);
     public List<Aretirer> mergeSet(Set<Aretirer> bulk);
+    public List<Aretirer> findUnSyncedAretirers(long disconnected_at);
+    
+    public boolean isExists(String uid);
+    public boolean isExists(String uid, LocalDateTime atime);
 }

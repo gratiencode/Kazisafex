@@ -4,15 +4,14 @@
  * and open the template in the editor.
  */
 package data;
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.util.Date;
-import jakarta.persistence.Basic;
+
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -24,9 +23,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 import java.util.UUID;
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -37,13 +36,14 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Aretirer.findAll", query = "SELECT DISTINCT  a FROM Aretirer a")
-    , @NamedQuery(name = "Aretirer.findByUid", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.uid = :uid")
-    , @NamedQuery(name = "Aretirer.findByNumlot", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.numlot = :numlot")
-    , @NamedQuery(name = "Aretirer.findByPrixVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.prixVente = :prixVente")
-    , @NamedQuery(name = "Aretirer.findByQuantite", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.quantite = :quantite")
-    , @NamedQuery(name = "Aretirer.findByDate", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.date = :date")
-    , @NamedQuery(name = "Aretirer.findByReferenceVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.referenceVente = :referenceVente")})
+    @NamedQuery(name = "Aretirer.findAll", query = "SELECT DISTINCT  a FROM Aretirer a"),
+    @NamedQuery(name = "Aretirer.findByUid", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.uid = :uid"),
+    @NamedQuery(name = "Aretirer.findByNumlot", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.numlot = :numlot"),
+    @NamedQuery(name = "Aretirer.findByPrixVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.prixVente = :prixVente"),
+    @NamedQuery(name = "Aretirer.findByQuantite", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.quantite = :quantite"),
+    @NamedQuery(name = "Aretirer.findByDate", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.date = :date"),
+    @NamedQuery(name = "Aretirer.findByReferenceVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.referenceVente = :referenceVente")})
+ 
 public class Aretirer extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -61,57 +61,67 @@ public class Aretirer extends BaseModel implements Serializable {
     private Double prixVente;
     @Column(name = "quantite")
     private Double quantite;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Column(name = "date_")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date date;
+    @Column(name = "date_", columnDefinition = "DATETIME")
+    private LocalDateTime date;
     @Column(name = "reference_vente")
     private String referenceVente;
     @JoinColumn(name = "client_id", referencedColumnName = "uid")
     @ManyToOne(optional = true)
-    @JsonBackReference
     private Client clientId;
-    
-  
-    
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
     @JoinColumn(name = "ligne_vente_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
     private LigneVente ligneVenteId;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
     private Mesure mesureId;
 
     public Aretirer() {
-        this.type=Tables.ARETIRER.name();
+        this.updatedAt = LocalDateTime.now();
+        this.type = Tables.ARETIRER.name();
     }
 
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
-    
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     public Aretirer(String uid) {
+        this.updatedAt = LocalDateTime.now();
         this.uid = uid;
-        this.type=Tables.ARETIRER.name();
+        this.type = Tables.ARETIRER.name();
     }
 
     public Aretirer(String uid, String referenceVente) {
+        this.updatedAt = LocalDateTime.now();
         this.uid = uid;
         this.referenceVente = referenceVente;
-        this.type=Tables.ARETIRER.name();
+        this.type = Tables.ARETIRER.name();
     }
 
-     
-
-    
     public String getUid() {
         return uid;
     }
@@ -144,11 +154,11 @@ public class Aretirer extends BaseModel implements Serializable {
         this.quantite = quantite;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDateTime date) {
         this.date = date;
     }
 
@@ -168,16 +178,6 @@ public class Aretirer extends BaseModel implements Serializable {
         this.clientId = clientId;
     }
 
-   
-       
-    
-
-   
-        
-    
-
-   
-
     public LigneVente getLigneVenteId() {
         return ligneVenteId;
     }
@@ -193,7 +193,7 @@ public class Aretirer extends BaseModel implements Serializable {
     public void setMesureId(Mesure mesureId) {
         this.mesureId = mesureId;
     }
-    
+
     public String getStatus() {
         return status;
     }
@@ -226,12 +226,13 @@ public class Aretirer extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Aretirer[ uid=" + uid + " ]";
     }
-     public String getRegion() {
+
+    public String getRegion() {
         return region;
     }
 
     public void setRegion(String region) {
         this.region = region;
     }
-    
+
 }

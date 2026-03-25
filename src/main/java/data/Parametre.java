@@ -1,6 +1,6 @@
 
 
-package data;
+package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.io.Serializable;
 import java.util.Objects;

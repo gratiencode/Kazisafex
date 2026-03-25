@@ -6,6 +6,7 @@
 package services;
 
 import IServices.MesureStorage;
+import data.Category;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -15,6 +16,10 @@ import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import data.Mesure;
+import data.Produit;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import tools.Tables;
 
 /**
  *
@@ -22,21 +27,43 @@ import data.Mesure;
  */
 public class MesureService implements MesureStorage {
 
-    EntityManager em;
+    @Override
+    public boolean isExists(String uid) {
+        String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
+                + "FROM Mesure c WHERE c.uid = :id";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+                    .setParameter("id", uid)
+                    .getSingleResult());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createQuery(jpql, Boolean.class)
+                .setParameter("id", uid)
+                .getSingleResult();
+    }
 
     public MesureService() {
-        em = JpaUtil.getEntityManagerFactory().createEntityManager();
+        //initializing...
     }
 
     @Override
     public Mesure createMesure(Mesure cat) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.persist(cat);
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getDescription() + " enregistree");
+            });
+            return cat;
+        }
         List<Mesure> exist = findByProduit(cat.getProduitId().getUid(), cat.getDescription());
         if (exist.isEmpty()) {
-            EntityTransaction tx = em.getTransaction();
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
             if (!tx.isActive()) {
                 tx.begin();
             }
-            em.persist(cat);
+            ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
         }
         return cat;
@@ -45,11 +72,20 @@ public class MesureService implements MesureStorage {
     @Override
     public Mesure updateMesure(Mesure cat) {
         try {
-            EntityTransaction tx = em.getTransaction();
+            if (ManagedSessionFactory.isEmbedded()) {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.merge(cat);
+                    return cat;
+                }).thenAccept(e -> {
+                    System.out.println("Element " + e.getDescription() + " enregistree");
+                });
+                return cat;
+            }
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
             if (!tx.isActive()) {
                 tx.begin();
             }
-            em.merge(cat);
+            ManagedSessionFactory.getEntityManager().merge(cat);
             tx.commit();
         } catch (jakarta.persistence.EntityNotFoundException e) {
             System.err.println("Erreur Message : " + e.getMessage());
@@ -59,23 +95,41 @@ public class MesureService implements MesureStorage {
 
     @Override
     public void deleteMesure(Mesure cat) {
-        EntityTransaction etr = em.getTransaction();
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                System.out.println("Element " + e.getDescription() + " supprimree");
+            });
+            return;
+        }
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        em.remove(em.merge(cat));
+        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
     }
 
     @Override
     public Mesure findMesure(String catId) {
-        return em.find(Mesure.class, catId);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.find(Mesure.class, catId));
+        }
+        return ManagedSessionFactory.getEntityManager().find(Mesure.class, catId);
     }
 
     @Override
     public List<Mesure> findMesures() {
         try {
-            Query query = em.createNamedQuery("Mesure.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em-> {
+                    Query query = em.createNamedQuery("Mesure.findAll");
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Mesure.findAll");
             return query.getResultList();
         } catch (NoResultException e) {
             return null;
@@ -85,7 +139,15 @@ public class MesureService implements MesureStorage {
     @Override
     public List<Mesure> findMesures(int start, int max) {
         try {
-            Query query = em.createNamedQuery("Mesure.findAll");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em-> {
+                    Query query = em.createNamedQuery("Mesure.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Mesure.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
             return query.getResultList();
@@ -99,7 +161,14 @@ public class MesureService implements MesureStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM mesure m WHERE m.produit_id =  ? ");
-            Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, prodUid);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
             query.setParameter(1, prodUid);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -112,7 +181,13 @@ public class MesureService implements MesureStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM mesure");
-            return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em
+                        -> {
+                    return (Long) em.createNativeQuery(sb.toString(), Long.class).getSingleResult();
+                });
+            }
+            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
         } catch (NoResultException e) {
             return 0L;
         }
@@ -123,7 +198,15 @@ public class MesureService implements MesureStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? AND m.description = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, prodUid);
+                    query.setParameter(2, desc);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
             query.setParameter(1, prodUid);
             query.setParameter(2, desc);
             return query.getResultList();
@@ -137,7 +220,14 @@ public class MesureService implements MesureStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? ORDER BY m.quantcontenu ASC ");
-            Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, uid);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
             query.setParameter(1, uid);
             return query.getResultList();
         } catch (NoResultException e) {
@@ -150,7 +240,35 @@ public class MesureService implements MesureStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? ORDER BY quantcontenu DESC LIMIT 1");
-            Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em
+                        -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, uid);
+                    return (Mesure) query.getSingleResult();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
+            query.setParameter(1, uid);
+            return (Mesure) query.getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    public Mesure findMinMesureByProduit(String uid) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? ORDER BY quantcontenu ASC LIMIT 1");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em
+                        -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, uid);
+                    return (Mesure) query.getSingleResult();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
             query.setParameter(1, uid);
             return (Mesure) query.getSingleResult();
         } catch (NoResultException e) {
@@ -160,21 +278,16 @@ public class MesureService implements MesureStorage {
 
     @Override
     public Mesure findByProduitAndQuant(String uid, Double quantContenu) {
-        try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? AND quantcontenu = ? ");
-            Query query = em.createNativeQuery(sb.toString(), Mesure.class);
-            query.setParameter(1, uid);
-            query.setParameter(2, quantContenu);
-            return (Mesure) query.getSingleResult();
-        } catch (NoResultException e) {
+        List<Mesure> meso = findByProduitAndQuantContenu(uid, quantContenu);
+        if (meso.isEmpty()) {
             return null;
         }
+        return meso.get(0);
     }
 
     @Override
     public List<Mesure> mergeSet(Set<Mesure> bulk) {
-        EntityTransaction etr = em.getTransaction();
+        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
@@ -182,20 +295,81 @@ public class MesureService implements MesureStorage {
         int i = 0;
         for (Mesure lj : bulk) {
             i++;
-            em.merge(lj);
+            ManagedSessionFactory.getEntityManager().merge(lj);
             if (i % 16 == 0) {
                 etr.commit();
-                em.clear();
-                EntityTransaction etr2 = em.getTransaction();
-        if (!etr2.isActive()) {
-            etr2.begin();
-       }
+                ManagedSessionFactory.getEntityManager().clear();
+                EntityTransaction etr2 = ManagedSessionFactory.getEntityManager().getTransaction();
+                if (!etr2.isActive()) {
+                    etr2.begin();
+                }
 
             }
         }
         etr.commit();
         Enumeration<Mesure> enums = Collections.enumeration(bulk);
         return Collections.list(enums);
+    }
+
+    @Override
+    public List<Mesure> findByProduitAndQuantContenu(String uid, double quantM) {
+        try {
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM mesure m WHERE m.produit_id = ? AND m.quantcontenu = ? ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString(), Mesure.class)
+                        .setParameter(1, uid).setParameter(2, quantM).getResultList());
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
+            query.setParameter(1, uid);
+            query.setParameter(2, quantM);
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public List<Mesure> findUnSyncedMesure(long disconnected_at) {
+        try {
+            Timestamp offline = new Timestamp(disconnected_at);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM mesure p WHERE p.updated_at >= ?");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                    query.setParameter(1, offline);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
+            query.setParameter(1, offline);
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isExists(String uid, LocalDateTime atime) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM mesure p WHERE p.uid = ? AND p.updated_at = ?");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Mesure.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, atime);
+                List<Mesure> result = query.getResultList();
+                return !result.isEmpty();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
+        query.setParameter(1, uid);
+        query.setParameter(2, atime);
+        List<Mesure> result = query.getResultList();
+        return !result.isEmpty();
     }
 
 }

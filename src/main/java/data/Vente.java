@@ -7,28 +7,23 @@ package data;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.util.Date;
 import java.util.List;
-import jakarta.json.bind.annotation.JsonbTransient;
-
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 
 import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
 
 /**
@@ -51,7 +46,7 @@ import tools.Tables;
     @NamedQuery(name = "Vente.findBySumDebt", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
     @NamedQuery(name = "Vente.findByMontantUsd", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantUsd = :montantUsd"),
     @NamedQuery(name = "Vente.findByMontantCdf", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantCdf = :montantCdf"),
-    @NamedQuery(name = "Vente.findBySumUSDRegion", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
+    @NamedQuery(name = "Vente.findBySumUSDRegioError writing JSON-B serialized object.n", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
     @NamedQuery(name = "Vente.findBySumCDFRegion", query = "SELECT DISTINCT  SUM(v.montantCdf) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
     @NamedQuery(name = "Vente.findBySumDebtRegion", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
     @NamedQuery(name = "Vente.findByEcheance", query = "SELECT DISTINCT  v FROM Vente v WHERE v.echeance = :echeance"),
@@ -60,20 +55,15 @@ import tools.Tables;
     @NamedQuery(name = "Vente.findByLongitude", query = "SELECT DISTINCT  v FROM Vente v WHERE v.longitude = :longitude"),
     @NamedQuery(name = "Vente.findByMontantDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantDette = :montantDette"),
     @NamedQuery(name = "Vente.findByDeviseDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.deviseDette = :deviseDette")})
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "uid")
+
 public class Vente extends BaseModel implements Serializable {
 
     @Column(name = "reference")
     private String reference;
-
     @Column(name = "region")
     private String region;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date dateVente;
+    @Column(name = "dateVente", columnDefinition = "DATETIME")
+    private LocalDateTime dateVente;
     private double montantUsd;
     private double montantCdf;
     private String payment;
@@ -84,27 +74,30 @@ public class Vente extends BaseModel implements Serializable {
     private static final long serialVersionUID = 1L;
     @Id
     private Integer uid;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd"
-    )
-    @Column(name = "echeance")
-    @Temporal(TemporalType.DATE)
-    private Date echeance;
-    private Double latitude;
-    private Double longitude;
-    private Double montantDette;
+    @Column(name = "echeance", columnDefinition = "DATE")
+    private LocalDate echeance;
+    private Double latitude = 0d;
+    private Double longitude = 0d;
+    private Double montantDette = 0d;
     @OneToMany(mappedBy = "venteReference")
-    @JsonIgnore
-    @JsonManagedReference
+    @JsonBackReference(value = "vnt-tx")
     private List<Taxer> taxerList;
-    @OneToMany(mappedBy = "reference", cascade = CascadeType.PERSIST)
-    @JsonIgnore
-    @JsonManagedReference
+    @OneToMany(mappedBy = "reference")
+    @JsonBackReference(value = "vnt-ligv")
     private List<LigneVente> ligneVenteList;
-    @ManyToOne(optional = false)
-    @JsonBackReference
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime updatedAt;
+    @JoinColumn(name = "clientId", referencedColumnName = "uid")
+    @ManyToOne
     private Client clientId;
+
+    @PrePersist
+    @PreUpdate
+    protected void doBeforeUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     public Vente() {
         this.type = Tables.VENTE.name();
@@ -115,7 +108,7 @@ public class Vente extends BaseModel implements Serializable {
         this.type = Tables.VENTE.name();
     }
 
-    public Vente(Integer uid, String reference, Date dateVente, double montantUsd, double montantCdf, String payment, String libelle, String observation) {
+    public Vente(Integer uid, String reference, LocalDateTime dateVente, double montantUsd, double montantCdf, String payment, String libelle, String observation) {
         this.uid = uid;
         this.reference = reference;
         this.dateVente = dateVente;
@@ -135,11 +128,11 @@ public class Vente extends BaseModel implements Serializable {
         this.uid = uid;
     }
 
-    public Date getDateVente() {
+    public LocalDateTime getDateVente() {
         return dateVente;
     }
 
-    public void setDateVente(Date dateVente) {
+    public void setDateVente(LocalDateTime dateVente) {
         this.dateVente = dateVente;
     }
 
@@ -159,11 +152,11 @@ public class Vente extends BaseModel implements Serializable {
         this.montantCdf = montantCdf;
     }
 
-    public Date getEcheance() {
+    public LocalDate getEcheance() {
         return echeance;
     }
 
-    public void setEcheance(Date echeance) {
+    public void setEcheance(LocalDate echeance) {
         this.echeance = echeance;
     }
 
@@ -172,7 +165,7 @@ public class Vente extends BaseModel implements Serializable {
     }
 
     public void setLatitude(Double latitude) {
-        this.latitude = latitude;
+        this.latitude = latitude == null ? 0 : latitude;
     }
 
     public Double getLongitude() {
@@ -180,7 +173,7 @@ public class Vente extends BaseModel implements Serializable {
     }
 
     public void setLongitude(Double longitude) {
-        this.longitude = longitude;
+        this.longitude = longitude == null ? 0 : longitude;
     }
 
     public Double getMontantDette() {
@@ -199,7 +192,6 @@ public class Vente extends BaseModel implements Serializable {
         this.deviseDette = deviseDette;
     }
 
-    @JsonbTransient
     public List<Taxer> getTaxerList() {
         return taxerList;
     }
@@ -208,7 +200,6 @@ public class Vente extends BaseModel implements Serializable {
         this.taxerList = taxerList;
     }
 
-    @JsonbTransient
     public List<LigneVente> getLigneVenteList() {
         return ligneVenteList;
     }
@@ -288,6 +279,22 @@ public class Vente extends BaseModel implements Serializable {
 
     public void setObservation(String observation) {
         this.observation = observation;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
     }
 
 }

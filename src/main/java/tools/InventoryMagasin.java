@@ -4,8 +4,6 @@
  * and open the template in the editor.
  */
 package tools;
-
-import java.util.Date;
 import java.util.Objects;
 import data.Mesure;
 import data.Produit;
@@ -18,6 +16,7 @@ import java.time.LocalDate;
 public class InventoryMagasin {
     private Produit produit;
     private Mesure mesure;
+    private double stockInitial;
     private double quantEntree;
     private double quantSortie;
     private double quantStock;
@@ -26,8 +25,9 @@ public class InventoryMagasin {
     private String lot;
     private String localisation;
     private String prixDeVente;
+    private String devise;
     private double alerte;
-    private Date expiry;
+    private LocalDate expiry;
 
     public InventoryMagasin(Produit produit, Mesure mesure, double quantEntree, double quantSortie, double quantStock) {
         this.produit = produit;
@@ -115,11 +115,11 @@ public class InventoryMagasin {
         this.alerte = alerte;
     }
 
-    public Date getExpiry() {
+    public LocalDate getExpiry() {
         return expiry;
     }
 
-    public void setExpiry(Date expiry) {
+    public void setExpiry(LocalDate expiry) {
         this.expiry = expiry;
     }
 
@@ -164,6 +164,22 @@ public class InventoryMagasin {
 
     public void setPrixDeVente(String prixDeVente) {
         this.prixDeVente = prixDeVente;
+    }
+
+    public double getSockInitial() {
+      return this.stockInitial;
+    }
+
+    public void setStockInitial(double stockInitial) {
+        this.stockInitial = stockInitial;
+    }
+
+    public String getDevise() {
+        return devise;
+    }
+
+    public void setDevise(String devise) {
+        this.devise = devise;
     }
 
   

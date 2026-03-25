@@ -17,6 +17,7 @@ public class Rupture {
     private Produit produit;
     private double quant;
     private double unitprice;
+    private String sale_price;
     private String localisation;
     private String date;
     private Mesure mesure;
@@ -122,6 +123,16 @@ public class Rupture {
 
     public void setUnitprice(double unitprice) {
         this.unitprice = unitprice;
+    }
+
+    
+
+    public String getSalePrice() {
+        return sale_price;
+    }
+
+    public void setSalePrice(String sale_price) {
+        this.sale_price = sale_price;
     }
     
     

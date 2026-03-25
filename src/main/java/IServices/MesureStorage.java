@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Mesure;
 
@@ -26,9 +26,14 @@ public interface MesureStorage {
     public List<Mesure> findAscSortedByQuantWithProduit(String uid);
 
     public Mesure findMaxMesureByProduit(String uid);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
 
     public Mesure findByProduitAndQuant(String uid, Double quantContenu);
     
      public List<Mesure> mergeSet(Set<Mesure> bulk);
+
+    public List<Mesure> findByProduitAndQuantContenu(String uid, double quantM);
+
+    public List<Mesure> findUnSyncedMesure(long disconnected_at);
     
 }

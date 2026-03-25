@@ -5,7 +5,7 @@
  */
 package IServices;
 
-import java.util.List;
+import java.util.List; import java.time.LocalDateTime;
 import java.util.Set;
 import data.Produit;
 
@@ -40,5 +40,8 @@ public interface ProduitStorage {
     public List<Produit> findByDescription(String nomProduit, String marque, String modele, String taille);
 
     public List<Produit> findProduitByName(String query);
+
+    public List<Produit> findUnSyncedProduct(long disconnected_at);
+    public boolean isExists(String uid);public boolean isExists(String uid, LocalDateTime atime);
 
 }

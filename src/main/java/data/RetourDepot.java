@@ -4,13 +4,14 @@
  * and open the template in the editor.
  */
 package data;
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.Serializable;
-import java.util.Date;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -19,12 +20,10 @@ import jakarta.persistence.NamedQuery;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import java.util.UUID;
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -32,20 +31,20 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "retour_depot")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "RetourDepot.findAll", query = "SELECT DISTINCT  r FROM RetourDepot r")
-    , @NamedQuery(name = "RetourDepot.findByUid", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.uid = :uid")
-    , @NamedQuery(name = "RetourDepot.findByRegionProv", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionProv = :regionProv")
-    , @NamedQuery(name = "RetourDepot.findByCoutAchat", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.coutAchat = :coutAchat")
-    , @NamedQuery(name = "RetourDepot.findByQuantite", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.quantite = :quantite")
-    , @NamedQuery(name = "RetourDepot.findByDate", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.date = :date")
-    , @NamedQuery(name = "RetourDepot.findByRegion", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.region = :region")
-    , @NamedQuery(name = "RetourDepot.findByMotif", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.motif = :motif")
-    , @NamedQuery(name = "RetourDepot.findByNumlot", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.numlot = :numlot")
-    , @NamedQuery(name = "RetourDepot.findByLocalisation", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.localisation = :localisation")
-    , @NamedQuery(name = "RetourDepot.findByRegionDest", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionDest = :regionDest")})
+    @NamedQuery(name = "RetourDepot.findAll", query = "SELECT DISTINCT  r FROM RetourDepot r"),
+    @NamedQuery(name = "RetourDepot.findByUid", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.uid = :uid"),
+    @NamedQuery(name = "RetourDepot.findByRegionProv", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionProv = :regionProv"),
+    @NamedQuery(name = "RetourDepot.findByCoutAchat", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.coutAchat = :coutAchat"),
+    @NamedQuery(name = "RetourDepot.findByQuantite", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.quantite = :quantite"),
+    @NamedQuery(name = "RetourDepot.findByDate", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.date = :date"),
+    @NamedQuery(name = "RetourDepot.findByRegion", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.region = :region"),
+    @NamedQuery(name = "RetourDepot.findByMotif", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.motif = :motif"),
+    @NamedQuery(name = "RetourDepot.findByNumlot", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.numlot = :numlot"),
+    @NamedQuery(name = "RetourDepot.findByLocalisation", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.localisation = :localisation"),
+    @NamedQuery(name = "RetourDepot.findByRegionDest", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionDest = :regionDest")})
 
 public class RetourDepot extends BaseModel implements Serializable {
 
@@ -53,7 +52,7 @@ public class RetourDepot extends BaseModel implements Serializable {
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-  
+
     private String uid;
     @Basic(optional = false)
     @Column(name = "region_prov")
@@ -64,8 +63,8 @@ public class RetourDepot extends BaseModel implements Serializable {
     @Column(name = "quantite")
     private Double quantite;
     @Column(name = "date_")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date date;
+    
+    private LocalDateTime date;
     @Column(name = "region")
     private String region;
     @Column(name = "motif")
@@ -78,47 +77,49 @@ public class RetourDepot extends BaseModel implements Serializable {
     private String regionDest;
     @JoinColumn(name = "destocker_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+    
     private Destocker destockerId;
-    
-   
-    
-    
-   
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
+    
     private Mesure mesureId;
     @JoinColumn(name = "recquisition_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    @JsonBackReference
+    
     private Recquisition recquisitionId;
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
 
     public RetourDepot() {
-         this.type=Tables.RETOURDEPOT.name();
+        this.type = Tables.RETOURDEPOT.name();
     }
 
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
-    
+
     public RetourDepot(String uid) {
         this.uid = uid;
-          this.type=Tables.RETOURDEPOT.name();
+        this.type = Tables.RETOURDEPOT.name();
     }
 
     public RetourDepot(String uid, String regionProv) {
         this.uid = uid;
         this.regionProv = regionProv;
-           this.type=Tables.RETOURDEPOT.name();
+        this.type = Tables.RETOURDEPOT.name();
     }
 
-    
-    
     public String getUid() {
         return uid;
     }
@@ -151,11 +152,11 @@ public class RetourDepot extends BaseModel implements Serializable {
         this.quantite = quantite;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 
-    public void setDate(Date date) {
+    public void setDate(LocalDateTime date) {
         this.date = date;
     }
 
@@ -207,10 +208,6 @@ public class RetourDepot extends BaseModel implements Serializable {
         this.destockerId = destockerId;
     }
 
-   
- 
-   
-
     public Mesure getMesureId() {
         return mesureId;
     }
@@ -251,5 +248,17 @@ public class RetourDepot extends BaseModel implements Serializable {
     public String toString() {
         return "entities.RetourDepot[ uid=" + uid + " ]";
     }
-    
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime updatedAt) {
+        this.deletedAt = updatedAt;
+    }
+
 }

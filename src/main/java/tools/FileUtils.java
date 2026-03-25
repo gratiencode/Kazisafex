@@ -63,6 +63,11 @@ public class FileUtils {
     public static InputStream byteToInputStream(byte[] buf) {
         return new ByteArrayInputStream(buf);
     }
+    private static void checkPath(File f){
+        if(!f.exists()){
+            
+        }
+    }
 
     public static File streamTofile(InputStream is) {
         OutputStream outStream = null;

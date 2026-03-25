@@ -37,7 +37,7 @@ public class ClientAppartenirEncoder implements Encoder.Text<ClientAppartenir> {
                 .add("counter", oper.getCounter())
                 .add("payload", oper.getPayload())
                 .add("from", oper.getFrom())
-                .add("date", tools.Constants.Datetime.format(oper.getDateAppartenir()))
+                .add("date", oper.getDateAppartenir().toString())
                 .add("clientId", Json.createObjectBuilder()
                         .add("uid", oper.getClientId().getUid()).build())
                 .add("clientOrganisationId", Json.createObjectBuilder()

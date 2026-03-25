@@ -5,14 +5,12 @@
  */
 package data;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
-import java.util.Date;
+
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -24,10 +22,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 import java.util.UUID;
-import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import tools.Tables;
-
-
 
 /**
  *
@@ -35,42 +33,41 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "facture")
- 
+
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Facture.findAll", query = "SELECT DISTINCT  f FROM Facture f")
-    , @NamedQuery(name = "Facture.findByUid", query = "SELECT DISTINCT  f FROM Facture f WHERE f.uid = :uid")
-    , @NamedQuery(name = "Facture.findByNumero", query = "SELECT DISTINCT  f FROM Facture f WHERE f.numero = :numero")
-    , @NamedQuery(name = "Facture.findByStartDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.startDate = :startDate")
-    , @NamedQuery(name = "Facture.findByEndDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.endDate = :endDate")
-    , @NamedQuery(name = "Facture.findByStatus", query = "SELECT DISTINCT  f FROM Facture f WHERE f.status = :status")
-    , @NamedQuery(name = "Facture.findByTotalamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.totalamount = :totalamount")
-    , @NamedQuery(name = "Facture.findByPayedamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.payedamount = :payedamount")
-    , @NamedQuery(name = "Facture.findByRegion", query = "SELECT DISTINCT  f FROM Facture f WHERE f.region = :region")})
+    @NamedQuery(name = "Facture.findAll", query = "SELECT DISTINCT  f FROM Facture f"),
+    @NamedQuery(name = "Facture.findByUid", query = "SELECT DISTINCT  f FROM Facture f WHERE f.uid = :uid"),
+    @NamedQuery(name = "Facture.findByNumero", query = "SELECT DISTINCT  f FROM Facture f WHERE f.numero = :numero"),
+    @NamedQuery(name = "Facture.findByStartDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.startDate = :startDate"),
+    @NamedQuery(name = "Facture.findByEndDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.endDate = :endDate"),
+    @NamedQuery(name = "Facture.findByStatus", query = "SELECT DISTINCT  f FROM Facture f WHERE f.status = :status"),
+    @NamedQuery(name = "Facture.findByTotalamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.totalamount = :totalamount"),
+    @NamedQuery(name = "Facture.findByPayedamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.payedamount = :payedamount"),
+    @NamedQuery(name = "Facture.findByRegion", query = "SELECT DISTINCT  f FROM Facture f WHERE f.region = :region")})
+
 public class Facture extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-   
-    private  String uid;
+
+    private String uid;
     @Column(name = "numero")
     private String numero;
     @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd"
+            shape = JsonFormat.Shape.STRING,
+            pattern = "yyyy-MM-dd"
     )
-    @Column(name = "start_date")
-    @Temporal(TemporalType.DATE)
-    private Date startDate;
+    @Column(name = "start_date", columnDefinition = "DATE")
+    private LocalDate startDate;
     @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd"
+            shape = JsonFormat.Shape.STRING,
+            pattern = "yyyy-MM-dd"
     )
-    @Column(name = "end_date")
-    @Temporal(TemporalType.DATE)
-    private Date endDate;
+    @Column(name = "end_date", columnDefinition = "DATE")
+    private LocalDate endDate;
     @Column(name = "status")
     private String status;
     // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
@@ -82,24 +79,29 @@ public class Facture extends BaseModel implements Serializable {
     private String region;
     @JoinColumn(name = "organis_id", referencedColumnName = "uid")
     @ManyToOne
-    @JsonBackReference
+
     private ClientOrganisation organisId;
-    
-    
-@PrePersist
+    @Column(name = "deleted_at", columnDefinition = "DATETIME")
+    private LocalDateTime deletedAt;
+    @Column(name = "updated_at", columnDefinition = "DATETIME")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
-            this.uid= UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+    protected void onDataOperation() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
+        this.updatedAt = LocalDateTime.now();
     }
+
     public Facture() {
-        this.type=Tables.FACTURE.name();
+        this.type = Tables.FACTURE.name();
     }
 
     public Facture(String uid) {
         this.uid = uid;
-        this.type=Tables.FACTURE.name();
+        this.type = Tables.FACTURE.name();
     }
 
     public String getUid() {
@@ -118,19 +120,19 @@ public class Facture extends BaseModel implements Serializable {
         this.numero = numero;
     }
 
-    public Date getStartDate() {
+    public LocalDate getStartDate() {
         return startDate;
     }
 
-    public void setStartDate(Date startDate) {
+    public void setStartDate(LocalDate startDate) {
         this.startDate = startDate;
     }
 
-    public Date getEndDate() {
+    public LocalDate getEndDate() {
         return endDate;
     }
 
-    public void setEndDate(Date endDate) {
+    public void setEndDate(LocalDate endDate) {
         this.endDate = endDate;
     }
 
@@ -198,5 +200,21 @@ public class Facture extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Facture[ uid=" + uid + " ]";
     }
-    
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
 }
