@@ -2294,7 +2294,7 @@ public class PosController implements Initializable {
     @FXML
     private void goToClient(Event e) {
         String token = pref.get("token", null);
-        MainUI.floatDialog(tools.Constants.CLIENT_DLG, 1090, 489, token, kazisafe, entreprise, region);
+        MainUI.floatDialog(tools.Constants.CLIENT_DLG, 1090, 500, token, kazisafe, entreprise, region);
     }
 
     private ScrollBar getVScrollbar(TableView<ListViewItem> table) {

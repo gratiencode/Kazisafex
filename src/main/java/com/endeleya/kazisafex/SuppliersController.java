@@ -391,15 +391,18 @@ public class SuppliersController implements Initializable {
                     javafx.application.Platform.runLater(() -> {
                         if (f != null) {
                             MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
-                            try {
-                                Desktop.getDesktop().open(f);
-                            } catch (IOException ex) {
-                                Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
-                            }
                         } else {
                             MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
                         }
                     });
+                    
+                    if (f != null) {
+                        try {
+                            Desktop.getDesktop().open(f);
+                        } catch (IOException ex) {
+                            Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                    }
                 });
 
     }
