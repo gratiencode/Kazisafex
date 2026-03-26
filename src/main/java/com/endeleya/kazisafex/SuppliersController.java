@@ -384,19 +384,22 @@ public class SuppliersController implements Initializable {
             MainUI.notify(null, "Attention", "Veuillez selectionner un fournisseur", 2, "warning");
             return;
         }
+        List<Livraison> dataCopy = new java.util.ArrayList<>(tb_debt_details.getItems());
         Executors.newSingleThreadExecutor()
                 .submit(() -> { 
-                    File f = Util.exportPdfSupplierStatement(choosenf, tb_debt_details.getItems(), entreprise);
-                    if (f != null) {
-                        MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
-                        try {
-                            Desktop.getDesktop().open(f);
-                        } catch (IOException ex) {
-                            Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
+                    File f = Util.exportPdfSupplierStatement(choosenf, dataCopy, entreprise);
+                    javafx.application.Platform.runLater(() -> {
+                        if (f != null) {
+                            MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
+                            try {
+                                Desktop.getDesktop().open(f);
+                            } catch (IOException ex) {
+                                Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                        } else {
+                            MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
                         }
-                    } else {
-                        MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
-                    }
+                    });
                 });
 
     }

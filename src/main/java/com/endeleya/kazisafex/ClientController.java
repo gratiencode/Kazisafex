@@ -840,19 +840,22 @@ public class ClientController implements Initializable {
     private CheckBox chk_show_unpaid_only;
 
     private void exportClientDebtToPdf(Client c) {
+        List<Vente> dataCopy = new java.util.ArrayList<>(ls_client_debt_details);
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    File f = Util.exportPdfClientStatement(c, ls_client_debt_details, entreprise);
-                    if (f != null) {
-                        MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
-                        try {
-                            Desktop.getDesktop().open(f);
-                        } catch (IOException ex) {
-                            Logger.getLogger(ClientController.class.getName()).log(Level.SEVERE, null, ex);
+                    File f = Util.exportPdfClientStatement(c, dataCopy, entreprise);
+                    javafx.application.Platform.runLater(() -> {
+                        if (f != null) {
+                            MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
+                            try {
+                                Desktop.getDesktop().open(f);
+                            } catch (IOException ex) {
+                                Logger.getLogger(ClientController.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                        } else {
+                            MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
                         }
-                    } else {
-                        MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
-                    }
+                    });
                 });
 
     }
