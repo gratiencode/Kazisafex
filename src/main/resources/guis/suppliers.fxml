@@ -102,7 +102,7 @@
                               <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
                            </columnResizePolicy>
                         </TableView>
-                        <CheckBox fx:id="chk_show_unpaid_only" layoutX="14.0" layoutY="348.0" mnemonicParsing="false" text="Afficher uniquement les factures impayées" textFill="#000000">
+                        <CheckBox fx:id="chk_show_unpaid_only" layoutX="388.0" layoutY="21.0" mnemonicParsing="false" text="Afficher uniquement les factures impayées" textFill="#000000">
                            <font>
                               <Font name="System Bold" size="13.0" />
                            </font>
@@ -117,7 +117,7 @@
                               <Font name="System Bold" size="14.0" />
                            </font>
                         </Label>
-                        <ImageView fx:id="btn_export" fitHeight="37.0" fitWidth="43.0" layoutX="1025.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebt" pickOnBounds="true" preserveRatio="true">
+                        <ImageView fx:id="btn_export" fitHeight="37.0" fitWidth="43.0" layoutX="1013.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebt" pickOnBounds="true" preserveRatio="true">
                            <image>
                               <Image url="@../icons/ms_excel_48px.png" />
                            </image>
@@ -125,15 +125,15 @@
                               <Cursor fx:constant="HAND" />
                            </cursor>
                         </ImageView>
-                        <ImageView fx:id="btn_export_pdf" fitHeight="37.0" fitWidth="43.0" layoutX="975.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebtPdf" pickOnBounds="true" preserveRatio="true">
+                        <ImageView fx:id="btn_export_pdf" fitHeight="37.0" fitWidth="43.0" layoutX="963.0" layoutY="339.0" onMouseClicked="#exportSuppliersDebtPdf" pickOnBounds="true" preserveRatio="true">
                            <image>
-                              <Image url="@../icons/pdf_48px.png" />
+                              <Image url="@../icons/download-pdf.png" />
                            </image>
                            <cursor>
                               <Cursor fx:constant="HAND" />
                            </cursor>
                         </ImageView>
-                        <Label layoutX="878.0" layoutY="349.0" text="Produire un relevée">
+                        <Label layoutX="773.0" layoutY="349.0" text="Produire un relevée">
                            <font>
                               <Font size="14.0" />
                            </font>

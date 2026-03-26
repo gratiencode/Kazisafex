@@ -55,7 +55,7 @@ module com.endeleya.kazisafex {
     requires swing.toast.notifications;
 
     opens com.endeleya.kazisafex to javafx.fxml, javafx.graphics;
-    opens data to org.hibernate.orm.core, com.fasterxml.jackson.databind;
+    opens data to org.hibernate.orm.core, com.fasterxml.jackson.databind, javafx.base;
     opens data.finance to com.fasterxml.jackson.databind;
     opens data.helpers to com.fasterxml.jackson.databind;
 
