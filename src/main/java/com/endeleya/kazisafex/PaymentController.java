@@ -132,6 +132,9 @@ import javax.bluetooth.RemoteDevice;
 import javax.print.PrintServiceLookup;
 import com.endeleya.kazisafex.tools.BluetoothPrintService;
 import com.endeleya.kazisafex.BluetoothPrinterManager;
+import com.endeleya.kazisafex.tools.SerialPrintService;
+import com.endeleya.kazisafex.SerialPrinterManager;
+import com.fazecast.jSerialComm.SerialPort;
 import java.util.concurrent.CompletableFuture;
 import javafx.beans.property.SimpleListProperty;
 
@@ -545,6 +548,8 @@ public class PaymentController implements Initializable {
         captioncdf.setText(maker.getInverseCurrencyCode());
         captionusd.setText(maker.getMainCurrency());
 
+        // Discover and register Serial printers on startup
+        refreshSerialPrinters();
     }
 
     public void setEntreprise(Entreprise e) {
@@ -2224,6 +2229,27 @@ public class PaymentController implements Initializable {
     }
 
     /**
+     * Finds serial printers (COM ports) and registers them as PrintServices.
+     */
+    public void refreshSerialPrinters() {
+        try {
+            List<SerialPort> ports = SerialPrinterManager.findSerialPrinters();
+            for (SerialPort port : ports) {
+                String name = port.getDescriptivePortName();
+                String systemName = port.getSystemPortName();
+                SerialPrintService sps = new SerialPrintService(name, systemName);
+                PrintServiceLookup.registerService(sps);
+            }
+            
+            // Refresh the printer list in cbx_printers
+            ObservableSet<Printer> osp = Printer.getAllPrinters();
+            cbx_printers.setItems(setToList(osp));
+        } catch (Exception e) {
+            System.err.println("Error discovering serial ports: " + e.getMessage());
+        }
+    }
+
+    /**
      * Launch printing of the bill receipt via Bluetooth if it's the selected printer.
      */
     public void printBillViaBluetooth() {
@@ -2231,7 +2257,18 @@ public class PaymentController implements Initializable {
             if (txt_print_status != null) {
                 txt_print_status.setText("Printing via BT...");
             }
-            // Reuse the existing printReceipt logic which should now find the BT service
+            printReceipt(defaultPrinter.getName(), entrepName, rccm, vente4save.getReference(), venteItems, ff + fd, cliname.getText(), tf_phone_client.getText(), maker.getMainCurrency(), taux2change);
+        }
+    }
+
+    /**
+     * Launch printing of the bill receipt via Serial if it's the selected printer.
+     */
+    public void printBillViaSerial() {
+        if (defaultPrinter != null && defaultPrinter.getName().startsWith("COM:")) {
+            if (txt_print_status != null) {
+                txt_print_status.setText("Printing via Serial...");
+            }
             printReceipt(defaultPrinter.getName(), entrepName, rccm, vente4save.getReference(), venteItems, ff + fd, cliname.getText(), tf_phone_client.getText(), maker.getMainCurrency(), taux2change);
         }
     }
