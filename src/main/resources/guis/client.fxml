@@ -128,6 +128,11 @@
                               <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
                            </columnResizePolicy>
                         </TableView>
+                        <CheckBox fx:id="chk_show_unpaid_only" layoutX="14.0" layoutY="348.0" mnemonicParsing="false" text="Afficher uniquement les factures impayées" textFill="#000000">
+                           <font>
+                              <Font name="System Bold" size="13.0" />
+                           </font>
+                        </CheckBox>
                         <Label layoutX="389.0" layoutY="348.0" text="Total Dette Client:" AnchorPane.bottomAnchor="74.0" AnchorPane.rightAnchor="555.0">
                            <font>
                               <Font name="System Bold" size="14.0" />
