@@ -264,8 +264,10 @@ public class SuppliersController implements Initializable {
         double total = 0;
         if (debts != null) {
             for (Livraison l : debts) {
-                // Calcul du remained = toPay - payed
-                double remained = l.getTopay() - l.getPayed();
+                // Calcul du remained = toPay - payed avec sécurité null
+                double topay = l.getTopay() != null ? l.getTopay() : 0;
+                double payed = l.getPayed() != null ? l.getPayed() : 0;
+                double remained = topay - payed;
                 l.setRemained(remained);
 
                 // Si la case est cochée, n'afficher que les dettes non soldées
@@ -380,14 +382,15 @@ public class SuppliersController implements Initializable {
 
     @FXML
     private void exportSuppliersDebtPdf(MouseEvent event) {
-        if (choosenf == null) {
-            MainUI.notify(null, "Attention", "Veuillez selectionner un fournisseur", 2, "warning");
+        Fournisseur selected = listvu_suppliers_debt.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            MainUI.notify(null, "Attention", "Veuillez selectionner un fournisseur dans la liste des dettes", 2, "warning");
             return;
         }
         List<Livraison> dataCopy = new java.util.ArrayList<>(tb_debt_details.getItems());
         Executors.newSingleThreadExecutor()
                 .submit(() -> { 
-                    File f = Util.exportPdfSupplierStatement(choosenf, dataCopy, entreprise);
+                    File f = Util.exportPdfSupplierStatement(selected, dataCopy, entreprise);
                     javafx.application.Platform.runLater(() -> {
                         if (f != null) {
                             MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
@@ -399,7 +402,7 @@ public class SuppliersController implements Initializable {
                     if (f != null) {
                         try {
                             Desktop.getDesktop().open(f);
-                        } catch (IOException ex) {
+                        } catch (Exception ex) {
                             Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
@@ -420,7 +423,6 @@ public class SuppliersController implements Initializable {
         btn_export_pdf.setFitWidth(32);
         btn_export_pdf.setPreserveRatio(true);
         Tooltip.install(btn_export_pdf, new Tooltip("Exporter en PDF"));
-        btn_export_pdf.setOnMouseClicked(this::exportSuppliersDebtPdf);
         ContextMenu cm = new ContextMenu();
         MenuItem m2 = new MenuItem("Supprimer");
         cm.getItems().add(m2);

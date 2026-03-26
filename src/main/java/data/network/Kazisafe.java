@@ -178,17 +178,17 @@ public interface Kazisafe {
         @POST("v1/finance/immobilisations")
         Call<Immobilisation> createImmobilisation(@Body Immobilisation immobilisation);
 
-        @POST("v1/finance/immobilisations/sync")
+        @PATCH("immobilisations/sync")
         Call<WebResult> syncImmobilisations(@Body List<Immobilisation> immobilisations);
 
-        @GET("v1/finance/immobilisations/sync/missed/{since}")
-        Call<List<Immobilisation>> syncMissedImmobilisations(@Path("since") String since);
+        @GET("immobilisations/downsync")
+        Call<List<Immobilisation>> syncMissedImmobilisations(@Query("lt") String since);
 
-        @POST("v1/agent/presence/sync")
+        @PATCH("presence/sync")
         Call<WebResult> syncPresences(@Body List<Presence> presences);
 
-        @GET("v1/agent/presence/sync/missed/{since}")
-        Call<List<Presence>> syncMissedPresences(@Path("since") String since);
+        @GET("presence/downsync")
+        Call<List<Presence>> syncMissedPresences(@Query("lt") String since);
 
         @GET("v1/agent/presence")
         Call<List<Presence>> getPresences(@Query("agent") String agent,
