@@ -6281,7 +6281,8 @@ public class Util {
                 int pageW = (int) PDRectangle.A4.getWidth();
                 int pageH = (int) PDRectangle.A4.getHeight();
 
-                try (PDPageContentStream contentStream = new PDPageContentStream(document, fPage)) {
+                PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
+                try {
                     PDFUtils pdf = new PDFUtils(document, contentStream);
 
                     PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
@@ -6309,7 +6310,6 @@ public class Util {
                     } catch (Exception e) {
                         // Silent logo failure
                     }
-                    System.out.println("file apres le try = " + file.getAbsolutePath());
 
                     pdf.addTextLine("Etat de Dette Client", 25, pageH - 98, hbold, 30, java.awt.Color.DARK_GRAY);
 
@@ -6327,7 +6327,6 @@ public class Util {
                             entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
                             entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
                     }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
-                    System.out.println("ou est ce qu ca freeze ");
 
                     // Client Info
                     pdf.addTextLine("Client : " + c.getNomClient(), 25, pageH - 240, hbold, 14, java.awt.Color.BLACK);
@@ -6356,7 +6355,27 @@ public class Util {
                     // Table Body
                     pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
                     double totalDebt = 0;
+                    int i = 0;
+                    int ln = 0;
+                    int lpp = 26;
                     for (Vente v : debts) {
+                        i++;
+                        ln++;
+                        if (i > 13) {
+                            if (i == 14 || ln == lpp) {
+                                contentStream.close();
+                                PDPage fPage2 = new PDPage(PDRectangle.A4);
+                                document.addPage(fPage2);
+                                contentStream = new PDPageContentStream(document, fPage2);
+                                pdf = new PDFUtils(document, contentStream);
+                                pdf.addTable(table, 25, 25, pageH - 68);
+                                pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                                if (ln == lpp || i == 14) {
+                                    ln = 0;
+                                }
+                            }
+                        }
+
                         pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
                         pdf.addCell(v.getDateVente().toLocalDate().toString(), egray);
                         pdf.addCell(v.getReference(), egray);
@@ -6383,6 +6402,10 @@ public class Util {
                     pdf.addCell("", endeleya);
                     pdf.addCell("", endeleya);
                     pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                } finally {
+                    if (contentStream != null) {
+                        contentStream.close();
+                    }
                 }
                 document.save(file);
             }
@@ -6410,7 +6433,8 @@ public class Util {
                 int pageW = (int) PDRectangle.A4.getWidth();
                 int pageH = (int) PDRectangle.A4.getHeight();
 
-                try (PDPageContentStream contentStream = new PDPageContentStream(document, fPage)) {
+                PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
+                try {
                     PDFUtils pdf = new PDFUtils(document, contentStream);
 
                     PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
@@ -6484,7 +6508,27 @@ public class Util {
                     // Table Body
                     pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
                     double totalDebt = 0;
+                    int rowCount = 0;
+                    int rowOnPage = 0;
+                    int lpp = 26;
                     for (Livraison v : debts) {
+                        rowCount++;
+                        rowOnPage++;
+                        if (rowCount > 13) {
+                            if (rowCount == 14 || rowOnPage == lpp) {
+                                contentStream.close();
+                                PDPage fPage2 = new PDPage(PDRectangle.A4);
+                                document.addPage(fPage2);
+                                contentStream = new PDPageContentStream(document, fPage2);
+                                pdf = new PDFUtils(document, contentStream);
+                                pdf.addTable(table, 25, 25, pageH - 68);
+                                pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                                if (rowOnPage == lpp || rowCount == 14) {
+                                    rowOnPage = 0;
+                                }
+                            }
+                        }
+
                         pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
                         pdf.addCell(v.getDateLivr().toString(), egray);
                         pdf.addCell(v.getNumPiece(), egray);
@@ -6502,6 +6546,10 @@ public class Util {
                     pdf.addCell("", endeleya);
                     pdf.addCell("", endeleya);
                     pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                } finally {
+                    if (contentStream != null) {
+                        contentStream.close();
+                    }
                 }
                 document.save(file);
             }

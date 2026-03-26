@@ -129,7 +129,7 @@
                               <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
                            </columnResizePolicy>
                         </TableView>
-                        <CheckBox fx:id="chk_show_unpaid_only" layoutX="14.0" layoutY="348.0" mnemonicParsing="false" text="Afficher uniquement les factures impayées" textFill="#000000">
+                        <CheckBox fx:id="chk_show_unpaid_only" layoutX="389.0" layoutY="21.0" mnemonicParsing="false" text="Afficher uniquement les factures impayées" textFill="#000000">
                            <font>
                               <Font name="System Bold" size="13.0" />
                            </font>
@@ -154,20 +154,6 @@
                            </cursor>
                         </ImageView>
                         <Label layoutX="875.0" layoutY="349.0" text="Relevé PDF" AnchorPane.bottomAnchor="75.0" AnchorPane.rightAnchor="141.0">
-                           <font>
-                              <Font size="13.0" />
-                           </font>
-                        </Label>
-                        <!-- XLS Export Button -->
-                        <ImageView fx:id="btn_export_cli_xls" fitHeight="37.0" fitWidth="43.0" layoutX="1025.0" layoutY="385.0" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="18.0" AnchorPane.rightAnchor="28.0">
-                           <image>
-                              <Image url="@../icons/excel.png" />
-                           </image>
-                           <cursor>
-                              <Cursor fx:constant="HAND" />
-                           </cursor>
-                        </ImageView>
-                        <Label layoutX="875.0" layoutY="395.0" text="Relevé Excel" AnchorPane.bottomAnchor="29.0" AnchorPane.rightAnchor="131.0">
                            <font>
                               <Font size="13.0" />
                            </font>
