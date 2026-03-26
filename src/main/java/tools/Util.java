@@ -5865,21 +5865,16 @@ public class Util {
                 }
             }
 
-            for (int i = 0; i < columns.length; i++) {
-                sheet.autoSizeColumn(i);
+            String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
             }
-
-            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
-            fileChooser.setTitle("Exporter les dettes fournisseurs");
-            fileChooser.setInitialFileName("Dettes_Fournisseurs_" + System.currentTimeMillis() + ".xlsx");
-            fileChooser.getExtensionFilters()
-                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
-            File file = fileChooser.showSaveDialog(null);
-            if (file != null) {
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    workbook.write(fos);
-                }
+            File file = new File(path + "/Dettes_Fournisseurs_Global_" + System.currentTimeMillis() + ".xlsx");
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
             }
+            Desktop.getDesktop().open(file);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -5945,22 +5940,16 @@ public class Util {
             footCellVal.setCellValue(totalDebt);
             footCellVal.setCellStyle(footStyle);
 
-            for (int i = 0; i < columns.length; i++) {
-                sheet.autoSizeColumn(i);
+            String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
             }
-
-            javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
-            fileChooser.setTitle("Exporter le relevé du fournisseur");
-            fileChooser.setInitialFileName(
-                    "Releve_" + f.getNomFourn().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
-            fileChooser.getExtensionFilters()
-                    .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
-            File file = fileChooser.showSaveDialog(null);
-            if (file != null) {
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    workbook.write(fos);
-                }
+            File file = new File(path + "/Releve_Fournisseur_" + f.getNomFourn().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
             }
+            Desktop.getDesktop().open(file);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -6505,17 +6494,18 @@ public class Util {
                     pdf.addCell("Déjà Payé", endeleya);
                     pdf.addCell("Reste", endeleya);
 
-                    // Table Body
+                    // Table Body with Pagination
                     pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
                     double totalDebt = 0;
-                    int rowCount = 0;
-                    int rowOnPage = 0;
-                    int lpp = 26;
-                    for (Livraison v : debts) {
-                        rowCount++;
-                        rowOnPage++;
-                        if (rowCount > 13) {
-                            if (rowCount == 14 || rowOnPage == lpp) {
+                    int i = 0;
+                    int ln = 0;
+                    int lpp = 26; // Lines per full page
+
+                    for (Livraison l : debts) {
+                        i++;
+                        ln++;
+                        if (i > 13) { // 14 rows on first page
+                            if (i == 14 || ln == lpp) {
                                 contentStream.close();
                                 PDPage fPage2 = new PDPage(PDRectangle.A4);
                                 document.addPage(fPage2);
@@ -6523,29 +6513,163 @@ public class Util {
                                 pdf = new PDFUtils(document, contentStream);
                                 pdf.addTable(table, 25, 25, pageH - 68);
                                 pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
-                                if (rowOnPage == lpp || rowCount == 14) {
-                                    rowOnPage = 0;
+                                if (ln == lpp || i == 14) {
+                                    ln = 0;
                                 }
                             }
                         }
 
                         pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
-                        pdf.addCell(v.getDateLivr().toString(), egray);
-                        pdf.addCell(v.getNumPiece(), egray);
-                        pdf.addCell(v.getLibelle(), egray);
-                        pdf.addCell(String.format("%.2f", v.getTopay()), egray);
-                        pdf.addCell(String.format("%.2f", v.getPayed()), egray);
-                        pdf.addCell(String.format("%.2f", v.getRemained()), egray);
-                        totalDebt += v.getRemained();
+                        pdf.addCell(l.getDateLivr() != null ? l.getDateLivr().toString() : "", egray);
+                        pdf.addCell(l.getNumPiece(), egray);
+                        pdf.addCell(l.getLibelle(), egray);
+                        pdf.addCell(String.format("%.2f", l.getTopay() != null ? l.getTopay() : 0.0), egray);
+                        pdf.addCell(String.format("%.2f", l.getPayed() != null ? l.getPayed() : 0.0), egray);
+                        pdf.addCell(String.format("%.2f", l.getRemained() != null ? l.getRemained() : 0.0), egray);
+                        totalDebt += (l.getRemained() != null ? l.getRemained() : 0.0);
                     }
 
-                    // Summary
+                    // Total Row
+                    pdf.addCell("", null);
                     pdf.addCell("", null);
                     pdf.addCell("", null);
                     pdf.addCell("TOTAL", endeleya);
                     pdf.addCell("", endeleya);
-                    pdf.addCell("", endeleya);
                     pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                } finally {
+                    if (contentStream != null) {
+                        contentStream.close();
+                    }
+                }
+                document.save(file);
+            }
+            return file;
+        } catch (Exception e) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
+            return null;
+        }
+    }
+
+    public static File exportPdfSuppliersDebt(List<Fournisseur> suppliers, Entreprise entrep) {
+        try {
+            String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File file = new File(path + "/Dettes_Fournisseurs_Global_"
+                    + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
+
+            try (PDDocument document = new PDDocument()) {
+                PDPage fPage = new PDPage(PDRectangle.A4);
+                document.addPage(fPage);
+
+                int pageW = (int) PDRectangle.A4.getWidth();
+                int pageH = (int) PDRectangle.A4.getHeight();
+
+                PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
+                try {
+                    PDFUtils pdf = new PDFUtils(document, contentStream);
+
+                    PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                    PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+                    java.awt.Color endeleya = new java.awt.Color(68, 206, 245);
+                    java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+                    // Logo
+                    try {
+                        File flogo = FileUtils.pointFile(entrep.getUid() + ".png");
+                        PDImageXObject logo = null;
+                        if (flogo.exists()) {
+                            logo = PDImageXObject.createFromFile(flogo.getPath(), document);
+                        } else {
+                            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+                            if (is != null) {
+                                byte[] bytes = IOUtils.toByteArray(is);
+                                logo = PDImageXObject.createFromByteArray(document, bytes, "logo");
+                            }
+                        }
+                        if (logo != null) {
+                            contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
+                        }
+                    } catch (Exception e) {
+                    }
+
+                    pdf.addTextLine("Liste des Dettes Fournisseurs", 25, pageH - 98, hbold, 28, java.awt.Color.DARK_GRAY);
+
+                    contentStream.setStrokingColor(endeleya);
+                    contentStream.setLineWidth(2);
+                    contentStream.moveTo(25, pageH - 120);
+                    contentStream.lineTo(pageW - 25, pageH - 120);
+                    contentStream.stroke();
+
+                    // Business Info
+                    pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
+                    pdf.addTextLine(new String[] {
+                            "Adresse : " + entrep.getAdresse(),
+                            "RCCM : " + entrep.getIdentification()
+                    }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
+
+                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
+                            pageH - 240, hnormal, 11, java.awt.Color.BLACK);
+
+                    // Table Header
+                    int table[] = { 150, 150, 100, 120 };
+                    pdf.addTable(table, 25, 25, pageH - 320);
+                    pdf.setFont(hbold, 10, java.awt.Color.WHITE);
+                    pdf.setRightAlignedColumns(new int[] { 3 });
+
+                    pdf.addCell("Nom Fournisseur", endeleya);
+                    pdf.addCell("Adresse", endeleya);
+                    pdf.addCell("Téléphone", endeleya);
+                    pdf.addCell("Dette Totale", endeleya);
+
+                    // Table Body with Pagination
+                    pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                    double globalTotal = 0;
+                    int i = 0;
+                    int ln = 0;
+                    int lpp = 26;
+
+                    for (Fournisseur f : suppliers) {
+                        double totalDebt = f.getLivraisonList() == null ? 0d
+                                : f.getLivraisonList().stream()
+                                        .mapToDouble(l -> l.getRemained() != null ? l.getRemained() : 0.0).sum();
+                        if (totalDebt <= 0)
+                            continue;
+
+                        i++;
+                        ln++;
+                        if (i > 13) {
+                            if (i == 14 || ln == lpp) {
+                                contentStream.close();
+                                PDPage fPage2 = new PDPage(PDRectangle.A4);
+                                document.addPage(fPage2);
+                                contentStream = new PDPageContentStream(document, fPage2);
+                                pdf = new PDFUtils(document, contentStream);
+                                pdf.addTable(table, 25, 25, pageH - 68);
+                                pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                                if (ln == lpp || i == 14) {
+                                    ln = 0;
+                                }
+                            }
+                        }
+
+                        pdf.setRightAlignedColumns(new int[] { 3 });
+                        pdf.addCell(f.getNomFourn(), egray);
+                        pdf.addCell(f.getAdresse(), egray);
+                        pdf.addCell(f.getPhone(), egray);
+                        pdf.addCell(String.format("%.2f USD", totalDebt), egray);
+                        globalTotal += totalDebt;
+                    }
+
+                    // Final Total
+                    pdf.addCell("", null);
+                    pdf.addCell("", null);
+                    pdf.addCell("TOTAL GLOBAL", endeleya);
+                    pdf.addCell(String.format("%.2f USD", globalTotal), endeleya);
                 } finally {
                     if (contentStream != null) {
                         contentStream.close();

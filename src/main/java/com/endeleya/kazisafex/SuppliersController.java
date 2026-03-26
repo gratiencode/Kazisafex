@@ -128,6 +128,7 @@ public class SuppliersController implements Initializable {
     Livraison choosenLiv;
     String token;
     String action = "create";
+    private ObservableList<Livraison> ls_supplier_debt_details;
 
     Entreprise entreprise;
     ObservableList<Fournisseur> lisfournisseur;
@@ -233,6 +234,9 @@ public class SuppliersController implements Initializable {
         col_remained.setCellValueFactory(new PropertyValueFactory<>("remained"));
         col_remained.setPrefWidth(100);
 
+        ls_supplier_debt_details = FXCollections.observableArrayList();
+        tb_debt_details.setItems(ls_supplier_debt_details);
+
         // Context menu for debt payment
         ContextMenu debtCm = new ContextMenu();
         MenuItem payItem = new MenuItem("Paiement de la dette");
@@ -259,8 +263,8 @@ public class SuppliersController implements Initializable {
     }
 
     private void showDebtDetails(Fournisseur f) {
+        ls_supplier_debt_details.clear();
         List<Livraison> debts = LivraisonDelegate.findBySupplier(f.getUid());
-        ObservableList<Livraison> obsDebts = FXCollections.observableArrayList();
         double total = 0;
         if (debts != null) {
             for (Livraison l : debts) {
@@ -273,19 +277,18 @@ public class SuppliersController implements Initializable {
                 // Si la case est cochée, n'afficher que les dettes non soldées
                 if (chk_show_unpaid_only != null && chk_show_unpaid_only.isSelected()) {
                     if (remained > 0) {
-                        obsDebts.add(l);
+                        ls_supplier_debt_details.add(l);
                         total += remained;
                     }
                 } else {
                     // Sinon afficher toutes les livraisons
-                    obsDebts.add(l);
+                    ls_supplier_debt_details.add(l);
                     if (remained > 0) {
                         total += remained;
                     }
                 }
             }
         }
-        tb_debt_details.setItems(obsDebts);
         lbl_total_debt.setText(String.format("%.2f USD", total));
     }
 
@@ -371,43 +374,70 @@ public class SuppliersController implements Initializable {
     @FXML
     private void exportSuppliersDebt(MouseEvent event) {
         Fournisseur selected = listvu_suppliers_debt.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            // If a specific supplier is selected, export their detailed statement
-            Util.exportXlsSupplierStatement(selected, tb_debt_details.getItems());
-        } else {
-            // Otherwise export all suppliers with debts as before
-            Util.exportXlsSuppliersDebt(lisfournisseur);
-        }
+        Executors.newSingleThreadExecutor().submit(() -> {
+            if (selected != null) {
+                // If a specific supplier is selected, export their detailed statement
+                Util.exportXlsSupplierStatement(selected, new java.util.ArrayList<>(tb_debt_details.getItems()));
+            } else {
+                // Otherwise export all suppliers with debts as before
+                Util.exportXlsSuppliersDebt(new java.util.ArrayList<>(lisfournisseur));
+            }
+            javafx.application.Platform.runLater(() -> {
+                MainUI.notify(null, "Succès", "L'exportation Excel a été effectuée", 4, "info");
+            });
+        });
     }
 
     @FXML
     private void exportSuppliersDebtPdf(MouseEvent event) {
         Fournisseur selected = listvu_suppliers_debt.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            MainUI.notify(null, "Attention", "Veuillez selectionner un fournisseur dans la liste des dettes", 2, "warning");
+            // Export all suppliers with debts to PDF (bonus logic retained for completeness)
+            Executors.newSingleThreadExecutor()
+                    .submit(() -> {
+                        File f = Util.exportPdfSuppliersDebt(new java.util.ArrayList<>(lisfournisseur), entreprise);
+                        javafx.application.Platform.runLater(() -> {
+                            if (f != null) {
+                                MainUI.notify(null, "Succès", "La liste globale des dettes a été exportée en PDF", 4, "info");
+                            } else {
+                                MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
+                            }
+                        });
+
+                        if (f != null) {
+                            try {
+                                Desktop.getDesktop().open(f);
+                            } catch (Exception ex) {
+                                Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                        }
+                    });
             return;
         }
-        List<Livraison> dataCopy = new java.util.ArrayList<>(tb_debt_details.getItems());
+        exportSupplierDebtToPdf(selected);
+    }
+
+    private void exportSupplierDebtToPdf(Fournisseur f) {
+        List<Livraison> dataCopy = new java.util.ArrayList<>(ls_supplier_debt_details);
         Executors.newSingleThreadExecutor()
                 .submit(() -> { 
-                    File f = Util.exportPdfSupplierStatement(selected, dataCopy, entreprise);
+                    File file = Util.exportPdfSupplierStatement(f, dataCopy, entreprise);
                     javafx.application.Platform.runLater(() -> {
-                        if (f != null) {
+                        if (file != null) {
                             MainUI.notify(null, "Succès", "L'état de dette a été exporté en PDF", 4, "info");
                         } else {
                             MainUI.notify(null, "Erreur", "Echec de l'exportation PDF", 4, "error");
                         }
                     });
                     
-                    if (f != null) {
+                    if (file != null) {
                         try {
-                            Desktop.getDesktop().open(f);
-                        } catch (Exception ex) {
+                            Desktop.getDesktop().open(file);
+                        } catch (IOException ex) {
                             Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
                 });
-
     }
 
     @Override
