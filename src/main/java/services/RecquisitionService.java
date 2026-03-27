@@ -3077,7 +3077,7 @@ public class RecquisitionService implements RecquisitionStorage {
 
     public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, double coutAch) {
         Mesure unite = MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
-        stock = findClosedStock(datedebut, datefin, produit.getUid());
+        stock = findClosedStock(datedebut, datefin, produit.getUid(), region, "Journalier du " + LocalDate.now());
         double E = sommeEntreeSurPeriode(produit.getUid(), datedebut, datefin, region);
         double SV = sommeSortieSurPeriode(produit.getUid(), datedebut, datefin, region);
         double stockInit = calculerStockInitialEnUnite(produit.getUid(), datedebut, region);
@@ -3124,7 +3124,7 @@ public class RecquisitionService implements RecquisitionStorage {
             stock.setInitialQuantity(stockInit);
             stock.setExpiree(expiree);
             stock.setContext("Journalier du " + LocalDate.now());
-            stock.setFinalQuantity(stockFinalValid);
+            stock.setFinalQuantity(stockFinalValid < 0 ? 0 : stockFinalValid);
             if (ManagedSessionFactory.isEmbedded()) {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.merge(stock);
@@ -3227,17 +3227,20 @@ public class RecquisitionService implements RecquisitionStorage {
         StringBuilder sb = new StringBuilder();
         Query query;
         sb.append(
-                "SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.product_id = ? AND s.context = ?");
+                "SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.product_id = ?");
         if (ManagedSessionFactory.isEmbedded()) {
             try {
                 return ManagedSessionFactory
-                        .executeRead(em -> (StockAgregate) em.createNativeQuery(sb.toString(), StockAgregate.class)
-                        .setParameter(1, today.atStartOfDay())
-                        .setParameter(2, today1.atTime(23, 59, 59))
-                        .setParameter(3, region)
-                        .setParameter(4, uid)
-                        .setParameter(5, cloture_type).getResultList().getFirst());
-            } catch (NoSuchElementException e) {
+                        .executeRead(em -> {
+                            List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                                .setParameter(1, today.atStartOfDay())
+                                .setParameter(2, today1.atTime(23, 59, 59))
+                                .setParameter(3, region)
+                                .setParameter(4, uid)
+                                .getResultList();
+                            return results.isEmpty() ? null : results.get(0);
+                        });
+            } catch (Exception e) {
                 return null;
             }
         }
@@ -3246,7 +3249,6 @@ public class RecquisitionService implements RecquisitionStorage {
         query.setParameter(2, today1.atTime(23, 59, 59));
         query.setParameter(3, region);
         query.setParameter(4, uid);
-        query.setParameter(5, cloture_type);
         List<StockAgregate> results = query.getResultList();
         return results.isEmpty() ? null : results.get(0);
     }
