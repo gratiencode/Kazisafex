@@ -1903,58 +1903,60 @@ public class RecquisitionService implements RecquisitionStorage {
     public List<ListViewItem> populate() {
         List<ListViewItem> result = new ArrayList<>();
         List<Produit> produits = getProduits();
-        System.out.println("Avant tout nombre de produit = " + produits.size());
-        produits.forEach(product -> {
-            StockAgregate aggreg = findClosedStock(LocalDate.now(), LocalDate.now(), product.getUid());
+        System.out.println("Populating products, total product count = " + produits.size());
+
+        for (Produit product : produits) {
+            // Must have a recent StockAgregate record
+            StockAgregate aggreg = findLatestStockAgregate(product.getUid());
+            // AND must have a recquisition
             Recquisition r = getLastEntry(product.getUid());
-            if (aggreg == null) {
-                if (r != null) {
-                    aggreg = saveStockFromRecquisition(r);
-                }
-            }
-            if (aggreg != null) {
-                if (!(r == null)) {
-                    Mesure mesure = aggreg.getMesureId();
-                    if (mesure != null) {
-                        PrixDeVente pvd = getExistingPricefor(r,
-                                MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
-                        if (!(pvd == null)) {
-                            double qr = aggreg.getFinalQuantity();
-                            if (!(qr <= 0)) {
-                                double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu())
-                                        .setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                                List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-                                ListViewItem item = new ListViewItem();
-                                item.setQuantiteRestant(qw);
-                                item.setMesureAchat(mesure);
-                                item.setCoutAchat(aggreg.getCoutAchat());
-                                item.setNumlot(r.getNumlot());
-                                item.setPeremption(r.getDateExpiry());
-                                item.setProduit(product);
-                                item.setPurchasePrice(r.getCoutAchat());
-                                Mesure detailMesure = pvd.getMesureId() == null
+
+            if (aggreg != null && r != null) {
+                Mesure mesure = aggreg.getMesureId();
+                if (mesure != null) {
+                    // AND must have a price
+                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    if (pvd != null) {
+                        double qr = aggreg.getFinalQuantity();
+                        // AND quantity must be > 0
+                        if (qr > 0) {
+                            double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu())
+                                    .setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
+                            
+                            ListViewItem item = new ListViewItem();
+                            item.setQuantiteRestant(qw);
+                            item.setMesureAchat(mesure);
+                            item.setCoutAchat(aggreg.getCoutAchat());
+                            item.setNumlot(r.getNumlot());
+                            item.setPeremption(r.getDateExpiry());
+                            item.setProduit(product);
+                            item.setPurchasePrice(r.getCoutAchat());
+                            
+                            Mesure detailMesure = pvd.getMesureId() == null
+                                    ? findMinMesureForProduit(product.getUid())
+                                    : pvd.getMesureId();
+                            item.setMesureDetail(detailMesure);
+                            item.setDetailPrice(pvd.getPrixUnitaire());
+                            
+                            if (!gros.isEmpty()) {
+                                PrixDeVente grprix = gros.getLast();
+                                Mesure grosMesure = grprix.getMesureId() == null
                                         ? findMinMesureForProduit(product.getUid())
-                                        : pvd.getMesureId();
-                                item.setMesureDetail(detailMesure);
-                                item.setDetailPrice(pvd.getPrixUnitaire());
-                                if (!gros.isEmpty()) {
-                                    PrixDeVente grprix = gros.getLast();
-                                    Mesure grosMesure = grprix.getMesureId() == null
-                                            ? findMinMesureForProduit(product.getUid())
-                                            : grprix.getMesureId();
-                                    item.setMesureGros(grosMesure);
-                                    item.setSalePrice(grprix.getPrixUnitaire());
-                                } else {
-                                    item.setMesureGros(detailMesure);
-                                    item.setSalePrice(pvd.getPrixUnitaire());
-                                }
-                                result.add(item);
+                                        : grprix.getMesureId();
+                                item.setMesureGros(grosMesure);
+                                item.setSalePrice(grprix.getPrixUnitaire());
+                            } else {
+                                item.setMesureGros(detailMesure);
+                                item.setSalePrice(pvd.getPrixUnitaire());
                             }
+                            result.add(item);
                         }
                     }
                 }
             }
-        });
+        }
+        System.out.println("Populate result size = " + result.size());
         return result;
     }
 
@@ -1963,52 +1965,58 @@ public class RecquisitionService implements RecquisitionStorage {
         List<ListViewItem> result = new ArrayList<>();
         List<Produit> produits = getProduits();
         for (Produit product : produits) {
-            StockAgregate aggreg = findClosedStock(LocalDate.now(), LocalDate.now(), product.getUid(), region,
-                    context_cloture);
-            if (aggreg == null) {
-                Recquisition dernierR = getLastEntry("lifo", product, region);
-                if (dernierR == null) {
-                    continue;
+            // Must have a recent StockAgregate record for the region
+            StockAgregate aggreg = findLatestStockAgregate(product.getUid(), region);
+            
+            // AND must have a recquisition
+            Recquisition r = getLastEntry("lifo", product, region);
+            if (r == null) {
+                r = getLastEntry(product.getUid());
+            }
+
+            if (aggreg != null && r != null) {
+                Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
+                        : aggreg.getMesureId();
+                if (mesure != null) {
+                    // AND must have a price
+                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    if (pvd != null) {
+                        double qr = aggreg.getFinalQuantity();
+                        // AND quantity must be > 0
+                        if (qr > 0) {
+                            double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu()).setScale(2, RoundingMode.HALF_EVEN)
+                                    .doubleValue();
+                            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
+                            
+                            ListViewItem item = new ListViewItem();
+                            item.setQuantiteRestant(qw);
+                            item.setMesureAchat(mesure);
+                            item.setCoutAchat(aggreg.getCoutAchat());
+                            item.setNumlot(r.getNumlot());
+                            item.setPeremption(r.getDateExpiry());
+                            item.setProduit(product);
+                            item.setPurchasePrice(r.getCoutAchat());
+                            
+                            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                    : pvd.getMesureId();
+                            item.setMesureDetail(detailMesure);
+                            item.setDetailPrice(pvd.getPrixUnitaire());
+                            
+                            if (!gros.isEmpty()) {
+                                PrixDeVente grprix = gros.getLast();
+                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                        : grprix.getMesureId();
+                                item.setMesureGros(grosMesure);
+                                item.setSalePrice(grprix.getPrixUnitaire());
+                            } else {
+                                item.setMesureGros(detailMesure);
+                                item.setSalePrice(pvd.getPrixUnitaire());
+                            }
+                            result.add(item);
+                        }
+                    }
                 }
-                aggreg = saveStockFromRecquisition(dernierR);
             }
-            Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
-                    : aggreg.getMesureId();
-            Recquisition r = getLastEntry(product.getUid());
-            PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
-            if (pvd == null) {
-                continue;
-            }
-            double qr = aggreg.getFinalQuantity();
-            if (qr <= 0) {
-                continue;
-            }
-            double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu()).setScale(2, RoundingMode.HALF_EVEN)
-                    .doubleValue();
-            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-            ListViewItem item = new ListViewItem();
-            item.setQuantiteRestant(qw);
-            item.setMesureAchat(mesure);
-            item.setCoutAchat(aggreg.getCoutAchat());
-            item.setNumlot(r.getNumlot());
-            item.setPeremption(r.getDateExpiry());
-            item.setProduit(product);
-            item.setPurchasePrice(r.getCoutAchat());
-            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                    : pvd.getMesureId();
-            item.setMesureDetail(detailMesure);
-            item.setDetailPrice(pvd.getPrixUnitaire());
-            if (!gros.isEmpty()) {
-                PrixDeVente grprix = gros.getLast();
-                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                        : grprix.getMesureId();
-                item.setMesureGros(grosMesure);
-                item.setSalePrice(grprix.getPrixUnitaire());
-            } else {
-                item.setMesureGros(detailMesure);
-                item.setSalePrice(pvd.getPrixUnitaire());
-            }
-            result.add(item);
         }
         return result;
     }
@@ -2018,49 +2026,45 @@ public class RecquisitionService implements RecquisitionStorage {
         List<ListViewItem> result = new ArrayList<>();
         List<Produit> produits = getProduits(category);
         for (Produit product : produits) {
-            StockAgregate aggreg = findClosedStock(LocalDate.now(), LocalDate.now(), product.getUid());
-            if (aggreg == null) {
-                Recquisition dernierR = getLastEntry(product.getUid());
-                if (dernierR == null) {
-                    continue;
-                }
-                aggreg = saveStockFromRecquisition(dernierR);
-            }
-            Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
-                    : aggreg.getMesureId();
+            StockAgregate aggreg = findLatestStockAgregate(product.getUid());
             Recquisition r = getLastEntry(product.getUid());
-            PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
-            if (pvd == null) {
-                continue;
+
+            if (aggreg != null && r != null) {
+                Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
+                        : aggreg.getMesureId();
+                if (mesure != null) {
+                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    if (pvd != null) {
+                        double qr = aggreg.getFinalQuantity();
+                        if (qr > 0) {
+                            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
+                            ListViewItem item = new ListViewItem();
+                            item.setQuantiteRestant(qr);
+                            item.setMesureAchat(mesure);
+                            item.setCoutAchat(aggreg.getCoutAchat());
+                            item.setNumlot(r.getNumlot());
+                            item.setPeremption(r.getDateExpiry());
+                            item.setProduit(product);
+                            item.setPurchasePrice(r.getCoutAchat());
+                            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                    : pvd.getMesureId();
+                            item.setMesureDetail(detailMesure);
+                            item.setDetailPrice(pvd.getPrixUnitaire());
+                            if (!gros.isEmpty()) {
+                                PrixDeVente grprix = gros.getLast();
+                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                        : grprix.getMesureId();
+                                item.setMesureGros(grosMesure);
+                                item.setSalePrice(grprix.getPrixUnitaire());
+                            } else {
+                                item.setMesureGros(detailMesure);
+                                item.setSalePrice(pvd.getPrixUnitaire());
+                            }
+                            result.add(item);
+                        }
+                    }
+                }
             }
-            double qr = aggreg.getFinalQuantity();
-            if (qr <= 0) {
-                continue;
-            }
-            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-            ListViewItem item = new ListViewItem();
-            item.setQuantiteRestant(qr);
-            item.setMesureAchat(mesure);
-            item.setCoutAchat(aggreg.getCoutAchat());
-            item.setNumlot(r.getNumlot());
-            item.setPeremption(r.getDateExpiry());
-            item.setProduit(product);
-            item.setPurchasePrice(r.getCoutAchat());
-            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                    : pvd.getMesureId();
-            item.setMesureDetail(detailMesure);
-            item.setDetailPrice(pvd.getPrixUnitaire());
-            if (!gros.isEmpty()) {
-                PrixDeVente grprix = gros.getLast();
-                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                        : grprix.getMesureId();
-                item.setMesureGros(grosMesure);
-                item.setSalePrice(grprix.getPrixUnitaire());
-            } else {
-                item.setMesureGros(detailMesure);
-                item.setSalePrice(pvd.getPrixUnitaire());
-            }
-            result.add(item);
         }
         return result;
     }
@@ -2070,50 +2074,45 @@ public class RecquisitionService implements RecquisitionStorage {
         List<ListViewItem> result = new ArrayList<>();
         List<Produit> produits = getProduits(category);
         for (Produit product : produits) {
-            StockAgregate aggreg = findClosedStock(LocalDate.now(), LocalDate.now(), product.getUid(), region,
-                    "Journalier du " + LocalDate.now());
-            if (aggreg == null) {
-                Recquisition dernierR = getLastEntry(product.getUid());
-                if (dernierR == null) {
-                    continue;
-                }
-                aggreg = saveStockFromRecquisition(dernierR);
-            }
-            Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
-                    : aggreg.getMesureId();
+            StockAgregate aggreg = findLatestStockAgregate(product.getUid(), region);
             Recquisition r = getHeaderRecq(Constants.getStringPref("meth", "fifo"), product, region);
-            PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
-            if (pvd == null) {
-                continue;
+            
+            if (aggreg != null && r != null) {
+                Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
+                        : aggreg.getMesureId();
+                if (mesure != null) {
+                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    if (pvd != null) {
+                        double qr = aggreg.getFinalQuantity();
+                        if (qr > 0) {
+                            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
+                            ListViewItem item = new ListViewItem();
+                            item.setQuantiteRestant(qr);
+                            item.setMesureAchat(mesure);
+                            item.setCoutAchat(aggreg.getCoutAchat());
+                            item.setNumlot(r.getNumlot());
+                            item.setPeremption(r.getDateExpiry());
+                            item.setProduit(product);
+                            item.setPurchasePrice(r.getCoutAchat());
+                            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                    : pvd.getMesureId();
+                            item.setMesureDetail(detailMesure);
+                            item.setDetailPrice(pvd.getPrixUnitaire());
+                            if (!gros.isEmpty()) {
+                                PrixDeVente grprix = gros.getLast();
+                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                        : grprix.getMesureId();
+                                item.setMesureGros(grosMesure);
+                                item.setSalePrice(grprix.getPrixUnitaire());
+                            } else {
+                                item.setMesureGros(detailMesure);
+                                item.setSalePrice(pvd.getPrixUnitaire());
+                            }
+                            result.add(item);
+                        }
+                    }
+                }
             }
-            double qr = aggreg.getFinalQuantity();
-            if (qr <= 0) {
-                continue;
-            }
-            List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-            ListViewItem item = new ListViewItem();
-            item.setQuantiteRestant(qr);
-            item.setMesureAchat(mesure);
-            item.setCoutAchat(aggreg.getCoutAchat());
-            item.setNumlot(r.getNumlot());
-            item.setPeremption(r.getDateExpiry());
-            item.setProduit(product);
-            item.setPurchasePrice(r.getCoutAchat());
-            Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                    : pvd.getMesureId();
-            item.setMesureDetail(detailMesure);
-            item.setDetailPrice(pvd.getPrixUnitaire());
-            if (!gros.isEmpty()) {
-                PrixDeVente grprix = gros.getLast();
-                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
-                        : grprix.getMesureId();
-                item.setMesureGros(grosMesure);
-                item.setSalePrice(grprix.getPrixUnitaire());
-            } else {
-                item.setMesureGros(detailMesure);
-                item.setSalePrice(pvd.getPrixUnitaire());
-            }
-            result.add(item);
         }
         return result;
     }
@@ -3277,6 +3276,56 @@ public class RecquisitionService implements RecquisitionStorage {
             query.setMaxResults(1);
             return (StockAgregate) query.getSingleResult();
         } catch (NoResultException ex) {
+            return null;
+        }
+    }
+
+    private StockAgregate findLatestStockAgregate(String productId) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? ORDER BY date DESC LIMIT 1");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, productId)
+                            .setMaxResults(1)
+                            .getResultList();
+                    return results.isEmpty() ? null : results.get(0);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setMaxResults(1)
+                    .getResultList();
+            return results.isEmpty() ? null : results.get(0);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private StockAgregate findLatestStockAgregate(String productId, String region) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND region LIKE ? ORDER BY date DESC LIMIT 1");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, productId)
+                            .setParameter(2, region)
+                            .setMaxResults(1)
+                            .getResultList();
+                    return results.isEmpty() ? null : results.get(0);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .setMaxResults(1)
+                    .getResultList();
+            return results.isEmpty() ? null : results.get(0);
+        } catch (Exception e) {
             return null;
         }
     }

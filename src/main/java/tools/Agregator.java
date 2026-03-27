@@ -122,25 +122,19 @@ public class Agregator {
                         if (region == null) {
                             return;
                         }
-                        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
-                        ScheduledFuture<Boolean> futur = ses.schedule(() -> {
-                            List<Produit> produits = ProduitDelegate.findProduits();
-                            int size = produits.size();
-                            for (int i = 0; i < size; i++) {
-                                Produit produit = produits.get(i);
-                                RecquisitionDelegate.cloturerUnProduit(produit, region, date1, date2, context);
-                                notifyProgress(i, size, "Stock " + produit.getNomProduit() + " cloturé");
-                            }
-                            return Boolean.TRUE;
-                        }, 3, TimeUnit.SECONDS);
-                        ses.awaitTermination(4, TimeUnit.SECONDS);
-                        finish = futur.get();
-                        notifyFinish(finish,"stock-cloture");
+                        List<Produit> produits = ProduitDelegate.findProduits();
+                        int size = produits.size();
+                        for (int i = 0; i < size; i++) {
+                            Produit produit = produits.get(i);
+                            RecquisitionDelegate.cloturerUnProduit(produit, region, date1, date2, context);
+                            notifyProgress(i, size, "Stock " + produit.getNomProduit() + " cloturé");
+                        }
+                        finish = true;
+                        notifyFinish(finish, "stock-cloture");
 
-                    } catch (InterruptedException ex) {
+                    } catch (Exception ex) {
                         Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
-                    } catch (ExecutionException ex) {
-                        Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
+                        notifyFinish(false, "stock-cloture");
                     }
                 });
     }
