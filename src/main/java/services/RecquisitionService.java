@@ -3285,7 +3285,7 @@ public class RecquisitionService implements RecquisitionStorage {
     private StockAgregate findLatestStockAgregate(String productId) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? ORDER BY date DESC LIMIT 1");
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? ORDER BY date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
@@ -3309,7 +3309,7 @@ public class RecquisitionService implements RecquisitionStorage {
     private StockAgregate findLatestStockAgregate(String productId, String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND region LIKE ? ORDER BY date DESC LIMIT 1");
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND region LIKE ? ORDER BY date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
