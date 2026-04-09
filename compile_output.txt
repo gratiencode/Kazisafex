@@ -1,0 +1,41 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.endeleya:Kazisafex >-----------------------
+[INFO] Building Kazisafex 2.0.25-build6
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ Kazisafex ---
+[INFO] Copying 185 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.11.0:compile (default-compile) @ Kazisafex ---
+[WARNING] *********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+[WARNING] * Required filename-based automodules detected: [commons-math3-3.6.1.jar, kernel-7.1.16.jar, layout-7.1.16.jar, hyph-7.1.16.jar, sign-7.1.16.jar, pdftest-7.1.16.jar, pdfa-9.1.0.jar, styled-xml-parser-9.1.0.jar, barcodes-9.1.0.jar, org.eclipse.persistence.core-2.7.12.jar, swing-toast-notifications-1.0.2.jar, controlsfx-8.40.11.jar, escpos-coffee-4.1.0.jar, okhttp-eventsource-3.0.0.jar, launchdarkly-logging-1.1.1.jar]. Please don't publish this project to a public artifact repository! *
+[WARNING] *********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 360 source files with javac [debug release 22 module-path] to target/classes
+[INFO] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java: /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java uses preview features of Java SE 22.
+[INFO] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java: Recompile with -Xlint:preview for details.
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java:[6464,1] class, interface, enum, or record expected
+[ERROR] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java:[6,1] implicitly declared class should not have package declaration
+[INFO] 2 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  7.264 s
+[INFO] Finished at: 2026-04-03T11:10:47+02:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project Kazisafex: Compilation failure: Compilation failure: 
+[ERROR] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java:[6464,1] class, interface, enum, or record expected
+[ERROR] /home/endeleya/NetBeansProjects/Kazisafex/src/main/java/com/endeleya/kazisafex/PosController.java:[6,1] implicitly declared class should not have package declaration
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

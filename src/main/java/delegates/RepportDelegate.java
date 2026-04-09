@@ -144,6 +144,16 @@ public class RepportDelegate {
         return getStorage().createMetrics(sa);
     }
 
+    public static void deleteMetric(SaleAgregate sa) {
+        getStorage().deleteMetrics(sa);
+    }
+
+    public static void refreshMetric(SaleAgregate sa) {
+        // Refresh metric by deleting and recreating
+        getStorage().deleteMetrics(sa);
+        getStorage().createMetrics(sa);
+    }
+
     public static Double turnOverOf(LocalDate date1, LocalDate date2, String region) {
         return getStorage().turnOverOf(date1, date2, region);
     }

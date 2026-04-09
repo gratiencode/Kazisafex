@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
@@ -206,8 +207,8 @@ public class PosController implements Initializable {
     Label rupt_count;
     @FXML
     Label progs;
-//    @FXML
-//    private TabPane tabpane_pos;
+    // @FXML
+    // private TabPane tabpane_pos;
     @FXML
     private Tab tab_pos;
     @FXML
@@ -221,8 +222,8 @@ public class PosController implements Initializable {
     Pane pane_wait_import;
     @FXML
     private TilePane tile_pane;
-//    @FXML
-//    private Tab tab_requisition;
+    // @FXML
+    // private Tab tab_requisition;
     @FXML
     Tab tab_rupture;
     @FXML
@@ -262,7 +263,7 @@ public class PosController implements Initializable {
     @FXML
     ProgressIndicator syncIndicator;
     Fournisseur choosenSupply;
-    //rupture
+    // rupture
     ObservableList<Rupture> obl_rupture_list;
     @FXML
     private CheckBox chbx_xall;
@@ -288,7 +289,7 @@ public class PosController implements Initializable {
     private TableColumn<Rupture, Boolean> tbl_rupt_select;
     @FXML
     private TableColumn<Rupture, Number> tbl_rupt_alert;
-    //end rupture
+    // end rupture
 
     @FXML
     private TableView<Recquisition> table_req;
@@ -619,7 +620,7 @@ public class PosController implements Initializable {
     private ScheduledExecutorService visibilityScheduler;
     int count_logic = 0;
     int pospg = 0;
-    //JpaStorage db;
+    // JpaStorage db;
 
     ObservableList<Cart> cart;
     ObservableList<Recquisition> lsreq;
@@ -886,7 +887,7 @@ public class PosController implements Initializable {
                 return cbx_categofilter.getItems()
                         .stream()
                         .filter(f -> (f.getDescritption())
-                        .equalsIgnoreCase(string))
+                                .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
         });
@@ -894,15 +895,18 @@ public class PosController implements Initializable {
         cbx_forunisseur_cmd.setConverter(new StringConverter<Fournisseur>() {
             @Override
             public String toString(Fournisseur object) {
-                return object == null ? null : object.getNomFourn() + " " + (object.getAdresse() == null ? "" : object.getAdresse()) + ", Tel :" + object.getPhone();
+                return object == null ? null
+                        : object.getNomFourn() + " " + (object.getAdresse() == null ? "" : object.getAdresse())
+                                + ", Tel :" + object.getPhone();
             }
 
             @Override
             public Fournisseur fromString(String string) {
                 return cbx_forunisseur_cmd.getItems()
                         .stream()
-                        .filter(f -> (f.getNomFourn() + " " + (f.getAdresse() == null ? "" : f.getAdresse()) + ", Tel :" + f.getPhone())
-                        .equalsIgnoreCase(string))
+                        .filter(f -> (f.getNomFourn() + " " + (f.getAdresse() == null ? "" : f.getAdresse()) + ", Tel :"
+                                + f.getPhone())
+                                .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
         });
@@ -912,9 +916,9 @@ public class PosController implements Initializable {
     public void addRecquisition(Recquisition liv) {
         Recquisition l = RecquisitionDelegate.findRecquisition(liv.getUid());
         if (l == null) {
-            l = RecquisitionDelegate.saveRecquisition(liv);//db.insertOnly(liv);
+            l = RecquisitionDelegate.saveRecquisition(liv);// db.insertOnly(liv);
         } else {
-            l = RecquisitionDelegate.updateRecquisition(liv);//db.updateOnly(liv);
+            l = RecquisitionDelegate.updateRecquisition(liv);// db.updateOnly(liv);
         }
         lsreq.add(l);
     }
@@ -922,9 +926,9 @@ public class PosController implements Initializable {
     public void addPrixDeVente(PrixDeVente liv) {
         PrixDeVente l = PrixDeVenteDelegate.findPrixDeVente(liv.getUid());
         if (l == null) {
-            PrixDeVenteDelegate.savePrixDeVente(liv);//db.insertOnly(liv);
+            PrixDeVenteDelegate.savePrixDeVente(liv);// db.insertOnly(liv);
         } else {
-            l = PrixDeVenteDelegate.updatePrixDeVente(liv);//db.updateOnly(liv);
+            l = PrixDeVenteDelegate.updatePrixDeVente(liv);// db.updateOnly(liv);
         }
     }
 
@@ -934,11 +938,11 @@ public class PosController implements Initializable {
     }
 
     public void addVentex(Vente liv) {
-        Vente l = VenteDelegate.findVente(liv.getUid());//db.findByUid(Vente.class, liv.getUid());
+        Vente l = VenteDelegate.findVente(liv.getUid());// db.findByUid(Vente.class, liv.getUid());
         if (l == null) {
-            l = VenteDelegate.saveVente(liv);//db.insertOnly(liv);
+            l = VenteDelegate.saveVente(liv);// db.insertOnly(liv);
         } else {
-            l = VenteDelegate.updateVente(liv);//db.updateOnly(liv);
+            l = VenteDelegate.updateVente(liv);// db.updateOnly(liv);
         }
 
     }
@@ -947,9 +951,10 @@ public class PosController implements Initializable {
     public void showSaveCartPane(Event e) {
         saveCartPane.setVisible(true);
     }
+
     int compteur = 0;
     double cmdvalue = 0;
-    //Vente cartsv;
+    // Vente cartsv;
 
     @FXML
     public void saveCart(Event e) {
@@ -1013,7 +1018,7 @@ public class PosController implements Initializable {
                     if (selectedCart == null) {
                         compteur = 1;
                     }
-                }       //            pref.putInt("_bill_counter_", compteur);
+                } // pref.putInt("_bill_counter_", compteur);
                 reference = String.format("%06d", compteur);
                 break;
             }
@@ -1021,7 +1026,7 @@ public class PosController implements Initializable {
                 compteur = pref.getInt("_bill_counter_", 0);
                 if (selectedCart == null) {
                     compteur++;
-                }   //            pref.putInt("_bill_counter_", compteur);
+                } // pref.putInt("_bill_counter_", compteur);
                 reference = String.format("%08d", compteur);
                 break;
             default:
@@ -1030,7 +1035,7 @@ public class PosController implements Initializable {
         }
 
         final Vente theCart = new Vente(tranzit);
-        Client anonym = ClientDelegate.findAnonymousClient();//db.getAnonymousClient();
+        Client anonym = ClientDelegate.findAnonymousClient();// db.getAnonymousClient();
         theCart.setLibelle(tf_cart_label.getText());
         theCart.setObservation("Drafted");
         theCart.setClientId(anonym);
@@ -1044,7 +1049,8 @@ public class PosController implements Initializable {
             theCart.setMontantUsd(savedSum);
         } else {
             theCart.setMontantCdf(savedSum);
-            theCart.setMontantUsd(BigDecimal.valueOf(savedSum / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            theCart.setMontantUsd(
+                    BigDecimal.valueOf(savedSum / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
         }
 
         theCart.setMontantDette(0d);
@@ -1084,7 +1090,7 @@ public class PosController implements Initializable {
             VenteDelegate.deleteVente(theCart);
         }
 
-        final Vente vt = VenteDelegate.saveVente(theCart);//db.insertAndSync(theCart);
+        final Vente vt = VenteDelegate.saveVente(theCart);// db.insertAndSync(theCart);
         Executors.newCachedThreadPool()
                 .submit(() -> {
                     Util.sync(vt, Constants.ACTION_CREATE, Tables.VENTE);
@@ -1107,14 +1113,14 @@ public class PosController implements Initializable {
     public void addLigneVente(LigneVente liv) {
         LigneVente l = LigneVenteDelegate.findLigneVente(liv.getUid());
         if (l == null) {
-            LigneVenteDelegate.saveLigneVente(liv);//db.insertOnly(liv);
+            LigneVenteDelegate.saveLigneVente(liv);// db.insertOnly(liv);
         }
     }
 
     private static PosController instance;
 
     public PosController() {
-        //db = JpaStorage.getInstance();
+        // db = JpaStorage.getInstance();
         lsreq = FXCollections.observableArrayList();
         instance = this;
     }
@@ -1191,11 +1197,12 @@ public class PosController implements Initializable {
         cm.getItems().add(menuItem3);
         menuItem.setOnAction((ActionEvent event) -> {
             if (choosenVente != null) {
-                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe, choosenVente.getLigneVenteList(), choosenVente, entreprise, choosenVente.getClientId());
+                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe,
+                        choosenVente.getLigneVenteList(), choosenVente, entreprise, choosenVente.getClientId());
             }
         });
         menuRetour.setOnAction((ActionEvent event) -> {
-            //To change body of generated methods, choose Tools | Templates.
+            // To change body of generated methods, choose Tools | Templates.
             if (choosenVente != null) {
                 List<LigneVente> lgvs = LigneVenteDelegate.findByReference(choosenVente.getUid());
                 if (lgvs.isEmpty()) {
@@ -1211,18 +1218,21 @@ public class PosController implements Initializable {
         });
         menuItem2.setOnAction((ActionEvent event) -> {
             if (choosenVente != null) {
-                // List<Vente> lvts = VenteDelegate.findCreditSaleByRef(choosenVente.getReference());
+                // List<Vente> lvts =
+                // VenteDelegate.findCreditSaleByRef(choosenVente.getReference());
                 Vente vnt = VenteDelegate.findVente(choosenVente.getUid());
                 System.out.println(" Ve-t " + vnt.getMontantDette());
                 if (vnt.getMontantDette() > 0) {
-                    //go to tresorerie>recouvrement
-                    MainuiController.getInstance().switchScreens(tools.Constants.CAISSE_VIEW, CAISSES, "Trésorerie", "cashier.png", vnt, null);
+                    // go to tresorerie>recouvrement
+                    MainuiController.getInstance().switchScreens(tools.Constants.CAISSE_VIEW, CAISSES, "Trésorerie",
+                            "cashier.png", vnt, null);
                 }
             }
         });
         menuItem3.setOnAction((ActionEvent event) -> {
             if (choosenVente != null) {
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer cette vente", ButtonType.YES, ButtonType.CANCEL);
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer cette vente",
+                        ButtonType.YES, ButtonType.CANCEL);
                 alert.setTitle("Attention!");
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -1252,13 +1262,19 @@ public class PosController implements Initializable {
                                     });
 
                             try {
-                                LocalDate venteDate = choosenVente.getDateVente() != null ? choosenVente.getDateVente().toLocalDate() : LocalDate.now();
-                                data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(ligv.getProductId().getUid(), venteDate, venteDate, choosenVente.getRegion());
+                                LocalDate venteDate = choosenVente.getDateVente() != null
+                                        ? choosenVente.getDateVente().toLocalDate()
+                                        : LocalDate.now();
+                                data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(
+                                        ligv.getProductId().getUid(), venteDate, venteDate, choosenVente.getRegion());
                                 if (existingSa != null) {
-                                    double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite()) - ligv.getQuantite();
-                                    double newTotal = (existingSa.getTotalSaleUsd() == null ? 0 : existingSa.getTotalSaleUsd()) - ligv.getMontantUsd();
+                                    double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite())
+                                            - ligv.getQuantite();
+                                    double newTotal = (existingSa.getTotalSaleUsd() == null ? 0
+                                            : existingSa.getTotalSaleUsd()) - ligv.getMontantUsd();
                                     double coutAch = ligv.getCoutAchat() == null ? 0 : ligv.getCoutAchat();
-                                    double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0 : existingSa.getCoutAchatTotal()) - (coutAch * ligv.getQuantite());
+                                    double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0
+                                            : existingSa.getCoutAchatTotal()) - (coutAch * ligv.getQuantite());
 
                                     existingSa.setQuantite(newQty);
                                     existingSa.setTotalSaleUsd(newTotal);
@@ -1266,7 +1282,8 @@ public class PosController implements Initializable {
                                     delegates.RepportDelegate.refreshMetric(existingSa);
                                 }
                             } catch (Exception saEx) {
-                                System.err.println("Error updating SaleAgregate on sale deletion: " + saEx.getMessage());
+                                System.err
+                                        .println("Error updating SaleAgregate on sale deletion: " + saEx.getMessage());
                             }
                         });
 
@@ -1277,7 +1294,8 @@ public class PosController implements Initializable {
                         VenteDelegate.deleteVente(choosenVente);
                         MainUI.notify(null, "Success", "Suppression faite avec succès", 2, "info");
                     } else {
-                        MainUI.notify(null, "Impossible de supprimer", "Vous n'avez pas les privileges necessaire pour effectuer la suppression", 2, "warn");
+                        MainUI.notify(null, "Impossible de supprimer",
+                                "Vous n'avez pas les privileges necessaire pour effectuer la suppression", 2, "warn");
                     }
                 }
             }
@@ -1286,18 +1304,21 @@ public class PosController implements Initializable {
 
         ttable_ventes_hyst.setContextMenu(cm);
         lsreq = FXCollections.observableArrayList();
-        ObservableList<Integer> rows = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
+        ObservableList<Integer> rows = FXCollections
+                .observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP.setItems(rows);
         rowPP.getSelectionModel().selectFirst();
         // pagination_pos.setPageFactory(this::createPosView);
         // pagination_req.setPageFactory(this::createDataPage);
         // pagination_sale.setPageFactory(this::createDataPage1);
         // pagination_inv.setPageFactory(this::createDataPage2);
-        ObservableList<Integer> rows1 = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
+        ObservableList<Integer> rows1 = FXCollections
+                .observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP1.setItems(rows1);
         rowPP1.getSelectionModel().selectFirst();
-        //pagination_sale.setPageFactory(this::createDataPage1);
-        ObservableList<Integer> rows2 = FXCollections.observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
+        // pagination_sale.setPageFactory(this::createDataPage1);
+        ObservableList<Integer> rows2 = FXCollections
+                .observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP2.setItems(rows2);
         rowPP2.getSelectionModel().selectFirst();
         list_mode_ls = FXCollections.observableArrayList();
@@ -1307,14 +1328,16 @@ public class PosController implements Initializable {
         cbx_forunisseur_cmd.getSelectionModel().selectFirst();
         // pagination_inv.setPageFactory(this::createDataPage2);
         cbx_forunisseur_cmd.setItems(obl_fournisseurs);
-        ttable_ventes_hyst.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<TreeItem<SaleItem>>() {
-            @Override
-            public void changed(ObservableValue<? extends TreeItem<SaleItem>> observable, TreeItem<SaleItem> oldValue, TreeItem<SaleItem> newValue) {
-                if (newValue != null) {
-                    choosenVente = VenteDelegate.findVente(newValue.getValue().getIdVente());
-                }
-            }
-        });
+        ttable_ventes_hyst.getSelectionModel().selectedItemProperty()
+                .addListener(new ChangeListener<TreeItem<SaleItem>>() {
+                    @Override
+                    public void changed(ObservableValue<? extends TreeItem<SaleItem>> observable,
+                            TreeItem<SaleItem> oldValue, TreeItem<SaleItem> newValue) {
+                        if (newValue != null) {
+                            choosenVente = VenteDelegate.findVente(newValue.getValue().getIdVente());
+                        }
+                    }
+                });
         ttable_ventes_hyst.focusedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
@@ -1324,7 +1347,8 @@ public class PosController implements Initializable {
         Util.installTooltip(img_vu_clear_cart, "Vider le panier");
         table_req.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Recquisition>() {
             @Override
-            public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue, Recquisition newValue) {
+            public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue,
+                    Recquisition newValue) {
                 if (newValue != null) {
                     choosenReq = newValue;
                 }
@@ -1355,12 +1379,15 @@ public class PosController implements Initializable {
 
         modif.setOnAction((ActionEvent event) -> {
             if (choosenReq != null) {
-                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, tools.Constants.ACTION_UPDATE, choosenReq, entreprise, cbx_provenance_req.getValue());
+                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, tools.Constants.ACTION_UPDATE,
+                        choosenReq, entreprise, cbx_provenance_req.getValue());
             }
         });
         del.setOnAction((ActionEvent event) -> {
             if (choosenReq != null) {
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer la recquisition selectionnée", ButtonType.YES, ButtonType.CANCEL);
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Voulez vous vraiment supprimer la recquisition selectionnée", ButtonType.YES,
+                        ButtonType.CANCEL);
                 alert.setTitle("Attention!");
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -1389,11 +1416,13 @@ public class PosController implements Initializable {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
                 if (newValue) {
-                    RecquisitionDelegate.findStockEnRupture(role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? null : region)
+                    CompletableFuture.supplyAsync(() -> RecquisitionDelegate.findStockEnRupture(
+                            role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? null : region))
                             .thenAccept(list -> {
                                 Platform.runLater(() -> {
                                     obl_rupture_list.setAll(list);
-                                    rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
+                                    rupt_count.setText(
+                                            String.format(bundle.getString("xitems"), obl_rupture_list.size()));
                                     chbx_xall.setSelected(false);
                                 });
                             });
@@ -1436,10 +1465,10 @@ public class PosController implements Initializable {
         tbcarts.setItems(savedCarts);
         cbx_paymode.setItems(FXCollections.observableArrayList("Par Banque/Cheque", "Au comptant", "En temperament"));
         cbx_modapay.setItems(FXCollections.observableArrayList("30 jours", "A la livraison", "Périodique"));
-//        pagination_pos.setPageFactory(this::createPosView);
+        // pagination_pos.setPageFactory(this::createPosView);
         pagination_req.setPageFactory(this::createDataPage);
-//        pagination_sale.setPageFactory(this::createDataPage1);
-//        pagination_inv.setPageFactory(this::createDataPage2);
+        // pagination_sale.setPageFactory(this::createDataPage1);
+        // pagination_inv.setPageFactory(this::createDataPage2);
         tab_axsoir.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
@@ -1456,11 +1485,13 @@ public class PosController implements Initializable {
                         savedCarts.add(vente);
                         somme += vente.getMontantUsd();
                     }
-                    savecartsum.setText(bundle.getString("xtotal") + " : " + somme + " USD or " + (somme * taux2change) + " CDF");
+                    savecartsum.setText(
+                            bundle.getString("xtotal") + " : " + somme + " USD or " + (somme * taux2change) + " CDF");
                 }
             }
         });
-        SpinnerValueFactory<Integer> values = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, Integer.MAX_VALUE, 1);
+        SpinnerValueFactory<Integer> values = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, Integer.MAX_VALUE,
+                1);
         values.setValue(1);
         spnr_compact_quantite.setValueFactory(values);
         spnr_compact_quantite.valueProperty().addListener(new ChangeListener<Integer>() {
@@ -1471,9 +1502,9 @@ public class PosController implements Initializable {
                 }
             }
         });
-//        Tooltip.install(btn_refresh, new Tooltip("Actualiser les données"));
-//        Tooltip.install(btn_delete, new Tooltip("Supprimer les données"));
-//        Tooltip.install(btn_export, new Tooltip("Exporter vers excel"));
+        // Tooltip.install(btn_refresh, new Tooltip("Actualiser les données"));
+        // Tooltip.install(btn_delete, new Tooltip("Supprimer les données"));
+        // Tooltip.install(btn_export, new Tooltip("Exporter vers excel"));
         Tooltip.install(btn_refresh_h, new Tooltip("Actualiser l'historique"));
         Tooltip.install(btn_export_h, new Tooltip("Exporter vers excel"));
         Tooltip.install(txt_inv_mag, new Tooltip("Valeur du stock"));
@@ -1504,7 +1535,8 @@ public class PosController implements Initializable {
 
         col_hist_ret_date.setCellValueFactory(cellData -> {
             LocalDateTime date = cellData.getValue().getDate();
-            return new SimpleStringProperty(date == null ? "" : Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(date)));
+            return new SimpleStringProperty(date == null ? ""
+                    : Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(date)));
         });
         col_hist_ret_client.setCellValueFactory(cellData -> {
             Client c = cellData.getValue().getClientId();
@@ -1555,7 +1587,7 @@ public class PosController implements Initializable {
     }
 
     private void populateRetourHistory() {
-        RecquisitionDelegate.findRetourMagasins().thenAccept(list -> {
+        CompletableFuture.supplyAsync(() -> RetourMagasinDelegate.findRetourMagasins()).thenAccept(list -> {
             Platform.runLater(() -> {
                 ols_retours.setAll(list);
             });
@@ -1563,7 +1595,9 @@ public class PosController implements Initializable {
     }
 
     private void deleteRetourMagasin(RetourMagasin r) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "REPRISE: Voulez-vous annuler ce retour et ré-insérer la vente originale ?", ButtonType.YES, ButtonType.NO);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "REPRISE: Voulez-vous annuler ce retour et ré-insérer la vente originale ?", ButtonType.YES,
+                ButtonType.NO);
         alert.showAndWait().ifPresent(type -> {
             if (type == ButtonType.YES) {
                 try {
@@ -1629,13 +1663,18 @@ public class PosController implements Initializable {
 
                     // 5. UPDATE SALE AGREGATE: add back the metric for this product
                     try {
-                        LocalDate venteDate = v.getDateVente() != null ? v.getDateVente().toLocalDate() : LocalDate.now();
-                        data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(proUid, venteDate, venteDate, region);
+                        LocalDate venteDate = v.getDateVente() != null ? v.getDateVente().toLocalDate()
+                                : LocalDate.now();
+                        data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(proUid, venteDate,
+                                venteDate, region);
                         if (existingSa != null) {
                             // Add back to existing aggregate
-                            double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite()) + quantite;
-                            double newTotal = (existingSa.getTotalSaleUsd() == null ? 0 : existingSa.getTotalSaleUsd()) + montantUsd;
-                            double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0 : existingSa.getCoutAchatTotal()) + (coutAch * quantite);
+                            double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite())
+                                    + quantite;
+                            double newTotal = (existingSa.getTotalSaleUsd() == null ? 0 : existingSa.getTotalSaleUsd())
+                                    + montantUsd;
+                            double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0
+                                    : existingSa.getCoutAchatTotal()) + (coutAch * quantite);
 
                             existingSa.setQuantite(newQty);
                             existingSa.setTotalSaleUsd(newTotal);
@@ -1647,7 +1686,9 @@ public class PosController implements Initializable {
                             data.SaleAgregate newSa = new data.SaleAgregate();
                             newSa.setUid(tools.DataId.generate());
                             newSa.setProductId(p);
-                            newSa.setCategoryId(p.getCategoryId() != null ? delegates.CategoryDelegate.findCategory(p.getCategoryId().getUid()) : null);
+                            newSa.setCategoryId(p.getCategoryId() != null
+                                    ? delegates.CategoryDelegate.findCategory(p.getCategoryId().getUid())
+                                    : null);
                             newSa.setMesureId(mesure);
                             newSa.setQuantite(quantite);
                             newSa.setTotalSaleUsd(montantUsd);
@@ -1664,7 +1705,8 @@ public class PosController implements Initializable {
                     populateRetourHistory();
                     Platform.runLater(() -> {
                         fillProductInTable(null);
-                        MainUI.notify(null, "Reprise réussie", "Le retour a été annulé et la vente ré-établie.", 3, "info");
+                        MainUI.notify(null, "Reprise réussie", "Le retour a été annulé et la vente ré-établie.", 3,
+                                "info");
                     });
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -1707,7 +1749,8 @@ public class PosController implements Initializable {
             return;
         }
         if (commandelist.isEmpty()) {
-            MainUI.notify(null, "Erreur", "Entrer la liste des produits avec des valeurs valides puis réesayer", 3, "error");
+            MainUI.notify(null, "Erreur", "Entrer la liste des produits avec des valeurs valides puis réesayer", 3,
+                    "error");
             return;
         }
 
@@ -1716,11 +1759,11 @@ public class PosController implements Initializable {
             try (PDDocument document = new PDDocument()) {
                 PDPage fPage = new PDPage(PDRectangle.A4);
                 document.addPage(fPage);
-                int pageW = (int) PDRectangle.A4.getWidth();//fPage.getTrimBox().getWidth();
-                int pageH = (int) PDRectangle.A4.getHeight();//fPage.getTrimBox().getHeight();
+                int pageW = (int) PDRectangle.A4.getWidth();// fPage.getTrimBox().getWidth();
+                int pageH = (int) PDRectangle.A4.getHeight();// fPage.getTrimBox().getHeight();
                 PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
                 PDFUtils pdf = new PDFUtils(document, contentStream);
-                //PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
+                // PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
                 // PDFont normal = new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
                 PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
                 PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -1750,26 +1793,45 @@ public class PosController implements Initializable {
                 contentStream.lineTo(pageW - 25, 700);
                 contentStream.stroke();
                 pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 180, hnormal, 18, java.awt.Color.BLACK);
-                pdf.addTextLine(new String[]{"Adresse : " + entrep.getAdresse(),
-                    "RCCM : " + entrep.getIdentification(), entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(), entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()}, 15, 25, pageH - 192, hnormal, 14, java.awt.Color.BLACK);
+                pdf.addTextLine(new String[] { "Adresse : " + entrep.getAdresse(),
+                        "RCCM : " + entrep.getIdentification(),
+                        entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                        entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot() }, 15, 25,
+                        pageH - 192, hnormal, 14, java.awt.Color.BLACK);
                 String idf = ff.getIdentification();
-                pdf.addTextLine(ff.getNomFourn(), ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 180, hnormal, 18, java.awt.Color.BLACK);
-                pdf.addTextLine(new String[]{"Adresse : " + ff.getAdresse(), idf == null ? ""
-                    : "RCCM : " + idf,
-                    "Tel : " + ff.getPhone()}, 15, ((int) (pageW - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf) / 1000 * 15 - 92)), pageH - 192, hnormal, 14, java.awt.Color.BLACK);
+                pdf.addTextLine(ff.getNomFourn(),
+                        ((int) (pageW
+                                - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf)
+                                        / 1000 * 15
+                                - 92)),
+                        pageH - 180, hnormal, 18, java.awt.Color.BLACK);
+                pdf.addTextLine(new String[] { "Adresse : " + ff.getAdresse(), idf == null ? ""
+                        : "RCCM : " + idf,
+                        "Tel : " + ff.getPhone() }, 15,
+                        ((int) (pageW
+                                - hnormal.getStringWidth(idf == null ? "Adresse : " + ff.getAdresse() : "RCCM : " + idf)
+                                        / 1000 * 15
+                                - 92)),
+                        pageH - 192, hnormal, 14, java.awt.Color.BLACK);
                 String date = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
-                pdf.addTextLine(new String[]{date,
-                    "Bon de commande N# : " + (int) (Math.random() * 100000)}, 15, ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal, 14, java.awt.Color.BLACK);
+                pdf.addTextLine(new String[] { date,
+                        "Bon de commande N# : " + (int) (Math.random() * 100000) }, 15,
+                        ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal, 14,
+                        java.awt.Color.BLACK);
                 String tfAdl = tf_adresse_livr.getText();
                 String perso = tf_conta_perso.getText();
                 String perso_phone = tf_phone_conta_perso.getText();
-                pdf.addTextLine(new String[]{"Modalité de paiement : " + cbx_modapay.getValue(),
-                    "Mode de paiement : " + cbx_paymode.getValue(), "Adresse de livraison : " + (tfAdl.isEmpty() ? entrep.getAdresse() : tfAdl), (perso.isEmpty() ? "" : "Personne de contact : " + perso), (perso_phone.isEmpty() ? "" : "Contact : " + perso_phone)}, 15, 25, pageH - 300, hnormal, 14, java.awt.Color.BLACK);
-                //Tableau items
-                int table[] = {55, 230, 100, 65, 90};
+                pdf.addTextLine(new String[] { "Modalité de paiement : " + cbx_modapay.getValue(),
+                        "Mode de paiement : " + cbx_paymode.getValue(),
+                        "Adresse de livraison : " + (tfAdl.isEmpty() ? entrep.getAdresse() : tfAdl),
+                        (perso.isEmpty() ? "" : "Personne de contact : " + perso),
+                        (perso_phone.isEmpty() ? "" : "Contact : " + perso_phone) }, 15, 25, pageH - 300, hnormal, 14,
+                        java.awt.Color.BLACK);
+                // Tableau items
+                int table[] = { 55, 230, 100, 65, 90 };
                 pdf.addTable(table, 30, 25, pageH - 400);
                 pdf.setFont(hnormal, 11, java.awt.Color.WHITE);
-                pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                 pdf.addCell("N#", endeleya);
                 pdf.addCell("Désignation", endeleya);
                 pdf.addCell("Quantité", endeleya);
@@ -1791,29 +1853,32 @@ public class PosController implements Initializable {
                             document.addPage(fPage2);
                             contentStream = new PDPageContentStream(document, fPage2);
                             pdf = new PDFUtils(document, contentStream);
-                            int tablex[] = {55, 230, 100, 65, 90};
+                            int tablex[] = { 55, 230, 100, 65, 90 };
 
                             pdf.addTable(tablex, 30, 25, pageH - 68);
                             pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
 
-                            pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                            pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                             contentStream.setFont(hnormal, 10);
                             if (ln == lpp || i == 14) {
                                 ln = 0;
                             }
                         }
-//
+                        //
                     }
 
                     Produit x = rupture.getProduit();
-                    pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                    pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                     pdf.addCell(i + ".", egray);
                     pdf.addCell(x.getNomProduit() + " "
-                            + "" + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
+                            + "" + x.getMarque() + " " + x.getModele() + " "
+                            + (x.getTaille() == null ? "" : x.getTaille()) + " "
+                            + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
                     pdf.addCell(rupture.getQuant() + " " + rupture.getMesure().getDescription(), egray);
                     pdf.addCell(rupture.getUnitprice() + " " + cbx_devise.getValue(), egray);
                     somme += rupture.getQuant() * rupture.getUnitprice();
-                    pdf.addCell(BigDecimal.valueOf(rupture.getQuant() * rupture.getUnitprice()).setScale(2, RoundingMode.HALF_EVEN) + " " + cbx_devise.getValue(), egray);
+                    pdf.addCell(BigDecimal.valueOf(rupture.getQuant() * rupture.getUnitprice()).setScale(2,
+                            RoundingMode.HALF_EVEN) + " " + cbx_devise.getValue(), egray);
 
                 }
                 if (ln == lpp - 1 || ln == 0) {
@@ -1822,10 +1887,10 @@ public class PosController implements Initializable {
                     document.addPage(fPage2);
                     contentStream = new PDPageContentStream(document, fPage2);
                     pdf = new PDFUtils(document, contentStream);
-                    int tablex[] = {55, 230, 100, 65, 90};
+                    int tablex[] = { 55, 230, 100, 65, 90 };
                     pdf.addTable(tablex, 30, 25, pageH - 68);
                     pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
-                    pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                    pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                     contentStream.setFont(hnormal, 10);
                 }
                 pdf.addCell("", null);
@@ -1837,7 +1902,8 @@ public class PosController implements Initializable {
                 pdf.addCell("", null);
                 pdf.addCell("Total", egray);
                 pdf.addCell("", egray);
-                pdf.addCell(BigDecimal.valueOf(somme).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + cbx_devise.getValue(), egray);
+                pdf.addCell(BigDecimal.valueOf(somme).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " "
+                        + cbx_devise.getValue(), egray);
                 contentStream.close();
                 bcmd = FileUtils.pointFile(System.currentTimeMillis() + ".pdf");
                 document.save(bcmd);
@@ -1865,13 +1931,13 @@ public class PosController implements Initializable {
             PDPage fPage = new PDPage(PDRectangle.A4);
             document.addPage(fPage);
 
-            int pageW = (int) PDRectangle.A4.getWidth();//fPage.getTrimBox().getWidth();
-            int pageH = (int) PDRectangle.A4.getHeight();//fPage.getTrimBox().getHeight();
+            int pageW = (int) PDRectangle.A4.getWidth();// fPage.getTrimBox().getWidth();
+            int pageH = (int) PDRectangle.A4.getHeight();// fPage.getTrimBox().getHeight();
 
             PDPageContentStream contentStream = new PDPageContentStream(document, fPage);
             PDFUtils pdf = new PDFUtils(document, contentStream);
 
-            //PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
+            // PDFont normalbold = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
             // PDFont normal = new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
             PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
             PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -1888,9 +1954,11 @@ public class PosController implements Initializable {
             contentStream.drawImage(logo, 25, pageH - 97, 72, 72);
             //
             pdf.addTextLine(entrep.getNomEntreprise(), 125, pageH - 38, hnormal, 18, java.awt.Color.BLACK);
-            pdf.addTextLine(new String[]{"Adresse : " + entrep.getAdresse(),
-                "RCCM : " + entrep.getIdentification(), entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
-                entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()}, 15, 125, pageH - 52, hnormal, 14, java.awt.Color.BLACK);
+            pdf.addTextLine(new String[] { "Adresse : " + entrep.getAdresse(),
+                    "RCCM : " + entrep.getIdentification(),
+                    entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                    entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot() }, 15, 125, pageH - 52,
+                    hnormal, 14, java.awt.Color.BLACK);
 
             contentStream.setStrokingColor(endeleya);
             contentStream.setLineWidth(2);
@@ -1898,18 +1966,20 @@ public class PosController implements Initializable {
             contentStream.lineTo(pageW - 25, 700);
             contentStream.stroke();
 
-            pdf.addTextLine("Liste de produit en rupture de stock ", 25, pageH - 320, hbold, 32, java.awt.Color.DARK_GRAY);
+            pdf.addTextLine("Liste de produit en rupture de stock ", 25, pageH - 320, hbold, 32,
+                    java.awt.Color.DARK_GRAY);
 
             String date = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
-            pdf.addTextLine(date, ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal, 14, java.awt.Color.DARK_GRAY);
+            pdf.addTextLine(date, ((int) (pageW - hnormal.getStringWidth(date) / 1000 * 15 - 32)), pageH - 260, hnormal,
+                    14, java.awt.Color.DARK_GRAY);
 
-            //Tableau items
-            int table[] = {55, 230, 100, 65, 90};
+            // Tableau items
+            int table[] = { 55, 230, 100, 65, 90 };
 
             pdf.addTable(table, 30, 25, pageH - 400);
             pdf.setFont(hnormal, 11, java.awt.Color.WHITE);
 
-            pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+            pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
 
             pdf.addCell("N#", endeleya);
             pdf.addCell("Désignation", endeleya);
@@ -1932,24 +2002,25 @@ public class PosController implements Initializable {
                         document.addPage(fPage2);
                         contentStream = new PDPageContentStream(document, fPage2);
                         pdf = new PDFUtils(document, contentStream);
-                        int tablex[] = {55, 230, 100, 65, 90};
+                        int tablex[] = { 55, 230, 100, 65, 90 };
 
                         pdf.addTable(tablex, 30, 25, pageH - 68);
                         pdf.setFont(hnormal, 10, java.awt.Color.BLACK);
-                        pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                        pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                         contentStream.setFont(hnormal, 10);
                         if (ln == lpp || i == 14) {
                             ln = 0;
                         }
                     }
-//                 
+                    //
                 }
 
                 Produit x = rupture.getProduit();
-                pdf.setRightAlignedColumns(new int[]{2, 3, 4});
+                pdf.setRightAlignedColumns(new int[] { 2, 3, 4 });
                 pdf.addCell(i + ".", egray);
                 pdf.addCell(x.getNomProduit() + " "
-                        + "" + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
+                        + "" + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille())
+                        + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
                 pdf.addCell(rupture.getQuant() + " " + rupture.getMesure().getDescription(), egray);
                 pdf.addCell(rupture.getUnitprice() + " $", egray);
                 pdf.addCell(rupture.getLocalisation(), egray);
@@ -1993,7 +2064,8 @@ public class PosController implements Initializable {
                         .submit(() -> {
                             try {
                                 System.out.println("Raprochement.....");
-                                List<PhysicalInventoryLine> datas = Util.importInventoryFromExcelFile(choosenFile, cbx_region_maginv.getValue() == null ? region : cbx_region_maginv.getValue());
+                                List<PhysicalInventoryLine> datas = Util.importInventoryFromExcelFile(choosenFile,
+                                        cbx_region_maginv.getValue() == null ? region : cbx_region_maginv.getValue());
                                 if (datas == null) {
                                     progs.setVisible(false);
                                     pgsIndicator.setVisible(false);
@@ -2005,7 +2077,9 @@ public class PosController implements Initializable {
                                 });
                                 System.out.println("Size pass datas if " + datas.size());
                                 if (datas.isEmpty()) {
-                                    MainUI.notify(null, "Error", "Ce fichier ne comporte pas les donnees valide d'inventaire de stock", 3, "error");
+                                    MainUI.notify(null, "Error",
+                                            "Ce fichier ne comporte pas les donnees valide d'inventaire de stock", 3,
+                                            "error");
                                     pgsIndicator.setVisible(false);
                                     progs.setVisible(false);
                                     return;
@@ -2035,7 +2109,8 @@ public class PosController implements Initializable {
                                         List<Category> cats = CategoryDelegate.findCategories("Divers");
                                         Category cat;
                                         if (cats.isEmpty()) {
-                                            cat = CategoryDelegate.saveCategory(new Category(DataId.generate(), "Divers"));
+                                            cat = CategoryDelegate
+                                                    .saveCategory(new Category(DataId.generate(), "Divers"));
                                         } else {
                                             cat = cats.get(0);
                                         }
@@ -2053,7 +2128,8 @@ public class PosController implements Initializable {
                                         List<Category> cats = CategoryDelegate.findCategories("Divers");
                                         Category cat;
                                         if (cats.isEmpty()) {
-                                            cat = CategoryDelegate.saveCategory(new Category(DataId.generate(), "Divers"));
+                                            cat = CategoryDelegate
+                                                    .saveCategory(new Category(DataId.generate(), "Divers"));
                                         } else {
                                             cat = cats.get(0);
                                         }
@@ -2075,7 +2151,10 @@ public class PosController implements Initializable {
                                         descr = mesure.split(":")[0];
                                         quantM = Double.parseDouble(mesure.split(":")[1]);
                                     } else {
-                                        MainUI.notify(null, "Erreur", "La mesure du produit " + data.getNomProduit() + "  a la ligne " + data.getLigne() + " est mal notee", 3, "error");
+                                        MainUI.notify(
+                                                null, "Erreur", "La mesure du produit " + data.getNomProduit()
+                                                        + "  a la ligne " + data.getLigne() + " est mal notee",
+                                                3, "error");
                                         progs.setVisible(false);
                                         pgsIndicator.setVisible(false);
                                         return;
@@ -2093,7 +2172,8 @@ public class PosController implements Initializable {
                                     }
                                     double rem;
                                     if (data.isMultiBatch()) {
-                                        rem = RecquisitionDelegate.findRemainedInMagasinForBatched(produit.getUid(), data.getNumlot());
+                                        rem = RecquisitionDelegate.findRemainedInMagasinForBatched(produit.getUid(),
+                                                data.getNumlot());
                                     } else {
                                         rem = RecquisitionDelegate.findRemainedInMagasinFor(produit.getUid());
                                     }
@@ -2101,8 +2181,9 @@ public class PosController implements Initializable {
                                     double ecart = phys - (rem / quantM);
                                     System.out.println("Ecart " + ecart);
                                     if (ecart > 0) {
-                                        //Nouveau Recquis
-                                        List<Recquisition> rqs = RecquisitionDelegate.findDescSortedByDateForProduit(produit.getUid());
+                                        // Nouveau Recquis
+                                        List<Recquisition> rqs = RecquisitionDelegate
+                                                .findDescSortedByDateForProduit(produit.getUid());
                                         Recquisition req = new Recquisition(DataId.generate());
                                         req.setCoutAchat(data.getCoutAchat());
                                         req.setDate(LocalDateTime.now());
@@ -2130,8 +2211,11 @@ public class PosController implements Initializable {
                                                                     String min = pv.split("-")[0];
                                                                     String max = pv.split("-")[1].split(":")[0];
                                                                     String px = pv.split("-")[1].split(":")[1];
-                                                                    if (StringUtils.isNumeric(min) && StringUtils.isNumeric(max) && StringUtils.isNumeric(px)) {
-                                                                        PrixDeVente prix = new PrixDeVente(DataId.generate());
+                                                                    if (StringUtils.isNumeric(min)
+                                                                            && StringUtils.isNumeric(max)
+                                                                            && StringUtils.isNumeric(px)) {
+                                                                        PrixDeVente prix = new PrixDeVente(
+                                                                                DataId.generate());
                                                                         prix.setQmin(Double.valueOf(min));
                                                                         prix.setQmax(Double.valueOf(max));
                                                                         prix.setPrixUnitaire(Double.valueOf(px));
@@ -2155,7 +2239,11 @@ public class PosController implements Initializable {
                                                             PrixDeVenteDelegate.savePrixDeVente(prix);
                                                         }
                                                     } else {
-                                                        MainUI.notify(null, "Erreur", "Le prix du produit " + data.getNomProduit() + "  a la ligne " + data.getLigne() + " est mal notee", 4, "error");
+                                                        MainUI.notify(null, "Erreur",
+                                                                "Le prix du produit " + data.getNomProduit()
+                                                                        + "  a la ligne " + data.getLigne()
+                                                                        + " est mal notee",
+                                                                4, "error");
                                                         progs.setVisible(false);
                                                         pgsIndicator.setVisible(false);
                                                         return;
@@ -2163,7 +2251,8 @@ public class PosController implements Initializable {
                                                 }
                                             }
                                         } else {
-                                            List<PrixDeVente> prices = PrixDeVenteDelegate.findPricesForRecq(rqs.get(0).getUid());
+                                            List<PrixDeVente> prices = PrixDeVenteDelegate
+                                                    .findPricesForRecq(rqs.get(0).getUid());
                                             for (PrixDeVente price : prices) {
                                                 PrixDeVente prix = new PrixDeVente(DataId.generate());
                                                 prix.setQmin(price.getQmin());
@@ -2177,7 +2266,7 @@ public class PosController implements Initializable {
                                             }
                                         }
                                     } else if (ecart < 0) {
-                                        //Nouvelle vente
+                                        // Nouvelle vente
                                         v.setRegion(data.getRegion());
                                         double q = Math.abs(ecart);
                                         LigneVente lv = new LigneVente(DataId.generateLong());
@@ -2199,10 +2288,11 @@ public class PosController implements Initializable {
                                     System.out.println("Ligne INV " + data.getLigne() + " enregistreee");
                                 }
 
-//                                createSafeVente(v);
+                                // createSafeVente(v);
                                 progs.setVisible(false);
                                 pgsIndicator.setVisible(false);
-                                MainUI.notify(null, "Error", "Importation de l'inventaire terminée avec succès ", 3, "info");
+                                MainUI.notify(null, "Error", "Importation de l'inventaire terminée avec succès ", 3,
+                                        "info");
                             } catch (Exception ex) {
                                 ex.printStackTrace();
                                 System.err.println("Exception dans l'importation inventaire " + ex.getMessage());
@@ -2218,9 +2308,9 @@ public class PosController implements Initializable {
 
     private void createSafeVente(Vente v) {
 
-//        ManagedSessionFactory.beginTransaction();
-//        ManagedSessionFactory.getEntityManager().persist(v);
-//        ManagedSessionFactory.commit();
+        // ManagedSessionFactory.beginTransaction();
+        // ManagedSessionFactory.getEntityManager().persist(v);
+        // ManagedSessionFactory.commit();
     }
 
     @FXML
@@ -2230,9 +2320,9 @@ public class PosController implements Initializable {
                 .submit(() -> {
                     List<Rupture> ruptures;
                     if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                        ruptures = RecquisitionDelegate.findStockEnRupture().join();
+                        ruptures = RecquisitionDelegate.findStockEnRupture();
                     } else {
-                        ruptures = RecquisitionDelegate.findStockEnRupture(region).join();
+                        ruptures = RecquisitionDelegate.findStockEnRupture(region);
                     }
 
                     obl_rupture_list.setAll(ruptures);
@@ -2265,7 +2355,8 @@ public class PosController implements Initializable {
             double quant = Double.parseDouble(quant_retour.getText());
 
             // Get requisition to retrieve cost price for stock rectification
-            List<Recquisition> rss = RecquisitionDelegate.findRecquisitionByProduit(elm.getProductId().getUid(), elm.getNumlot());
+            List<Recquisition> rss = RecquisitionDelegate.findRecquisitionByProduit(elm.getProductId().getUid(),
+                    elm.getNumlot());
             if (rss.isEmpty()) {
                 MainUI.notify(null, "Erreur", "Détails stock introuvables", 3, "error");
                 return;
@@ -2277,7 +2368,8 @@ public class PosController implements Initializable {
             rmg.setClientId(choosenVente.getClientId());
             rmg.setDate(LocalDateTime.now());
             rmg.setMesureId(choosenMesure4Retour);
-            String meta = elm.getProductId().getUid() + "|||" + elm.getNumlot() + "|||" + elm.getCoutAchat() + "|||" + elm.getPrixUnit() + "|||" + refBase;
+            String meta = elm.getProductId().getUid() + "|||" + elm.getNumlot() + "|||" + elm.getCoutAchat() + "|||"
+                    + elm.getPrixUnit() + "|||" + refBase;
             rmg.setMotif(meta + "|||" + valueobs);
             rmg.setPrixVente(elm.getPrixUnit());
             rmg.setQuantite(quant);
@@ -2330,7 +2422,8 @@ public class PosController implements Initializable {
 
             new Thread(() -> {
                 // 5. RECTIFICATION STOCK ONLY (no new Recquisition created)
-                RecquisitionDelegate.rectifyStock(elmFinal.getProductId(), LocalDate.now(), LocalDate.now(), region, r.getCoutAchat());
+                RecquisitionDelegate.rectifyStock(elmFinal.getProductId(), LocalDate.now(), LocalDate.now(), region,
+                        r.getCoutAchat());
 
                 // 6. UPDATE SALE AGREGATE: reduce or remove the metric for this product
                 try {
@@ -2351,13 +2444,15 @@ public class PosController implements Initializable {
 
                         if (newQty <= 0 || newTotal <= 0) {
                             delegates.RepportDelegate.deleteMetric(sa);
-                            System.out.println("SaleAgregate deleted for product: " + elmFinal.getProductId().getNomProduit());
+                            System.out.println(
+                                    "SaleAgregate deleted for product: " + elmFinal.getProductId().getNomProduit());
                         } else {
                             sa.setQuantite(newQty);
                             sa.setTotalSaleUsd(newTotal);
                             sa.setCoutAchatTotal(newCoutAchatTotal);
                             delegates.RepportDelegate.refreshMetric(sa);
-                            System.out.println("SaleAgregate updated for product: " + elmFinal.getProductId().getNomProduit());
+                            System.out.println(
+                                    "SaleAgregate updated for product: " + elmFinal.getProductId().getNomProduit());
                         }
                     } else {
                         System.out.println("No SaleAgregate found for: " + elmFinal.getProductId().getNomProduit());
@@ -2369,13 +2464,18 @@ public class PosController implements Initializable {
                 // Update SaleAgregate for the remaining deleted lines (if sale was zeroed)
                 for (LigneVente lv : linesToDelete) {
                     try {
-                        LocalDate venteDate = choosenVente.getDateVente() != null ? choosenVente.getDateVente().toLocalDate() : LocalDate.now();
-                        data.SaleAgregate sa = delegates.RepportDelegate.findSaleReportFor(lv.getProductId().getUid(), venteDate, venteDate, region);
+                        LocalDate venteDate = choosenVente.getDateVente() != null
+                                ? choosenVente.getDateVente().toLocalDate()
+                                : LocalDate.now();
+                        data.SaleAgregate sa = delegates.RepportDelegate.findSaleReportFor(lv.getProductId().getUid(),
+                                venteDate, venteDate, region);
                         if (sa != null) {
                             double newQty = (sa.getQuantite() == null ? 0 : sa.getQuantite()) - lv.getQuantite();
-                            double newTotal = (sa.getTotalSaleUsd() == null ? 0 : sa.getTotalSaleUsd()) - lv.getMontantUsd();
+                            double newTotal = (sa.getTotalSaleUsd() == null ? 0 : sa.getTotalSaleUsd())
+                                    - lv.getMontantUsd();
                             double coutAch = lv.getCoutAchat() == null ? 0 : lv.getCoutAchat();
-                            double newCoutAchatTotal = (sa.getCoutAchatTotal() == null ? 0 : sa.getCoutAchatTotal()) - (coutAch * lv.getQuantite());
+                            double newCoutAchatTotal = (sa.getCoutAchatTotal() == null ? 0 : sa.getCoutAchatTotal())
+                                    - (coutAch * lv.getQuantite());
 
                             if (newQty <= 0 || newTotal <= 0) {
                                 delegates.RepportDelegate.deleteMetric(sa);
@@ -2387,7 +2487,8 @@ public class PosController implements Initializable {
                             }
                         }
                     } catch (Exception ex) {
-                        System.err.println("Error updating SaleAgregate on remaining line deletion: " + ex.getMessage());
+                        System.err
+                                .println("Error updating SaleAgregate on remaining line deletion: " + ex.getMessage());
                     }
                 }
 
@@ -2421,6 +2522,7 @@ public class PosController implements Initializable {
                 return TypeTraisorerie.ELECTRONIQUE;
         }
     }
+
     double valeurs = 0;
 
     private void enPeremption(Date darg) {
@@ -2434,8 +2536,11 @@ public class PosController implements Initializable {
         cexp.set(Calendar.MINUTE, 59);
         cexp.set(Calendar.SECOND, 59);
         cexp.set(Calendar.MILLISECOND, 0);
-        List<Stocker> stks = StockerDelegate.findByDateExpInterval(Constants.Datetime.toLocalDate(leo.getTime()), Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
-        List<Recquisition> reks = RecquisitionDelegate.findByDateExpInterval(Constants.Datetime.toLocalDate(leo.getTime()), Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
+        List<Stocker> stks = StockerDelegate.findByDateExpInterval(Constants.Datetime.toLocalDate(leo.getTime()),
+                Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
+        List<Recquisition> reks = RecquisitionDelegate.findByDateExpInterval(
+                Constants.Datetime.toLocalDate(leo.getTime()),
+                Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg));
         ols_peremption.clear();
         valeurs = 0;
         for (Stocker stk : stks) {
@@ -2449,9 +2554,12 @@ public class PosController implements Initializable {
                 }
                 sommedqpc += dsk.getQuantite() * mz.getQuantContenu();
             }
-            Mesure mz = MesureDelegate.findMesure(stk.getMesureId().getUid());//db.findByUid(Mesure.class, stk.getMesureId().getUid());
+            Mesure mz = MesureDelegate.findMesure(stk.getMesureId().getUid());// db.findByUid(Mesure.class,
+                                                                              // stk.getMesureId().getUid());
             if (mz == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(stk.getProductId().getUid());// db.findByProduitAsc(Mesure.class, stk.getProductId().getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(stk.getProductId().getUid());// db.findByProduitAsc(Mesure.class,
+                                                                                                                   // stk.getProductId().getUid(),
+                                                                                                                   // "quantContenu");
                 mz = mesures.get(0);
             }
             double qc = mz.getQuantContenu();
@@ -2476,19 +2584,24 @@ public class PosController implements Initializable {
             }
         }
         for (Recquisition rek : reks) {
-            List<LigneVente> lvs = LigneVenteDelegate.findByProduitWithLot(rek.getProductId().getUid(), rek.getNumlot());//db.findByLot(LigneVente.class, rek.getNumlot());
+            List<LigneVente> lvs = LigneVenteDelegate.findByProduitWithLot(rek.getProductId().getUid(),
+                    rek.getNumlot());// db.findByLot(LigneVente.class, rek.getNumlot());
             double sommedqpc = 0;
             for (LigneVente lv : lvs) {
                 Mesure mz = MesureDelegate.findMesure(lv.getMesureId().getUid());
                 if (mz == null) {
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lv.getProductId().getUid());//db.findByProduitAsc(Mesure.class, lv.getProductId().getUid(), "quantContenu");
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(lv.getProductId().getUid());// db.findByProduitAsc(Mesure.class,
+                                                                                                                      // lv.getProductId().getUid(),
+                                                                                                                      // "quantContenu");
                     mz = mesures.get(0);
                 }
                 sommedqpc += lv.getQuantite() * mz.getQuantContenu();
             }
             Mesure mz = MesureDelegate.findMesure(rek.getMesureId().getUid());
             if (mz == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(rek.getProductId().getUid());// db.findByProduitAsc(Mesure.class, rek.getProductId().getUid(), "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(rek.getProductId().getUid());// db.findByProduitAsc(Mesure.class,
+                                                                                                                   // rek.getProductId().getUid(),
+                                                                                                                   // "quantContenu");
                 mz = mesures.get(0);
             }
             double qc = mz.getQuantContenu();
@@ -2551,6 +2664,7 @@ public class PosController implements Initializable {
             }
         }).start();
     }
+
     HashMap<String, String> hmap = new HashMap<String, String>();
 
     @FXML
@@ -2571,7 +2685,8 @@ public class PosController implements Initializable {
                         : Constants.USER_READABLE_FORMAT.format(Constants.Datetime.toUtilDate(ldf)));
                 hmap.put("operateur", pref.get("operator", "Uknown"));
 
-                File xlsInv = Util.exportXlsInventoryMagasin(hmap, table_inv_mag.getItems(), pref.get("mainCur", "USD"));
+                File xlsInv = Util.exportXlsInventoryMagasin(hmap, table_inv_mag.getItems(),
+                        pref.get("mainCur", "USD"));
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
@@ -2627,8 +2742,10 @@ public class PosController implements Initializable {
                     setGraphic(null);
                 } else {
                     Produit p = ProduitDelegate.findProduit(item.getProductId().getUid());
-                    setText(p.getNomProduit() + " " + (p.getMarque() == null ? "" : p.getMarque()) + "-" + (p.getModele() == null ? "" : p.getModele()) + " " + item.getQuantite() + ""
-                            + " " + item.getMesureId().getDescription() + " à " + item.getPrixUnit() + " USD : " + item.getMontantUsd());
+                    setText(p.getNomProduit() + " " + (p.getMarque() == null ? "" : p.getMarque()) + "-"
+                            + (p.getModele() == null ? "" : p.getModele()) + " " + item.getQuantite() + ""
+                            + " " + item.getMesureId().getDescription() + " à " + item.getPrixUnit() + " USD : "
+                            + item.getMontantUsd());
                     imageView.setFitHeight(30);
                     imageView.setFitWidth(30);
                     imageView.setPreserveRatio(true);
@@ -2652,12 +2769,14 @@ public class PosController implements Initializable {
         context.getItems().add(menuItem2);
         menuItem1.setOnAction((ActionEvent event) -> {
             Produit p = choosenLv.getProductId();
-            MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Modif", choosenLv.getUid());
+            MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Modif",
+                    choosenLv.getUid());
             lslgnventes.remove(choosenLv);
             String dev = pref.get("mainCur", "USD");
             savedSum = Util.sumCart(lslgnventes, dev);
             if (dev.equals("CDF")) {
-                txt_panier_total.setText("Total : " + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
+                txt_panier_total.setText("Total : "
+                        + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
             } else {
                 txt_panier_total.setText("Total : " + savedSum + "  USD");
             }
@@ -2668,7 +2787,8 @@ public class PosController implements Initializable {
             String dev = pref.get("mainCur", "USD");
             savedSum = Util.sumCart(lslgnventes, dev);
             if (dev.equals("CDF")) {
-                txt_panier_total.setText("Total : " + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
+                txt_panier_total.setText("Total : "
+                        + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
             } else {
                 txt_panier_total.setText("Total : " + savedSum + "  USD");
             }
@@ -2676,7 +2796,8 @@ public class PosController implements Initializable {
         });
         panier_list.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<LigneVente>() {
             @Override
-            public void changed(ObservableValue<? extends LigneVente> observable, LigneVente oldValue, LigneVente newValue) {
+            public void changed(ObservableValue<? extends LigneVente> observable, LigneVente oldValue,
+                    LigneVente newValue) {
                 choosenLv = newValue;
             }
         });
@@ -2709,7 +2830,8 @@ public class PosController implements Initializable {
         });
         col_date_expir_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
-            return new SimpleStringProperty(r.getPeremption() == null ? "Non perissable" : r.getPeremption().toString());
+            return new SimpleStringProperty(
+                    r.getPeremption() == null ? "Non perissable" : r.getPeremption().toString());
         });
         col_taille_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
@@ -2718,12 +2840,15 @@ public class PosController implements Initializable {
         col_quanite_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
             double rest = r.getQuantiteRestant();
-//            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-//                rest = RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid());
-//            } else {
-//                rest = RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid(), region);
-//            }
-            ////            r.getQuantiteRestant();
+            // if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()))
+            // {
+            // rest =
+            // RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid());
+            // } else {
+            // rest = RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid(),
+            // region);
+            // }
+            //// r.getQuantiteRestant();
             Mesure m = r.getMesureAchat();
             return new SimpleStringProperty(rest + " " + m.getDescription());
         });
@@ -2782,14 +2907,15 @@ public class PosController implements Initializable {
                 mm = MesureDelegate.findMesure(mz.getUid());
                 qc = mm.getQuantContenu();
             }
-            SimpleStringProperty ex = getValues((sa / qc) + " " + (mz == null ? mz.getDescription() : mz.getDescription()));
+            SimpleStringProperty ex = getValues(
+                    (sa / qc) + " " + (mz == null ? mz.getDescription() : mz.getDescription()));
             return ex;
 
         });
         col_quant_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
             Mesure mx = r.getMesureId();
-//            Mesure m = MesureDelegate.findMesure(mx.getUid());
+            // Mesure m = MesureDelegate.findMesure(mx.getUid());
             return new SimpleStringProperty(r.getQuantite() + " " + (mx == null ? "" : mx.getDescription()));
         });
         col_date_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
@@ -2810,7 +2936,8 @@ public class PosController implements Initializable {
                 return null;
             }
             return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
-                    + (p.getTaille() == null ? "" : p.getTaille()) + " " + (p.getCouleur() == null ? "" : p.getCouleur()));
+                    + (p.getTaille() == null ? "" : p.getTaille()) + " "
+                    + (p.getCouleur() == null ? "" : p.getCouleur()));
         });
         col_ref_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
@@ -2822,7 +2949,8 @@ public class PosController implements Initializable {
         });
         col_coutotal_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, Number> param) -> {
             Recquisition r = param.getValue();
-            return new SimpleDoubleProperty(BigDecimal.valueOf(r.getCoutAchat() * r.getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            return new SimpleDoubleProperty(BigDecimal.valueOf(r.getCoutAchat() * r.getQuantite())
+                    .setScale(2, RoundingMode.HALF_EVEN).doubleValue());
         });
         col_numlot_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
@@ -2833,7 +2961,7 @@ public class PosController implements Initializable {
             return new SimpleStringProperty(r.getObservation());
         });
 
-        //Peremption
+        // Peremption
         col_codebar_exp.setCellValueFactory((TableColumn.CellDataFeatures<Peremption, String> param) -> {
             Peremption p = param.getValue();
             return new SimpleStringProperty(p.getCodebar());
@@ -2871,8 +2999,8 @@ public class PosController implements Initializable {
             return new SimpleDoubleProperty(p.getValeur());
         });
 
-        //#Cart saving
-        //+ Rupture
+        // #Cart saving
+        // + Rupture
         tbl_rupt_date.setCellValueFactory((TableColumn.CellDataFeatures<Rupture, String> param) -> {
             Rupture p = param.getValue();
             return new SimpleStringProperty(p.getDate());
@@ -2952,7 +3080,7 @@ public class PosController implements Initializable {
             return slx;
         });
 
-        //- Rupture
+        // - Rupture
     }
 
     private void confDraft() {
@@ -2992,7 +3120,8 @@ public class PosController implements Initializable {
         col_prod_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
             InventoryMagasin im = param.getValue();
             Produit p = im.getProduit();
-            return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille() + " " + p.getCouleur());
+            return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
+                    + p.getTaille() + " " + p.getCouleur());
         });
         col_entree_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
             InventoryMagasin im = param.getValue();
@@ -3007,7 +3136,7 @@ public class PosController implements Initializable {
             InventoryMagasin im = param.getValue();
             Mesure mx = im.getMesure();
             Mesure mes = MesureDelegate.findMesure(mx.getUid());
-            //Util.findMesure(db.findAll(), mx);
+            // Util.findMesure(db.findAll(), mx);
             if (mes == null) {
                 mes = mx;
             }
@@ -3031,7 +3160,7 @@ public class PosController implements Initializable {
             InventoryMagasin im = param.getValue();
             Mesure mx = im.getMesure();
             Mesure mes = MesureDelegate.findMesure(mx.getUid());
-            //Util.findMesure(db.findAll(), mx);
+            // Util.findMesure(db.findAll(), mx);
             if (mes == null) {
                 mes = mx;
             }
@@ -3044,7 +3173,8 @@ public class PosController implements Initializable {
         col_expiry_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
             InventoryMagasin im = param.getValue();
             LocalDate dex = im.getExpiry();
-            return new SimpleStringProperty(dex == null ? "" : Constants.USER_READABLE_FORMAT.format(Constants.Datetime.toUtilDate(dex)));
+            return new SimpleStringProperty(
+                    dex == null ? "" : Constants.USER_READABLE_FORMAT.format(Constants.Datetime.toUtilDate(dex)));
         });
     }
 
@@ -3078,8 +3208,10 @@ public class PosController implements Initializable {
                 return null;
             }
             Produit p = value.getProduit();
-            return new SimpleStringProperty(p == null && value.getItems() == null ? "+ des factures" : p == null && value.getItems() != null ? value.getItems().size() + " produit(s)" : p.getNomProduit() + " " + p.getMarque() + ""
-                    + " " + p.getModele() + " " + p.getCouleur() + " " + p.getTaille());
+            return new SimpleStringProperty(p == null && value.getItems() == null ? "+ des factures"
+                    : p == null && value.getItems() != null ? value.getItems().size() + " produit(s)"
+                            : p.getNomProduit() + " " + p.getMarque() + ""
+                                    + " " + p.getModele() + " " + p.getCouleur() + " " + p.getTaille());
         });
 
         trcol_date_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, String> param) -> {
@@ -3088,7 +3220,8 @@ public class PosController implements Initializable {
                 return null;
             }
             Date date = vls.getDate();
-            return new SimpleStringProperty(date == null ? "" : tools.Constants.DATE_HEURE_USER_READABLE_FORMAT.format(date));
+            return new SimpleStringProperty(
+                    date == null ? "" : tools.Constants.DATE_HEURE_USER_READABLE_FORMAT.format(date));
         });
 
         trcol_client_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, String> param) -> {
@@ -3097,8 +3230,10 @@ public class PosController implements Initializable {
                 return null;
             }
             Client c = value.getClient();
-            return new SimpleStringProperty(c == null ? "" : (c.getPhone().length() < 8
-                    ? c.getNomClient() : c.getPhone().equals("09000") ? "Anonyme" : c.getNomClient() + ",Tel:" + c.getPhone()));
+            return new SimpleStringProperty(c == null ? ""
+                    : (c.getPhone().length() < 8
+                            ? c.getNomClient()
+                            : c.getPhone().equals("09000") ? "Anonyme" : c.getNomClient() + ",Tel:" + c.getPhone()));
         });
         trcol_totalusd_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, Number> param) -> {
             SaleItem value = param.getValue().getValue();
@@ -3138,18 +3273,20 @@ public class PosController implements Initializable {
             return new SimpleStringProperty(vls.getLibelle());
         });
 
-        ttable_ventes_hyst.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<TreeItem<SaleItem>>() {
-            @Override
-            public void changed(ObservableValue<? extends TreeItem<SaleItem>> observable, TreeItem<SaleItem> oldValue, TreeItem<SaleItem> newValue) {
-                if (newValue == null) {
-                    return;
-                }
-                SaleItem si = newValue.getValue();
+        ttable_ventes_hyst.getSelectionModel().selectedItemProperty()
+                .addListener(new ChangeListener<TreeItem<SaleItem>>() {
+                    @Override
+                    public void changed(ObservableValue<? extends TreeItem<SaleItem>> observable,
+                            TreeItem<SaleItem> oldValue, TreeItem<SaleItem> newValue) {
+                        if (newValue == null) {
+                            return;
+                        }
+                        SaleItem si = newValue.getValue();
 
-                choosenVente = VenteDelegate.findVente(si.getIdVente());
+                        choosenVente = VenteDelegate.findVente(si.getIdVente());
 
-            }
-        });
+                    }
+                });
         cbx_lgnvt_retour.setConverter(new StringConverter<LigneVente>() {
             @Override
             public String toString(LigneVente object) {
@@ -3157,24 +3294,30 @@ public class PosController implements Initializable {
                     return null;
                 }
                 Produit p = ProduitDelegate.findProduit(object.getProductId().getUid());
-                return p == null ? null : p.getNomProduit() + " " + (p.getMarque() == null ? "" : p.getMarque()) + " " + (p.getModele() == null ? "" : p.getModele())
-                        + " " + (p.getTaille() == null ? "" : p.getTaille() + " ") + p.getCodebar();
+                return p == null ? null
+                        : p.getNomProduit() + " " + (p.getMarque() == null ? "" : p.getMarque()) + " "
+                                + (p.getModele() == null ? "" : p.getModele())
+                                + " " + (p.getTaille() == null ? "" : p.getTaille() + " ") + p.getCodebar();
             }
 
             @Override
             public LigneVente fromString(String string) {
                 return cbx_lgnvt_retour.getItems()
                         .stream()
-                        .filter(p -> (p.getProductId().getNomProduit() + " " + (p.getProductId().getMarque() == null ? "" : p.getProductId().getMarque()) + " " + (p.getProductId().getModele() == null ? "" : p.getProductId().getModele())
-                        + " " + (p.getProductId().getTaille() == null ? "" : p.getProductId().getTaille() + " ") + p.getProductId().getCodebar())
-                        .equalsIgnoreCase(string))
+                        .filter(p -> (p.getProductId().getNomProduit() + " "
+                                + (p.getProductId().getMarque() == null ? "" : p.getProductId().getMarque()) + " "
+                                + (p.getProductId().getModele() == null ? "" : p.getProductId().getModele())
+                                + " " + (p.getProductId().getTaille() == null ? "" : p.getProductId().getTaille() + " ")
+                                + p.getProductId().getCodebar())
+                                .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
         });
         cbx_lgnvt_retour.getSelectionModel().selectedItemProperty()
                 .addListener(new ChangeListener<LigneVente>() {
                     @Override
-                    public void changed(ObservableValue<? extends LigneVente> observable, LigneVente oldValue, LigneVente newValue) {
+                    public void changed(ObservableValue<? extends LigneVente> observable, LigneVente oldValue,
+                            LigneVente newValue) {
                         if (newValue != null) {
                             quant_retour.setText(String.valueOf(newValue.getQuantite()));
                             List<Mesure> lmr = MesureDelegate.findMesureByProduit(newValue.getProductId().getUid());
@@ -3205,7 +3348,9 @@ public class PosController implements Initializable {
                 if (object != null) {
                     p = ProduitDelegate.findProduit(object.getProductId().getUid());
                 }
-                return p == null ? null : p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille() + " " + p.getCouleur() + " " + object.getNumlot();
+                return p == null ? null
+                        : p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille() + " "
+                                + p.getCouleur() + " " + object.getNumlot();
             }
 
             @Override
@@ -3225,26 +3370,30 @@ public class PosController implements Initializable {
         mesure_retour.getSelectionModel().selectedItemProperty()
                 .addListener(new ChangeListener<Mesure>() {
                     @Override
-                    public void changed(ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) {
+                    public void changed(ObservableValue<? extends Mesure> observable, Mesure oldValue,
+                            Mesure newValue) {
                         if (newValue != null) {
                             choosenMesure4Retour = newValue;
                         }
                     }
                 });
-        listvu_choosen4_retour_depot.setCellFactory((ListView<InventoryMagasin> param) -> new ListCell<InventoryMagasin>() {
+        listvu_choosen4_retour_depot
+                .setCellFactory((ListView<InventoryMagasin> param) -> new ListCell<InventoryMagasin>() {
 
-            @Override
-            protected void updateItem(InventoryMagasin item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                } else {
-                    Produit p = ProduitDelegate.findProduit(item.getProduit().getUid());
-                    Mesure mes = MesureDelegate.findMesure(item.getMesure().getUid());
-                    setText(p.getNomProduit() + " " + p.getMarque() + "-" + p.getModele() + " " + p.getTaille() + " " + p.getCouleur() + " : " + item.getQuantStock() + " " + mes.getDescription() + " valant " + item.getValeurStock() + " USD ");
-                }
-            }
-        });
+                    @Override
+                    protected void updateItem(InventoryMagasin item, boolean empty) {
+                        super.updateItem(item, empty);
+                        if (empty || item == null) {
+                            setText(null);
+                        } else {
+                            Produit p = ProduitDelegate.findProduit(item.getProduit().getUid());
+                            Mesure mes = MesureDelegate.findMesure(item.getMesure().getUid());
+                            setText(p.getNomProduit() + " " + p.getMarque() + "-" + p.getModele() + " " + p.getTaille()
+                                    + " " + p.getCouleur() + " : " + item.getQuantStock() + " " + mes.getDescription()
+                                    + " valant " + item.getValeurStock() + " USD ");
+                        }
+                    }
+                });
 
         ContextMenu cm = new ContextMenu();
         MenuItem midel = new MenuItem("Supprimer");
@@ -3259,7 +3408,8 @@ public class PosController implements Initializable {
         cbx_produit_retour_depot.getSelectionModel().selectedItemProperty()
                 .addListener(new ChangeListener<Recquisition>() {
                     @Override
-                    public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue, Recquisition newValue) {
+                    public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue,
+                            Recquisition newValue) {
                         if (newValue != null) {
                             Mesure rm = newValue.getMesureId();
                             List<Mesure> lms = MesureDelegate.findMesureByProduit(newValue.getProductId().getUid());
@@ -3293,6 +3443,7 @@ public class PosController implements Initializable {
             }
         });
     }
+
     double sommeRtr = 0;
 
     @FXML
@@ -3361,7 +3512,7 @@ public class PosController implements Initializable {
                     .submit(() -> {
                         Util.sync(LivraisonDelegate.saveLivraison(livr), Constants.ACTION_CREATE, Tables.LIVRAISON);
                     });
-            //db.insertAndSync(livr);
+            // db.insertAndSync(livr);
             for (Recquisition rec : listDeRetourDepot) {
                 Stocker s = new Stocker(DataId.generate());
                 s.setCoutAchat(rec.getCoutAchat());
@@ -3386,8 +3537,9 @@ public class PosController implements Initializable {
                 s.setStockAlerte(rec.getStockAlert());
                 Executors.newCachedThreadPool()
                         .submit(() -> {
-                            Util.sync(RecquisitionDelegate.saveRecquisition(rec), Constants.ACTION_CREATE, Tables.RECQUISITION);//db.insertAndSync(rec);
-                            Util.sync(StockerDelegate.saveStocker(s), Constants.ACTION_CREATE, Tables.STOCKER);//db.insertAndSync(s);
+                            Util.sync(RecquisitionDelegate.saveRecquisition(rec), Constants.ACTION_CREATE,
+                                    Tables.RECQUISITION);// db.insertAndSync(rec);
+                            Util.sync(StockerDelegate.saveStocker(s), Constants.ACTION_CREATE, Tables.STOCKER);// db.insertAndSync(s);
                         });
             }
             MainUI.notify(null, "Succes", "Stock retourne au depot avec success", 4, "info");
@@ -3443,96 +3595,104 @@ public class PosController implements Initializable {
         return result;
     }
 
-//    private ObservableList<ListViewItem> toListMode(String query, String cat) {
-//        ObservableList<ListViewItem> result = FXCollections.observableArrayList();
-//        List<Object[]> goods;
-//        if (cat.equals("All")) {
-//            if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
-//                goods = db.findGoods();
-//            } else {
-//                goods = db.findGoodsOnRegion(region);
-//            }
-//        } else {
-//            if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
-//                goods = db.searchGoods(query);
-//            } else {
-//                goods = db.searchGoods(query, region);
-//            }
-//        }
-//        for (Object[] good : goods) {
-//            ListViewItem lvi = new ListViewItem();
-//            Double ca = Double.valueOf(String.valueOf(good[9]));
-//            lvi.setCoutAchat(ca);
-//            lvi.setPurchasePrice(ca);
-//            lvi.setNumlot(String.valueOf(good[10]));
-//            Produit pro = db.findByUid(Produit.class, String.valueOf(good[1]));
-//            lvi.setProduit(pro);
-//            lvi.setAchatQuantity(String.valueOf(good[7]) + " " + String.valueOf(good[8]));
-//
-//            if (!Objects.isNull(good[11])) {
-//                try {
-//                    String exp = String.valueOf(good[11]);
-    ////                    if (StringUtils.isNumeric(exp)) {
-//                    Date ex = Constants.DATE_ONLY_FORMAT.parse(String.valueOf(exp));
-//                    lvi.setPeremption(ex);
-////                    }
-//                } catch (ParseException ex) {
-//                    Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-//                }
-//            }
-//            String req = String.valueOf(good[0]);
-//            Mesure mez = db.findByUid(Mesure.class, String.valueOf(good[2]));
-//            lvi.setMesureAchat(mez);
-//            List<Mesure> mesures = db.findByProduitAsc(Mesure.class, pro.getUid(), "quantcontenu");
-//            if (mesures.isEmpty()) {
-//                continue;
-//            }
-//            Mesure mesure = mesures.get(0);
-//            List<PrixDeVente> pvx = db.findWithAndClauseDesc(PrixDeVente.class, new String[]{"recquisition_id", "mesureid_uid"}, new String[]{req, mez.getUid()}, "prix_Unitaire");
-//            if (!pvx.isEmpty()) {
-//                PrixDeVente pv = pvx.get(0);
-//                Mesure mzr = db.findByUid(Mesure.class, pv.getMesureId().getUid());
-//                lvi.setMesureDetail(mzr);
-//                lvi.setDetailPrice(pv.getPrixUnitaire());
-//            } else {
-//                Double d = mesure.getQuantContenu();
-//                PrixDeVente pr = findPrice(req);
-//                if (pr == null) {
-//                    continue;
-//                }
-//                Double p = pr.getPrixUnitaire();
-//                Mesure qrz = pr.getMesureId();
-//                Mesure qr = db.findByUid(Mesure.class, qrz.getUid());
-//                double ppc = (p / qr.getQuantContenu());
-//                double ppd = BigDecimal.valueOf(d * ppc).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-//                lvi.setMesureDetail(mesure);
-//                lvi.setDetailPrice(ppd);
-//            }
-//            mesure = mesures.get(mesures.size() - 1);
-//            List<PrixDeVente> pvs = db.findWithAndClauseDesc(PrixDeVente.class, new String[]{"recquisition_id", "mesureid_uid"}, new String[]{req, mesure.getUid()}, "prix_Unitaire");
-//            if (!pvs.isEmpty()) {
-//                PrixDeVente pv = pvs.get(0);
-//                Mesure mzr = db.findByUid(Mesure.class, pv.getMesureId().getUid());
-//                lvi.setMesureGros(mzr);
-//                lvi.setSalePrice(pv.getPrixUnitaire());
-//            } else {
-//                Double d = mesure.getQuantContenu();
-//                PrixDeVente pr = findPrice(req);
-//                Double p = pr.getPrixUnitaire();
-//                Mesure qrz = pr.getMesureId();
-//                Mesure qr = db.findByUid(Mesure.class, qrz.getUid());
-//                double ppc = (p / qr.getQuantContenu());
-//                double ppd = BigDecimal.valueOf(d * ppc).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-//                lvi.setMesureGros(mesure);
-//                lvi.setSalePrice(ppd);
-//            }
-//            double rest = Double.valueOf(String.valueOf(good[7]));
-//            lvi.setQuantiteRestant(rest);
-//            result.add(lvi);
-//
-//        }
-//        return result;
-//    }
+    // private ObservableList<ListViewItem> toListMode(String query, String cat) {
+    // ObservableList<ListViewItem> result = FXCollections.observableArrayList();
+    // List<Object[]> goods;
+    // if (cat.equals("All")) {
+    // if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
+    // goods = db.findGoods();
+    // } else {
+    // goods = db.findGoodsOnRegion(region);
+    // }
+    // } else {
+    // if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
+    // goods = db.searchGoods(query);
+    // } else {
+    // goods = db.searchGoods(query, region);
+    // }
+    // }
+    // for (Object[] good : goods) {
+    // ListViewItem lvi = new ListViewItem();
+    // Double ca = Double.valueOf(String.valueOf(good[9]));
+    // lvi.setCoutAchat(ca);
+    // lvi.setPurchasePrice(ca);
+    // lvi.setNumlot(String.valueOf(good[10]));
+    // Produit pro = db.findByUid(Produit.class, String.valueOf(good[1]));
+    // lvi.setProduit(pro);
+    // lvi.setAchatQuantity(String.valueOf(good[7]) + " " +
+    // String.valueOf(good[8]));
+    //
+    // if (!Objects.isNull(good[11])) {
+    // try {
+    // String exp = String.valueOf(good[11]);
+    //// if (StringUtils.isNumeric(exp)) {
+    // Date ex = Constants.DATE_ONLY_FORMAT.parse(String.valueOf(exp));
+    // lvi.setPeremption(ex);
+    //// }
+    // } catch (ParseException ex) {
+    // Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+    // }
+    // }
+    // String req = String.valueOf(good[0]);
+    // Mesure mez = db.findByUid(Mesure.class, String.valueOf(good[2]));
+    // lvi.setMesureAchat(mez);
+    // List<Mesure> mesures = db.findByProduitAsc(Mesure.class, pro.getUid(),
+    // "quantcontenu");
+    // if (mesures.isEmpty()) {
+    // continue;
+    // }
+    // Mesure mesure = mesures.get(0);
+    // List<PrixDeVente> pvx = db.findWithAndClauseDesc(PrixDeVente.class, new
+    // String[]{"recquisition_id", "mesureid_uid"}, new String[]{req, mez.getUid()},
+    // "prix_Unitaire");
+    // if (!pvx.isEmpty()) {
+    // PrixDeVente pv = pvx.get(0);
+    // Mesure mzr = db.findByUid(Mesure.class, pv.getMesureId().getUid());
+    // lvi.setMesureDetail(mzr);
+    // lvi.setDetailPrice(pv.getPrixUnitaire());
+    // } else {
+    // Double d = mesure.getQuantContenu();
+    // PrixDeVente pr = findPrice(req);
+    // if (pr == null) {
+    // continue;
+    // }
+    // Double p = pr.getPrixUnitaire();
+    // Mesure qrz = pr.getMesureId();
+    // Mesure qr = db.findByUid(Mesure.class, qrz.getUid());
+    // double ppc = (p / qr.getQuantContenu());
+    // double ppd = BigDecimal.valueOf(d * ppc).setScale(2,
+    // RoundingMode.HALF_EVEN).doubleValue();
+    // lvi.setMesureDetail(mesure);
+    // lvi.setDetailPrice(ppd);
+    // }
+    // mesure = mesures.get(mesures.size() - 1);
+    // List<PrixDeVente> pvs = db.findWithAndClauseDesc(PrixDeVente.class, new
+    // String[]{"recquisition_id", "mesureid_uid"}, new String[]{req,
+    // mesure.getUid()}, "prix_Unitaire");
+    // if (!pvs.isEmpty()) {
+    // PrixDeVente pv = pvs.get(0);
+    // Mesure mzr = db.findByUid(Mesure.class, pv.getMesureId().getUid());
+    // lvi.setMesureGros(mzr);
+    // lvi.setSalePrice(pv.getPrixUnitaire());
+    // } else {
+    // Double d = mesure.getQuantContenu();
+    // PrixDeVente pr = findPrice(req);
+    // Double p = pr.getPrixUnitaire();
+    // Mesure qrz = pr.getMesureId();
+    // Mesure qr = db.findByUid(Mesure.class, qrz.getUid());
+    // double ppc = (p / qr.getQuantContenu());
+    // double ppd = BigDecimal.valueOf(d * ppc).setScale(2,
+    // RoundingMode.HALF_EVEN).doubleValue();
+    // lvi.setMesureGros(mesure);
+    // lvi.setSalePrice(ppd);
+    // }
+    // double rest = Double.valueOf(String.valueOf(good[7]));
+    // lvi.setQuantiteRestant(rest);
+    // result.add(lvi);
+    //
+    // }
+    // return result;
+    // }
     private PrixDeVente findPrice(String req) {
         List<PrixDeVente> pvs = PrixDeVenteDelegate.findDescOrderdByPriceForRecq(req);
         if (pvs.isEmpty()) {
@@ -3602,7 +3762,7 @@ public class PosController implements Initializable {
 
                 }
                 load_history.setVisible(false);
-                //if (!treeSaleItems.contains(tip)) {
+                // if (!treeSaleItems.contains(tip)) {
                 treeSaleItems.add(tip);
                 // }
             }
@@ -3611,8 +3771,10 @@ public class PosController implements Initializable {
 
             Platform.runLater(() -> {
                 txt_table_hyst_count.setText(rootView.getChildren().size() + " elements");
-                txt_total_chiffre_affaire.setText("Total cash usd " + BigDecimal.valueOf(sommeUsd).setScale(3, RoundingMode.HALF_EVEN).doubleValue() + ", cdf "
-                        + "" + BigDecimal.valueOf(sommeCdf).setScale(3, RoundingMode.HALF_EVEN).doubleValue() + ". Dette USD "
+                txt_total_chiffre_affaire.setText("Total cash usd "
+                        + BigDecimal.valueOf(sommeUsd).setScale(3, RoundingMode.HALF_EVEN).doubleValue() + ", cdf "
+                        + "" + BigDecimal.valueOf(sommeCdf).setScale(3, RoundingMode.HALF_EVEN).doubleValue()
+                        + ". Dette USD "
                         + "" + BigDecimal.valueOf(sommeDette).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
             });
             Util.installTooltip(txt_total_chiffre_affaire, txt_total_chiffre_affaire.getText());
@@ -3659,7 +3821,9 @@ public class PosController implements Initializable {
                 if (empty || item == null) {
                     setText(null);
                 } else {
-                    setText(item.getReference() + " - " + (item.getFournId() != null ? item.getFournId().getNomFourn() : "") + " le " + item.getDateLivr().toString());
+                    setText(item.getReference() + " - "
+                            + (item.getFournId() != null ? item.getFournId().getNomFourn() : "") + " le "
+                            + item.getDateLivr().toString());
                 }
             }
         });
@@ -3682,7 +3846,8 @@ public class PosController implements Initializable {
             } else {
                 ObservableList<Livraison> filtered = FXCollections.observableArrayList();
                 for (Livraison l : obl_livraisons_req) {
-                    if (l.getReference().toLowerCase().contains(newValue.toLowerCase()) || (l.getFournId() != null && l.getFournId().getNomFourn().toLowerCase().contains(newValue.toLowerCase()))) {
+                    if (l.getReference().toLowerCase().contains(newValue.toLowerCase()) || (l.getFournId() != null
+                            && l.getFournId().getNomFourn().toLowerCase().contains(newValue.toLowerCase()))) {
                         filtered.add(l);
                     }
                 }
@@ -3755,7 +3920,8 @@ public class PosController implements Initializable {
                             | role.contains(Role.ALL_ACCESS.name())) {
                         FournisseurDelegate.deleteFournisseur(choosenSupply);
                         obl_fournisseurs.remove(choosenSupply);
-                        // count_fournisseur.setText(String.format(bundle.getString("xitems"), list_supplier_req.size()));
+                        // count_fournisseur.setText(String.format(bundle.getString("xitems"),
+                        // list_supplier_req.size()));
                         MainUI.notify(null, "Succes", "Fournisseur supprime avec success", 3, "info");
                     } else {
                         MainUI.notify(null, "Attention",
@@ -3831,10 +3997,10 @@ public class PosController implements Initializable {
     private void addRequest(ActionEvent event) {
         String prov = cbx_provenance_req.getValue();
         if ("Achat".equals(prov)) {
-            //on affiche le dialogue de DELIVERY_DLG
+            // on affiche le dialogue de DELIVERY_DLG
             MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, null, Constants.POS);
         } else {
-            //on affiche le RECQ_DLG
+            // on affiche le RECQ_DLG
             addRequestItem(event);
         }
     }
@@ -3893,16 +4059,16 @@ public class PosController implements Initializable {
             MainUI.notify(null, "Erreur", "Echec d'enregistrement local du reglement", 3, "error");
             return;
         }
-//        Util.sync(saved, Constants.ACTION_UPDATE, Tables.LIVRAISON);
+        // Util.sync(saved, Constants.ACTION_UPDATE, Tables.LIVRAISON);
         syncLivraisonByHttp(saved);
-//        int index = obl_livraisons_req.indexOf(saved);
-//        if (index >= 0) {
-//            obl_livraisons_req.set(index, saved);
-//        }
-//        if (livraison != null && livraison.getUid().equals(saved.getUid())) {
-//            livraison = saved;
-//            global_achat.setText("Total : USD " + safeAmount(saved.getPayed()));
-//        }
+        // int index = obl_livraisons_req.indexOf(saved);
+        // if (index >= 0) {
+        // obl_livraisons_req.set(index, saved);
+        // }
+        // if (livraison != null && livraison.getUid().equals(saved.getUid())) {
+        // livraison = saved;
+        // global_achat.setText("Total : USD " + safeAmount(saved.getPayed()));
+        // }
         MainUI.notify(null, "Succes", "Reglement fournisseur enregistre (recu: " + recu + ")", 4, "info");
     }
 
@@ -3952,17 +4118,20 @@ public class PosController implements Initializable {
         if (tabpane_req_left.getSelectionModel().getSelectedIndex() == 1) {
             choosenSupply = list_supplier_req.getSelectionModel().getSelectedItem();
             if (choosenSupply == null) {
-                MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3, "error");
+                MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3,
+                        "error");
                 return;
             }
             List<Livraison> livs = LivraisonDelegate.findBySupplier(choosenSupply.getUid());
             obl_livraisons_req.setAll(livs);
             tabpane_req_left.getSelectionModel().select(0);
             lbl_livrez_recq.setText(choosenSupply.getNomFourn() + ", " + choosenSupply.getAdresse() + " "
-                    + choosenSupply.getPhone() + "/ " + livs.size() + " Livraisons, Total achat : " + livs.stream().mapToDouble(l -> l.getTopay()).sum());
+                    + choosenSupply.getPhone() + "/ " + livs.size() + " Livraisons, Total achat : "
+                    + livs.stream().mapToDouble(l -> l.getTopay()).sum());
 
         } else {
-            MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3, "error");
+            MainUI.notify(null, "Erreur", "Veuillez selectionner un fournisseur dans l'onglet Fournisseurs", 3,
+                    "error");
             return;
         }
     }
@@ -4013,7 +4182,8 @@ public class PosController implements Initializable {
                 ScrollBar vbar = getVScrollbar(tbl_list_pro);
                 vbar.valueProperty().addListener(new ChangeListener<Number>() {
                     @Override
-                    public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                    public void changed(ObservableValue<? extends Number> observable, Number oldValue,
+                            Number newValue) {
                         if (newValue.doubleValue() == vbar.getMax()) {
 
                             int or = tdataLoded;
@@ -4082,7 +4252,8 @@ public class PosController implements Initializable {
         l.setLayoutY(118);
         l.setLayoutX(5);
         l.setTextFill(Color.rgb(255, 255, 255));
-        l.setBackground(new Background(new BackgroundFill(Color.rgb(0x7, 0x7, 0xf, 0.3), new CornerRadii(3.0), new Insets(-5.0))));
+        l.setBackground(new Background(
+                new BackgroundFill(Color.rgb(0x7, 0x7, 0xf, 0.3), new CornerRadii(3.0), new Insets(-5.0))));
         l.setPadding(new Insets(0, 4, 4, 4));
         imagev.setFitWidth(149);
         imagev.setFitHeight(122);
@@ -4118,7 +4289,8 @@ public class PosController implements Initializable {
             }
             m = lm.get(0);
         }
-        l.setText(p.getMarque() + " " + p.getModele() + " " + p.getTaille() + "(" + (r.getQuantite() / m.getQuantContenu()) + " " + m.getDescription() + ")");
+        l.setText(p.getMarque() + " " + p.getModele() + " " + p.getTaille() + "("
+                + (r.getQuantite() / m.getQuantContenu()) + " " + m.getDescription() + ")");
         Util.installTooltip(l, l.getText());
         Util.installPicture(imagev, p.getUid() + ".jpeg");
         pane.getChildren().add(imagev);
@@ -4148,28 +4320,28 @@ public class PosController implements Initializable {
     }
 
     private void fillProducts(boolean reinit, Collection<Produit> ps) {
-//        new Thread(new Runnable() {
-//            @Override
-//            public void run() {
+        // new Thread(new Runnable() {
+        // @Override
+        // public void run() {
         if (reinit) {
             Platform.runLater(tile_pane.getChildren()::clear);
         }
-        //List<Object[]> goods = db.searchGoods();
+        // List<Object[]> goods = db.searchGoods();
         for (Produit good : ps) {
 
             Platform.runLater(() -> {
-                //  Produit pr=db.findByUid(Produit.class, String.valueOf(good[1]));
+                // Produit pr=db.findByUid(Produit.class, String.valueOf(good[1]));
                 Node pane = addProduit(good);
-//                        boolean isnodexist=findNode(tile_pane.getChildren(), pane)!=null;
-//                            if (!isnodexist) {
+                // boolean isnodexist=findNode(tile_pane.getChildren(), pane)!=null;
+                // if (!isnodexist) {
                 if (pane != null) {
                     tile_pane.getChildren().add(pane);
                 }
             });
         }
 
-//            }
-//        }).start();
+        // }
+        // }).start();
     }
 
     public Node findNode(List<Node> nodes, Node id) {
@@ -4193,7 +4365,7 @@ public class PosController implements Initializable {
     private void selectRowPerPage1(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
         rowsDataCount1 = (int) cbx.getValue();
-//        pagination_sale.setPageFactory(this::createDataPage1);
+        // pagination_sale.setPageFactory(this::createDataPage1);
         System.out.println("Row set to " + rowsDataCount1);
     }
 
@@ -4201,7 +4373,7 @@ public class PosController implements Initializable {
     private void selectRowPerPage2(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
         rowsDataCount2 = (int) cbx.getValue();
-//        pagination_inv.setPageFactory(this::createDataPage2);
+        // pagination_inv.setPageFactory(this::createDataPage2);
         System.out.println("Row set to " + rowsDataCount2);
     }
 
@@ -4228,7 +4400,7 @@ public class PosController implements Initializable {
                 txt_table_hyst_count.setText(rootView.getChildren().size() + " elements");
             }
         } catch (java.lang.IllegalArgumentException e) {
-//            pagination_sale.setPageCount(pgindex);
+            // pagination_sale.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
         return ttable_ventes_hyst;
@@ -4241,7 +4413,7 @@ public class PosController implements Initializable {
             table_inv_mag.setItems(FXCollections.observableArrayList(lsinventaire.subList(offset, limit)));
 
         } catch (java.lang.IllegalArgumentException e) {
-//            pagination_inv.setPageCount(pgindex);
+            // pagination_inv.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
         return table_inv_mag;
@@ -4253,9 +4425,12 @@ public class PosController implements Initializable {
             motif_declass.setVisible(true);
         } else {
             if (choosenVente != null) {
-                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe, lslgnventes, choosenVente, entreprise, choosenVente.getClientId());
+                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe, lslgnventes, choosenVente,
+                        entreprise, choosenVente.getClientId());
             } else {
-                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe, lslgnventes, selectedCart == null ? null : selectedCart, entreprise, selectedCart == null ? null : selectedCart.getClientId());
+                MainUI.floatDialog(tools.Constants.PAYMENT_DLG, 1088, 678, null, kazisafe, lslgnventes,
+                        selectedCart == null ? null : selectedCart, entreprise,
+                        selectedCart == null ? null : selectedCart.getClientId());
             }
         }
     }
@@ -4263,8 +4438,9 @@ public class PosController implements Initializable {
     @FXML
     public void saveDeclasser(Event e) {
         if (!tf_motif_declass.getText().isEmpty()) {
-            //declasser now
-            Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment déclasser les éléments séléctionnés", ButtonType.YES, ButtonType.CANCEL);
+            // declasser now
+            Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Voulez vous vraiment déclasser les éléments séléctionnés", ButtonType.YES, ButtonType.CANCEL);
             alertdlg.setTitle("Attention!");
             alertdlg.setHeaderText(null);
 
@@ -4272,7 +4448,8 @@ public class PosController implements Initializable {
             if (showAndWait.get() == ButtonType.YES) {
                 int r = (int) (Math.random() * 100000);
                 Vente v = new Vente(r);
-                Client clt = ClientDelegate.findAnonymousClient();//db.findWithAndClause(Client.class, new String[]{"phone"}, new String[]{"0000"});
+                Client clt = ClientDelegate.findAnonymousClient();// db.findWithAndClause(Client.class, new
+                                                                  // String[]{"phone"}, new String[]{"0000"});
                 v.setClientId(clt);
                 v.setDateVente(LocalDateTime.now());
                 v.setDeviseDette("USD");
@@ -4286,7 +4463,7 @@ public class PosController implements Initializable {
                 v.setPayment("NA");
                 v.setReference("DEC" + r);
                 v.setRegion(region);
-                Vente ventura = VenteDelegate.saveVente(v);//db.insertAndSync(v);
+                Vente ventura = VenteDelegate.saveVente(v);// db.insertAndSync(v);
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             Util.sync(ventura, Constants.ACTION_CREATE, Tables.VENTE);
@@ -4294,12 +4471,13 @@ public class PosController implements Initializable {
                 for (LigneVente lv : lslgnventes) {
                     lv.setReference(v);
                     lv.setClientId("RABBISH");
-//                    System.out.println("VENTE INTSERTE "+ventura);
+                    // System.out.println("VENTE INTSERTE "+ventura);
 
                     System.out.println("Ligne vente " + lv.getNumlot());
                     Executors.newCachedThreadPool()
                             .submit(() -> {
-                                Util.sync(LigneVenteDelegate.saveLigneVente(lv), Constants.ACTION_CREATE, Tables.LIGNEVENTE);//db.insertAndSync(lv);
+                                Util.sync(LigneVenteDelegate.saveLigneVente(lv), Constants.ACTION_CREATE,
+                                        Tables.LIGNEVENTE);// db.insertAndSync(lv);
                             });
                 }
 
@@ -4442,7 +4620,8 @@ public class PosController implements Initializable {
 
                     if (pv != null) {
                         // Product should be visible if it has a price. Rectify stock to reveal it.
-                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), region, lastRecq.getCoutAchat());
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), region,
+                                lastRecq.getCoutAchat());
                     }
                 }
             }
@@ -4480,17 +4659,18 @@ public class PosController implements Initializable {
             @Override
             public void run() {
                 // ObservableList<Produit> produits = FXCollections.observableArrayList();
-//                tbl_list_pro.getSelectionModel().clearSelection();
+                // tbl_list_pro.getSelectionModel().clearSelection();
                 if (tab_pos.isSelected()) {
-                    //tile_pane.getChildren().clear();
+                    // tile_pane.getChildren().clear();
                     List<ListViewItem> result = new ArrayList<>();
                     if (chbx_scancbar.isSelected()) {
                         Produit p = ProduitDelegate.findByCodebar(query);
-                        //Util.findProduitByCodebar(distinctProduct(lisprod), query);
+                        // Util.findProduitByCodebar(distinctProduct(lisprod), query);
                         System.out.println("Produit by CB -XX " + p);
                         if (p != null) {
                             Platform.runLater(() -> {
-                                MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
+                                MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise,
+                                        "Create", -1);
                             });
                         }
 
@@ -4507,7 +4687,7 @@ public class PosController implements Initializable {
                     } else {
                         if (!vu.equals("card")) {
                             result.clear();
-//                            searcher.clear();
+                            // searcher.clear();
                             for (ListViewItem p : list_mode_ls) {
                                 String pred = (p.getProduit().getCodebar() + " " + p.getProduit().getCouleur() + ""
                                         + " " + p.getProduit().getMarque() + " " + p.getProduit().getModele() + " "
@@ -4531,7 +4711,8 @@ public class PosController implements Initializable {
                                 }
                             }
                             if (resulto.isEmpty()) {
-                                List<Produit> inj = ProduitDelegate.findProduitByName(query);//searchInDatabase(dbase, query);
+                                List<Produit> inj = ProduitDelegate.findProduitByName(query);// searchInDatabase(dbase,
+                                                                                             // query);
                                 resulto.addAll(inj);
                             }
                             System.err.println("pos pos pos " + resulto.size());
@@ -4555,7 +4736,8 @@ public class PosController implements Initializable {
                         }
                         String pred = p.getCodebar() + " " + p.getCouleur() + ""
                                 + " " + p.getMarque() + " " + p.getModele() + " "
-                                + p.getNomProduit() + " " + p.getTaille() + " " + req.getReference() + " " + req.getObservation();
+                                + p.getNomProduit() + " " + p.getTaille() + " " + req.getReference() + " "
+                                + req.getObservation();
                         if (pred.toUpperCase().contains(query.toUpperCase())) {
                             result.add(req);
                         }
@@ -4574,10 +4756,13 @@ public class PosController implements Initializable {
                             List<Vente> lrst = new ArrayList<>();
                             for (Vente v : ventes) {
                                 Client c = ClientDelegate.findClient(v.getClientId().getUid());
-                                String bill = v.getReference() + " " + (Constants.DATE_HEURE_FORMAT.format(v.getDateVente())) + " "
-                                        + "" + (c == null ? "Anonyme" : (c.getNomClient() + " " + c.getPhone())) + " " + c.getEmail();
+                                String bill = v.getReference() + " "
+                                        + (Constants.DATE_HEURE_FORMAT.format(v.getDateVente())) + " "
+                                        + "" + (c == null ? "Anonyme" : (c.getNomClient() + " " + c.getPhone())) + " "
+                                        + c.getEmail();
                                 List<LigneVente> lgv = v.getLigneVenteList();
-                                List<LigneVente> lgvs = lgv == null ? LigneVenteDelegate.findByReference(v.getUid()) : lgv;
+                                List<LigneVente> lgvs = lgv == null ? LigneVenteDelegate.findByReference(v.getUid())
+                                        : lgv;
                                 for (LigneVente lv : lgvs) {
                                     Produit px = lv.getProductId();
                                     Produit p = ProduitDelegate.findProduit(px.getUid());
@@ -4594,9 +4779,9 @@ public class PosController implements Initializable {
                         }
                     }).start();
                 } else if (tab_mag_inv.isSelected()) {
-//                    new Thread(new Runnable() {
-//                        @Override
-//                        public void run() {
+                    // new Thread(new Runnable() {
+                    // @Override
+                    // public void run() {
                     ObservableList<InventoryMagasin> linvm = FXCollections.observableArrayList();
                     for (InventoryMagasin im : lsinventaire) {
                         Produit p = im.getProduit();
@@ -4617,9 +4802,11 @@ public class PosController implements Initializable {
                         }
                     });
 
-//                        }
-//                    }).start();
-                } else if (peremption.isSelected()) {
+                    // }
+                    // }).start();
+                } else if (peremption.isSelected())
+
+                {
                     Executors.newCachedThreadPool()
                             .execute(() -> {
                                 if (query.isEmpty()) {
@@ -4631,8 +4818,10 @@ public class PosController implements Initializable {
                                     for (Peremption perams : ols_peremption) {
                                         String pred = perams.getCodebar() + " " + perams.getProduit()
                                                 + " " + perams.getLocalisation() + " " + perams.getLot() + ""
-                                                + " " + perams.getLot() + " " + perams.getRegion() + " " + perams.getQuantite()
-                                                + " " + Constants.USER_READABLE_FORMAT.format(perams.getDateExpiry()) + " "
+                                                + " " + perams.getLot() + " " + perams.getRegion() + " "
+                                                + perams.getQuantite()
+                                                + " " + Constants.USER_READABLE_FORMAT.format(perams.getDateExpiry())
+                                                + " "
                                                 + perams.getCoutAchat();
                                         if (pred.toUpperCase().contains(query.toUpperCase())) {
                                             result.add(perams);
@@ -4651,15 +4840,18 @@ public class PosController implements Initializable {
                             });
 
                 } else if (tab_rupture.isSelected()) {
-//                    Executors.newSingleThreadExecutor().submit(() -> {
+                    // Executors.newSingleThreadExecutor().submit(() -> {
                     if (query.isEmpty()) {
                         tbl_rupture.setItems(obl_rupture_list);
                     } else {
                         List<Rupture> result = new ArrayList<>();
                         for (Rupture rup : obl_rupture_list) {
                             Produit p = rup.getProduit();
-                            String pr = rup.getDate() + " " + rup.getLocalisation() + " " + rup.getRegion() + " " + p.getCodebar()
-                                    + " " + p.getCouleur() + " " + p.getMarque() + " " + p.getModele() + " " + p.getNomProduit() + " " + p.getTaille();
+                            String pr = rup.getDate() + " " + rup.getLocalisation() + " " + rup.getRegion() + " "
+                                    + p.getCodebar()
+                                    + " " + p.getCouleur() + " " + p.getMarque() + " " + p.getModele() + " "
+                                    + p.getNomProduit()
+                                    + " " + p.getTaille();
                             if (pr.toUpperCase().contains(query.toUpperCase())) {
                                 result.add(rup);
                             }
@@ -4669,11 +4861,12 @@ public class PosController implements Initializable {
                             rupt_count.setText(String.format(bundle.getString("xitems"), result.size()));
                         });
                     }
-//                    });
+                    // });
                 }
             }
         }).start();
     }
+
     int s = 0;
 
     public double getRest(Produit p) {
@@ -4743,7 +4936,8 @@ public class PosController implements Initializable {
         double alertValue = (req.getStockAlert() == null ? 0 : req.getStockAlert()) * qco;
         if (netAvailable <= alertValue) {
             MainUI.notify(null, bundle.getString("warning"), bundle.getString("alertmess") + " de "
-                    + (req.getStockAlert() == null ? 0 : req.getStockAlert()) + " " + reel.getDescription(), 5, "warning");
+                    + (req.getStockAlert() == null ? 0 : req.getStockAlert()) + " " + reel.getDescription(), 5,
+                    "warning");
         }
         // Also calculate based on direct stocker-destocker difference for backward
         // compatibility
@@ -4758,7 +4952,9 @@ public class PosController implements Initializable {
             // Log for debugging but allow addition
             System.out.println("Non-perishable item addition - bypassing hard block if any.");
             if (dispo < 0) {
-                MainUI.notify(null, bundle.getString("warning"), "Stock théorique insuffisant pour ce produit non-périssable, mais l'ajout est autorisé.", 4, "warning");
+                MainUI.notify(null, bundle.getString("warning"),
+                        "Stock théorique insuffisant pour ce produit non-périssable, mais l'ajout est autorisé.", 4,
+                        "warning");
                 return true;
             }
         }
@@ -4772,6 +4968,7 @@ public class PosController implements Initializable {
         }
         return true;
     }
+
     double savedSum = 0;
 
     public void addCartItem(LigneVente lv) {
@@ -4779,7 +4976,8 @@ public class PosController implements Initializable {
         String dev = pref.get("mainCur", "USD");
         savedSum = Util.sumCart(lslgnventes, dev);
         if (dev.equals("CDF")) {
-            txt_panier_total.setText("Total : " + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
+            txt_panier_total.setText("Total : "
+                    + BigDecimal.valueOf(savedSum).setScale(0, RoundingMode.HALF_EVEN).doubleValue() + "  CDF");
         } else {
             txt_panier_total.setText("Total : " + savedSum + "  USD");
         }
@@ -4791,7 +4989,7 @@ public class PosController implements Initializable {
         List<Recquisition> result = new ArrayList<>();
         for (Produit lp : lps) {
             List<Recquisition> rqs = RecquisitionDelegate.findRecquisitionByProduit(lp.getUid());
-            //List<Recquisition> tofills = distinctBylotRecq(rqs);
+            // List<Recquisition> tofills = distinctBylotRecq(rqs);
             result.addAll(rqs
             // tofills
             );
@@ -4863,9 +5061,9 @@ public class PosController implements Initializable {
         prodx = FXCollections.observableArrayList();
         String meth = pref.get("meth", "FIFO");
         loadRegionsLocally();
-//        Executors.newSingleThreadExecutor()
-//                .execute(() -> {
-//        JpaStorage dbase = JpaStorage.getInstance();
+        // Executors.newSingleThreadExecutor()
+        // .execute(() -> {
+        // JpaStorage dbase = JpaStorage.getInstance();
         obl_fournisseurs.setAll(FournisseurDelegate.findFournisseurs());
         categs.addAll(CategoryDelegate.findCategories());
         List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate();
@@ -4899,9 +5097,9 @@ public class PosController implements Initializable {
             calcvente = VenteDelegate.findVentes(region);
         }
 
-//                });
+        // });
         new Thread(() -> {
-            List<Object[]> gds = RecquisitionDelegate.findGoods();//db.findGoods();
+            List<Object[]> gds = RecquisitionDelegate.findGoods();// db.findGoods();
             for (Object[] gd : gds) {
                 Produit pro = ProduitDelegate.findProduit(String.valueOf(gd[1]));
                 prodx.add(pro);
@@ -4979,9 +5177,11 @@ public class PosController implements Initializable {
                     if (livraison != null) {
                         ObservableList<Recquisition> stockrs = FXCollections
                                 .observableArrayList(RecquisitionDelegate.findByReference(livraison.getReference()));
-                        lbl_livrez_recq.setText(livraison.getFournId().getNomFourn() + " : " + livraison.getNumPiece() + ", "
-                                + livraison.getDateLivr().toString() + " (" + stockrs.size() + " articles), Total : " + stockrs.stream()
-                                .mapToDouble(r -> r.getCoutAchat() * r.getQuantite()).sum());
+                        lbl_livrez_recq
+                                .setText(livraison.getFournId().getNomFourn() + " : " + livraison.getNumPiece() + ", "
+                                        + livraison.getDateLivr().toString() + " (" + stockrs.size()
+                                        + " articles), Total : " + stockrs.stream()
+                                                .mapToDouble(r -> r.getCoutAchat() * r.getQuantite()).sum());
                         table_req.setItems(stockrs);
                         txt_table_req_count.setText(String.format(bundle.getString("xitems"), stockrs.size()));
 
@@ -4998,14 +5198,16 @@ public class PosController implements Initializable {
                     return;
                 }
                 String prov = cbx_provenance_req.getValue();
-                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, new Object[]{tools.Constants.ACTION_CREATE, null, entreprise, prov, liv});
+                MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe,
+                        new Object[] { tools.Constants.ACTION_CREATE, null, entreprise, prov, liv });
             });
             list_livraison_req.setContextMenu(ctx);
             tbcarts.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             tbcarts.getSelectionModel().selectedItemProperty()
                     .addListener(new ChangeListener<Vente>() {
                         @Override
-                        public void changed(ObservableValue<? extends Vente> observable, Vente oldValue, Vente newValue) {
+                        public void changed(ObservableValue<? extends Vente> observable, Vente oldValue,
+                                Vente newValue) {
                             selectedCart = newValue;
                             selectedAvedCarts.add(newValue);
                         }
@@ -5015,7 +5217,8 @@ public class PosController implements Initializable {
                 if (vbar != null) {
                     vbar.valueProperty().addListener(new ChangeListener<Number>() {
                         @Override
-                        public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                        public void changed(ObservableValue<? extends Number> observable, Number oldValue,
+                                Number newValue) {
                             if (newValue.doubleValue() == vbar.getMax()) {
                                 int or = tdataLoded;
                                 tdataLoded += 10;
@@ -5023,12 +5226,13 @@ public class PosController implements Initializable {
                                 if (or > limit) {
                                     return;
                                 }
-                                //List<Produit> prod = prodx.subList(or, limit);
+                                // List<Produit> prod = prodx.subList(or, limit);
                                 fillProductInTable("All");
                                 Platform.runLater(new Runnable() {
                                     @Override
                                     public void run() {
-                                        tbl_pro_count.setText(String.format(bundle.getString("xitems"), tbl_list_pro.getItems().size()));
+                                        tbl_pro_count.setText(String.format(bundle.getString("xitems"),
+                                                tbl_list_pro.getItems().size()));
                                     }
                                 });
                             }
@@ -5042,37 +5246,37 @@ public class PosController implements Initializable {
                     }
                 });
             }
-//                if (prodx.size() > 20) {
-//                    ScrollBar vbar = getVScrollbar(tbl_list_pro);
-//                    if (vbar != null) {
-//                        vbar.valueProperty().addListener(new ChangeListener<Number>() {
-//                            @Override
-//                            public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-//                                if (newValue.doubleValue() == vbar.getMax()) {
-//
-//                                    int or = tdataLoded;
-//                                    tdataLoded += 10;
-//                                    int limit = Math.min(tdataLoded, prodx.size());
-//                                    if (or > limit) {
-//                                        return;
-//                                    }
-//                                    List<Produit> prod = prodx.subList(or, limit);
-//                                    addProductInTable(prod);
+            // if (prodx.size() > 20) {
+            // ScrollBar vbar = getVScrollbar(tbl_list_pro);
+            // if (vbar != null) {
+            // vbar.valueProperty().addListener(new ChangeListener<Number>() {
+            // @Override
+            // public void changed(ObservableValue<? extends Number> observable, Number
+            // oldValue, Number newValue) {
+            // if (newValue.doubleValue() == vbar.getMax()) {
+            //
+            // int or = tdataLoded;
+            // tdataLoded += 10;
+            // int limit = Math.min(tdataLoded, prodx.size());
+            // if (or > limit) {
+            // return;
+            // }
+            // List<Produit> prod = prodx.subList(or, limit);
+            // addProductInTable(prod);
 
-        
-        ////                            lisprod.addAll(prod);
-////                            fillProducts(true, lisprod);
-//                                    Platform.runLater(new Runnable() {
-//                                        @Override
-//                                        public void run() {
-//                                            tbl_pro_count.setText(tbl_list_pro.getItems().size() + " elements");
-//                                        }
-//                                    });
-//                                }
-//                            }
-//                        });
-//                    }
-//                }
+            //// lisprod.addAll(prod);
+            //// fillProducts(true, lisprod);
+            // Platform.runLater(new Runnable() {
+            // @Override
+            // public void run() {
+            // tbl_pro_count.setText(tbl_list_pro.getItems().size() + " elements");
+            // }
+            // });
+            // }
+            // }
+            // });
+            // }
+            // }
         }).start();
         configViewlist();
         chbx_dettes_only.selectedProperty().addListener(new ChangeListener<Boolean>() {
@@ -5088,23 +5292,23 @@ public class PosController implements Initializable {
                                     if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
                                         loop = VenteDelegate.findCreditSalesFromRegion(region);
                                     } else {
-                                        loop = VenteDelegate.findCreditSales();//db.findVenteCredit();
+                                        loop = VenteDelegate.findCreditSales();// db.findVenteCredit();
                                     }
                                     fillSaleHistory();
                                 }
                             });
 
-//                    for (Vente vs : db.findAll()) {
-//                        double dette = vs.getMontantDette() == null ? 0 : vs.getMontantDette();
-//                        if (dette > 0) {
-//                            result.add(vs);
-//                        }
-//                    }
-//                    if (!role.equals(Role.Trader.name())) {
-//                        fillSaleHistory(result, region);
-//                    } else {
-//                       
-//                    }
+                    // for (Vente vs : db.findAll()) {
+                    // double dette = vs.getMontantDette() == null ? 0 : vs.getMontantDette();
+                    // if (dette > 0) {
+                    // result.add(vs);
+                    // }
+                    // }
+                    // if (!role.equals(Role.Trader.name())) {
+                    // fillSaleHistory(result, region);
+                    // } else {
+                    //
+                    // }
                 } else {
                     fillSaleHistory();
                 }
@@ -5166,19 +5370,19 @@ public class PosController implements Initializable {
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             if (!newValue.isEmpty()) {
-                                RecquisitionDelegate.findStockEnRupture(newValue).thenAccept(list -> {
-                                    Platform.runLater(() -> {
-                                        obl_rupture_list.setAll(list);
-                                        rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
-                                    });
+                                List<Rupture> list = RecquisitionDelegate.findStockEnRupture(newValue);
+                                Platform.runLater(() -> {
+                                    obl_rupture_list.setAll(list);
+                                    rupt_count.setText(
+                                            String.format(bundle.getString("xitems"), obl_rupture_list.size()));
                                 });
                             } else {
                                 if (role.contains(Role.ALL_ACCESS.name()) | role.equals(Role.Trader.name())) {
-                                    RecquisitionDelegate.findStockEnRupture().thenAccept(list -> {
-                                        Platform.runLater(() -> {
-                                            obl_rupture_list.setAll(list);
-                                            rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
-                                        });
+                                    List<Rupture> list = RecquisitionDelegate.findStockEnRupture();
+                                    Platform.runLater(() -> {
+                                        obl_rupture_list.setAll(list);
+                                        rupt_count.setText(
+                                                String.format(bundle.getString("xitems"), obl_rupture_list.size()));
                                     });
                                 }
                             }
@@ -5188,14 +5392,15 @@ public class PosController implements Initializable {
             }
         });
         chbx_xall.selectedProperty().addListener(new ChangeListener<Boolean>() {
+
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
                 ObservableList<Rupture> rup = tbl_rupture.getItems();
                 if (newValue) {
-//                    obl_rupture_list.forEach((rupture) -> {
-//                        rupture.setSelect(true);
-//                        obl_rupture_list.set(obl_rupture_list.indexOf(rupture), rupture);
-//                    });
+                    // obl_rupture_list.forEach((rupture) -> {
+                    // rupture.setSelect(true);
+                    // obl_rupture_list.set(obl_rupture_list.indexOf(rupture), rupture);
+                    // });
 
                     rup.forEach((rupture) -> {
                         rupture.setSelect(true);
@@ -5238,22 +5443,26 @@ public class PosController implements Initializable {
             }
         });
 
-//        tbl_list_pro.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends ListViewItem> observable, ListViewItem oldValue, ListViewItem newValue) -> {
-//            if (newValue != null) {
-//
-//                Produit p = newValue.getProduit();
-//                MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
-//                System.out.println("Test " + p.getCodebar());
-//                tbl_list_pro.getSelectionModel().clearSelection();
-//            }
-//        });
+        // tbl_list_pro.getSelectionModel().selectedItemProperty().addListener((ObservableValue<?
+        // extends ListViewItem> observable, ListViewItem oldValue, ListViewItem
+        // newValue) -> {
+        // if (newValue != null) {
+        //
+        // Produit p = newValue.getProduit();
+        // MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p,
+        // entreprise, "Create", -1);
+        // System.out.println("Test " + p.getCodebar());
+        // tbl_list_pro.getSelectionModel().clearSelection();
+        // }
+        // });
         tbl_list_pro.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode().equals(KeyCode.ENTER)) {
 
                 newValue = tbl_list_pro.getSelectionModel().getSelectedItem();
                 if (newValue != null) {
                     Produit p = newValue.getProduit();
-                    MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
+                    MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create",
+                            -1);
                     System.out.println("Test " + p.getCodebar());
                 }
             }
@@ -5294,11 +5503,12 @@ public class PosController implements Initializable {
             lsks.addAll(RecquisitionDelegate.toFefoOrdering(prod.getUid()));
         } else if (meth.equals("fifo")) {
             lsks.addAll(RecquisitionDelegate.toFifoOrdering(prod.getUid()));
-            //db.findByProduitOrderByDateAsc(Recquisition.class, prod.getUid());
+            // db.findByProduitOrderByDateAsc(Recquisition.class, prod.getUid());
         } else if (meth.equals("lifo")) {
             lsks.addAll(RecquisitionDelegate.toLifoOrdering(prod.getUid()));
         }
-        //System.out.println("Produit XXXXXXXXXXXX " + prod.getNomProduit() + " size " + lsks.size());
+        // System.out.println("Produit XXXXXXXXXXXX " + prod.getNomProduit() + " size "
+        // + lsks.size());
         return lsks.isEmpty() ? null : lsks.get(0);
     }
 
@@ -5331,7 +5541,8 @@ public class PosController implements Initializable {
         } else {
             Executors.newSingleThreadExecutor()
                     .submit(() -> {
-                        lsreq = FXCollections.observableArrayList(RecquisitionDelegate.findRecquisitions(region));//db.findAllByRegion(Recquisition.class, region));
+                        lsreq = FXCollections.observableArrayList(RecquisitionDelegate.findRecquisitions(region));// db.findAllByRegion(Recquisition.class,
+                                                                                                                  // region));
                         Platform.runLater(() -> {
                             table_req.setItems(lsreq);
                         });
@@ -5352,7 +5563,8 @@ public class PosController implements Initializable {
 
     @FXML
     private void deleteRecqs(Event et) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer cette recquisition ?", ButtonType.YES, ButtonType.CANCEL);
+        Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer cette recquisition ?",
+                ButtonType.YES, ButtonType.CANCEL);
         alert.setTitle("Attention!");
         alert.setHeaderText(null);
         Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -5372,7 +5584,8 @@ public class PosController implements Initializable {
     @FXML
     public void cleanSavedCart(Event e) {
         if (!selectedAvedCarts.isEmpty()) {
-            Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer les element selectiones ?", ButtonType.YES, ButtonType.CANCEL);
+            Alert alert = new Alert(Alert.AlertType.WARNING, "Voulez vous vraiment suprimmer les element selectiones ?",
+                    ButtonType.YES, ButtonType.CANCEL);
             alert.setTitle("Attention!");
             alert.setHeaderText(null);
             Optional<ButtonType> showAndWait = alert.showAndWait();
@@ -5380,11 +5593,11 @@ public class PosController implements Initializable {
                 List<LigneVente> lv = LigneVenteDelegate.findByReference(selectedCart.getUid());
                 for (LigneVente l : lv) {
                     LigneVenteDelegate.deleteLigneVente(l);
-                    //db.delete(l);
+                    // db.delete(l);
                 }
                 VenteDelegate.deleteVente(selectedCart);
-                //db.delete(choosenVente);
-//                }
+                // db.delete(choosenVente);
+                // }
 
                 savedCarts.removeAll(selectedAvedCarts);
                 selectedAvedCarts.clear();
@@ -5393,7 +5606,8 @@ public class PosController implements Initializable {
             }
 
         } else {
-            MainUI.notify(null, bundle.getString("error"), "Selectionnez au moins un element puis continuer", 3, "error");
+            MainUI.notify(null, bundle.getString("error"), "Selectionnez au moins un element puis continuer", 3,
+                    "error");
         }
     }
 
@@ -5411,14 +5625,14 @@ public class PosController implements Initializable {
                 Util.sync(ref, "read", Tables.REFRESH);
             }
         });
-//        Future<Boolean> finish = exec.submit(se);
-//        try {
-//            
-//        } catch (InterruptedException ex) {
-//            Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-//        } catch (ExecutionException ex) {
-//            Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-//        }
+        // Future<Boolean> finish = exec.submit(se);
+        // try {
+        //
+        // } catch (InterruptedException ex) {
+        // Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+        // } catch (ExecutionException ex) {
+        // Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+        // }
 
     }
 
@@ -5459,7 +5673,7 @@ public class PosController implements Initializable {
     }
 
     private void populate(List<Vente> sold, String region) {
-        //SyncEngine.getInstance().shutdown();
+        // SyncEngine.getInstance().shutdown();
         treeSaleItems.clear();
         List<SaleItem> lsi = new ArrayList<>();
         for (Vente v : sold) {
@@ -5480,13 +5694,13 @@ public class PosController implements Initializable {
                 si.setLibelle(v.getLibelle());
                 double paym = sumAllCurrency(v.getUid());
                 si.setSaleAmountCredit(v.getMontantDette());
-//                if (lvs != null) {
+                // if (lvs != null) {
                 si.setItems(lvs);
-//                } else {
-//                    List<LigneVente> lvt = LigneVenteDelegate.findByReference(v.getUid());
-//                    //  Util.getLigneVenteForVente(jpas.findAll(), v.getUid());
-//                    si.setItems(lvt);
-//                }
+                // } else {
+                // List<LigneVente> lvt = LigneVenteDelegate.findByReference(v.getUid());
+                // // Util.getLigneVenteForVente(jpas.findAll(), v.getUid());
+                // si.setItems(lvt);
+                // }
                 if (si.getItems().isEmpty()) {
                     List<LigneVente> items = getItemsForVente(v.getUid());
                     // System.err.println("Items value " + items.size());
@@ -5543,7 +5757,7 @@ public class PosController implements Initializable {
     }
 
     private List<LigneVente> getItemsForVente(int vid) {
-        List<LigneVente> lvs = LigneVenteDelegate.findByReference(vid);//db.findByRef(LigneVente.class, vid);
+        List<LigneVente> lvs = LigneVenteDelegate.findByReference(vid);// db.findByRef(LigneVente.class, vid);
         return lvs;
     }
 
@@ -5602,8 +5816,7 @@ public class PosController implements Initializable {
     }
 
     private double sumAllRecqInPcsWithLot(String idpro, String lot) {
-        double result
-                = RecquisitionDelegate.sumByProduitWithLotInUnit(idpro, lot);
+        double result = RecquisitionDelegate.sumByProduitWithLotInUnit(idpro, lot);
         return result;
     }
 
@@ -5644,7 +5857,8 @@ public class PosController implements Initializable {
         if (dpk_debut_inv_mag.getValue() != null && dpk_fin_inv_mag.getValue() != null) {
             Executors.newSingleThreadExecutor()
                     .execute(() -> {
-                        populateInv(region, Constants.Datetime.toUtilDate(dpk_debut_inv_mag.getValue()), Constants.Datetime.toUtilDate(dpk_fin_inv_mag.getValue()));
+                        populateInv(region, Constants.Datetime.toUtilDate(dpk_debut_inv_mag.getValue()),
+                                Constants.Datetime.toUtilDate(dpk_fin_inv_mag.getValue()));
                         table_inv_mag.setItems(FXCollections.observableArrayList(lsinventaire));
                         Platform.runLater(new Runnable() {
                             @Override
@@ -5726,7 +5940,8 @@ public class PosController implements Initializable {
         Platform.runLater(new Runnable() {
             @Override
             public void run() {
-                txt_inv_mag.setText("Valeur du stock : " + BigDecimal.valueOf(valTotStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                txt_inv_mag.setText("Valeur du stock : "
+                        + BigDecimal.valueOf(valTotStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
             }
         });
     }
@@ -5795,15 +6010,16 @@ public class PosController implements Initializable {
             entrees = RecquisitionDelegate.findRecquisitionByProduit(idPro);
         }
         Recquisition last = RecquisitionDelegate.findDescSortedByDateForProduit(idPro).get(0);
-        //Util.findLastRecquisitionFor(entrees, idPro);
+        // Util.findLastRecquisitionFor(entrees, idPro);
 
         List<LigneVente> sorties;
         if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
-            sorties = LigneVenteDelegate.findByProduitRegion(idPro, region);//Util.findLigneVenteForProduit(db.findAll(),idPro, region);
+            sorties = LigneVenteDelegate.findByProduitRegion(idPro, region);// Util.findLigneVenteForProduit(db.findAll(),idPro,
+                                                                            // region);
         } else {
             sorties = LigneVenteDelegate.findByProduit(idPro);
         }
-        //en piecement
+        // en piecement
         double epc = 0, spc = 0;
         for (Recquisition r : entrees) {
             Mesure mz = r.getMesureId();
@@ -5819,7 +6035,8 @@ public class PosController implements Initializable {
 
             Mesure m = (mz == null) ? mesure1(idPro) : MesureDelegate.findMesure(mz.getUid());
             if (m == null) {
-                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idPro);//db.findByProduitAsc(Mesure.class, idPro, "quantContenu");
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idPro);// db.findByProduitAsc(Mesure.class,
+                                                                                             // idPro, "quantContenu");
                 m = mesures.get(0);
             }
             spc += lv.getQuantite() * m.getQuantContenu();
@@ -5830,16 +6047,19 @@ public class PosController implements Initializable {
         Mesure mz = last.getMesureId();
         Mesure m = MesureDelegate.findMesure(mz.getUid());
         if (m == null) {
-            List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idPro);//db.findByProduitAsc(Mesure.class, idPro, "quantContenu");
+            List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idPro);// db.findByProduitAsc(Mesure.class,
+                                                                                         // idPro, "quantContenu");
             m = mesures.get(0);
         }
-        double alert = (last.getStockAlert() == null ? 0 : last.getStockAlert()) / (m.getQuantContenu() == null ? 1 : m.getQuantContenu());
+        double alert = (last.getStockAlert() == null ? 0 : last.getStockAlert())
+                / (m.getQuantContenu() == null ? 1 : m.getQuantContenu());
         double rest = epc - spc;
         return rest <= alert;
     }
 
     private Mesure mesure1(String idpro) {
-        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idpro);//db.findByProduitAsc(Mesure.class, idPro, "quantContenu");
+        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(idpro);// db.findByProduitAsc(Mesure.class,
+                                                                                     // idPro, "quantContenu");
         return (mesures.isEmpty()) ? null : mesures.get(0);
 
     }
@@ -5849,14 +6069,18 @@ public class PosController implements Initializable {
      *
      * @param idPro l'id du produit dont on va tester la peremption
      * @return true si le produit expire dans 6 mois et false dans le cas
-     * contraire
+     *         contraire
      */
     public boolean isExpiredSoon(String idPro) {
         List<Recquisition> entrees;
         if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
-            entrees = RecquisitionDelegate.findRecquisitionByProduitRegion(idPro, region);//db.findByProduit(Recquisition.class, idPro, region);//Util.findRequisitionForProduit(db.findByRegion(region), idPro);
+            entrees = RecquisitionDelegate.findRecquisitionByProduitRegion(idPro, region);// db.findByProduit(Recquisition.class,
+                                                                                          // idPro,
+                                                                                          // region);//Util.findRequisitionForProduit(db.findByRegion(region),
+                                                                                          // idPro);
         } else {
-            entrees = RecquisitionDelegate.findRecquisitionByProduit(idPro);//db.findByProduit(Recquisition.class, idPro);
+            entrees = RecquisitionDelegate.findRecquisitionByProduit(idPro);// db.findByProduit(Recquisition.class,
+                                                                            // idPro);
         }
         Recquisition last = Util.findLastRecquisitionFor(entrees, idPro);
         if (last == null) {
@@ -5904,18 +6128,18 @@ public class PosController implements Initializable {
 
     @FXML
     private void clearArticles(MouseEvent et) {
-//        oblcart.clear();
-//        table_cart.setItems(oblcart);
+        // oblcart.clear();
+        // table_cart.setItems(oblcart);
     }
 
     @FXML
     private void goToAccessories(MouseEvent et) {
-//        MainUI.getPage(kazisafe, "accessories.fxml", null);
+        // MainUI.getPage(kazisafe, "accessories.fxml", null);
     }
 
     @FXML
     private void goToHistory(MouseEvent et) {
-//        MainUI.getPage(kazisafe, "history.fxml", null);
+        // MainUI.getPage(kazisafe, "history.fxml", null);
     }
 
     @FXML
@@ -5943,7 +6167,8 @@ public class PosController implements Initializable {
         Produit p = cbx_produit_compter.getValue();
         Mesure m = cbx_mesure_compter.getValue();
         if (p == null || m == null || tf_quantite_compter.getText().isEmpty()) {
-            MainUI.notify(null, "Erreur", "Veuillez remplir les champs obligatoires (Produit, Mesure, Quantité).", 3, "error");
+            MainUI.notify(null, "Erreur", "Veuillez remplir les champs obligatoires (Produit, Mesure, Quantité).", 3,
+                    "error");
             return;
         }
 
@@ -5958,13 +6183,15 @@ public class PosController implements Initializable {
             c.setRegion(region);
             c.setDateCount(LocalDateTime.now());
             c.setObservation(input_observ_comptage.getText());
-            c.setCoutAchat(tf_coutachat_compter.getText().isEmpty() ? 0 : Double.parseDouble(tf_coutachat_compter.getText()));
+            c.setCoutAchat(
+                    tf_coutachat_compter.getText().isEmpty() ? 0 : Double.parseDouble(tf_coutachat_compter.getText()));
             if (dpk_date_exp_compter.getValue() != null) {
                 c.setDateExpiration(dpk_date_exp_compter.getValue());
             }
 
             // Calcul theorique tire de StockAgregate
-            data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p, inv.getRegion(), LocalDate.now(), LocalDate.now());
+            data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p, inv.getRegion(), LocalDate.now(),
+                    LocalDate.now());
 
             double theorik = (sa != null && sa.getFinalQuantity() != null) ? sa.getFinalQuantity() : 0.0;
             c.setQuantiteTheorik(theorik);
@@ -5996,7 +6223,8 @@ public class PosController implements Initializable {
     @FXML
     private void saveInventaire(ActionEvent et) {
         if (!canCreateInventory.get()) {
-            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de créer ou modifier un inventaire.", 3, "error");
+            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de créer ou modifier un inventaire.", 3,
+                    "error");
             return;
         }
 
@@ -6053,21 +6281,35 @@ public class PosController implements Initializable {
 
         // Setup table
         tbl_comptage_inv.setItems(obl_comptages);
-        col_code_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getCodeInventaire()));
-        col_etat_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getEtatInventaire()));
-        col_debut_date_inv_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDebutInventair().toString()));
-        col_date_today_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDateCompter().toString()));
-        col_produit_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getProduit().getNomProduit()));
-        col_stk_theorik_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantiteTheorik()));
-        col_quantite_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantite()));
-        col_quant_ecart_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getEcart()));
-        col_valeur_unit_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getCoutAchat()));
+        col_code_inv_compter
+                .setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getCodeInventaire()));
+        col_etat_inv_compter
+                .setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getEtatInventaire()));
+        col_debut_date_inv_compter.setCellValueFactory(
+                cellData -> new SimpleStringProperty(cellData.getValue().getDebutInventair().toString()));
+        col_date_today_compter.setCellValueFactory(
+                cellData -> new SimpleStringProperty(cellData.getValue().getDateCompter().toString()));
+        col_produit_compter.setCellValueFactory(
+                cellData -> new SimpleStringProperty(cellData.getValue().getProduit().getNomProduit()));
+        col_stk_theorik_compter
+                .setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantiteTheorik()));
+        col_quantite_compter
+                .setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantite()));
+        col_quant_ecart_compter
+                .setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getEcart()));
+        col_valeur_unit_compter
+                .setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getCoutAchat()));
 
-        col_valeur_tot_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getQuantite() * cellData.getValue().getCoutAchat()));
-        col_val_ecart_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getEcart() * cellData.getValue().getCoutAchat()));
+        col_valeur_tot_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(
+                cellData.getValue().getQuantite() * cellData.getValue().getCoutAchat()));
+        col_val_ecart_compter.setCellValueFactory(cellData -> new SimpleDoubleProperty(
+                cellData.getValue().getEcart() * cellData.getValue().getCoutAchat()));
         col_lot_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getNumlot()));
-        col_date_perem_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDateExpiration() != null ? cellData.getValue().getDateExpiration().toString() : ""));
-        col_ecart_obs_compter.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getObservation()));
+        col_date_perem_compter.setCellValueFactory(cellData -> new SimpleStringProperty(
+                cellData.getValue().getDateExpiration() != null ? cellData.getValue().getDateExpiration().toString()
+                        : ""));
+        col_ecart_obs_compter
+                .setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getObservation()));
         this.tbl_comptage_inv.getSelectionModel().selectedItemProperty().addListener((ov, t, t1) -> {
             if (t1 != null) {
                 Inventaire inv = InventaireDelegate.findInventaireByCode((String) t1.getCodeInventaire());
@@ -6085,7 +6327,8 @@ public class PosController implements Initializable {
                 this.tf_coutachat_compter.setText(Double.toString(t1.getCoutAchat()));
                 this.tf_numlot_compter.setText(t1.getNumlot());
                 this.tf_quantite_compter.setText(Double.toString(t1.getQuantite()));
-                this.choosenCompter = CompterDelegate.findCompterByInventaireAndProduit(inv.getUid(), t1.getProduit().getUid());
+                this.choosenCompter = CompterDelegate.findCompterByInventaireAndProduit(inv.getUid(),
+                        t1.getProduit().getUid());
             }
         });
 
@@ -6093,34 +6336,41 @@ public class PosController implements Initializable {
         cbx_inventaire_compter.setConverter(new StringConverter<Inventaire>() {
             @Override
             public String toString(Inventaire o) {
-                return o == null ? "" : o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " (" + o.getEtat() + ")".toUpperCase();
+                return o == null ? ""
+                        : o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " (" + o.getEtat()
+                                + ")".toUpperCase();
             }
 
             @Override
             public Inventaire fromString(String s) {
                 return cbx_inventaire_compter.getItems()
                         .stream()
-                        .filter(o -> (o != null && (o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " (" + o.getEtat() + ")").toUpperCase()
-                        .equalsIgnoreCase(s.toUpperCase())))
+                        .filter(o -> (o != null && (o.getCodeInventaire() + " du " + o.getDateDebut().toString() + " ("
+                                + o.getEtat() + ")").toUpperCase()
+                                .equalsIgnoreCase(s.toUpperCase())))
                         .findFirst().orElse(null);
             }
         });
         cbx_produit_compter.setConverter(new StringConverter<Produit>() {
             @Override
             public String toString(Produit object) {
-                return object == null ? null : object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque()) + " "
-                        + (object.getModele() == null ? "" : object.getModele()) + " " + (object.getTaille() == null ? "" : object.getTaille()) + " "
-                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar();
+                return object == null ? null
+                        : object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                                + (object.getModele() == null ? "" : object.getModele()) + " "
+                                + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar();
             }
 
             @Override
             public Produit fromString(String string) {
                 return cbx_produit_compter.getItems()
                         .stream()
-                        .filter(object -> (object.getNomProduit() + " " + (object.getMarque() == null ? "" : object.getMarque()) + " "
-                        + (object.getModele() == null ? "" : object.getModele()) + " " + (object.getTaille() == null ? "" : object.getTaille()) + " "
-                        + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar())
-                        .equalsIgnoreCase(string))
+                        .filter(object -> (object.getNomProduit() + " "
+                                + (object.getMarque() == null ? "" : object.getMarque()) + " "
+                                + (object.getModele() == null ? "" : object.getModele()) + " "
+                                + (object.getTaille() == null ? "" : object.getTaille()) + " "
+                                + (object.getCouleur() == null ? "" : object.getCouleur()) + " " + object.getCodebar())
+                                .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
         });
@@ -6135,7 +6385,7 @@ public class PosController implements Initializable {
                 return cbx_mesure_compter.getItems()
                         .stream()
                         .filter(v -> (v.getDescription())
-                        .equalsIgnoreCase(string))
+                                .equalsIgnoreCase(string))
                         .findFirst().orElse(null);
             }
         });
@@ -6159,7 +6409,8 @@ public class PosController implements Initializable {
 
         cbx_produit_compter.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
-                cbx_mesure_compter.setItems(FXCollections.observableArrayList(MesureDelegate.findAscSortedByQuantWithProduit(newVal.getUid())));
+                cbx_mesure_compter.setItems(FXCollections
+                        .observableArrayList(MesureDelegate.findAscSortedByQuantWithProduit(newVal.getUid())));
                 cbx_mesure_compter.getSelectionModel().selectFirst();
                 String meth = pref.get("meth", "FIFO");
                 Recquisition rq = RecquisitionDelegate.getLastEntry(meth, newVal, region);
@@ -6169,7 +6420,8 @@ public class PosController implements Initializable {
                     dpk_date_exp_compter.setValue(rq.getDateExpiry());
                 }
                 // Update theoretical stock label from StockAgregate
-                data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(newVal, region, LocalDate.now(), LocalDate.now());
+                data.StockAgregate sa = delegates.RepportDelegate.findCurrentStock(newVal, region, LocalDate.now(),
+                        LocalDate.now());
                 double theorik = (sa != null && sa.getFinalQuantity() != null) ? sa.getFinalQuantity() : 0.0;
                 txt_stkheorik_comptage.setText("Theor.: " + theorik);
                 updateEcartLive();
@@ -6177,7 +6429,8 @@ public class PosController implements Initializable {
         });
 
         tf_quantite_compter.textProperty().addListener((obs, oldV, newV) -> updateEcartLive());
-        cbx_mesure_compter.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> updateEcartLive());
+        cbx_mesure_compter.getSelectionModel().selectedItemProperty()
+                .addListener((obs, oldV, newV) -> updateEcartLive());
         NotificationHandler.setOnDataSyncListener(basemodel -> {
             int index = -2;
             if (basemodel instanceof Inventaire) {
@@ -6222,13 +6475,14 @@ public class PosController implements Initializable {
                 LigneVente i = (LigneVente) basemodel;
                 this.refreshPosUi();
             }
-            System.out.println(">>>>>>>>>>> index " + index + ">>>>>>>>>>>>>>>>uid enregirte venant de synchronization = " + basemodel.getType());
+            System.out.println(">>>>>>>>>>> index " + index
+                    + ">>>>>>>>>>>>>>>>uid enregirte venant de synchronization = " + basemodel.getType());
         });
 
         // Load data
         obl_inventaires.setAll(InventaireDelegate.findInventaires(region));
         obl_inventaires.add(null);
-//        cbx_inventaire_compter.setItems(obl_inventaires);
+        // cbx_inventaire_compter.setItems(obl_inventaires);
         cbx_produit_compter.setItems(FXCollections.observableArrayList(ProduitDelegate.findProduits()));
         new ComboBoxAutoCompletion<>(cbx_produit_compter);
     }
@@ -6239,7 +6493,8 @@ public class PosController implements Initializable {
         }
         try {
             double theorik = Double.parseDouble(txt_stkheorik_comptage.getText().split(":")[1].trim());
-            double qte = tf_quantite_compter.getText().isEmpty() ? 0 : Double.parseDouble(tf_quantite_compter.getText());
+            double qte = tf_quantite_compter.getText().isEmpty() ? 0
+                    : Double.parseDouble(tf_quantite_compter.getText());
             Mesure m = cbx_mesure_compter.getValue();
             if (m != null && m.getQuantContenu() != null && m.getQuantContenu() > 0) {
                 double ecart = qte - (theorik / m.getQuantContenu());
@@ -6277,12 +6532,16 @@ public class PosController implements Initializable {
 
     @FXML
     public void saveCompter(Event e) {
-        if (cbx_inventaire_compter.getValue() == null || this.tf_coutachat_compter.getText().isBlank() || this.tf_quantite_compter.getText().isBlank() || this.tf_numlot_compter.getText().isBlank()) {
-            MainUI.notify(null, (String) "", (String) "Completer les champs non facultatives du cote comptage puis reessayer", (long) 5L, (String) "error");
+        if (cbx_inventaire_compter.getValue() == null || this.tf_coutachat_compter.getText().isBlank()
+                || this.tf_quantite_compter.getText().isBlank() || this.tf_numlot_compter.getText().isBlank()) {
+            MainUI.notify(null, (String) "",
+                    (String) "Completer les champs non facultatives du cote comptage puis reessayer", (long) 5L,
+                    (String) "error");
             return;
         }
         if (cbx_inventaire_compter.getValue().getEtat().equals("Terminé")) {
-            MainUI.notify(null, (String) "", (String) "Impossible d'ajouter un pointage sur un inventaire cloture", (long) 4L, (String) "error");
+            MainUI.notify(null, (String) "", (String) "Impossible d'ajouter un pointage sur un inventaire cloture",
+                    (long) 4L, (String) "error");
             return;
         }
         if (cbx_inventaire_compter.getValue().getEtat().equalsIgnoreCase("Non commencé")) {
@@ -6306,7 +6565,8 @@ public class PosController implements Initializable {
                 choosenCompter.setDateExpiration(dpk_date_exp_compter.getValue());
             }
             // Calcul theorique tire de StockAgregate
-            StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p, cbx_inventaire_compter.getValue().getRegion(), LocalDate.now(), LocalDate.now());
+            StockAgregate sa = delegates.RepportDelegate.findCurrentStock(p,
+                    cbx_inventaire_compter.getValue().getRegion(), LocalDate.now(), LocalDate.now());
 
             double theorik = (sa == null) ? 0.0 : (sa.getFinalQuantity() == null) ? 0.0 : sa.getFinalQuantity();
             double th = (theorik / m.getQuantContenu());
@@ -6314,8 +6574,11 @@ public class PosController implements Initializable {
             choosenCompter.setEcart(ecart);
 
             // Mettre a jour le total ecart en valeur
-            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null ? inv.getValeurTotalEcart() : 0.0;
-            cbx_inventaire_compter.getValue().setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
+            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null
+                    ? inv.getValeurTotalEcart()
+                    : 0.0;
+            cbx_inventaire_compter.getValue()
+                    .setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
             InventaireDelegate.updateInventaire(cbx_inventaire_compter.getValue());
             saveInventaireByHttp(cbx_inventaire_compter.getValue());
             this.choosenCompter.setQuantiteTheorik(th);
@@ -6366,8 +6629,11 @@ public class PosController implements Initializable {
             choosenCompter.setEcart(ecart);
 
             // Mettre a jour le total ecart en valeur
-            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null ? inv.getValeurTotalEcart() : 0.0;
-            cbx_inventaire_compter.getValue().setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
+            double existingVal = cbx_inventaire_compter.getValue().getValeurTotalEcart() != null
+                    ? inv.getValeurTotalEcart()
+                    : 0.0;
+            cbx_inventaire_compter.getValue()
+                    .setValeurTotalEcart(existingVal + (ecart * choosenCompter.getCoutAchat()));
             delegates.InventaireDelegate.updateInventaire(cbx_inventaire_compter.getValue());
             saveInventaireByHttp(cbx_inventaire_compter.getValue());
             this.choosenCompter.setInventaireId(inv);
@@ -6387,26 +6653,31 @@ public class PosController implements Initializable {
             }
             this.syncCompterHttp(created);
         }
-//        this.tf_quantite_compter.clear();
-//        this.tf_numlot_compter.clear();
-//        double cau = choosenCompter.getCoutAchat() / m.getQuantContenu();
-//        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), this.region, cau);
+        // this.tf_quantite_compter.clear();
+        // this.tf_numlot_compter.clear();
+        // double cau = choosenCompter.getCoutAchat() / m.getQuantContenu();
+        // RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(),
+        // this.region, cau);
         String dev = this.pref.get("mainCur", "USD");
-        this.txt_valeur_global_compter.setText("Valeur totale compt\u00e9e :" + this.obl_comptages.stream().mapToDouble(l -> {
-            double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-            return val;
-        }).sum() + " " + dev);
-        this.txt_valeurtotal_ecart_compter.setText("Valeur totale \u00e9cart :" + this.obl_comptages.stream().mapToDouble(l -> {
-            double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-            return val;
-        }).sum() + " " + dev);
+        this.txt_valeur_global_compter
+                .setText("Valeur totale compt\u00e9e :" + this.obl_comptages.stream().mapToDouble(l -> {
+                    double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    return val;
+                }).sum() + " " + dev);
+        this.txt_valeurtotal_ecart_compter
+                .setText("Valeur totale \u00e9cart :" + this.obl_comptages.stream().mapToDouble(l -> {
+                    double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN)
+                            .doubleValue();
+                    return val;
+                }).sum() + " " + dev);
         choosenCompter = null;
     }
 
     public void refreshPoints(Event e) {
         Executors.newSingleThreadExecutor().submit(() -> {
             if (cbx_inventaire_compter.getValue() == null) {
-                MainUI.notify(null, (String) "Erreur", (String) "Selectionner un inventaire puis reessayer!", (long) 4L, (String) "error");
+                MainUI.notify(null, (String) "Erreur", (String) "Selectionner un inventaire puis reessayer!", (long) 4L,
+                        (String) "error");
                 return;
             }
             this.obl_comptages.clear();
@@ -6435,7 +6706,8 @@ public class PosController implements Initializable {
                     return val;
                 }).sum();
                 double valeurTotalEcart = this.obl_comptages.stream().mapToDouble(l -> {
-                    double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    double val = BigDecimal.valueOf(l.getEcart() * l.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN)
+                            .doubleValue();
                     return val;
                 }).sum();
                 inv.setValeurTotal(valeurTotal);
@@ -6455,7 +6727,8 @@ public class PosController implements Initializable {
 
     @FXML
     public void createNewProductIfnotExist(Event e) {
-        MainUI.floatDialog((String) "produit_item.fxml", (int) 600, (int) 790, (String) this.token, (Kazisafe) this.kazisafe, (Object[]) new Object[]{this.entreprise, null});
+        MainUI.floatDialog((String) "produit_item.fxml", (int) 600, (int) 790, (String) this.token,
+                (Kazisafe) this.kazisafe, (Object[]) new Object[] { this.entreprise, null });
     }
 
     private void syncInventaireHttp(Inventaire inv) {
@@ -6493,9 +6766,11 @@ public class PosController implements Initializable {
                     if (syncinv.code() == 417) {
                         String msg = syncinv.errorBody().string();
                         if (msg.contains("Inventaire")) {
-                            this.saveInvHttp(InventaireDelegate.findInventaire((String) compter.getInventaireId().getUid()));
+                            this.saveInvHttp(
+                                    InventaireDelegate.findInventaire((String) compter.getInventaireId().getUid()));
                         } else {
-                            this.sendProduitIfNotExist(compter.getProductId(), MesureDelegate.findMesureByProduit((String) compter.getProductId().getUid()));
+                            this.sendProduitIfNotExist(compter.getProductId(),
+                                    MesureDelegate.findMesureByProduit((String) compter.getProductId().getUid()));
                         }
                     }
                     ++retries;
@@ -6522,8 +6797,7 @@ public class PosController implements Initializable {
 
     private byte[] loadDefaultImage() {
         byte[] byArray;
-        block8:
-        {
+        block8: {
             InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
             try {
                 byArray = FileUtils.readAllBytes((InputStream) is);
@@ -6559,26 +6833,34 @@ public class PosController implements Initializable {
     @FXML
     private void deleteInventory(ActionEvent event) {
         if (!canCreateInventory.get()) {
-            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de supprimer un inventaire.", 3, "error");
+            MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de supprimer un inventaire.", 3,
+                    "error");
             return;
         }
         if (cbx_inventaire_compter.getValue() != null) {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer l'inventaire physique ?", new ButtonType[]{ButtonType.YES, ButtonType.CANCEL});
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Voulez vous vraiment supprimer l'inventaire physique ?",
+                    new ButtonType[] { ButtonType.YES, ButtonType.CANCEL });
             alert.setTitle("Attention!");
             alert.setHeaderText(null);
             Optional showAndWait = alert.showAndWait();
             if (showAndWait.get() == ButtonType.YES) {
                 if (this.role.equals(Role.Trader.name())
                         | this.role.equals(Role.Manager_ALL_ACCESS.name())) {
-                    List counts = CompterDelegate.findCompterBYInventaire((String) cbx_inventaire_compter.getValue().getUid());
+                    List counts = CompterDelegate
+                            .findCompterBYInventaire((String) cbx_inventaire_compter.getValue().getUid());
                     if (counts.isEmpty()) {
                         InventaireDelegate.deleteInventaire((Inventaire) cbx_inventaire_compter.getValue());
-                        MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s", (long) 4L, (String) "info");
+                        MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s",
+                                (long) 4L, (String) "info");
                     } else {
-                        MainUI.notify(null, (String) "Erreur", (String) "Cet inventaire n'est pas vide", (long) 4L, (String) "erreur");
+                        MainUI.notify(null, (String) "Erreur", (String) "Cet inventaire n'est pas vide", (long) 4L,
+                                (String) "erreur");
                     }
                 } else {
-                    MainUI.notify(null, (String) "Impossible de supprimer", (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression", (long) 2L, (String) "warn");
+                    MainUI.notify(null, (String) "Impossible de supprimer",
+                            (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression",
+                            (long) 2L, (String) "warn");
                 }
             }
         }
@@ -6587,7 +6869,8 @@ public class PosController implements Initializable {
     @FXML
     private void deleteCompter(ActionEvent event) {
         if (this.choosenCompter != null) {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer ce comptage ?", new ButtonType[]{ButtonType.YES, ButtonType.CANCEL});
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Voulez vous vraiment supprimer ce comptage ?",
+                    new ButtonType[] { ButtonType.YES, ButtonType.CANCEL });
             alert.setTitle("Attention!");
             alert.setHeaderText(null);
             Optional showAndWait = alert.showAndWait();
@@ -6604,9 +6887,12 @@ public class PosController implements Initializable {
                     parent.setValeurTotal(newvalue);
                     InventaireDelegate.updateInventaire((Inventaire) parent);
                     this.syncInventaireHttp(parent);
-                    MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s", (long) 4L, (String) "info");
+                    MainUI.notify(null, (String) "Success", (String) "Suppression faite avec succ\u00e8s", (long) 4L,
+                            (String) "info");
                 } else {
-                    MainUI.notify(null, (String) "Impossible de supprimer", (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression", (long) 2L, (String) "warn");
+                    MainUI.notify(null, (String) "Impossible de supprimer",
+                            (String) "Vous n'avez pas les privileges necessaire pour effectuer la suppression",
+                            (long) 2L, (String) "warn");
                 }
             }
         }
@@ -6622,7 +6908,8 @@ public class PosController implements Initializable {
                 return;
             }
             String prov = cbx_provenance_req.getValue();
-            MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe, new Object[]{tools.Constants.ACTION_CREATE, null, entreprise, prov, liv});
+            MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe,
+                    new Object[] { tools.Constants.ACTION_CREATE, null, entreprise, prov, liv });
         } else {
             MainUI.notify(null, "Erreur", "Veuillez selectionner une livraison dans l'onglet Livraisons", 3, "error");
         }
@@ -6685,7 +6972,8 @@ public class PosController implements Initializable {
         ComptageItem co = new ComptageItem();
         co.setCodeInventaire(inv.getCodeInventaire());
         co.setCoutAchat(compter.getCoutAchat());
-        co.setCoutTotal(BigDecimal.valueOf(compter.getCoutAchat() * compter.getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+        co.setCoutTotal(BigDecimal.valueOf(compter.getCoutAchat() * compter.getQuantite())
+                .setScale(2, RoundingMode.HALF_EVEN).doubleValue());
         co.setDateCompter(compter.getDateCount());
         co.setDateExpiration(compter.getDateExpiration());
         co.setQuantiteTheorik(compter.getQuantiteTheorik().doubleValue());
@@ -6703,7 +6991,9 @@ public class PosController implements Initializable {
 
     private List<ComptageItem> comptageRender(Collection<Compter> cs, Inventaire inv) {
         if (inv == null) {
-            MainUI.notify(null, (String) "Error", (String) "Erreur : veuillez reselectionner l'inventaire puis reesayer", (long) 4L, (String) "error");
+            MainUI.notify(null, (String) "Error",
+                    (String) "Erreur : veuillez reselectionner l'inventaire puis reesayer", (long) 4L,
+                    (String) "error");
             return null;
         }
         ArrayList<ComptageItem> result = new ArrayList<>();
@@ -6712,7 +7002,8 @@ public class PosController implements Initializable {
             ComptageItem co = new ComptageItem();
             co.setCodeInventaire(inv.getCodeInventaire());
             co.setCoutAchat(c.getCoutAchat());
-            co.setCoutTotal(BigDecimal.valueOf(c.getCoutAchat() * c.getQuantite()).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+            co.setCoutTotal(BigDecimal.valueOf(c.getCoutAchat() * c.getQuantite()).setScale(2, RoundingMode.HALF_EVEN)
+                    .doubleValue());
             co.setDateCompter(c.getDateCount());
             co.setDateExpiration(c.getDateExpiration());
             co.setDebutInventair(inv.getDateDebut());
@@ -6739,14 +7030,17 @@ public class PosController implements Initializable {
             return;
         }
         this.obl_comptages.setAll(crender);
-        this.txt_valeur_global_compter.setText("Valeur totale compt\u00e9e: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(l -> {
-            double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-            return val;
-        }).sum()) + " " + dev);
-        this.txt_valeurtotal_ecart_compter.setText("Val.totale ecart: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(e -> {
-            double val = BigDecimal.valueOf(e.getEcart() * e.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-            return val;
-        }).sum()) + " " + dev);
+        this.txt_valeur_global_compter
+                .setText("Valeur totale compt\u00e9e: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(l -> {
+                    double val = BigDecimal.valueOf(l.getCoutTotal()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                    return val;
+                }).sum()) + " " + dev);
+        this.txt_valeurtotal_ecart_compter
+                .setText("Val.totale ecart: " + Util.toPlain(this.obl_comptages.stream().mapToDouble(e -> {
+                    double val = BigDecimal.valueOf(e.getEcart() * e.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN)
+                            .doubleValue();
+                    return val;
+                }).sum()) + " " + dev);
     }
 
     private void saveProductByHttpSafely(Produit produit, String base64Image, List<Mesure> mesures) {
@@ -6774,7 +7068,8 @@ public class PosController implements Initializable {
         }
     }
 
-    private Response<Produit> saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures) throws IOException {
+    private Response<Produit> saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures)
+            throws IOException {
         ProduitHelper produitHelper = this.createProduitHelper(produit, base64Image, mesures);
         Response response = this.kazisafe.saveLite(produitHelper).execute();
         if (response.isSuccessful()) {
