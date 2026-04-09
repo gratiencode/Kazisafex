@@ -5,15 +5,10 @@
  */
 package com.endeleya.kazisafex;
 
-import com.github.anastaciocintra.escpos.EscPos;
-import com.github.anastaciocintra.escpos.EscPosConst;
-import com.github.anastaciocintra.escpos.barcode.BarCode;
-import com.github.anastaciocintra.output.PrinterOutputStream;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.oned.Code128Writer;
-import delegates.LigneVenteDelegate;
 import delegates.MesureDelegate;
 import delegates.PrixDeVenteDelegate;
 import delegates.RecquisitionDelegate;
@@ -189,15 +184,21 @@ public class PanierappenderController implements Initializable {
                 return;
             }
             String numlotx = choosenRecquisition.getNumlot();
+            double sumLot;
             if (hasGlobalStockAccess()) {
                 resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
+                sumLot = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), numlotx);
             } else {
                 resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
+                sumLot = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), numlotx, region);
             }
             prices = getRecentPrice(prod.getUid()).getValue();//PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
 
             reste = (resteEnPiece / choosenmez.getQuantContenu());
             txt_available_quant.setText(reste + " " + choosenmez.getDescription());
+            if (txt_qte_lot != null) {
+                txt_qte_lot.setText((sumLot / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
+            }
             if (!tf_input_quant.getText().isEmpty() && StringUtils.isNumeric(tf_input_quant.getText())) {
                 Double d = Double.valueOf(tf_input_quant.getText());
                 List<PrixDeVente> pvds = PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, d);
@@ -313,7 +314,10 @@ public class PanierappenderController implements Initializable {
                 lsk.setNumlot(lsk.getDate().toString());
             }
             if (!isSameLotExistInRecqs(lsk.getNumlot())) {
-                double q = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot());
+                // Respecter le scope d'acces: global (toutes regions) ou region courante.
+                double q = hasGlobalStockAccess()
+                        ? RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot())
+                        : RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot(), region);
                 if (q > 0) {
                     lisrecquisition.add(lsk);
                 }
@@ -323,6 +327,7 @@ public class PanierappenderController implements Initializable {
 //        Recquisition choosen = chooseValideRecquisitionx(lisrecquisition);
         cbx_lot_recquisitionee.getSelectionModel().selectFirst();//.select(choosen);
         choosenRecquisition = cbx_lot_recquisitionee.getValue();
+        
         Map.Entry<Recquisition, List<PrixDeVente>> recent = getRecentPrice(prod.getUid());
         if (choosenRecquisition == null) {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("choosemeth"), 4, "error");
@@ -335,6 +340,7 @@ public class PanierappenderController implements Initializable {
             MainUI.notify(null, bundle.getString("error"), "Aucun lot disponible pour ce produit.", 4, "error");
             return;
         }
+        applyBgColorIfExpired(choosenRecquisition);
         List<Stocker> locals = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosenRecquisition.getNumlot());
         Stocker local = locals.isEmpty() ? null : locals.get(0);
         localisabel.setText(local == null ? "" : local.getLocalisation());
@@ -342,25 +348,8 @@ public class PanierappenderController implements Initializable {
 //        Recquisition headerRecq = PosController.getInstance().getHeaderRecq(prod);
 //        String numlot = choosenRecquisition == null ? headerRecq.getNumlot() : choosenRecquisition.getNumlot();
 
-        int expir = isStockExpired(choosenRecquisition);
-        switch (expir) {
-            case -1 ->
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-            case 3 ->
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-            case 6 ->
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-            case 12 ->
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-            default ->
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-        }
-        txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
-        if (hasGlobalStockAccess()) {
-            resteEnPiece = RecquisitionDelegate.findCurrentStockFor(prod, "%");
-        } else {
-            resteEnPiece = RecquisitionDelegate.findCurrentStockFor(prod, region);
-        }
+        // Quantite totale restante du produit (somme de tous les lots du scope).
+        resteEnPiece = getCurrentRemainingPieces();
 
 //        prices = PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
         if (prices == null) {
@@ -383,6 +372,17 @@ public class PanierappenderController implements Initializable {
             }
         }
         txt_available_quant.setText((resteEnPiece / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
+        double sumLotIn = 0;
+        if (choosenRecquisition != null) {
+             if (hasGlobalStockAccess()) {
+                 sumLotIn = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), choosenRecquisition.getNumlot());
+             } else {
+                 sumLotIn = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), choosenRecquisition.getNumlot(), region);
+             }
+        }
+        if (txt_qte_lot != null) {
+            txt_qte_lot.setText((sumLotIn / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
+        }
         List<PrixDeVente> pvxs = pickPrice(prices, choosenmez, 1);
         if (!pvxs.isEmpty()) {
             PrixDeVente pvx = pvxs.get(0);
@@ -497,21 +497,10 @@ public class PanierappenderController implements Initializable {
                     }
                     reste = resteEnPiece / choosenmez.getQuantContenu();
                     txt_available_quant.setText(reste + " " + choosenmez.getDescription());
-                    txt_qte_lot.setText((sum / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-                    int exp = isStockExpired(choosenRecquisition);
-                    switch (exp) {
-                        case -1 ->
-                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-                        case 3 ->
-                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-                        case 6 ->
-                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-                        case 12 ->
-                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-                        default ->
-                            txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+                    if (txt_qte_lot != null) {
+                        txt_qte_lot.setText((sum / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
                     }
-                    txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
+                    applyBgColorIfExpired(choosenRecquisition);
                     List<Stocker> lstk = StockerDelegate.findStockerByProduitLot(choosenRecquisition.getProductId().getUid(), choosenRecquisition.getNumlot());
                     if (lstk.isEmpty()) {
                         return;
@@ -523,25 +512,27 @@ public class PanierappenderController implements Initializable {
 
         LocalDate date = choosenRecquisition.getDateExpiry();
         txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date.toString());
-        txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-        if (txt_peremption.getText().trim().equals(bundle.getString("noperish"))) {
-            return;
-        }
-        int exp = isStockExpired(choosenRecquisition);
+        applyBgColorIfExpired(choosenRecquisition);
+        tf_input_quant.requestFocus();
+    }
+    
+    private void applyBgColorIfExpired(Recquisition req) {
+        int exp = isStockExpired(req);
         switch (exp) {
-            case -1 ->
+            case -1 -> // Expired
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-            case 3 ->
+            case 1 -> // 1 Month
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#db8109"), new CornerRadii(20), new Insets(4))));
+            case 3 -> // 3 Months
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-            case 6 ->
+            case 6 -> // 6 Months
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-            case 12 ->
+            case 12 -> // 12 Months
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-            default ->
+            default -> // Non-perishable or long term
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
         }
         txt_peremption.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 6;");
-        tf_input_quant.requestFocus();
     }
 
     private PrixDeVente findPriceWithConversion(List<PrixDeVente> pvxs,
@@ -964,6 +955,8 @@ public class PanierappenderController implements Initializable {
             valeurTotalUsd = valeurTotalCdf / taux2change;
         }
 
+        // Reprendre la quantite courante juste avant validation pour eviter un stale state.
+        resteEnPiece = getCurrentRemainingPieces();
         double rest = PosController.getInstance().getRest(prod);
         double kms = rest;
         // choosenmez.getQuantContenu();
@@ -978,7 +971,7 @@ public class PanierappenderController implements Initializable {
         }
         Double oal = last.getStockAlert();
         double alt = ((oal == null ? 0 : oal) * m.getQuantContenu()) / choosenmez.getQuantContenu();
-        double rst = resteEnPiece - qpc;
+        double rst = rest - qpc;
         if (PosController.getInstance().isAlertReached(prod.getUid())) {
             if (rst <= 0) {
                 Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, String.format(bundle.getString("quantremn"), kms, choosenmez.getDescription(), choosenRecquisition.getNumlot()), ButtonType.YES, ButtonType.CANCEL);
@@ -1085,6 +1078,16 @@ public class PanierappenderController implements Initializable {
 
     private boolean hasGlobalStockAccess() {
         return Role.Trader.name().equals(role) || (role != null && role.contains(Role.ALL_ACCESS.name()));
+    }
+
+    private double getCurrentRemainingPieces() {
+        if (prod == null) {
+            return 0;
+        }
+        // Quantite en pieces du produit, sommee sur tous les lots du scope utilisateur.
+        return hasGlobalStockAccess()
+                ? RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid())
+                : RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
     }
 
     private double parseDoubleOrDefault(String value, double fallback) {

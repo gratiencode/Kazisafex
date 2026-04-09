@@ -40,6 +40,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +50,7 @@ import data.*;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -212,6 +214,8 @@ public class PosController implements Initializable {
     private Tab tabcarts;
     @FXML
     private Tab tab_axsoir;
+    @FXML
+    private Tab tab_retour_march_mag;
 
     @FXML
     Pane pane_wait_import;
@@ -247,6 +251,8 @@ public class PosController implements Initializable {
     private ComboBox<String> cbx_region_retour_depot;
     @FXML
     private ListView<InventoryMagasin> listvu_choosen4_retour_depot;
+    @FXML
+    private TextField search_facture_retour;
     @FXML
     private Pane pane_retour;
     @FXML
@@ -599,6 +605,18 @@ public class PosController implements Initializable {
     TextField tf_phone_conta_perso;
     @FXML
     Pane pane_retour_depot;
+    @FXML
+    private TableView<RetourMagasin> tbl_hist_retour;
+    @FXML
+    private TableColumn<RetourMagasin, String> col_hist_ret_date;
+    @FXML
+    private TableColumn<RetourMagasin, String> col_hist_ret_client;
+    @FXML
+    private TableColumn<RetourMagasin, String> col_hist_ret_prod;
+    @FXML
+    private TableColumn<RetourMagasin, String> col_hist_ret_quant;
+
+    private ScheduledExecutorService visibilityScheduler;
     int count_logic = 0;
     int pospg = 0;
     //JpaStorage db;
@@ -606,6 +624,7 @@ public class PosController implements Initializable {
     ObservableList<Cart> cart;
     ObservableList<Recquisition> lsreq;
     ObservableList<Rupture> resultRuptureSearch;
+    ObservableList<RetourMagasin> ols_retours;
     List<Recquisition> calcreq;
     Set<Recquisition> listDeRetourDepot;
     List<LigneVente> calclv;
@@ -1144,6 +1163,18 @@ public class PosController implements Initializable {
         MainUI.setPattern(datePremption);
         MainUI.setPattern(dpk_debut_req);
         MainUI.setPattern(dpk_debut_inv_mag);
+
+        // Schedule product visibility verification
+        visibilityScheduler = Executors.newSingleThreadScheduledExecutor();
+        visibilityScheduler.scheduleWithFixedDelay(() -> {
+            try {
+                if (list_mode_ls != null) {
+                    verifyProductVisibility(new ArrayList<>(list_mode_ls));
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }, 5, 20, TimeUnit.SECONDS);
         MainUI.setPattern(dpk_fin_inv_mag);
         pane_wait_import.setVisible(false);
         pane_retour_depot.setVisible(false);
@@ -1170,9 +1201,10 @@ public class PosController implements Initializable {
                 if (lgvs.isEmpty()) {
                     return;
                 }
-                ols_ligvt_retour.addAll(lgvs);
+                ols_ligvt_retour.setAll(lgvs);
                 cbx_lgnvt_retour.getSelectionModel().selectFirst();
-                pane_retour.setVisible(true);
+                tab_axsoir.getTabPane().getSelectionModel().select(tab_axsoir);
+                tab_retour_march_mag.getTabPane().getSelectionModel().select(tab_retour_march_mag);
             } else {
                 MainUI.notify(null, "Erreur", "Veuillez selectionner une facture valide puis reessayer", 4, "error");
             }
@@ -1218,6 +1250,24 @@ public class PosController implements Initializable {
                                     .submit(() -> {
                                         Util.sync(ligv, Constants.ACTION_DELETE, Tables.LIGNEVENTE);
                                     });
+
+                            try {
+                                LocalDate venteDate = choosenVente.getDateVente() != null ? choosenVente.getDateVente().toLocalDate() : LocalDate.now();
+                                data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(ligv.getProductId().getUid(), venteDate, venteDate, choosenVente.getRegion());
+                                if (existingSa != null) {
+                                    double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite()) - ligv.getQuantite();
+                                    double newTotal = (existingSa.getTotalSaleUsd() == null ? 0 : existingSa.getTotalSaleUsd()) - ligv.getMontantUsd();
+                                    double coutAch = ligv.getCoutAchat() == null ? 0 : ligv.getCoutAchat();
+                                    double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0 : existingSa.getCoutAchatTotal()) - (coutAch * ligv.getQuantite());
+
+                                    existingSa.setQuantite(newQty);
+                                    existingSa.setTotalSaleUsd(newTotal);
+                                    existingSa.setCoutAchatTotal(newCoutAchatTotal);
+                                    delegates.RepportDelegate.refreshMetric(existingSa);
+                                }
+                            } catch (Exception saEx) {
+                                System.err.println("Error updating SaleAgregate on sale deletion: " + saEx.getMessage());
+                            }
                         });
 
                         Executors.newCachedThreadPool()
@@ -1339,21 +1389,14 @@ public class PosController implements Initializable {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
                 if (newValue) {
-                    Executors.newCachedThreadPool()
-                            .submit(() -> {
-                                List<Rupture> ruptures;
-                                if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                                    ruptures = RecquisitionDelegate.findStockEnRupture();
-                                } else {
-                                    ruptures = RecquisitionDelegate.findStockEnRupture(region);
-                                }
-                                obl_rupture_list.setAll(ruptures);
+                    RecquisitionDelegate.findStockEnRupture(role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? null : region)
+                            .thenAccept(list -> {
                                 Platform.runLater(() -> {
+                                    obl_rupture_list.setAll(list);
                                     rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
+                                    chbx_xall.setSelected(false);
                                 });
-                                chbx_xall.setSelected(false);
                             });
-
                 }
             }
         });
@@ -1446,6 +1489,189 @@ public class PosController implements Initializable {
         pgsIndicator.setVisible(false);
         progs.setVisible(false);
         initInventoryTab();
+        initRetourHistoryTab();
+
+        tab_retour_march_mag.setOnSelectionChanged(e -> {
+            if (tab_retour_march_mag.isSelected()) {
+                populateRetourHistory();
+            }
+        });
+    }
+
+    private void initRetourHistoryTab() {
+        ols_retours = FXCollections.observableArrayList();
+        tbl_hist_retour.setItems(ols_retours);
+
+        col_hist_ret_date.setCellValueFactory(cellData -> {
+            LocalDateTime date = cellData.getValue().getDate();
+            return new SimpleStringProperty(date == null ? "" : Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(date)));
+        });
+        col_hist_ret_client.setCellValueFactory(cellData -> {
+            Client c = cellData.getValue().getClientId();
+            return new SimpleStringProperty(c == null ? "N/A" : c.getNomClient());
+        });
+        col_hist_ret_prod.setCellValueFactory(cellData -> {
+            RetourMagasin r = cellData.getValue();
+            Produit p = null;
+            if (r.getLigneVenteId() != null) {
+                p = r.getLigneVenteId().getProductId();
+            } else {
+                // Try parsing from metadata in motif
+                try {
+                    String[] parts = r.getMotif().split("\\|\\|\\|");
+                    if (parts.length > 0) {
+                        p = ProduitDelegate.findProduit(parts[0]);
+                    }
+                } catch (Exception e) {
+                }
+            }
+            if (p != null) {
+                String desc = p.getNomProduit() + " "
+                        + (p.getMarque() != null ? p.getMarque() : "") + " "
+                        + (p.getModele() != null ? p.getModele() : "") + " "
+                        + (p.getTaille() != null ? p.getTaille() : "");
+                return new SimpleStringProperty(desc.trim());
+            }
+            return new SimpleStringProperty("Produit Inconnu");
+        });
+        col_hist_ret_quant.setCellValueFactory(cellData -> {
+            RetourMagasin r = cellData.getValue();
+            String m = r.getMesureId() != null ? r.getMesureId().getDescription() : "";
+            return new SimpleStringProperty((r.getQuantite() == null ? "0" : r.getQuantite()) + " " + m);
+        });
+
+        ContextMenu cm = new ContextMenu();
+        MenuItem deleteMenu = new MenuItem("Supprimer ce retour (Annuler)");
+        deleteMenu.setOnAction(e -> {
+            RetourMagasin selected = tbl_hist_retour.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                deleteRetourMagasin(selected);
+            }
+        });
+        cm.getItems().add(deleteMenu);
+        tbl_hist_retour.setContextMenu(cm);
+
+        populateRetourHistory();
+    }
+
+    private void populateRetourHistory() {
+        RecquisitionDelegate.findRetourMagasins().thenAccept(list -> {
+            Platform.runLater(() -> {
+                ols_retours.setAll(list);
+            });
+        });
+    }
+
+    private void deleteRetourMagasin(RetourMagasin r) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "REPRISE: Voulez-vous annuler ce retour et ré-insérer la vente originale ?", ButtonType.YES, ButtonType.NO);
+        alert.showAndWait().ifPresent(type -> {
+            if (type == ButtonType.YES) {
+                try {
+                    // Parse Metadata: UIDPRO|||NUMLOT|||COUTACHAT|||PIXUNIT|||REFBASE|||OBS
+                    String[] parts = r.getMotif().split("\\|\\|\\|");
+                    if (parts.length < 5) {
+                        return;
+                    }
+                    String proUid = parts[0];
+                    String numLot = parts[1];
+                    double coutAch = Double.parseDouble(parts[2]);
+                    double price = Double.parseDouble(parts[3]);
+                    String refBase = parts[4];
+
+                    Produit p = ProduitDelegate.findProduit(proUid);
+                    Mesure mesure = r.getMesureId();
+                    double quantite = r.getQuantite();
+                    double montantUsd = price * quantite;
+                    double montantCdf = montantUsd * taux2change;
+
+                    // 1. Re-insert or find Vente
+                    List<Vente> existingVentes = VenteDelegate.findByRef(refBase);
+                    Vente v;
+                    if (existingVentes.isEmpty()) {
+                        v = new Vente();
+                        v.setClientId(r.getClientId());
+                        v.setDateVente(LocalDateTime.now());
+                        v.setReference(refBase);
+                        v.setRegion(r.getRegion());
+                        v.setPayment(Constants.PAYMENT_CASH);
+                        v.setLibelle("Repris du retour");
+                        v.setMontantUsd(montantUsd);
+                        v.setMontantCdf(montantCdf);
+                        v = VenteDelegate.saveVente(v);
+                    } else {
+                        v = existingVentes.get(0);
+                        // Update totals
+                        double existingUsd = v.getMontantUsd();
+                        double existingCdf = v.getMontantCdf();
+                        v.setMontantUsd(existingUsd + montantUsd);
+                        v.setMontantCdf(existingCdf + montantCdf);
+                        VenteDelegate.updateVente(v);
+                    }
+
+                    // 2. Re-insert LigneVente
+                    LigneVente nlv = new LigneVente();
+                    nlv.setProductId(p);
+                    nlv.setReference(v);
+                    nlv.setQuantite(quantite);
+                    nlv.setMesureId(mesure);
+                    nlv.setPrixUnit(price);
+                    nlv.setCoutAchat(coutAch);
+                    nlv.setMontantUsd(montantUsd);
+                    nlv.setMontantCdf(montantCdf);
+                    nlv.setNumlot(numLot);
+                    LigneVenteDelegate.saveLigneVente(nlv);
+
+                    // 3. Delete Return record
+                    RetourMagasinDelegate.deleteRetourMagasin(r);
+
+                    // 4. Rectify stock (decrease it back after reprise)
+                    RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), region, coutAch);
+
+                    // 5. UPDATE SALE AGREGATE: add back the metric for this product
+                    try {
+                        LocalDate venteDate = v.getDateVente() != null ? v.getDateVente().toLocalDate() : LocalDate.now();
+                        data.SaleAgregate existingSa = delegates.RepportDelegate.findSaleReportFor(proUid, venteDate, venteDate, region);
+                        if (existingSa != null) {
+                            // Add back to existing aggregate
+                            double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite()) + quantite;
+                            double newTotal = (existingSa.getTotalSaleUsd() == null ? 0 : existingSa.getTotalSaleUsd()) + montantUsd;
+                            double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0 : existingSa.getCoutAchatTotal()) + (coutAch * quantite);
+
+                            existingSa.setQuantite(newQty);
+                            existingSa.setTotalSaleUsd(newTotal);
+                            existingSa.setCoutAchatTotal(newCoutAchatTotal);
+                            delegates.RepportDelegate.refreshMetric(existingSa);
+                            System.out.println("SaleAgregate restored (updated) for: " + p.getNomProduit());
+                        } else {
+                            // Create a new aggregate entry
+                            data.SaleAgregate newSa = new data.SaleAgregate();
+                            newSa.setUid(tools.DataId.generate());
+                            newSa.setProductId(p);
+                            newSa.setCategoryId(p.getCategoryId() != null ? delegates.CategoryDelegate.findCategory(p.getCategoryId().getUid()) : null);
+                            newSa.setMesureId(mesure);
+                            newSa.setQuantite(quantite);
+                            newSa.setTotalSaleUsd(montantUsd);
+                            newSa.setCoutAchatTotal(coutAch * quantite);
+                            newSa.setDate(LocalDateTime.now());
+                            newSa.setRegion(region);
+                            delegates.RepportDelegate.createMetric(newSa);
+                            System.out.println("SaleAgregate created for reprise: " + p.getNomProduit());
+                        }
+                    } catch (Exception saEx) {
+                        System.err.println("Error updating SaleAgregate on reprise: " + saEx.getMessage());
+                    }
+
+                    populateRetourHistory();
+                    Platform.runLater(() -> {
+                        fillProductInTable(null);
+                        MainUI.notify(null, "Reprise réussie", "Le retour a été annulé et la vente ré-établie.", 3, "info");
+                    });
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    MainUI.notify(null, "Erreur", "Echec de la reprise du retour", 3, "error");
+                }
+            }
+        });
     }
 
     @FXML
@@ -2004,10 +2230,11 @@ public class PosController implements Initializable {
                 .submit(() -> {
                     List<Rupture> ruptures;
                     if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                        ruptures = RecquisitionDelegate.findStockEnRupture();
+                        ruptures = RecquisitionDelegate.findStockEnRupture().join();
                     } else {
-                        ruptures = RecquisitionDelegate.findStockEnRupture(region);
+                        ruptures = RecquisitionDelegate.findStockEnRupture(region).join();
                     }
+
                     obl_rupture_list.setAll(ruptures);
                     Platform.runLater(() -> {
                         rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
@@ -2020,97 +2247,160 @@ public class PosController implements Initializable {
     @FXML
     public void saveRetourMarchandise(Event evt) {
         if (choosenVente != null) {
-            String ref = choosenVente.getReference() + "-" + choosenVente.getUid();
+            String refBase = choosenVente.getReference() + "-" + choosenVente.getUid();
+            String ref = "RTR-" + refBase;
             String obs = comment_retour.getText();
             String valueobs = (obs.isEmpty() ? "Retour de marchandise" : obs);
-            double vtotret = 0;
 
             LigneVente elm = cbx_lgnvt_retour.getValue();
-
-            double pv = elm.getPrixUnit();
-            if (quant_retour.getText().isEmpty()) {
-                MainUI.notify(null, "Erreur", "Veuillez entrer d'abord la quantité qui a été retournée puis réessayer", 4, "error");
+            if (elm == null) {
+                MainUI.notify(null, "Erreur", "Sélectionnez un produit", 3, "error");
                 return;
             }
-            if (!elm.getReference().equals(choosenVente)) {
-                MainUI.notify(null, "Erreur", "Nous n'avons pas pu trouver, sur la facture, le produit selectionne", 4, "error");
+
+            if (quant_retour.getText().isEmpty()) {
+                MainUI.notify(null, "Erreur", "Veuillez entrer la quantité", 3, "error");
                 return;
             }
             double quant = Double.parseDouble(quant_retour.getText());
-            vtotret += (pv * quant);
-            List<Recquisition> rss = RecquisitionDelegate.findRecquisitionByProduit(elm.getProductId().getUid(), elm.getNumlot());//db.findByLot(Recquisition.class, elm.getNumlot());
-//            if (!rss.isEmpty()) {
-            Recquisition r = rss.get(0);
-            Mesure rme = MesureDelegate.findMesure(r.getMesureId().getUid());
-            double rqdiv = rme.getQuantContenu();
 
-            double retqpc = quant * choosenMesure4Retour.getQuantContenu();
+            // Get requisition to retrieve cost price for stock rectification
+            List<Recquisition> rss = RecquisitionDelegate.findRecquisitionByProduit(elm.getProductId().getUid(), elm.getNumlot());
+            if (rss.isEmpty()) {
+                MainUI.notify(null, "Erreur", "Détails stock introuvables", 3, "error");
+                return;
+            }
+            Recquisition r = rss.get(0);
+
+            // Create Return record with Metadata for Transfer
             RetourMagasin rmg = new RetourMagasin(DataId.generate());
             rmg.setClientId(choosenVente.getClientId());
             rmg.setDate(LocalDateTime.now());
-            rmg.setLigneVenteId(elm);
             rmg.setMesureId(choosenMesure4Retour);
-            rmg.setMotif(valueobs);
+            String meta = elm.getProductId().getUid() + "|||" + elm.getNumlot() + "|||" + elm.getCoutAchat() + "|||" + elm.getPrixUnit() + "|||" + refBase;
+            rmg.setMotif(meta + "|||" + valueobs);
             rmg.setPrixVente(elm.getPrixUnit());
             rmg.setQuantite(quant);
             rmg.setReferenceVente(ref);
             rmg.setRegion(region);
-            RetourMagasin rtr = RetourMagasinDelegate.saveRetourMagasin(rmg);
-            if (rtr != null) {
-                MainUI.notify(null, "Succes", "Retour de marchandise au magasin enregistré avec succes", 4, "info");
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(rmg, Constants.ACTION_CREATE, Tables.RETOURMAGASIN);
+
+            // 1. UPDATE VENTE TOTALS (Subtract returned amount)
+            double sumToSubtract = elm.getPrixUnit() * quant;
+            choosenVente.setMontantUsd(choosenVente.getMontantUsd() - sumToSubtract);
+
+            // 2. SUPPRESSION DE LA LIGNEVENTE
+            LigneVenteDelegate.deleteLigneVente(elm);
+            Executors.newCachedThreadPool().submit(() -> {
+                Util.sync(elm, Constants.ACTION_DELETE, Tables.LIGNEVENTE);
+            });
+
+            // 3. CHECK IF VENTE IS NOW EMPTY OR ZEROED OUT
+            List<LigneVente> remainingLines = LigneVenteDelegate.findByReference(choosenVente.getUid());
+            double totalUsd = choosenVente.getMontantUsd();
+            double totalCdf = choosenVente.getMontantCdf();
+            boolean isZeroed = (totalUsd + totalCdf) <= 0;
+
+            final List<LigneVente> linesToDelete = new ArrayList<>();
+            if (remainingLines == null || remainingLines.isEmpty() || isZeroed) {
+                // Delete remaining lines if any (in case of zero total with leftover lines)
+                if (isZeroed && remainingLines != null) {
+                    for (LigneVente lv : remainingLines) {
+                        LigneVenteDelegate.deleteLigneVente(lv);
+                        linesToDelete.add(lv);
+                        Executors.newCachedThreadPool().submit(() -> {
+                            Util.sync(lv, Constants.ACTION_DELETE, Tables.LIGNEVENTE);
                         });
-                double sum = elm.getPrixUnit() * quant;
-                if (choosenVente.getPayment().equals(Constants.PAYEMENT_CREDIT)
-                        || choosenVente.getPayment().equals(Constants.PAYMENT_CREDIT_CASH)) {
-                    double vsum = choosenVente.getMontantDette() - sum;
-                    if (vsum < 0) {
-                        choosenVente.setMontantDette(0d);
-                        double nvsum = choosenVente.getMontantUsd() - Math.abs(vsum);
-                        if (nvsum < 0) {
-                            choosenVente.setMontantUsd(0d);
-                            choosenVente.setMontantCdf(choosenVente.getMontantCdf() - (Math.abs(nvsum) * taux2change));
+                    }
+                }
+                VenteDelegate.deleteVente(choosenVente);
+                Executors.newCachedThreadPool().submit(() -> {
+                    Util.sync(choosenVente, Constants.ACTION_DELETE, Tables.VENTE);
+                });
+            } else {
+                VenteDelegate.updateVente(choosenVente);
+            }
+
+            // 4. SAVE RETOUR RECORD
+            RetourMagasinDelegate.saveRetourMagasin(rmg);
+
+            // Capture final values for background thread
+            final LigneVente elmFinal = elm;
+            final double quantFinal = quant;
+            final double sumToSubtractFinal = sumToSubtract;
+
+            new Thread(() -> {
+                // 5. RECTIFICATION STOCK ONLY (no new Recquisition created)
+                RecquisitionDelegate.rectifyStock(elmFinal.getProductId(), LocalDate.now(), LocalDate.now(), region, r.getCoutAchat());
+
+                // 6. UPDATE SALE AGREGATE: reduce or remove the metric for this product
+                try {
+                    LocalDate venteDate = choosenVente.getDateVente() != null
+                            ? choosenVente.getDateVente().toLocalDate()
+                            : LocalDate.now();
+                    data.SaleAgregate sa = delegates.RepportDelegate.findSaleReportFor(
+                            elmFinal.getProductId().getUid(), venteDate, venteDate, region);
+
+                    if (sa != null) {
+                        double currentQty = sa.getQuantite() == null ? 0 : sa.getQuantite();
+                        double currentTotal = sa.getTotalSaleUsd() == null ? 0 : sa.getTotalSaleUsd();
+                        double currentCoutTotal = sa.getCoutAchatTotal() == null ? 0 : sa.getCoutAchatTotal();
+                        double newQty = currentQty - quantFinal;
+                        double newTotal = currentTotal - sumToSubtractFinal;
+                        double reqPrice = r.getCoutAchat();
+                        double newCoutAchatTotal = currentCoutTotal - (reqPrice * quantFinal);
+
+                        if (newQty <= 0 || newTotal <= 0) {
+                            delegates.RepportDelegate.deleteMetric(sa);
+                            System.out.println("SaleAgregate deleted for product: " + elmFinal.getProductId().getNomProduit());
                         } else {
-                            choosenVente.setMontantUsd(nvsum);
+                            sa.setQuantite(newQty);
+                            sa.setTotalSaleUsd(newTotal);
+                            sa.setCoutAchatTotal(newCoutAchatTotal);
+                            delegates.RepportDelegate.refreshMetric(sa);
+                            System.out.println("SaleAgregate updated for product: " + elmFinal.getProductId().getNomProduit());
                         }
                     } else {
-                        choosenVente.setMontantDette(vsum);
+                        System.out.println("No SaleAgregate found for: " + elmFinal.getProductId().getNomProduit());
                     }
-
-                } else {
-                    double vsum = choosenVente.getMontantUsd() - sum;
-                    choosenVente.setMontantUsd(vsum);
+                } catch (Exception ex) {
+                    System.err.println("Error updating SaleAgregate on return: " + ex.getMessage());
                 }
-                long count = RetourMagasinDelegate.getCountForVente(ref);
-                choosenVente.setLibelle("RTR (" + count + ")");
-                Vente upd = VenteDelegate.updateVente(choosenVente);
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(upd, Constants.ACTION_UPDATE, Tables.VENTE);
-                        });
-            }
-//                Recquisition rretour = new Recquisition(DataId.generate());
-//                rretour.setCoutAchat(r.getCoutAchat());
-//                rretour.setDate(new Date());
-//                rretour.setDateExpiry(r.getDateExpiry());
-//                System.out.println("Mesure on recquisition " + rme + " quant " + elm.getQuantite());
-//                rretour.setMesureId(rme);
-//                rretour.setNumlot(elm.getNumlot());
-//                rretour.setObservation(valueobs);
-//                rretour.setProductId(elm.getProductId());
-//                rretour.setQuantite(BigDecimal.valueOf(retqpc / rqdiv).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
-//                rretour.setReference(ref);
-//                rretour.setRegion(region);
-//                rretour.setStockAlert(r.getStockAlert());
-//                Executors.newCachedThreadPool()
-//                        .submit(() -> {
-//                            Util.sync(RecquisitionDelegate.saveRecquisition(rretour), Constants.ACTION_CREATE, Tables.RECQUISITION);
-//                        });
-            //db.insertAndSync(rretour);
-//            }
 
+                // Update SaleAgregate for the remaining deleted lines (if sale was zeroed)
+                for (LigneVente lv : linesToDelete) {
+                    try {
+                        LocalDate venteDate = choosenVente.getDateVente() != null ? choosenVente.getDateVente().toLocalDate() : LocalDate.now();
+                        data.SaleAgregate sa = delegates.RepportDelegate.findSaleReportFor(lv.getProductId().getUid(), venteDate, venteDate, region);
+                        if (sa != null) {
+                            double newQty = (sa.getQuantite() == null ? 0 : sa.getQuantite()) - lv.getQuantite();
+                            double newTotal = (sa.getTotalSaleUsd() == null ? 0 : sa.getTotalSaleUsd()) - lv.getMontantUsd();
+                            double coutAch = lv.getCoutAchat() == null ? 0 : lv.getCoutAchat();
+                            double newCoutAchatTotal = (sa.getCoutAchatTotal() == null ? 0 : sa.getCoutAchatTotal()) - (coutAch * lv.getQuantite());
+
+                            if (newQty <= 0 || newTotal <= 0) {
+                                delegates.RepportDelegate.deleteMetric(sa);
+                            } else {
+                                sa.setQuantite(newQty);
+                                sa.setTotalSaleUsd(newTotal);
+                                sa.setCoutAchatTotal(newCoutAchatTotal);
+                                delegates.RepportDelegate.refreshMetric(sa);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("Error updating SaleAgregate on remaining line deletion: " + ex.getMessage());
+                    }
+                }
+
+                Platform.runLater(() -> {
+                    populateRetourHistory();
+                    fillProductInTable(null);
+                    MainUI.notify(null, "Succès", "Retour enregistré.", 4, "info");
+                    search_facture_retour.clear();
+                    quant_retour.clear();
+                    comment_retour.clear();
+                    cbx_lgnvt_retour.getItems().clear();
+                });
+            }).start();
         }
     }
 
@@ -2481,7 +2771,10 @@ public class PosController implements Initializable {
         col_alerte_req.setCellValueFactory((TableColumn.CellDataFeatures<Recquisition, String> param) -> {
             Recquisition r = param.getValue();
             Mesure mz = r.getMesureId();
-//            Mesure mz = MesureDelegate.findMesure(mz.getUid());
+            if (mz == null) {
+                Produit p = r.getProductId();
+                mz = MesureDelegate.findByProduitAndQuant(p.getUid(), 1d);
+            }
             double sa = r.getStockAlert() == null ? 0 : r.getStockAlert();
             Double qc = mz == null ? mz.getQuantContenu() : mz.getQuantContenu();
             Mesure mm;
@@ -2587,9 +2880,9 @@ public class PosController implements Initializable {
         tbl_rupt_produit.setCellValueFactory((TableColumn.CellDataFeatures<Rupture, String> param) -> {
             Rupture r = param.getValue();
             Produit p = r.getProduit();
-            return new SimpleStringProperty(p.getNomProduit() + " " + p.getMarque() + " "
+            return new SimpleStringProperty((p != null) ? (p.getNomProduit() + " " + p.getMarque() + " "
                     + "" + p.getModele() + " " + (p.getTaille() == null ? "" : p.getTaille()) + " "
-                    + "" + (p.getCouleur() == null ? "" : p.getCouleur()));
+                    + "" + (p.getCouleur() == null ? "" : p.getCouleur())) : "");
 
         });
         tbl_rupt_localisation.setCellValueFactory((TableColumn.CellDataFeatures<Rupture, String> param) -> {
@@ -2885,7 +3178,7 @@ public class PosController implements Initializable {
                         if (newValue != null) {
                             quant_retour.setText(String.valueOf(newValue.getQuantite()));
                             List<Mesure> lmr = MesureDelegate.findMesureByProduit(newValue.getProductId().getUid());
-                            ols_mesure_retour.addAll(lmr);
+                            ols_mesure_retour.setAll(lmr);
                             mesure_retour.getSelectionModel().select(newValue.getMesureId());
                         }
                     }
@@ -4038,13 +4331,65 @@ public class PosController implements Initializable {
 
     public void fillProductInTable(final String cat) {
         new Thread(() -> {
-            List<ListViewItem> datalist
-                    = RecquisitionDelegate.populate();
+            // Charger les items selon le scope d'acces (global vs region), puis
+            // harmoniser la quantite affichee avec le stock reel (somme de tous les lots).
+            boolean hasGlobalAccess = role != null
+                    && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()));
+            List<ListViewItem> datalist = hasGlobalAccess
+                    ? RecquisitionDelegate.populate()
+                    : RecquisitionDelegate.populate(region, "Journalier du " + LocalDate.now());
+            final List<ListViewItem> normalized = harmonizeUiStockByProduct(datalist, hasGlobalAccess);
             Platform.runLater(() -> {
-                list_mode_ls.setAll(datalist);
+                list_mode_ls.setAll(normalized);
                 tbl_list_pro.setItems(list_mode_ls);
+                verifyProductVisibility(normalized);
             });
         }).start();
+    }
+
+    private List<ListViewItem> harmonizeUiStockByProduct(List<ListViewItem> source, boolean hasGlobalAccess) {
+        List<ListViewItem> normalized = new ArrayList<>();
+        if (source == null || source.isEmpty()) {
+            return normalized;
+        }
+        String meth = pref.get("meth", "fifo");
+        for (ListViewItem item : source) {
+            if (item == null || item.getProduit() == null) {
+                continue;
+            }
+            Produit p = item.getProduit();
+            // Quantite reellement disponible en pieces (somme de tous les lots).
+            double pieces = hasGlobalAccess
+                    ? RecquisitionDelegate.findRemainedInMagasinFor(p.getUid())
+                    : RecquisitionDelegate.findRemainedInMagasinFor(p.getUid(), region);
+            if (pieces <= 0) {
+                continue;
+            }
+            Mesure mesureUi = item.getMesureAchat();
+            if (mesureUi == null || mesureUi.getQuantContenu() == null || mesureUi.getQuantContenu() <= 0) {
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
+                if (mesures.isEmpty()) {
+                    continue;
+                }
+                mesureUi = mesures.get(0);
+                item.setMesureAchat(mesureUi);
+            }
+            double resteMesureUi = BigDecimal.valueOf(pieces / mesureUi.getQuantContenu())
+                    .setScale(3, RoundingMode.HALF_EVEN)
+                    .doubleValue();
+            item.setQuantiteRestant(resteMesureUi);
+
+            // Le lot affiche suit la methode d'inventaire selectionnee (FIFO/LIFO/FEFO).
+            Recquisition header = hasGlobalAccess
+                    ? RecquisitionDelegate.getHeaderRecq(meth, p)
+                    : RecquisitionDelegate.getHeaderRecq(meth, p, region);
+            if (header != null) {
+                item.setNumlot(header.getNumlot());
+                item.setPeremption(header.getDateExpiry());
+            }
+            normalized.add(item);
+        }
+        return normalized;
     }
 
     List<ListViewItem> searcher = null;
@@ -4061,6 +4406,71 @@ public class PosController implements Initializable {
         System.out.println("Test " + p.getCodebar());
         tbl_list_pro.getSelectionModel().clearSelection();
 
+    }
+
+    public void verifyProductVisibility(List<ListViewItem> currentItems) {
+        List<Produit> allProduits = ProduitDelegate.findProduits();
+        for (Produit p : allProduits) {
+            boolean isVisible = currentItems.stream()
+                    .anyMatch(item -> item.getProduit().getUid().equals(p.getUid()));
+
+            if (!isVisible) {
+                Recquisition lastRecq = RecquisitionDelegate.getLastEntry("lifo", p, region);
+                if (lastRecq == null) {
+                    List<Recquisition> lr = RecquisitionDelegate.findRecquisitionByProduit(p.getUid());
+                    if (!lr.isEmpty()) {
+                        lr.sort(Comparator.comparing(Recquisition::getDate).reversed());
+                        lastRecq = lr.get(0);
+                    }
+                }
+
+                if (lastRecq != null) {
+                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
+                    PrixDeVente pv = RecquisitionDelegate.getPrice(lastRecq, mesures);
+
+                    if (pv == null) {
+                        // try to find price from previous requisitions
+                        List<Recquisition> allRecqs = RecquisitionDelegate.findRecquisitionByProduit(p.getUid());
+                        allRecqs.sort(Comparator.comparing(Recquisition::getDate).reversed());
+                        for (Recquisition old : allRecqs) {
+                            pv = RecquisitionDelegate.getPrice(old, mesures);
+                            if (pv != null) {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (pv != null) {
+                        // Product should be visible if it has a price. Rectify stock to reveal it.
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), region, lastRecq.getCoutAchat());
+                    }
+                }
+            }
+        }
+    }
+
+    @FXML
+    public void searchVenteForRetour(Event evt) {
+        String refInput = search_facture_retour.getText();
+        if (refInput.isEmpty()) {
+            return;
+        }
+
+        List<Vente> result = VenteDelegate.findByRef(refInput);
+        if (result == null || result.isEmpty()) {
+            MainUI.notify(null, "Erreur", "Facture introuvable pour la référence : " + refInput, 3, "error");
+            return;
+        }
+
+        choosenVente = result.get(0);
+        ols_ligvt_retour.clear();
+        List<LigneVente> lgvs = LigneVenteDelegate.findByReference(choosenVente.getUid());
+        ols_ligvt_retour.setAll(lgvs);
+        if (!lgvs.isEmpty()) {
+            cbx_lgnvt_retour.getSelectionModel().selectFirst();
+        } else {
+            MainUI.notify(null, "Info", "Cette facture ne contient aucun produit retournable", 3, "info");
+        }
     }
 
     public void search(final String query) {
@@ -4097,7 +4507,7 @@ public class PosController implements Initializable {
                     } else {
                         if (!vu.equals("card")) {
                             result.clear();
-                            searcher.clear();
+//                            searcher.clear();
                             for (ListViewItem p : list_mode_ls) {
                                 String pred = (p.getProduit().getCodebar() + " " + p.getProduit().getCouleur() + ""
                                         + " " + p.getProduit().getMarque() + " " + p.getProduit().getModele() + " "
@@ -4140,6 +4550,9 @@ public class PosController implements Initializable {
                     table_req.setItems(result);
                     for (Recquisition req : lsreq) {
                         Produit p = req.getProductId();
+                        if (p == null) {
+                            continue;
+                        }
                         String pred = p.getCodebar() + " " + p.getCouleur() + ""
                                 + " " + p.getMarque() + " " + p.getModele() + " "
                                 + p.getNomProduit() + " " + p.getTaille() + " " + req.getReference() + " " + req.getObservation();
@@ -4147,7 +4560,6 @@ public class PosController implements Initializable {
                             result.add(req);
                         }
                     }
-
                 } else if (tab_history.isSelected()) {
                     new Thread(new Runnable() {
                         @Override
@@ -4313,13 +4725,9 @@ public class PosController implements Initializable {
     }
 
     public boolean pass(double quantDem, Recquisition req, Produit choosenPro, Mesure choosenMesure) {
-        // Check available stock from StockDepotAgregate aggregate table
-        if (newValue == null) {
-            return false;
-        }
-        // String regionStock = req.getRegion() != null ? req.getRegion() : region;
-        Mesure mx = newValue.getMesureAchat();
-        double availableStock = newValue.getQuantiteRestant() * mx.getQuantContenu();
+        // Verrou principal: on controle toujours le stock reel courant en pieces.
+        // Cela evite les ecarts entre la vue POS et la fenetre d'ajout panier.
+        double availableStock = Math.max(0, getRest(choosenPro));
 
         // Also check what's already in the current list to prevent double counting
         double alreadyQueued = lslgnventes.stream()
@@ -4332,10 +4740,10 @@ public class PosController implements Initializable {
         Mesure reel = MesureDelegate.findMesure(choosenMesure.getUid());
         double qco = reel.getQuantContenu();
 
-        double alert = req.getStockAlert() * qco;
-        if (netAvailable <= alert) {
+        double alertValue = (req.getStockAlert() == null ? 0 : req.getStockAlert()) * qco;
+        if (netAvailable <= alertValue) {
             MainUI.notify(null, bundle.getString("warning"), bundle.getString("alertmess") + " de "
-                    + req.getStockAlert() + " " + reel.getDescription(), 5, "warning");
+                    + (req.getStockAlert() == null ? 0 : req.getStockAlert()) + " " + reel.getDescription(), 5, "warning");
         }
         // Also calculate based on direct stocker-destocker difference for backward
         // compatibility
@@ -4344,6 +4752,16 @@ public class PosController implements Initializable {
         double dispo = netAvailable - qinpc;
         double stab = alreadyQueued / choosenMesure.getQuantContenu();
         double stockRestant = netAvailable / choosenMesure.getQuantContenu();
+
+        // Relax block for non-perishables if the user explicitly wants to allow it
+        if (req.getDateExpiry() == null) {
+            // Log for debugging but allow addition
+            System.out.println("Non-perishable item addition - bypassing hard block if any.");
+            if (dispo < 0) {
+                MainUI.notify(null, bundle.getString("warning"), "Stock théorique insuffisant pour ce produit non-périssable, mais l'ajout est autorisé.", 4, "warning");
+                return true;
+            }
+        }
 
         if (dispo < 0) {
             MainUI.notify(null, bundle.getString("error"),
@@ -4748,15 +5166,22 @@ public class PosController implements Initializable {
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             if (!newValue.isEmpty()) {
-                                obl_rupture_list.setAll(RecquisitionDelegate.findStockEnRupture(newValue));
+                                RecquisitionDelegate.findStockEnRupture(newValue).thenAccept(list -> {
+                                    Platform.runLater(() -> {
+                                        obl_rupture_list.setAll(list);
+                                        rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
+                                    });
+                                });
                             } else {
                                 if (role.contains(Role.ALL_ACCESS.name()) | role.equals(Role.Trader.name())) {
-                                    obl_rupture_list.setAll(RecquisitionDelegate.findStockEnRupture());
+                                    RecquisitionDelegate.findStockEnRupture().thenAccept(list -> {
+                                        Platform.runLater(() -> {
+                                            obl_rupture_list.setAll(list);
+                                            rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
+                                        });
+                                    });
                                 }
                             }
-                            Platform.runLater(() -> {
-                                rupt_count.setText(String.format(bundle.getString("xitems"), obl_rupture_list.size()));
-                            });
 
                         });
 
@@ -4896,11 +5321,22 @@ public class PosController implements Initializable {
     @FXML
     private void refreshRecqs(Event et) {
         if (role.equals(Role.Trader.name())) {
-            lsreq.setAll(RecquisitionDelegate.findRecquisitions());
-            table_req.setItems(lsreq);
+            Executors.newSingleThreadExecutor()
+                    .submit(() -> {
+                        lsreq.setAll(RecquisitionDelegate.findRecquisitions());
+                        Platform.runLater(() -> {
+                            table_req.setItems(lsreq);
+                        });
+                    });
         } else {
-            lsreq = FXCollections.observableArrayList(RecquisitionDelegate.findRecquisitions(region));//db.findAllByRegion(Recquisition.class, region));
-            table_req.setItems(lsreq);
+            Executors.newSingleThreadExecutor()
+                    .submit(() -> {
+                        lsreq = FXCollections.observableArrayList(RecquisitionDelegate.findRecquisitions(region));//db.findAllByRegion(Recquisition.class, region));
+                        Platform.runLater(() -> {
+                            table_req.setItems(lsreq);
+                        });
+
+                    });
         }
 
         Executors.newSingleThreadExecutor()
