@@ -48,6 +48,15 @@ public class StockDepotAgregateService {
         if (stocker == null || stocker.getProductId() == null) {
             return;
         }
+        if (stocker.getNumlot() != null && !stocker.getNumlot().isBlank()) {
+            new StockerService().rectifyStockDepotByLot(
+                    stocker.getProductId(),
+                    stocker.getNumlot(),
+                    stocker.getRegion(),
+                    stocker.getCoutAchat(),
+                    stocker.getDateExpir());
+            return;
+        }
 
         String productId = stocker.getProductId().getUid();
         String region = stocker.getRegion() != null ? stocker.getRegion() : "DEFAULT";
@@ -109,6 +118,15 @@ public class StockDepotAgregateService {
         if (destocker == null || destocker.getProductId() == null) {
             return;
         }
+        if (destocker.getNumlot() != null && !destocker.getNumlot().isBlank()) {
+            new StockerService().rectifyStockDepotByLot(
+                    destocker.getProductId(),
+                    destocker.getNumlot(),
+                    destocker.getRegion(),
+                    destocker.getCoutAchat(),
+                    null);
+            return;
+        }
 
         Stocker s = new Stocker();
         s.setProductId(destocker.getProductId());
@@ -128,6 +146,15 @@ public class StockDepotAgregateService {
      */
     public void removeStock(Destocker destocker) {
         if (destocker == null || destocker.getProductId() == null) {
+            return;
+        }
+        if (destocker.getNumlot() != null && !destocker.getNumlot().isBlank()) {
+            new StockerService().rectifyStockDepotByLot(
+                    destocker.getProductId(),
+                    destocker.getNumlot(),
+                    destocker.getRegion(),
+                    destocker.getCoutAchat(),
+                    null);
             return;
         }
 
@@ -204,8 +231,7 @@ public class StockDepotAgregateService {
         }
 
         StockDepotAgregate latest = findLatestStockDepotAgregate(productId, region);
-
-        return latest == null ? 0 : latest.getQuantite() * latest.getMesureId().getQuantContenu();
+        return latest == null ? 0 : latest.getQuantite();
     }
 
     /**
@@ -218,7 +244,7 @@ public class StockDepotAgregateService {
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNamedQuery("StockDepotAgregate.findByProduitRegionDate");
-                query.setParameter("productId", produit);
+                query.setParameter("productId", productId);
                 query.setParameter("region", region);
                 query.setParameter("date", date);
                 try {
@@ -239,7 +265,7 @@ public class StockDepotAgregateService {
 
         EntityManager em = ManagedSessionFactory.getEntityManager();
         Query query = em.createNamedQuery("StockDepotAgregate.findByProduitRegionDate");
-        query.setParameter("productId", produit);
+        query.setParameter("productId", productId);
         query.setParameter("region", region);
         query.setParameter("date", date);
 
@@ -262,35 +288,64 @@ public class StockDepotAgregateService {
      * Find the latest stock depot record for a product in a region
      */
     public StockDepotAgregate findLatestStockDepotAgregate(String productId, String region) {
-        Produit produit = new Produit(productId);
-
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNamedQuery("StockDepotAgregate.findLatestByProduitAndRegion");
-                query.setParameter("productId", produit);
-                query.setParameter("region", region);
-                query.setMaxResults(1);
-                try {
-                    List<StockDepotAgregate> results = query.getResultList();
-                    return results.isEmpty() ? null : results.get(0);
-                } catch (NoResultException e) {
-                    return null;
-                }
-            });
-        }
-
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        Query query = em.createNamedQuery("StockDepotAgregate.findLatestByProduitAndRegion");
-        query.setParameter("productId", produit);
-        query.setParameter("region", region);
-        query.setMaxResults(1);
-
-        try {
-            List<StockDepotAgregate> results = query.getResultList();
-            return results.isEmpty() ? null : results.get(0);
-        } catch (NoResultException e) {
+        List<StockDepotAgregate> latestLots = findLatestLotStockDepotAggregates(productId, region);
+        if (latestLots.isEmpty()) {
             return null;
         }
+
+        StockDepotAgregate aggregate = new StockDepotAgregate();
+        aggregate.setProductId(latestLots.get(0).getProductId());
+        aggregate.setRegion(region);
+        aggregate.setMesureId(latestLots.get(0).getMesureId());
+
+        double totalQty = 0d;
+        double totalValue = 0d;
+        LocalDate latestDate = null;
+        for (StockDepotAgregate lot : latestLots) {
+            double qty = lot.getQuantite();
+            if (qty <= 0) {
+                continue;
+            }
+            totalQty += qty;
+            totalValue += lot.getValeurStock();
+            if (lot.getDate() != null && (latestDate == null || lot.getDate().isAfter(latestDate))) {
+                latestDate = lot.getDate();
+            }
+        }
+
+        aggregate.setQuantite(totalQty);
+        aggregate.setValeurStock(totalValue);
+        aggregate.setCoutAchat(totalQty <= 0 ? 0d : totalValue / totalQty);
+        aggregate.setDate(latestDate);
+        return aggregate;
+    }
+
+    private List<StockDepotAgregate> findLatestLotStockDepotAggregates(String productId, String region) {
+        String sql = """
+                SELECT s.*
+                FROM stock_depot_agregate s
+                WHERE s.product_id = ?
+                  AND s.region = ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date_record = (
+                      SELECT MAX(s2.date_record)
+                      FROM stock_depot_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                  )
+                ORDER BY s.date_record DESC, s.num_lot
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockDepotAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager().createNativeQuery(sql, StockDepotAgregate.class)
+                .setParameter(1, productId)
+                .setParameter(2, region)
+                .getResultList();
     }
 
     /**
@@ -474,7 +529,7 @@ public class StockDepotAgregateService {
         }
 
         EntityManager em = ManagedSessionFactory.getEntityManager();
-        String jpql = "SELECT s FROM StockDepotAgregate s WHERE s.productId = :productId";
+        String jpql = "SELECT s FROM StockDepotAgregate s WHERE s.productId.uid = :productId";
         if (region != null && !region.isEmpty()) {
             jpql += " AND s.region = :region";
         }

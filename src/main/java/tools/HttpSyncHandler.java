@@ -72,6 +72,9 @@ public class HttpSyncHandler
     }
 
     private void getDataFromCloud(long lastSession, ExceptionalRunnable onComplete) throws Exception {
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
+        }
         String[] endpoints = {
             "syncMissedCategories",
             "syncMissedProducts",
@@ -259,7 +262,7 @@ public class HttpSyncHandler
                         Mesure m = MesureDelegate.findMesure(recquisition.getMesureId().getUid());
                         Produit p = ProduitDelegate.findProduit(recquisition.getProductId().getUid());
                         double cau = recquisition.getCoutAchat() / m.getQuantContenu();
-                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), cau);
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), cau, recquisition.getNumlot());
                     }
 
                 }
@@ -335,7 +338,7 @@ public class HttpSyncHandler
                         Produit p = ProduitDelegate.findProduit(saleitem.getProductId().getUid());
                         Vente vr = VenteDelegate.findVente(saleitem.getReference().getUid());
                         double cau = saleitem.getCoutAchat() / m.getQuantContenu();
-                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), cau);
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), cau, saleitem.getNumlot());
                     }
                 }
             }
@@ -447,9 +450,6 @@ public class HttpSyncHandler
                         } else {
                             StockerDelegate.updateStocker(stocker);
                         }
-                        Produit p = ProduitDelegate.findProduit(stocker.getProductId().getUid());
-                        StockerDelegate.rectifyStockDepot(p, stocker.getDateStocker().toLocalDate(), stocker.getRegion(), stocker.getCoutAchat());
-
                     }
 
                 }
@@ -468,8 +468,6 @@ public class HttpSyncHandler
                         } else {
                             DestockerDelegate.updateDestocker(destocker);
                         }
-                        Produit p = ProduitDelegate.findProduit(destocker.getProductId().getUid());
-                        StockerDelegate.rectifyStockDepot(p, destocker.getDateDestockage().toLocalDate(), destocker.getRegion(), destocker.getCoutAchat());
                     }
                 }
             }
@@ -657,6 +655,9 @@ public class HttpSyncHandler
 
     private void sendDataToCloud(long lastSession, ExceptionalRunnable onComplete) throws Exception {
         try {
+            if(!Util.isInternetAndBaseApiReachable()){
+                return;
+            }
             for (Tables t : Tables.values()) {
                 WebResult wres = handleSyncRequest(lastSession, t);
                 if (wres != null) {

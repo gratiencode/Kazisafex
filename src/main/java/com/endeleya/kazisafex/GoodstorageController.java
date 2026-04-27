@@ -52,6 +52,7 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -65,10 +66,12 @@ import javafx.scene.control.Pagination;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
+import javafx.collections.transformation.FilteredList;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
@@ -78,6 +81,7 @@ import data.Destocker;
 import data.Entreprise;
 import data.Fournisseur;
 import data.LigneVente;
+import services.utils.RegionRegistry;
 import data.Mesure;
 import data.Produit;
 import data.Recquisition;
@@ -105,6 +109,7 @@ import data.network.Kazisafe;
 import delegates.CategoryDelegate;
 import delegates.PermissionDelegate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
 import tools.DataId;
 
@@ -218,19 +223,27 @@ public class GoodstorageController implements Initializable {
     @FXML
     private TableColumn<InventoryItem, String> col_nom_produit_inv;
     @FXML
+    private TableColumn<InventoryItem, String> col_stock_initial_inv;
+    @FXML
     private TableColumn<InventoryItem, String> col_quant_in_inv;
     @FXML
     private TableColumn<InventoryItem, String> col_quant_out_inv;
     @FXML
     private TableColumn<InventoryItem, String> col_remain_inv;
     @FXML
+    private TableColumn<InventoryItem, String> col_cout_achat_inv;
+    @FXML
     private TableColumn<InventoryItem, String> col_valeur_rem_inv;
     @FXML
     private TableColumn<InventoryItem, String> col_alerte_inv;
     @FXML
+    private TableColumn<InventoryItem, String> col_numlot_inv;
+    @FXML
     private TableColumn<InventoryItem, String> col_date_expir_inv;
     @FXML
     private TableColumn<InventoryItem, String> col_localisation_inv;
+    @FXML
+    private TableColumn<InventoryItem, String> col_region_inv;
     @FXML
     private ComboBox<Integer> rowPP11;
     @FXML
@@ -251,6 +264,14 @@ public class GoodstorageController implements Initializable {
     private ImageView btn_update, btn_update_d, btn_export_i;
     @FXML
     private ComboBox<String> cbx_choose_critere_de_selection;
+    @FXML
+    private ComboBox<String> cbx_filter_color_inv_depot;
+    @FXML
+    private CheckBox chbx_filter_stock_fini_depot;
+    @FXML
+    private CheckBox chbx_filter_stock_non_fini_depot;
+    @FXML
+    private Button btn_declasser_inv_depot;
     @FXML
     CheckBox chbx_filter;
     @FXML
@@ -273,6 +294,7 @@ public class GoodstorageController implements Initializable {
     ObservableList<Stocker> list_stockers;
     ObservableList<Destocker> lisdestocker;
     ObservableList<InventoryItem> lisinvent;
+    private FilteredList<InventoryItem> filteredDepotInventory;
     ObservableList<String> regions;
     StockDepotAgregateService stockDepotService;
     List<Produit> products;
@@ -294,6 +316,7 @@ public class GoodstorageController implements Initializable {
     Kazisafe kazisafe;
     String region, role, token, entr;
     ResourceBundle bundle;
+    private static final DateTimeFormatter INVENTORY_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public GoodstorageController() {
         listfourn = FXCollections.observableArrayList();
@@ -635,12 +658,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
                 if (newValue) {
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            table11.setItems(lisinvent);
-                        }
-                    }).start();
+                    loadInv();
                 }
             }
         });
@@ -661,30 +679,8 @@ public class GoodstorageController implements Initializable {
             }
         });
 
-        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Rapport regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
         cbx_regions.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -724,7 +720,9 @@ public class GoodstorageController implements Initializable {
                     }
                 } else {
                     try {
-                        loadInventaireDepot(Util.filterNoNullMesure(products), null);
+                        String selectedRegion = cbx_regions == null ? null : cbx_regions.getValue();
+                        loadInventaireDepot(Util.filterNoNullMesure(products),
+                                selectedRegion == null || selectedRegion.isBlank() ? region : selectedRegion);
                     } catch (Exception ex) {
                         Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                     }
@@ -732,21 +730,6 @@ public class GoodstorageController implements Initializable {
             }
         }).start();
 
-    }
-
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
     }
 
     public void setEntreprise(Entreprise entreprise) {
@@ -893,19 +876,26 @@ public class GoodstorageController implements Initializable {
                         param.getValue().getRegion()));
         // inventaire
         col_codebar_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            Produit p = Util.findProduit(products, param.getValue().getProduit().getUid());
+            Produit p = param.getValue().getProduit() == null ? null
+                    : Util.findProduit(products, param.getValue().getProduit().getUid());
             if (p == null) {
                 return new SimpleStringProperty();
             }
             return new SimpleStringProperty(p == null ? "Not synced" : p.getCodebar());
         });
         col_nom_produit_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            Produit p = Util.findProduit(products, param.getValue().getProduit().getUid());
+            Produit p = param.getValue().getProduit() == null ? null
+                    : Util.findProduit(products, param.getValue().getProduit().getUid());
             if (p == null) {
                 return new SimpleStringProperty();
             }
             return new SimpleStringProperty(p == null ? "Not synced"
-                    : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + p.getTaille()));
+                    : (p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
+                    + (p.getTaille() == null ? "" : p.getTaille()) + " "
+                    + (p.getCouleur() == null ? "" : p.getCouleur())).trim());
+        });
+        col_stock_initial_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
+            return new SimpleStringProperty(formatInventoryQuantity(param.getValue().getStockInitial(), param.getValue()));
         });
         col_quant_in_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getQuantEntree());
@@ -916,18 +906,60 @@ public class GoodstorageController implements Initializable {
         col_remain_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getQuantRest());
         });
+        col_cout_achat_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
+            return new SimpleStringProperty(String.format("%.2f USD", param.getValue().getCoutAchat()));
+        });
         col_valeur_rem_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getValeurStock());
         });
         col_alerte_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getStockAlerte());
         });
+        col_numlot_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
+            return new SimpleStringProperty(param.getValue().getNumlot() == null ? "" : param.getValue().getNumlot());
+        });
         col_date_expir_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            LocalDate d = param.getValue().getLastStocker().getDateExpir();
-            return new SimpleStringProperty(d == null ? null : d.toString());
+            String d = param.getValue().getDateExpir();
+            if (d == null && param.getValue().getLastStocker() != null) {
+                LocalDate ld = param.getValue().getLastStocker().getDateExpir();
+                d = ld == null ? "-" : ld.format(INVENTORY_DATE_FORMAT);
+            }
+            return new SimpleStringProperty(d == null ? "-" : d);
         });
         col_localisation_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            return new SimpleStringProperty(param.getValue().getLastStocker().getLocalisation());
+            String loc = param.getValue().getLocalisation();
+            if (loc == null && param.getValue().getLastStocker() != null) {
+                loc = param.getValue().getLastStocker().getLocalisation();
+            }
+            return new SimpleStringProperty(loc == null ? "" : loc);
+        });
+        col_region_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
+            return new SimpleStringProperty(param.getValue().getRegion() == null ? "" : param.getValue().getRegion());
+        });
+        table11.setRowFactory(tv -> new TableRow<InventoryItem>() {
+            @Override
+            protected void updateItem(InventoryItem item, boolean empty) {
+                super.updateItem(item, empty);
+                if (item == null || empty || item.getExpiryDate() == null) {
+                    setStyle("");
+                    return;
+                }
+                int exp = isStockExpired(item.getExpiryDate());
+                switch (exp) {
+                    case -1 ->
+                        setStyle("-fx-background-color: #f58282;");
+                    case 1 ->
+                        setStyle("-fx-background-color: #c46506;");
+                    case 3 ->
+                        setStyle("-fx-background-color: #db8109;");
+                    case 6 ->
+                        setStyle("-fx-background-color: #f7fa61;");
+                    case 12 ->
+                        setStyle("-fx-background-color: #c5e6b3;");
+                    default ->
+                        setStyle("");
+                }
+            }
         });
         
         list_livraison.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Livraison>() {
@@ -981,80 +1013,340 @@ public class GoodstorageController implements Initializable {
      * This is the new method that uses StockDepotAgregate as the source of truth
      */
     public void loadInventoryFromStockDepotAgregate(List<Produit> lp, String regionFilter) {
-        lisinvent.clear();
-        valStock = 0;
+        String effectiveRegion = regionFilter != null ? regionFilter : (region != null ? region : "DEFAULT");
 
-        for (Produit p : lp) {
-            // Get latest stock depot aggregate for this product and region
-            StockDepotAgregate latestStock = stockDepotService.findLatestStockDepotAgregate(p.getUid(),
-                    regionFilter != null ? regionFilter : (region != null ? region : "DEFAULT"));
+        ExecutorService ex = Executors.newSingleThreadExecutor();
+        ex.execute(() -> {
+            List<InventoryItem> loadedItems = new ArrayList<>();
+            double totalValue = 0d;
+            for (Produit p : lp) {
+                List<StockDepotAgregate> lotAggregates = StockerDelegate.findLatestLotDepotStockAggregates(p.getUid(), effectiveRegion);
+                if (lotAggregates == null || lotAggregates.isEmpty()) {
+                    continue;
+                }
 
-            if (latestStock == null || latestStock.getQuantite() <= 0) {
-                continue; // Skip products with no stock
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
+                if (mesures == null || mesures.isEmpty()) {
+                    continue;
+                }
+                Mesure displayMesure = mesures.get(0);
+                double displayContent = displayMesure.getQuantContenu() != null && displayMesure.getQuantContenu() > 0
+                        ? displayMesure.getQuantContenu() : 1d;
+
+                for (StockDepotAgregate aggregate : lotAggregates) {
+                    InventoryItem item = buildInventoryItemFromAggregate(p, aggregate, effectiveRegion, displayMesure, displayContent);
+                    if (item == null) {
+                        continue;
+                    }
+                    loadedItems.add(item);
+                    totalValue += item.getValeurStockValue();
+                }
             }
 
-            InventoryItem invent = new InventoryItem();
-            invent.setProduit(p);
-
-            // Get all stock depot records for this product to calculate totals
-            List<StockDepotAgregate> stockDepotRecords = stockDepotService.findByProduitAndRegion(p.getUid(),
-                    regionFilter != null ? regionFilter : (region != null ? region : "DEFAULT"));
-
-            double totalQuantite = 0;
-            double totalValeur = 0;
-            double coutMoyen = 0;
-
-            for (StockDepotAgregate sd : stockDepotRecords) {
-                totalQuantite += sd.getQuantite();
-                totalValeur += sd.getValeurStock();
-            }
-
-            if (totalQuantite > 0) {
-                coutMoyen = totalValeur / totalQuantite;
-            }
-
-            // Get measure for display
-            List<Mesure> lm = MesureDelegate.findAscSortedByQuantWithProduit(p.getUid());
-            if (lm.isEmpty()) {
-                continue;
-            }
-            Mesure mx = lm.get(0);
-
-            // Set inventory item properties from StockDepotAgregate
-            invent.setStockAlerte((latestStock.getQuantite() > 0 ? "En stock" : "Rupture") + " " + mx.getDescription());
-            invent.setLastStocker(null); // Not using individual stockers anymore
-            invent.setLastDestocker(null);
-
-            // Calculate values based on StockDepotAgregate
-            double in = totalQuantite; // Total quantity in base unit
-            double out = 0; // Already accounted for in aggregate
-            double rst = in - out;
-
-            Double den = mx.getQuantContenu();
-            invent.setQuantEntree((in / (den == null ? 1 : den)) + " " + mx.getDescription());
-            invent.setQuantSortie("0 " + mx.getDescription());
-            invent.setQuantRest((rst / (den == null ? 1 : den)) + " " + mx.getDescription());
-            invent.setValeurStock(
-                    BigDecimal.valueOf(totalValeur).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
-
-            lisinvent.add(invent);
-            valStock += totalValeur;
-        }
-
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
-                table11.setItems(lisinvent);
-                count11.setText(String.format(bundle.getString("xitems"), lisinvent.size()));
-            }
+            final double totalValueFinal = totalValue;
+            Platform.runLater(() -> {
+                lisinvent.setAll(loadedItems);
+                valStock = totalValueFinal;
+                applyDepotInventoryFilters();
+            });
         });
+        ex.shutdown();
     }
+
 
     public void loadInventaireDepot(List<Produit> lp, String region) {
         // Call the new method that uses StockDepotAgregate as source
         loadInventoryFromStockDepotAgregate(lp, region);
+    }
+
+    private InventoryItem buildInventoryItemFromAggregate(Produit produit, StockDepotAgregate aggregate, String effectiveRegion,
+            Mesure displayMesure, double displayContent) {
+        if (aggregate == null || aggregate.getNumlot() == null || aggregate.getNumlot().isBlank()
+                || aggregate.getQuantite() <= 0) {
+            return null;
+        }
+
+        List<Stocker> filteredStockers = new ArrayList<>();
+        List<Stocker> lotStockers = StockerDelegate.findStockerByProduitLot(produit.getUid(), aggregate.getNumlot());
+        if (lotStockers != null) {
+            for (Stocker stocker : lotStockers) {
+                if (stocker != null && effectiveRegion.equals(stocker.getRegion())) {
+                    filteredStockers.add(stocker);
+                }
+            }
+        }
+
+        List<Destocker> filteredDestockers = new ArrayList<>();
+        List<Destocker> lotDestockers = DestockerDelegate.findByProduitLot(produit.getUid(), aggregate.getNumlot());
+        if (lotDestockers != null) {
+            for (Destocker destocker : lotDestockers) {
+                if (destocker != null && effectiveRegion.equals(destocker.getRegion())) {
+                    filteredDestockers.add(destocker);
+                }
+            }
+        }
+
+        Stocker earliestStocker = null;
+        Stocker latestStocker = null;
+        double totalEntriesPc = 0d;
+        for (Stocker stocker : filteredStockers) {
+            totalEntriesPc += toPieces(stocker);
+            if (earliestStocker == null || (stocker.getDateStocker() != null && earliestStocker.getDateStocker() != null
+                    && stocker.getDateStocker().isBefore(earliestStocker.getDateStocker()))) {
+                earliestStocker = stocker;
+            }
+            if (latestStocker == null || (stocker.getDateStocker() != null && latestStocker.getDateStocker() != null
+                    && stocker.getDateStocker().isAfter(latestStocker.getDateStocker()))) {
+                latestStocker = stocker;
+            }
+        }
+
+        Destocker latestDestocker = null;
+        double totalSortiesPc = 0d;
+        for (Destocker destocker : filteredDestockers) {
+            totalSortiesPc += toPieces(destocker);
+            if (latestDestocker == null || (destocker.getDateDestockage() != null && latestDestocker.getDateDestockage() != null
+                    && destocker.getDateDestockage().isAfter(latestDestocker.getDateDestockage()))) {
+                latestDestocker = destocker;
+            }
+        }
+
+        double stockInitialPc = earliestStocker == null ? 0d : toPieces(earliestStocker);
+        double entreesPc = Math.max(0d, totalEntriesPc - stockInitialPc);
+        double stockRestPc = aggregate.getQuantite();
+        double valeur = aggregate.getValeurStock() > 0 ? aggregate.getValeurStock() : stockRestPc * aggregate.getCoutAchat();
+        double alertPc = 0d;
+        if (latestStocker != null) {
+            Mesure alerteMesure = latestStocker.getMesureId() != null
+                    ? MesureDelegate.findMesure(latestStocker.getMesureId().getUid())
+                    : null;
+            double alertContent = alerteMesure != null && alerteMesure.getQuantContenu() != null && alerteMesure.getQuantContenu() > 0
+                    ? alerteMesure.getQuantContenu() : 1d;
+            alertPc = latestStocker.getStockAlerte() * alertContent;
+        }
+
+        InventoryItem item = new InventoryItem();
+        item.setProduit(produit);
+        item.setProductId(produit.getUid());
+        item.setProductName(produit.getNomProduit());
+        item.setRegion(aggregate.getRegion());
+        item.setDate(aggregate.getDate());
+        item.setCoutAchat(aggregate.getCoutAchat());
+        item.setQuantite(stockRestPc);
+        item.setNumlot(aggregate.getNumlot());
+        item.setMesureLabel(displayMesure.getDescription());
+        item.setQuantContenu(displayContent);
+        item.setExpiryDate(aggregate.getDateExpiration());
+        item.setDateExpir(aggregate.getDateExpiration() == null ? "-" : aggregate.getDateExpiration().format(INVENTORY_DATE_FORMAT));
+        item.setLastStocker(latestStocker);
+        item.setLastDestocker(latestDestocker);
+        item.setLocalisation(latestStocker != null && latestStocker.getLocalisation() != null ? latestStocker.getLocalisation() : "");
+
+        item.setStockInitial(stockInitialPc);
+        item.setQuantEntreeValue(entreesPc);
+        item.setQuantSortieValue(totalSortiesPc);
+        item.setQuantRestValue(stockRestPc);
+        item.setValeurStockValue(valeur);
+        item.setStockAlerteValue(alertPc);
+
+        item.setQuantEntree(formatInventoryQuantity(entreesPc, item));
+        item.setQuantSortie(formatInventoryQuantity(totalSortiesPc, item));
+        item.setQuantRest(formatInventoryQuantity(stockRestPc, item));
+        item.setValeurStock(String.format("%.2f USD", valeur));
+        item.setStockAlerte(formatInventoryQuantity(alertPc, item));
+        return item;
+    }
+
+    private double toPieces(Stocker stocker) {
+        if (stocker == null) {
+            return 0d;
+        }
+        Mesure mesure = stocker.getMesureId() != null ? MesureDelegate.findMesure(stocker.getMesureId().getUid()) : null;
+        double content = mesure != null && mesure.getQuantContenu() != null && mesure.getQuantContenu() > 0
+                ? mesure.getQuantContenu() : 1d;
+        return stocker.getQuantite() * content;
+    }
+
+    private double toPieces(Destocker destocker) {
+        if (destocker == null) {
+            return 0d;
+        }
+        Mesure mesure = destocker.getMesureId() != null ? MesureDelegate.findMesure(destocker.getMesureId().getUid()) : null;
+        double content = mesure != null && mesure.getQuantContenu() != null && mesure.getQuantContenu() > 0
+                ? mesure.getQuantContenu() : 1d;
+        return destocker.getQuantite() * content;
+    }
+
+    private String formatInventoryQuantity(double pieces, InventoryItem item) {
+        double content = item == null || item.getQuantContenu() <= 0 ? 1d : item.getQuantContenu();
+        String label = item == null || item.getMesureLabel() == null ? "" : " " + item.getMesureLabel();
+        return String.format("%.2f%s", pieces / content, label);
+    }
+
+    private void setupDepotInventoryFilters() {
+        cbx_filter_color_inv_depot.getItems().setAll(
+                "Tous les lots",
+                "(Rouge) Déjà expiré",
+                "(Orange foncé) Expire dans 1 mois",
+                "(Orange) Expire dans 3 mois",
+                "(Jaune) Expire dans 6 mois",
+                "(Vert) Expire dans 12 mois");
+        cbx_filter_color_inv_depot.getSelectionModel().selectFirst();
+
+        filteredDepotInventory = new FilteredList<>(lisinvent, p -> true);
+
+        ChangeListener<Object> filterListener = (obs, oldVal, newVal) -> applyDepotInventoryFilters();
+        cbx_filter_color_inv_depot.getSelectionModel().selectedItemProperty().addListener(filterListener);
+        chbx_filter_stock_fini_depot.selectedProperty().addListener(filterListener);
+        chbx_filter_stock_non_fini_depot.selectedProperty().addListener(filterListener);
+        cbx_choose_critere_de_selection.getSelectionModel().selectedItemProperty().addListener(filterListener);
+        input_txt_criteres_mens.textProperty().addListener(filterListener);
+    }
+
+    private void applyDepotInventoryFilters() {
+        if (filteredDepotInventory == null) {
+            return;
+        }
+        String colorFilter = cbx_filter_color_inv_depot.getValue();
+        boolean filterFini = chbx_filter_stock_fini_depot.isSelected();
+        boolean filterNonFini = chbx_filter_stock_non_fini_depot.isSelected();
+        String criteria = cbx_choose_critere_de_selection.getValue();
+        int monthsFilter = parseMonthsFilter();
+
+        filteredDepotInventory.setPredicate(item -> {
+            if (item == null) {
+                return false;
+            }
+            if (filterFini && !filterNonFini && item.getQuantRestValue() > 0) {
+                return false;
+            }
+            if (!filterFini && filterNonFini && item.getQuantRestValue() <= 0) {
+                return false;
+            }
+
+            int status = isStockExpired(item.getExpiryDate());
+            if (colorFilter != null && !"Tous les lots".equals(colorFilter)) {
+                if (colorFilter.contains("Rouge") && status != -1) {
+                    return false;
+                }
+                if (colorFilter.contains("Orange foncé") && status != 1) {
+                    return false;
+                }
+                if (colorFilter.contains("Orange") && !colorFilter.contains("foncé") && status != 3) {
+                    return false;
+                }
+                if (colorFilter.contains("Jaune") && status != 6) {
+                    return false;
+                }
+                if (colorFilter.contains("Vert") && status != 12) {
+                    return false;
+                }
+            }
+
+            if (criteria != null) {
+                switch (criteria) {
+                    case "Sans destockage" -> {
+                        if (item.getQuantSortieValue() > 0) {
+                            return false;
+                        }
+                    }
+                    case "Stock en Alerte" -> {
+                        if (item.getQuantRestValue() > item.getStockAlerteValue()) {
+                            return false;
+                        }
+                    }
+                    case "Expirés" -> {
+                        if (status != -1) {
+                            return false;
+                        }
+                    }
+                    case "Stock à expirer dans :" -> {
+                        if (monthsFilter <= 0 || item.getExpiryDate() == null) {
+                            return false;
+                        }
+                        long remain = Constants.Datetime.dateInMillis(item.getExpiryDate()) - System.currentTimeMillis();
+                        if (remain < 0 || remain > ((long) monthsFilter * Constants.UN_MOIS)) {
+                            return false;
+                        }
+                    }
+                    default -> {
+                    }
+                }
+            }
+            return true;
+        });
+
+        refreshDepotInventoryTable();
+        updateDepotInventoryTotalLabel();
+    }
+
+    private int parseMonthsFilter() {
+        try {
+            return Integer.parseInt(input_txt_criteres_mens.getText() == null ? "0" : input_txt_criteres_mens.getText().trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private void refreshDepotInventoryTable() {
+        List<InventoryItem> source = currentDepotInventoryItems();
+        int pageSize = rowsDataCount11 <= 0 ? 20 : rowsDataCount11;
+        int pageCount = Math.max(1, (int) Math.ceil((double) source.size() / pageSize));
+        pagination11.setPageCount(pageCount);
+
+        int currentIndex = Math.min(pagination11.getCurrentPageIndex(), Math.max(0, pageCount - 1));
+        int offset = currentIndex * pageSize;
+        int limit = Math.min(offset + pageSize, source.size());
+        if (source.isEmpty()) {
+            table11.setItems(FXCollections.observableArrayList());
+        } else {
+            table11.setItems(FXCollections.observableArrayList(source.subList(offset, limit)));
+        }
+        count11.setText(String.format(bundle.getString("xitems"), source.size()));
+    }
+
+    private List<InventoryItem> currentDepotInventoryItems() {
+        return filteredDepotInventory == null ? new ArrayList<>(lisinvent) : new ArrayList<>(filteredDepotInventory);
+    }
+
+    private void updateDepotInventoryTotalLabel() {
+        double total = 0d;
+        for (InventoryItem item : currentDepotInventoryItems()) {
+            total += item.getValeurStockValue();
+        }
+        valStock = total;
+        valSocks.setText("Valeur du stock : "
+                + BigDecimal.valueOf(total).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+
+        boolean isRouge = cbx_filter_color_inv_depot.getValue() != null
+                && cbx_filter_color_inv_depot.getValue().contains("Rouge");
+        boolean criteriaExpired = "Expirés".equals(cbx_choose_critere_de_selection.getValue());
+        btn_declasser_inv_depot.setDisable(currentDepotInventoryItems().isEmpty() || !(isRouge || criteriaExpired));
+    }
+
+    private int isStockExpired(LocalDate dateExpiration) {
+        long now = System.currentTimeMillis();
+        if (dateExpiration == null) {
+            return 555;
+        }
+        long exp = Constants.Datetime.dateInMillis(dateExpiration);
+        long interval = exp - now;
+        if (interval <= 0) {
+            return -1;
+        }
+        if (interval <= Constants.UN_MOIS) {
+            return 1;
+        }
+        if (interval <= Constants.UN_MOIS * 3) {
+            return 3;
+        }
+        if (interval <= Constants.UN_MOIS * 6) {
+            return 6;
+        }
+        if (interval <= Constants.UN_MOIS * 12) {
+            return 12;
+        }
+        return 555;
     }
 
     double sumLotPc(List<Destocker> ls, String numlot) {
@@ -1764,23 +2056,28 @@ public class GoodstorageController implements Initializable {
             table1.setItems(rst);
         } else if (tab_invent.isSelected()) {
             if (query == null) {
-                table11.setItems(lisinvent);
+                refreshDepotInventoryTable();
                 return;
             }
-            ObservableList<InventoryItem> invs = table11.getItems();
+            ObservableList<InventoryItem> invs = FXCollections.observableArrayList(currentDepotInventoryItems());
             ObservableList<InventoryItem> result = FXCollections.observableArrayList();
             for (InventoryItem item : invs) {
-                Livraison l = item.getLastStocker().getLivraisId();
-                Produit p = Util.findProduit(products, item.getProduit().getUid());
+                Produit p = item.getProduit() == null ? null : Util.findProduit(products, item.getProduit().getUid());
                 if (p == null) {
                     continue;
                 }
-                Destocker lds = item.getLastDestocker();
-                Stocker lst = item.getLastStocker();
+                Destocker lastDestocker = item.getLastDestocker();
+                Stocker lastStocker = item.getLastStocker();
+                String destination = lastDestocker == null || lastDestocker.getDestination() == null ? "" : lastDestocker.getDestination();
+                String reference = lastDestocker == null || lastDestocker.getReference() == null ? "" : lastDestocker.getReference();
+                String movementRegion = lastDestocker == null || lastDestocker.getRegion() == null ? "" : lastDestocker.getRegion();
+                String location = lastStocker == null || lastStocker.getLocalisation() == null ? "" : lastStocker.getLocalisation();
                 String e = p.getCodebar() + " " + p.getNomProduit() + " " + p.getMarque()
                         + " " + p.getModele() + " " + p.getCouleur() + " " + p.getTaille()
-                        + " " + item.getLastDestocker().getDestination()
-                        + " " + item.getLastDestocker().getReference() + " " + item.getLastDestocker().getRegion();
+                        + " " + item.getNumlot()
+                        + " " + destination
+                        + " " + reference + " " + movementRegion
+                        + " " + location;
                 if (e.toUpperCase().contains(query.toUpperCase())) {
                     result.add(item);
                 }
@@ -1799,15 +2096,8 @@ public class GoodstorageController implements Initializable {
                     public void changed(ObservableValue<? extends String> observable, String oldValue,
                             String newValue) {
                         choosen_criteria = newValue;
-                        if (choosen_criteria.equals("Stock en Alerte")) {
-                            loadInventaireAlerte(products);
-                        } else if (choosen_criteria.equals("Sans destockage")) {
-                            // filtrage des element non encore desockes
-                            loadInventaire100Destockage(products);
-                        } else if (choosen_criteria.equals("Expirés")) {
-                            loadInventaireDejaExpirDepot(products);
-                        } else {
-                            table11.setItems(lisinvent);
+                        if (filteredDepotInventory != null) {
+                            applyDepotInventoryFilters();
                         }
                     }
                 });
@@ -1853,28 +2143,7 @@ public class GoodstorageController implements Initializable {
         pagination.setPageFactory(this::createDataPage);
         pagination1.setPageFactory(this::createDataPage);
         pagination11.setPageFactory(this::createDataPage);
-        input_txt_criteres_mens.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                if (!newValue.isEmpty()) {
-                    if (choosen_criteria.equals("Stock à expirer dans :")) {
-                        try {
-                            if (!input_txt_criteres_mens.getText().isEmpty()) {
-                                if (role.contains(Role.ALL_ACCESS.name()) || role.equals(Role.Trader.name())) {
-                                    loadInventaireExpirDepot(products, Integer.parseInt(newValue), null);
-                                } else {
-                                    loadInventaireExpirDepot(products, Integer.parseInt(newValue), region);
-                                }
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    table11.setItems(lisinvent);
-                }
-            }
-        });
+        setupDepotInventoryFilters();
 
         ContextMenu contextMenut11 = new ContextMenu();
         MenuItem menuItem1 = new MenuItem(bundle.getString("stockfolio"));
@@ -2499,7 +2768,7 @@ public class GoodstorageController implements Initializable {
             lisdestocker.setAll(Util.filterNoNullMesure(destox));
             table1.setItems(lisdestocker);
         } else if (tab_invent.isSelected()) {
-            table11.setItems(lisinvent);
+            loadInv();
         } else {
             table_stockage.setItems(list_stockers);
         }
@@ -2539,7 +2808,7 @@ public class GoodstorageController implements Initializable {
         } else {
             ComboBox cbx = (ComboBox) evt.getSource();
             rowsDataCount11 = (int) cbx.getSelectionModel().getSelectedItem();
-            pagination11.setPageFactory(this::createDataPage);
+            refreshDepotInventoryTable();
             System.out.println("Row set to " + rowsDataCount11);
         }
     }
@@ -2588,9 +2857,14 @@ public class GoodstorageController implements Initializable {
             return table1;
         } else {
             try {
+                List<InventoryItem> source = currentDepotInventoryItems();
                 int offset = pgindex * rowsDataCount11;
-                int limit = Math.min(offset + rowsDataCount11, lisinvent.size());
-                table11.setItems(FXCollections.observableArrayList(lisinvent.subList(offset, limit)));
+                int limit = Math.min(offset + rowsDataCount11, source.size());
+                if (source.isEmpty()) {
+                    table11.setItems(FXCollections.observableArrayList());
+                } else {
+                    table11.setItems(FXCollections.observableArrayList(source.subList(offset, limit)));
+                }
             } catch (java.lang.IllegalArgumentException e) {
                 pagination11.setPageCount(pgindex);
                 System.out.println("Page suivante non disponible");
@@ -2958,8 +3232,6 @@ public class GoodstorageController implements Initializable {
             // Save the destocker
             Destocker saved = DestockerDelegate.saveDestocker(destocker);
             if (saved != null) {
-                // Update StockDepotAgregate aggregate
-                stockDepotService.removeStock(saved);
                 MainUI.notify(null, "Succès",
                         String.format("Excès de %.2f %s déstocké",
                                 difference / mesure.getQuantContenu(), mesure.getDescription()),
@@ -2987,8 +3259,6 @@ public class GoodstorageController implements Initializable {
             // Save the stocker
             Stocker saved = StockerDelegate.saveStocker(stocker);
             if (saved != null) {
-                // Update StockDepotAgregate aggregate
-                stockDepotService.addStock(saved);
                 MainUI.notify(null, "Succès",
                         String.format("Manquant de %.2f %s ajouté",
                                 Math.abs(difference) / mesure.getQuantContenu(), mesure.getDescription()),
@@ -2998,6 +3268,70 @@ public class GoodstorageController implements Initializable {
         }
 
         return false;
+    }
+
+    @FXML
+    private void declasserDepotExpiredStock(ActionEvent event) {
+        List<InventoryItem> items = currentDepotInventoryItems();
+        if (items == null || items.isEmpty()) {
+            MainUI.notify(null, "Information", "Aucun lot expiré à déclasser dans la vue courante.", 3, "info");
+            return;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "Voulez-vous vraiment déclasser les lots expirés affichés ?",
+                ButtonType.YES, ButtonType.NO);
+        alert.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.YES) {
+                processDeclasserDepot(items);
+            }
+        });
+    }
+
+    private void processDeclasserDepot(List<InventoryItem> items) {
+        String reference = "DECL-STK-" + System.currentTimeMillis();
+        int savedCount = 0;
+        for (InventoryItem item : items) {
+            if (item == null || item.getExpiryDate() == null || isStockExpired(item.getExpiryDate()) != -1
+                    || item.getQuantRestValue() <= 0) {
+                continue;
+            }
+            Mesure unit = MesureDelegate.findByProduitAndQuant(item.getProduit().getUid(), 1d);
+            if (unit == null) {
+                List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(item.getProduit().getUid());
+                if (mesures == null || mesures.isEmpty()) {
+                    continue;
+                }
+                unit = mesures.get(0);
+            }
+
+            Destocker destocker = new Destocker(DataId.generate());
+            destocker.setProductId(item.getProduit());
+            destocker.setMesureId(unit);
+            destocker.setQuantite(item.getQuantRestValue() / (unit.getQuantContenu() == null || unit.getQuantContenu() <= 0 ? 1d : unit.getQuantContenu()));
+            destocker.setCoutAchat(item.getCoutAchat());
+            destocker.setDateDestockage(LocalDateTime.now());
+            destocker.setDestination("Déclassement de stock");
+            destocker.setReference(reference);
+            destocker.setLibelle("Déclassement de stock expiré");
+            destocker.setObservation("Déclassement automatique du lot expiré " + item.getNumlot());
+            destocker.setRegion(item.getRegion());
+            destocker.setNumlot(item.getNumlot());
+
+            Destocker saved = DestockerDelegate.saveDestocker(destocker);
+            if (saved != null) {
+                savedCount++;
+                lisdestocker.add(0, saved);
+                Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
+            }
+        }
+
+        if (savedCount > 0) {
+            MainUI.notify(null, "Succès",
+                    savedCount + " lot(s) expiré(s) déclassé(s) avec la référence " + reference, 4, "info");
+            loadInv();
+        } else {
+            MainUI.notify(null, "Information", "Aucun lot expiré n'a été déclassé.", 3, "info");
+        }
     }
 
     /**
@@ -3034,16 +3368,23 @@ public class GoodstorageController implements Initializable {
         lisinvent.clear();
         for (StockDepotAgregate sd : stockDepotAgregates) {
             InventoryItem item = new InventoryItem();
+            item.setProduit(sd.getProductId());
             item.setProductId(sd.getProductId().getUid());
             item.setProductName(sd.getProductId().getNomProduit());
             item.setQuantite(sd.getQuantite());
             item.setCoutAchat(sd.getCoutAchat());
-            item.setValeurStock(String.valueOf(sd.getValeurStock()));
+            item.setQuantRestValue(sd.getQuantite());
+            item.setQuantRest(String.format("%.2f", sd.getQuantite()));
+            item.setValeurStock(String.format("%.2f USD", sd.getValeurStock()));
+            item.setValeurStockValue(sd.getValeurStock());
             item.setRegion(sd.getRegion());
             item.setDate(sd.getDate());
+            item.setNumlot(sd.getNumlot());
+            item.setExpiryDate(sd.getDateExpiration());
+            item.setDateExpir(sd.getDateExpiration() == null ? "-" : sd.getDateExpiration().format(INVENTORY_DATE_FORMAT));
             lisinvent.add(item);
         }
-        table11.setItems(lisinvent);
+        applyDepotInventoryFilters();
     }
 
 }

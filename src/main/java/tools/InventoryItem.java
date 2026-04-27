@@ -8,6 +8,7 @@ package tools;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.time.LocalDate;
 import data.Destocker;
 import data.Produit;
 import data.Stocker;
@@ -37,7 +38,16 @@ public class InventoryItem {
     private double quantite;
     private double coutAchat;
     private String region;
-    private java.time.LocalDate date;
+    private LocalDate date;
+    private double stockInitial;
+    private double quantEntreeValue;
+    private double quantSortieValue;
+    private double quantRestValue;
+    private double valeurStockValue;
+    private double stockAlerteValue;
+    private String mesureLabel;
+    private double quantContenu = 1d;
+    private LocalDate expiryDate;
 
     public InventoryItem() {
     }
@@ -171,19 +181,102 @@ public class InventoryItem {
         this.region = region;
     }
 
-    public java.time.LocalDate getDate() {
+    public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(java.time.LocalDate date) {
+    public void setDate(LocalDate date) {
         this.date = date;
     }
 
+    public double getStockInitial() {
+        return stockInitial;
+    }
+
+    public void setStockInitial(double stockInitial) {
+        this.stockInitial = stockInitial;
+    }
+
+    public double getQuantEntreeValue() {
+        return quantEntreeValue;
+    }
+
+    public void setQuantEntreeValue(double quantEntreeValue) {
+        this.quantEntreeValue = quantEntreeValue;
+    }
+
+    public double getQuantSortieValue() {
+        return quantSortieValue;
+    }
+
+    public void setQuantSortieValue(double quantSortieValue) {
+        this.quantSortieValue = quantSortieValue;
+    }
+
+    public double getQuantRestValue() {
+        return quantRestValue;
+    }
+
+    public void setQuantRestValue(double quantRestValue) {
+        this.quantRestValue = quantRestValue;
+    }
+
+    public double getValeurStockValue() {
+        return valeurStockValue;
+    }
+
+    public void setValeurStockValue(double valeurStockValue) {
+        this.valeurStockValue = valeurStockValue;
+    }
+
+    public double getStockAlerteValue() {
+        return stockAlerteValue;
+    }
+
+    public void setStockAlerteValue(double stockAlerteValue) {
+        this.stockAlerteValue = stockAlerteValue;
+    }
+
+    public String getMesureLabel() {
+        return mesureLabel;
+    }
+
+    public void setMesureLabel(String mesureLabel) {
+        this.mesureLabel = mesureLabel;
+    }
+
+    public double getQuantContenu() {
+        return quantContenu;
+    }
+
+    public void setQuantContenu(double quantContenu) {
+        this.quantContenu = quantContenu;
+    }
+
+    public LocalDate getExpiryDate() {
+        return expiryDate;
+    }
+
+    public void setExpiryDate(LocalDate expiryDate) {
+        this.expiryDate = expiryDate;
+    }
+
+    // ── Lot-aware display fields ──────────────────────────────────────────────
+    private String numlot;
+    private String dateExpirStr;
+
+    public String getLocalisation() { return localisation; }
+    public void setLocalisation(String localisation) { this.localisation = localisation; }
+
+    public String getNumlot() { return numlot; }
+    public void setNumlot(String numlot) { this.numlot = numlot; }
+
+    public String getDateExpir() { return dateExpirStr; }
+    public void setDateExpir(String dateExpirStr) { this.dateExpirStr = dateExpirStr; }
+
     @Override
     public int hashCode() {
-        int hash = 3;
-        hash = 59 * hash + Objects.hashCode(this.produit);
-        return hash;
+        return Objects.hash(this.produit, this.numlot, this.region);
     }
 
     @Override
@@ -198,10 +291,9 @@ public class InventoryItem {
             return false;
         }
         final InventoryItem other = (InventoryItem) obj;
-        if (!Objects.equals(this.produit, other.produit)) {
-            return false;
-        }
-        return true;
+        return Objects.equals(this.produit, other.produit)
+                && Objects.equals(this.numlot, other.numlot)
+                && Objects.equals(this.region, other.region);
     }
 
 }

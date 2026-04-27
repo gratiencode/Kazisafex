@@ -35,6 +35,53 @@ import delegates.MesureDelegate;
  */
 public class StockerService implements StockerStorage {
 
+    private static final class DepotLotSnapshot {
+
+        private final Produit produit;
+        private final String numlot;
+        private final String region;
+        private final double coutAchat;
+        private final LocalDate dateExpir;
+
+        private DepotLotSnapshot(Produit produit, String numlot, String region, double coutAchat, LocalDate dateExpir) {
+            this.produit = produit;
+            this.numlot = numlot;
+            this.region = region;
+            this.coutAchat = coutAchat;
+            this.dateExpir = dateExpir;
+        }
+
+        private boolean isValid() {
+            return produit != null && produit.getUid() != null
+                    && numlot != null && !numlot.isBlank()
+                    && region != null && !region.isBlank();
+        }
+    }
+
+    private DepotLotSnapshot snapshotOf(Stocker stocker) {
+        if (stocker == null) {
+            return null;
+        }
+        return new DepotLotSnapshot(
+                stocker.getProductId(),
+                stocker.getNumlot(),
+                stocker.getRegion(),
+                stocker.getCoutAchat(),
+                stocker.getDateExpir());
+    }
+
+    private void rectifyDepotAggregate(DepotLotSnapshot snapshot) {
+        if (snapshot == null || !snapshot.isValid()) {
+            return;
+        }
+        rectifyStockDepotByLot(
+                snapshot.produit,
+                snapshot.numlot,
+                snapshot.region,
+                snapshot.coutAchat,
+                snapshot.dateExpir);
+    }
+
     @Override
     public boolean isExists(String uid) {
         String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
@@ -62,6 +109,7 @@ public class StockerService implements StockerStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getNumlot() + " enregistree");
+                rectifyDepotAggregate(snapshotOf(e));
             });
             return cat;
         }
@@ -73,18 +121,22 @@ public class StockerService implements StockerStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
+            rectifyDepotAggregate(snapshotOf(cat));
         }
         return cat;
     }
 
     @Override
     public Stocker updateStocker(Stocker cat) {
+        DepotLotSnapshot before = snapshotOf(findStocker(cat.getUid()));
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.merge(cat);
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getNumlot() + " enregistree");
+                rectifyDepotAggregate(before);
+                rectifyDepotAggregate(snapshotOf(e));
             });
             return cat;
         }
@@ -94,17 +146,21 @@ public class StockerService implements StockerStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
+        rectifyDepotAggregate(before);
+        rectifyDepotAggregate(snapshotOf(cat));
         return cat;
     }
 
     @Override
     public void deleteStocker(Stocker cat) {
+        DepotLotSnapshot before = snapshotOf(findStocker(cat.getUid()));
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getNumlot() + " supprimee");
+                rectifyDepotAggregate(before == null ? snapshotOf(e) : before);
             });
             return;
         }
@@ -114,6 +170,7 @@ public class StockerService implements StockerStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        rectifyDepotAggregate(before == null ? snapshotOf(cat) : before);
     }
 
     @Override
@@ -881,5 +938,212 @@ public class StockerService implements StockerStorage {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ─── Lot-aware depot aggregate methods ───────────────────────────────────
+
+    /**
+     * Calcule les entrées (stocker) en pièces pour un lot donné, toutes dates confondues.
+     */
+    private double sumStockerByLotInPc(String prodId, String numlot, String region) {
+        String sql = "SELECT SUM(COALESCE(s.quantite,0)*COALESCE(m.quantcontenu,0)) "
+                + "FROM stocker s, mesure m "
+                + "WHERE s.product_id=? AND s.mesure_id=m.uid AND s.numlot=? AND s.region=?";
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Double r = (Double) em.createNativeQuery(sql)
+                            .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                            .getSingleResult();
+                    return r == null ? 0 : r;
+                });
+            }
+            Double r = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                    .getSingleResult();
+            return r == null ? 0 : r;
+        } catch (Exception e) { return 0; }
+    }
+
+    /**
+     * Calcule les sorties (destocker) en pièces pour un lot donné, toutes dates confondues.
+     */
+    private double sumDestockerByLotInPc(String prodId, String numlot, String region) {
+        String sql = "SELECT SUM(COALESCE(d.quantite,0)*COALESCE(m.quantcontenu,0)) "
+                + "FROM destocker d, mesure m "
+                + "WHERE d.product_id=? AND d.mesure_id=m.uid AND d.numlot=? AND d.region=?";
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Double r = (Double) em.createNativeQuery(sql)
+                            .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                            .getSingleResult();
+                    return r == null ? 0 : r;
+                });
+            }
+            Double r = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                    .getSingleResult();
+            return r == null ? 0 : r;
+        } catch (Exception e) { return 0; }
+    }
+
+    @Override
+    public void rectifyStockDepotByLot(data.Produit produit, String numlot, String region, double coutAch, LocalDate dateExpir) {
+        if (produit == null || numlot == null || numlot.isBlank() || region == null) return;
+        data.Mesure unite = delegates.MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
+        double entrees = sumStockerByLotInPc(produit.getUid(), numlot, region);
+        double sorties = sumDestockerByLotInPc(produit.getUid(), numlot, region);
+        double stockFinal = Math.max(0, entrees - sorties);
+        LocalDate today = LocalDate.now();
+        LocalDate resolvedDateExpir = resolveDepotDateExpiration(produit.getUid(), numlot, region, dateExpir);
+        double resolvedCost = resolveDepotUnitCost(produit.getUid(), numlot, region, coutAch);
+
+        StockDepotAgregate depot = findDepotAggregateByLot(produit, numlot, region, today);
+        boolean exists = (depot != null);
+        if (!exists) {
+            depot = new StockDepotAgregate();
+        }
+        depot.setProductId(produit);
+        depot.setRegion(region);
+        depot.setDate(today);
+        depot.setMesureId(unite);
+        depot.setNumlot(numlot);
+        depot.setQuantite(stockFinal);
+        depot.setCoutAchat(resolvedCost);
+        depot.setValeurStock(stockFinal * resolvedCost);
+        depot.setDateExpiration(resolvedDateExpir);
+
+        final StockDepotAgregate finalDepot = depot;
+        final boolean finalExists = exists;
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                if (!finalExists) em.persist(finalDepot); else em.merge(finalDepot);
+                return finalDepot;
+            });
+        } else {
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+            if (!tx.isActive()) tx.begin();
+            if (!finalExists) ManagedSessionFactory.getEntityManager().persist(finalDepot);
+            else ManagedSessionFactory.getEntityManager().merge(finalDepot);
+            tx.commit();
+        }
+        System.out.println("DepotAgregate lot=" + numlot + " stockFinal=" + stockFinal + " E=" + entrees + " S=" + sorties);
+    }
+
+    private LocalDate resolveDepotDateExpiration(String productId, String numlot, String region, LocalDate fallback) {
+        if (fallback != null) {
+            return fallback;
+        }
+        List<Stocker> stockers = findStockerByProduitLot(productId, numlot);
+        LocalDate resolved = null;
+        if (stockers != null) {
+            for (Stocker stocker : stockers) {
+                if (stocker == null || stocker.getDateExpir() == null) {
+                    continue;
+                }
+                if (region != null && !region.equals(stocker.getRegion())) {
+                    continue;
+                }
+                if (resolved == null || stocker.getDateExpir().isBefore(resolved)) {
+                    resolved = stocker.getDateExpir();
+                }
+            }
+        }
+        return resolved;
+    }
+
+    private double resolveDepotUnitCost(String productId, String numlot, String region, double fallback) {
+        if (fallback > 0) {
+            return fallback;
+        }
+        List<Stocker> stockers = findStockerByProduitLot(productId, numlot);
+        Stocker latest = null;
+        if (stockers != null) {
+            for (Stocker stocker : stockers) {
+                if (stocker == null) {
+                    continue;
+                }
+                if (region != null && !region.equals(stocker.getRegion())) {
+                    continue;
+                }
+                if (latest == null) {
+                    latest = stocker;
+                    continue;
+                }
+                if (stocker.getDateStocker() != null && latest.getDateStocker() != null
+                        && stocker.getDateStocker().isAfter(latest.getDateStocker())) {
+                    latest = stocker;
+                }
+            }
+        }
+        return latest != null ? latest.getCoutAchat() : 0d;
+    }
+
+    private StockDepotAgregate findDepotAggregateByLot(data.Produit p, String numlot, String region, LocalDate dte) {
+        try {
+            String sql = "SELECT * FROM stock_depot_agregate WHERE product_id=? AND num_lot=? AND region=? AND date_record=? LIMIT 1";
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockDepotAgregate> r = em.createNativeQuery(sql, StockDepotAgregate.class)
+                            .setParameter(1, p.getUid()).setParameter(2, numlot)
+                            .setParameter(3, region).setParameter(4, dte)
+                            .getResultList();
+                    return r.isEmpty() ? null : r.get(0);
+                });
+            }
+            List<StockDepotAgregate> r = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sql, StockDepotAgregate.class)
+                    .setParameter(1, p.getUid()).setParameter(2, numlot)
+                    .setParameter(3, region).setParameter(4, dte)
+                    .getResultList();
+            return r.isEmpty() ? null : r.get(0);
+        } catch (Exception e) { return null; }
+    }
+
+    @Override
+    public double findLatestDepotStockByLot(String productId, String numlot, String region) {
+        try {
+            String sql = "SELECT quantite FROM stock_depot_agregate WHERE product_id=? AND num_lot=? AND region=? "
+                    + "ORDER BY date_record DESC LIMIT 1";
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<?> r = em.createNativeQuery(sql)
+                            .setParameter(1, productId).setParameter(2, numlot).setParameter(3, region)
+                            .getResultList();
+                    if (r.isEmpty() || r.get(0) == null) return 0.0;
+                    return ((Number) r.get(0)).doubleValue();
+                });
+            }
+            List<?> r = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, productId).setParameter(2, numlot).setParameter(3, region)
+                    .getResultList();
+            if (r.isEmpty() || r.get(0) == null) return 0.0;
+            return ((Number) r.get(0)).doubleValue();
+        } catch (Exception e) { return 0.0; }
+    }
+
+    @Override
+    public List<StockDepotAgregate> findLatestLotDepotStockAggregates(String productId, String region) {
+        try {
+            // Un seul agrégat par lot : le plus récent
+            String sql = "SELECT s.* FROM stock_depot_agregate s "
+                    + "INNER JOIN (SELECT num_lot, MAX(date_record) AS maxd FROM stock_depot_agregate "
+                    + "WHERE product_id=? AND region=? GROUP BY num_lot) t "
+                    + "ON s.num_lot=t.num_lot AND s.date_record=t.maxd "
+                    + "WHERE s.product_id=? AND s.region=? ORDER BY s.date_record DESC";
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    return em.createNativeQuery(sql, StockDepotAgregate.class)
+                            .setParameter(1, productId).setParameter(2, region)
+                            .setParameter(3, productId).setParameter(4, region)
+                            .getResultList();
+                });
+            }
+            return ManagedSessionFactory.getEntityManager().createNativeQuery(sql, StockDepotAgregate.class)
+                    .setParameter(1, productId).setParameter(2, region)
+                    .setParameter(3, productId).setParameter(4, region)
+                    .getResultList();
+        } catch (Exception e) { return List.of(); }
     }
 }

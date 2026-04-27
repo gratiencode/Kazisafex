@@ -147,8 +147,6 @@ public class NotificationHandler
                                 } else {
                                     result = StockerDelegate.updateStocker(stocker);
                                 }
-                                Produit p = ProduitDelegate.findProduit(stocker.getProductId().getUid());
-                                StockerDelegate.rectifyStockDepot(p, stocker.getDateStocker().toLocalDate(), stocker.getRegion(), stocker.getCoutAchat());
                                 notifySynced(result);
                             }
                         }
@@ -164,8 +162,6 @@ public class NotificationHandler
                                 } else {
                                     result = DestockerDelegate.updateDestocker(destocker);
                                 }
-                                Produit p = ProduitDelegate.findProduit(destocker.getProductId().getUid());
-                                StockerDelegate.rectifyStockDepot(p, destocker.getDateDestockage().toLocalDate(), destocker.getRegion(), destocker.getCoutAchat());
                                 notifySynced(result);
                             }
                         }
@@ -185,7 +181,7 @@ public class NotificationHandler
                                 Mesure m = MesureDelegate.findMesure(recquisition.getMesureId().getUid());
                                 Produit p = ProduitDelegate.findProduit(recquisition.getProductId().getUid());
                                 double cau = recquisition.getCoutAchat() / m.getQuantContenu();
-                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), cau);
+                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), cau, recquisition.getNumlot());
                                 notifySynced(result);
                             }
                         }
@@ -263,7 +259,7 @@ public class NotificationHandler
                                 Produit p = ProduitDelegate.findProduit(saleitem.getProductId().getUid());
                                 Vente vr = VenteDelegate.findVente(saleitem.getReference().getUid());
                                 double cau = saleitem.getCoutAchat() / m.getQuantContenu();
-                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), cau);
+                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), cau, saleitem.getNumlot());
                                 notifySynced(result);
                             }
                         }

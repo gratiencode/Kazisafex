@@ -72,6 +72,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
+import services.utils.RegionRegistry;
 
 import data.Destocker;
 import data.Entreprise;
@@ -233,22 +234,8 @@ public class DestockController implements Initializable {
         new ComboBoxAutoCompletion<>(cbx_choose_product_dstk);
         lisstocker = FXCollections.observableArrayList();
 
-        if (kazisafe != null) {
-            kazisafe.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
-                @Override
-                public void onResponse(retrofit2.Call<List<String>> call, retrofit2.Response<List<String>> rspns) {
-                    if (rspns.isSuccessful() && rspns.body() != null) {
-                        javafx.application.Platform.runLater(() -> {
-                            regions.clear();
-                            regions.addAll(rspns.body());
-                        });
-                    }
-                }
-                @Override
-                public void onFailure(retrofit2.Call<List<String>> call, Throwable thrwbl) {
-                }
-            });
-        }
+        RegionRegistry.loadAndSync(pref, kazisafe, regions, List.of("Déclassement de stock"));
+        RegionRegistry.selectSavedRegion(pref, cbx_destination_dstk);
         cbx_choose_mesure_dstk.setItems(lismesure);
         txt_reference_dstk.setText("DST" + ((int) (Math.random() * 100000)) + "K");
         tb_destock_list.setItems(lsdin);
@@ -314,33 +301,6 @@ public class DestockController implements Initializable {
         cbx_devise_req1.setItems(FXCollections.observableArrayList("USD", "CDF"));
         cbx_devise_req1.getSelectionModel().selectFirst();
         prices = new ArrayList<>();
-        regions.add("Déclassement de stock");
-        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.setAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    regions.add("Déclassement de stock");
-
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
-        regions.addAll(GoodstorageController.getInstance().accessregion());
         cbx_choose_mesure_vente.setConverter(new StringConverter<Mesure>() {
             @Override
             public String toString(Mesure object) {
@@ -426,7 +386,7 @@ public class DestockController implements Initializable {
                     double converted = dispo / choosenM.getQuantContenu();
                     lbl_cout_achat.setText(String.format("%.2f USD", choosenStockLot.getCoutAchat()));
                     tf_cout_unitr_cump_dstk.setText(String.valueOf(choosenStockLot.getCoutAchat()));
-                    
+
                     updateGlobalStockDisplay();
 
                     List<Recquisition> reqs = RecquisitionDelegate.findByReference(choosenProduct.getUid(),
@@ -486,7 +446,7 @@ public class DestockController implements Initializable {
                     lismesure.clear();
                     lismesure.addAll(mesures);
                     cbx_choose_mesure_dstk.setItems(lismesure);
-                    
+
                     updateGlobalStockDisplay();
                 }
             }
@@ -684,20 +644,6 @@ public class DestockController implements Initializable {
         return result;
     }
 
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
-    }
-
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         bundle = rb;
@@ -726,9 +672,6 @@ public class DestockController implements Initializable {
                     alert.showAndWait().ifPresent(response -> {
                         if (response == ButtonType.YES) {
                             DestockerDelegate.deleteDestocker(selected);
-                            StockerDelegate.rectifyStockDepot(selected.getProductId(), selected.getDateDestockage().toLocalDate(), selected.getRegion(), selected.getCoutAchat());
-                            StockDepotAgregateService agService = new StockDepotAgregateService();
-                            agService.addStock(selected);
 
                             lisdestocker.remove(selected);
                             Util.sync(selected, Constants.ACTION_DELETE, Tables.DESTOCKER);
@@ -852,14 +795,10 @@ public class DestockController implements Initializable {
             if (saved != null) {
                 // Update local list for display
                 lsdin.add(0, saved);
-                
+
                 // Synchronize via HTTP directly
                 saveDestockerWithRetry(saved);
-                
-                // Update StockDepotAgregate and legacy stock tables
-                stockDepotService.removeStock(saved);
-                StockerDelegate.rectifyStockDepot(saved.getProductId(), saved.getDateDestockage().toLocalDate(), saved.getRegion(), saved.getCoutAchat());
-                
+
                 // Update UI Sum
                 double total = 0;
                 for (Destocker d : lsdin) {
@@ -868,9 +807,9 @@ public class DestockController implements Initializable {
                 cglobal = total; // Sync internal field
                 txt_somme_global_dstk.setText(String.format("Total : %.2f", total));
                 txt_count_dstk.setText(String.valueOf(lsdin.size()) + " article(s)");
-                
+
                 MainUI.notify(null, "Succès", "Destockage enregistré avec succès", 4, "info");
-                
+
                 // Clear inputs for next entry
                 tf_quantite_dstk.clear();
                 tf_observation.clear();
@@ -880,9 +819,6 @@ public class DestockController implements Initializable {
                 return;
             }
 
-            // Correction: put back old stock before validating/applying new one
-            stockDepotService.addStock(choosenDestocker);
-            
             choosenDestocker.setDateDestockage(dpk_date_dstk.getValue().atStartOfDay());
             choosenDestocker.setQuantite(qte);
             choosenDestocker.setDestination(reg);
@@ -892,22 +828,20 @@ public class DestockController implements Initializable {
 
             Destocker updated = DestockerDelegate.updateDestocker(choosenDestocker);
             if (updated != null) {
-                StockerDelegate.rectifyStockDepot(updated.getProductId(), updated.getDateDestockage().toLocalDate(), updated.getRegion(), updated.getCoutAchat());
-                stockDepotService.removeStock(updated);
                 saveDestockerWithRetry(updated);
-                
+
                 int index = lsdin.indexOf(choosenDestocker);
                 if (index != -1) {
                     lsdin.set(index, updated);
                 }
-                
+
                 double total = 0;
                 for (Destocker d : lsdin) {
                     total += d.getCoutAchat() * d.getQuantite();
                 }
                 cglobal = total;
                 txt_somme_global_dstk.setText(String.format("Total : %.2f", total));
-                
+
                 MainUI.notify(null, "Succès", "Destockage mis à jour.", 2, "info");
             }
         }
@@ -915,8 +849,8 @@ public class DestockController implements Initializable {
     }
 
     /**
-     * Sauvegarde tous les destockers ajoutés dans la liste locale (lsdin) en BD.
-     * Inspiré du pattern saveStock de StoreformController.
+     * Sauvegarde tous les destockers ajoutés dans la liste locale (lsdin) en
+     * BD. Inspiré du pattern saveStock de StoreformController.
      */
     @FXML
     public void saveAllDestockers(ActionEvent event) {
@@ -927,11 +861,11 @@ public class DestockController implements Initializable {
 
         for (Destocker s : lsdin) {
             Destocker saved = DestockerDelegate.saveDestocker(s);
-            StockerDelegate.rectifyStockDepot(saved.getProductId(), saved.getDateDestockage().toLocalDate(), saved.getRegion(), saved.getCoutAchat());
-            stockDepotService.removeStock(saved);
-            saveDestockerWithRetry(saved);
-            Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
-            lisdestocker.add(0, saved);
+            if (saved != null) {
+                saveDestockerWithRetry(saved);
+                Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
+                lisdestocker.add(0, saved);
+            }
         }
 
         MainUI.notify(null, "Succès", lsdin.size() + " destockage(s) enregistré(s) avec succès.", 3, "info");
@@ -1103,6 +1037,9 @@ public class DestockController implements Initializable {
 
     private void saveDestockerWithRetry(Destocker destocker) {
         Executors.newSingleThreadExecutor().submit(() -> {
+            if (!Util.isInternetAndBaseApiReachable()) {
+                return;
+            }
             int attempt = 0;
             while (attempt < MAX_RETRY) {
                 try {
@@ -1128,6 +1065,9 @@ public class DestockController implements Initializable {
     }
 
     private void sendProduitIfNotExist(Produit p, List<Mesure> m) {
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
+        }
         String base64 = Base64.getEncoder().encodeToString(p.getImage() != null ? p.getImage() : loadDefaultImage());
         saveProduitByHttp(p, base64, m);
     }

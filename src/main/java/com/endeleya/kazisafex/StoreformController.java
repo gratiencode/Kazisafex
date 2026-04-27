@@ -83,6 +83,7 @@ import data.Stocker;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import services.utils.RegionRegistry;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -318,47 +319,11 @@ public class StoreformController implements Initializable {
 //         cbx_devise_price.setItems(FXCollections.observableArrayList("USD", "CDF"));
         String maindev = pref.get("mainCur", "USD");
 //         cbx_devise_price.getSelectionModel().select(maindev);
-        ksf.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Agent regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, ksf, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
 
         ComboBoxAutoCompletion<Produit> comx = new ComboBoxAutoCompletion<>(cbx_choose_produit_stk);
 
-    }
-
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
     }
 
     private void configtablot() {
@@ -702,7 +667,6 @@ public class StoreformController implements Initializable {
                 return;
             }
             Stocker upd = StockerDelegate.updateStocker(choosenStock);
-            StockerDelegate.rectifyStockDepot(upd.getProductId(), upd.getDateStocker().toLocalDate(), upd.getRegion(), upd.getCoutAchat());
             Executors.newCachedThreadPool()
                     .submit(() -> {
                         Util.sync(upd, Constants.ACTION_UPDATE, Tables.STOCKER);
@@ -812,7 +776,6 @@ public class StoreformController implements Initializable {
             if (findStocker(choosenStock.getNumlot()) == null) {
                 if (obllot.add(choosenStock)) {
                     Stocker stk = StockerDelegate.saveStocker(choosenStock);
-                    StockerDelegate.rectifyStockDepot(stk.getProductId(), stk.getDateStocker().toLocalDate(), stk.getRegion(), stk.getCoutAchat());
                     Executors.newCachedThreadPool()
                             .submit(() -> {
                                 Util.sync(stk, Constants.ACTION_CREATE, Tables.STOCKER);
@@ -854,6 +817,9 @@ public class StoreformController implements Initializable {
             @Field("productId") String productId,
             @Field("numlot") String numlo
          */
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
+        }
         LocalDate d=stocker.getDateExpir();
         ksf.syncStockage(stocker.getUid(),(stocker.getDateStocker() == null ? "" : stocker.getDateStocker().toString()), 
                 Double.toString(stocker.getCoutAchat()),(d == null ? "" : d.toString()), 
@@ -1221,7 +1187,7 @@ public class StoreformController implements Initializable {
                                 + "" + stk.getProductId().getCodebar() + " " + stk.getProductId().getCouleur() + " "
                                 + "" + stk.getProductId().getModele() + " " + stk.getProductId().getTaille();
                         String pred = stk.getNumlot() + " " + stk.getLocalisation() + " " + prod + " " + stk.getLibelle() + ""
-                                + " " + Constants.USER_READABLE_FORMAT.format(stk.getDateStocker());
+                                + " " + (stk.getDateStocker() != null ? stk.getDateStocker().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "");
                         if (pred.toUpperCase().contains(newValue.toUpperCase())) {
                             rst.add(stk);
                         }

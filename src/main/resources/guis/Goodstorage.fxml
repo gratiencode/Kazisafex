@@ -350,13 +350,17 @@
                                  <columns>
                                     <TableColumn fx:id="col_codebar_inv" prefWidth="145.0" text="%xcol.code_bar" />
                                     <TableColumn fx:id="col_nom_produit_inv" minWidth="3.0" prefWidth="208.0" text="%xcol.nom_produit" />
-                                    <TableColumn fx:id="col_quant_in_inv" minWidth="3.0" prefWidth="202.0" text="%xqte_entree" />
-                                    <TableColumn fx:id="col_quant_out_inv" minWidth="0.0" prefWidth="115.0" text="%xqte_sortie" />
-                                    <TableColumn fx:id="col_remain_inv" minWidth="0.0" prefWidth="157.0" text="%xqte_restant" />
-                                    <TableColumn fx:id="col_valeur_rem_inv" prefWidth="75.0" text="%xvaleur_valeur" />
-                                    <TableColumn fx:id="col_alerte_inv" minWidth="0.0" prefWidth="157.0" text="%xalerte_stk" />
-                                    <TableColumn fx:id="col_date_expir_inv" minWidth="0.0" prefWidth="157.0" text="%xdate_expir_oblig" />
-                                    <TableColumn fx:id="col_localisation_inv" minWidth="0.0" prefWidth="157.0" text="%xlocalisation" />
+                                    <TableColumn fx:id="col_stock_initial_inv" minWidth="3.0" prefWidth="110.0" text="Stock initial" />
+                                    <TableColumn fx:id="col_quant_in_inv" minWidth="3.0" prefWidth="110.0" text="%xqte_entree" />
+                                    <TableColumn fx:id="col_quant_out_inv" minWidth="0.0" prefWidth="110.0" text="%xqte_sortie" />
+                                    <TableColumn fx:id="col_remain_inv" minWidth="0.0" prefWidth="115.0" text="%xqte_restant" />
+                                    <TableColumn fx:id="col_cout_achat_inv" minWidth="0.0" prefWidth="110.0" text="Coût achat" />
+                                    <TableColumn fx:id="col_valeur_rem_inv" prefWidth="115.0" text="%xvaleur_valeur" />
+                                    <TableColumn fx:id="col_alerte_inv" minWidth="0.0" prefWidth="110.0" text="%xalerte_stk" />
+                                    <TableColumn fx:id="col_numlot_inv" minWidth="0.0" prefWidth="120.0" text="Numéro lot" />
+                                    <TableColumn fx:id="col_date_expir_inv" minWidth="0.0" prefWidth="110.0" text="%xdate_expir_oblig" />
+                                    <TableColumn fx:id="col_localisation_inv" minWidth="0.0" prefWidth="120.0" text="%xlocalisation" />
+                                    <TableColumn fx:id="col_region_inv" minWidth="0.0" prefWidth="95.0" text="%xregions" />
                                  </columns>
                                  <columnResizePolicy>
                                     <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
@@ -399,13 +403,17 @@
                                     </ImageView>
                                  </children>
                               </Pane>
-                              <TextField fx:id="input_txt_criteres_mens" layoutX="307.0" layoutY="106.0" prefHeight="24.0" prefWidth="49.0" AnchorPane.leftAnchor="307.0" />
-                              <Label layoutX="365.0" layoutY="110.0" text="%xmonth" AnchorPane.leftAnchor="365.0" />
                               <Label layoutX="34.0" layoutY="110.0" prefHeight="16.0" prefWidth="78.0" text="%xcritere_de_select" AnchorPane.leftAnchor="34.0" />
                               <ComboBox fx:id="cbx_choose_critere_de_selection" layoutX="119.0" layoutY="106.0" prefHeight="24.0" prefWidth="178.0" promptText="%xcritere_de_select" style="-fx-background-radius: 5;" AnchorPane.leftAnchor="119.0" />
+                              <TextField fx:id="input_txt_criteres_mens" layoutX="307.0" layoutY="106.0" prefHeight="24.0" prefWidth="49.0" AnchorPane.leftAnchor="307.0" />
+                              <Label layoutX="365.0" layoutY="110.0" text="%xmonth" AnchorPane.leftAnchor="365.0" />
+                              <ComboBox fx:id="cbx_filter_color_inv_depot" layoutX="420.0" layoutY="106.0" prefHeight="24.0" prefWidth="210.0" promptText="Filtre péremption" style="-fx-background-radius: 5;" />
+                              <CheckBox fx:id="chbx_filter_stock_fini_depot" layoutX="648.0" layoutY="108.0" mnemonicParsing="false" text="Stock fini" />
+                              <CheckBox fx:id="chbx_filter_stock_non_fini_depot" layoutX="741.0" layoutY="108.0" mnemonicParsing="false" selected="true" text="Stock disponible" />
                               <CheckBox fx:id="chk_box_inv_mag_depot" disable="true" layoutX="34.0" layoutY="42.0" mnemonicParsing="false" opacity="0.0" prefHeight="30.0" prefWidth="96.0" style="-fx-background-color: #44CEF5; -fx-background-radius: 50;" text="MAGASIN" textFill="#fcfafa" />
                               <ComboBox fx:id="cbx_regions" layoutX="1070.0" layoutY="18.0" prefWidth="150.0" promptText="%xregions" AnchorPane.rightAnchor="22.0" />
-                              <Label fx:id="valSocks" layoutX="824.0" layoutY="142.0" text="%xvalueur_stock" AnchorPane.rightAnchor="307.0" />
+                              <Label fx:id="valSocks" layoutX="620.0" layoutY="478.0" text="%xvalueur_stock" AnchorPane.bottomAnchor="42.0" AnchorPane.leftAnchor="620.0" />
+                              <Button fx:id="btn_declasser_inv_depot" disable="true" layoutX="1004.0" layoutY="470.0" mnemonicParsing="false" onAction="#declasserDepotExpiredStock" prefHeight="30.0" prefWidth="160.0" style="-fx-background-color: #f58282; -fx-text-fill: white; -fx-background-radius: 6;" text="Déclasser expirés" AnchorPane.bottomAnchor="37.0" AnchorPane.rightAnchor="135.0" />
                               <ComboBox editable="true" layoutX="1070.0" layoutY="51.0" prefWidth="150.0" promptText="%xlocalisation" AnchorPane.rightAnchor="22.0" />
                            </children>
                         </AnchorPane>

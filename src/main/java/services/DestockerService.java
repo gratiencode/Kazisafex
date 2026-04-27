@@ -19,6 +19,7 @@ import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import jakarta.persistence.TemporalType;
 import data.Destocker;
+import data.Produit;
 import jakarta.persistence.EntityNotFoundException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -31,6 +32,50 @@ import tools.Tables;
  * @author eroot
  */
 public class DestockerService implements DestockerStorage {
+
+    private static final class DepotLotSnapshot {
+
+        private final Produit produit;
+        private final String numlot;
+        private final String region;
+        private final double coutAchat;
+
+        private DepotLotSnapshot(Produit produit, String numlot, String region, double coutAchat) {
+            this.produit = produit;
+            this.numlot = numlot;
+            this.region = region;
+            this.coutAchat = coutAchat;
+        }
+
+        private boolean isValid() {
+            return produit != null && produit.getUid() != null
+                    && numlot != null && !numlot.isBlank()
+                    && region != null && !region.isBlank();
+        }
+    }
+
+    private DepotLotSnapshot snapshotOf(Destocker destocker) {
+        if (destocker == null) {
+            return null;
+        }
+        return new DepotLotSnapshot(
+                destocker.getProductId(),
+                destocker.getNumlot(),
+                destocker.getRegion(),
+                destocker.getCoutAchat());
+    }
+
+    private void rectifyDepotAggregate(DepotLotSnapshot snapshot) {
+        if (snapshot == null || !snapshot.isValid()) {
+            return;
+        }
+        new StockerService().rectifyStockDepotByLot(
+                snapshot.produit,
+                snapshot.numlot,
+                snapshot.region,
+                snapshot.coutAchat,
+                null);
+    }
 
     @Override
     public boolean isExists(String uid) {
@@ -59,6 +104,7 @@ public class DestockerService implements DestockerStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                rectifyDepotAggregate(snapshotOf(e));
             });
             return cat;
         }
@@ -71,18 +117,22 @@ public class DestockerService implements DestockerStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
+            rectifyDepotAggregate(snapshotOf(cat));
         }
         return cat;
     }
 
     @Override
     public Destocker updateDestocker(Destocker cat) {
+        DepotLotSnapshot before = snapshotOf(findDestocker(cat.getUid()));
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.merge(cat);
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                rectifyDepotAggregate(before);
+                rectifyDepotAggregate(snapshotOf(e));
             });
             return cat;
         }
@@ -92,18 +142,22 @@ public class DestockerService implements DestockerStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
+        rectifyDepotAggregate(before);
+        rectifyDepotAggregate(snapshotOf(cat));
 
         return cat;
     }
 
     @Override
     public void deleteDestocker(Destocker cat) {
+        DepotLotSnapshot before = snapshotOf(findDestocker(cat.getUid()));
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                rectifyDepotAggregate(before == null ? snapshotOf(e) : before);
             });
             return;
         }
@@ -113,6 +167,7 @@ public class DestockerService implements DestockerStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        rectifyDepotAggregate(before == null ? snapshotOf(cat) : before);
     }
 
     @Override
