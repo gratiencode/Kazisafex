@@ -73,10 +73,9 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                editStock(cat);
-                System.out.println("Element " + e.getProductId().getNomProduit() + " comptee");
-            });
+            }).join();
+            editStock(cat);
+            System.out.println("Element " + cat.getProductId().getNomProduit() + " comptee");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -96,10 +95,9 @@ public class CompterService implements CompterStorage {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.merge(cat);
                     return cat;
-                }).thenAccept(e -> {
-                    editStock(cat);
-                    System.out.println("Element " + e.getProductId().getNomProduit() + " recomptee");
-                });
+                }).join();
+                editStock(cat);
+                System.out.println("Element " + cat.getProductId().getNomProduit() + " recomptee");
                 return cat;
             }
             EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -121,9 +119,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(obj));
                 return obj;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getProductId().getNomProduit() + " comptee supprimee");
-            });
+            }).join();
+            System.out.println("Element " + obj.getProductId().getNomProduit() + " comptee supprimee");
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -526,7 +523,7 @@ public class CompterService implements CompterStorage {
                 query.setParameter(6, region);
                 query.executeUpdate();
                 return null;
-            });
+            }).join();
             return;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -965,9 +962,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element prix " + e.getPrixUnitaire() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element prix " + cat.getPrixUnitaire() + " enregistree");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -1004,11 +1000,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                // RecquisitionDelegate.rectifyStock(cat.getProductId(), LocalDate.now(),
-                // LocalDate.now(), cat.getRegion(), cat.getCoutAchat(), cat.getNumlot());
-                System.out.println("Element Recq inv " + e.getReference() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element Recq inv " + cat.getReference() + " enregistree");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -1017,8 +1010,6 @@ public class CompterService implements CompterStorage {
         }
         ManagedSessionFactory.getEntityManager().persist(cat);
         tx.commit();
-        // RecquisitionDelegate.rectifyStock(cat.getProductId(), LocalDate.now(),
-        // LocalDate.now(), cat.getRegion(), cat.getCoutAchat(), cat.getNumlot());
         return cat;
     }
 
@@ -1039,7 +1030,7 @@ public class CompterService implements CompterStorage {
                             .setParameter(4, region)
                             .executeUpdate();
                     return null;
-                });
+                }).join();
             } else {
                 EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
                 if (!tx.isActive()) {
@@ -1087,9 +1078,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getPrixUnitaire() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element " + cat.getPrixUnitaire() + " enregistree");
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -1120,7 +1110,7 @@ public class CompterService implements CompterStorage {
                             .setParameter(4, region)
                             .executeUpdate();
                     return null;
-                });
+                }).join();
             } else {
                 EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
                 if (!tx.isActive()) {
@@ -1150,9 +1140,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element lv invent" + e.getProductId().getNomProduit() + " vendu");
-            });
+            }).join();
+            System.out.println("Element lv invent" + cat.getProductId().getNomProduit() + " vendu");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -1176,9 +1165,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getReference() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element vente inv" + cat.getReference() + " enregistree");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -1247,9 +1235,8 @@ public class CompterService implements CompterStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getNomClient() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element " + cat.getNomClient() + " enregistree");
             return cat;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();

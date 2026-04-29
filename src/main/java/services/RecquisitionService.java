@@ -16,11 +16,11 @@ import delegates.ProduitDelegate;
 import delegates.StockerDelegate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Level;
@@ -47,6 +47,7 @@ import java.time.LocalDateTime;
 import data.PermitTo;
 import delegates.PermissionDelegate;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Executors;
 import java.util.prefs.Preferences;
 import tools.Constants;
 import tools.DataId;
@@ -60,6 +61,8 @@ import tools.Util;
  * @author eroot
  */
 public class RecquisitionService implements RecquisitionStorage {
+
+    private ClotureCallback clotureCallback;
 
     @Override
     public boolean isExists(String uid) {
@@ -81,6 +84,27 @@ public class RecquisitionService implements RecquisitionStorage {
     public RecquisitionService() {
         // initializing...
         pref = Preferences.userNodeForPackage(tools.SyncEngine.class);
+    }
+
+    public void setClotureCallback(ClotureCallback clotureCallback) {
+        this.clotureCallback = clotureCallback;
+    }
+
+    @Override
+    public void setClotureListener(ClotureCallback listener) {
+        setClotureCallback(clotureCallback);
+    }
+
+    private void notifyCallback(int index, int s, Produit p) {
+        if (this.clotureCallback != null) {
+            this.clotureCallback.onClosure(index, s, p);
+        }
+    }
+
+    private void notifyClotureFinish(int size) {
+        if (this.clotureCallback != null) {
+            this.clotureCallback.onFinish(size);
+        }
     }
 
     @Override
@@ -160,7 +184,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element LV " + e.getNumlot() + " enregistree");
-            });
+            }).join();
             return cat;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -182,9 +206,7 @@ public class RecquisitionService implements RecquisitionStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.merge(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getReference() + " enregistree");
-            });
+            }).join();
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -202,9 +224,7 @@ public class RecquisitionService implements RecquisitionStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getReference() + " enregistree");
-            });
+            }).join();
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -234,35 +254,544 @@ public class RecquisitionService implements RecquisitionStorage {
 
     @Override
     public StockAgregate saveStockFromRecquisition(Recquisition e) {
-        stock = new StockAgregate(DataId.generate());
-        LocalDate leo = LocalDate.now();
-        stock.setCoutAchat(e.getCoutAchat());
-        stock.setDate(leo.atStartOfDay());
-        stock.setEntrees(e.getQuantite());
-        stock.setSorties(0d);
-        stock.setInitialQuantity(0d);
-        stock.setExpiree(0d);
-        stock.setFinalQuantity(e.getQuantite());
-        stock.setContext("Journalier du " + leo);
-        stock.setMesureId(e.getMesureId());
-        stock.setProductId(e.getProductId());
-        stock.setRegion(e.getRegion());
+        LocalDate today = LocalDate.now();
+        return saveStockFromRecquisition(e, today, today, "Journalier du " + today);
+    }
+
+    /**
+     * Totaux agrégés (tous lots) pour la ligne de synthèse sans numéro de lot.
+     */
+    private static final class LotClosureTotals {
+
+        double entrees;
+        double sorties;
+        double initial;
+        double expiree;
+        double finalQty;
+
+        void add(double e, double s, double i, double x, double f) {
+            entrees += e;
+            sorties += s;
+            initial += i;
+            expiree += x;
+            finalQty += f;
+        }
+    }
+
+    /**
+     * Métriques d’agrégation (pièces) sur une période : ordre logique stock
+     * initial (ouverture) → entrées période → sorties période → (périmés) →
+     * stock final. Formule :
+     * {@code finalValid = max(0, stockInitial + entrees - sorties - expiree)}.
+     */
+    private record LotPeriodPieces(double entrees, double sorties, double stockInitial, double expiree,
+            double finalValid) {
+
+    }
+
+    private LotPeriodPieces computeLotPeriodPieces(String productUid, String numlot, String region,
+            LocalDate datedebut, LocalDate datefin) {
+        if (productUid == null || numlot == null || numlot.isBlank() || region == null || region.isBlank()
+                || datedebut == null || datefin == null) {
+            return new LotPeriodPieces(0, 0, 0, 0, 0);
+        }
+
+        double entrees = sumBatchedRecqusitionFrom(productUid, numlot, datedebut, datefin, region);
+        double sorties = sumBatchedLigneventeFrom(productUid, numlot, datedebut, datefin, region);
+        double stockInit
+                = //                isStockExists(productUid, numlot)?
+                //                calculerStockInitialEnUniteByLot(productUid, numlot, datedebut, region):
+                stockInitialAlternative(productUid, datedebut, numlot, region);
+        double expiree = getStockExpireeByLot(productUid, numlot, datedebut, datefin, region);
+        double finalValid = Math.max(0, (stockInit + entrees - sorties));
+        return new LotPeriodPieces(entrees, sorties, stockInit, expiree, finalValid);
+    }
+
+    /**
+     * Borne inférieure pour cumuler l’ouverture de période lorsqu’aucune région
+     * n’est filtrée.
+     */
+    private static final LocalDate GLOBAL_LEDGER_START = LocalDate.of(1970, 1, 1);
+
+    /**
+     * Même séquence que {@link #computeLotPeriodPieces} : d’abord stock initial
+     * à l’ouverture de {@code datedebut} (cumul recquisitions − cumul ventes
+     * jusqu’à la veille), puis entrées et sorties sur
+     * {@code [datedebut, datefin]}, périmés 0 (non calculés sans région), enfin
+     * stock final.
+     */
+    private LotPeriodPieces computeLotPeriodPiecesNoRegion(String productUid, String numlot, LocalDate datedebut,
+            LocalDate datefin) {
+        if (productUid == null || numlot == null || numlot.isBlank() || datedebut == null || datefin == null) {
+            return new LotPeriodPieces(0, 0, 0, 0, 0);
+        }
+        double stockInitial = 0d;
+        if (datedebut.isAfter(GLOBAL_LEDGER_START)) {
+            LocalDate veille = datedebut.minusDays(1);
+            stockInitial = Math.max(0,
+                    sumBatchedRecqusitionFrom(productUid, numlot, GLOBAL_LEDGER_START, veille)
+                    - sumBatchedLigneventeFrom(productUid, numlot, GLOBAL_LEDGER_START, veille));
+        }
+        double entrees = sumBatchedRecqusitionFrom(productUid, numlot, datedebut, datefin);
+        double sorties = sumBatchedLigneventeFrom(productUid, numlot, datedebut, datefin);
+        double expiree = 0d;
+        double finalValid = Math.max(0, stockInitial + entrees - sorties - expiree);
+        return new LotPeriodPieces(entrees, sorties, stockInitial, expiree, finalValid);
+    }
+
+    private StockAgregate applyStockAggregateValues(StockAgregate target, Produit produit, Mesure mesure, String region,
+            String context, String numlot, LocalDate dateExpiration, LocalDate aggregateDate, double coutAchat,
+            double stockInitial, double entrees, double sorties, double expiree, double stockFinal) {
+        StockAgregate row = target == null ? new StockAgregate(DataId.generate()) : target;
+        row.setProductId(produit);
+        row.setMesureId(mesure);
+        row.setRegion(normalizeStockAggregateText(region));
+        row.setContext(normalizeStockAggregateText(context));
+        row.setNumlot(normalizeStockAggregateText(numlot));
+        row.setDateExpiration(dateExpiration);
+        row.setDate(aggregateDate);
+        row.setCoutAchat(coutAchat);
+        row.setInitialQuantity(stockInitial);
+        row.setEntrees(entrees);
+        row.setSorties(sorties);
+        row.setExpiree(expiree);
+        row.setFinalQuantity(stockFinal);
+        return row;
+    }
+
+    private String normalizeStockAggregateText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private double safeStockAggregateValue(Double value) {
+        return value == null ? 0d : value;
+    }
+
+    private StockAgregate findStockAgregate(String uid) {
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    return em.find(StockAgregate.class, uid);
+                });
+            }
+            return ManagedSessionFactory.getEntityManager().find(StockAgregate.class, uid);
+        } catch (NoResultException e) {
+            return null;
+        }
+
+    }
+
+    private StockAgregate synthesizeStockAggregateFromLots(List<StockAgregate> lotRows, String region, String context) {
+        if (lotRows == null || lotRows.isEmpty()) {
+            return null;
+        }
+        StockAgregate latest = null;
+        double stockInitial = 0d;
+        double entrees = 0d;
+        double sorties = 0d;
+        double expiree = 0d;
+        double stockFinal = 0d;
+        for (StockAgregate lotRow : lotRows) {
+            if (lotRow == null) {
+                continue;
+            }
+            stockInitial += safeStockAggregateValue(lotRow.getInitialQuantity());
+            entrees += safeStockAggregateValue(lotRow.getEntrees());
+            sorties += safeStockAggregateValue(lotRow.getSorties());
+            expiree += safeStockAggregateValue(lotRow.getExpiree());
+            stockFinal += safeStockAggregateValue(lotRow.getFinalQuantity());
+            if (latest == null || (lotRow.getDate() != null
+                    && (latest.getDate() == null || lotRow.getDate().isAfter(latest.getDate())))) {
+                latest = lotRow;
+            }
+        }
+        if (latest == null) {
+            return null;
+        }
+        return applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                latest.getProductId(),
+                latest.getMesureId(),
+                region,
+                context != null ? context : latest.getContext(),
+                null,
+                null,
+                latest.getDate(),
+                safeStockAggregateValue(latest.getCoutAchat()),
+                stockInitial,
+                entrees,
+                sorties,
+                expiree,
+                stockFinal);
+    }
+
+    /**
+     * Régénère les {@link StockAgregate} par lot sur la période
+     * {@code datedebut}–{@code datefin} et la région du mouvement source. Avec
+     * région : {@link #upsertLotStockAggregates}, qui s’appuie sur
+     * {@link #computeLotPeriodPieces} (entrées/sorties période batch région
+     * exacte, stock initial {@link #calculerStockInitialEnUniteByLot}, périmés
+     * {@link #getStockExpireeByLot}). Sans région :
+     * {@link #computeLotPeriodPiecesNoRegion}. La synthèse retournée reste
+     * calculée en mémoire, sans insertion globale dans {@code stock_agregate}.
+     */
+    private StockAgregate saveStockFromRecquisition(Recquisition e, LocalDate datedebut, LocalDate datefin,
+            String context) {
+        if (e == null || e.getProductId() == null) {
+            return null;
+        }
+        final LocalDate dDeb = datedebut == null ? LocalDate.now() : datedebut;
+        final LocalDate dFin = datefin == null ? dDeb : datefin;
+        final String targetContext = (context == null || context.isBlank())
+                ? "Journalier du " + dFin
+                : context;
+        final String productId = e.getProductId().getUid();
+        final String region = e.getRegion();
+        final Mesure unite = MesureDelegate.findByProduitAndQuant(productId, 1d);
+
+        if (region != null && !region.isBlank()) {
+//            purgeDailyLotAggregatesForProduct(productId, region, dDeb, dFin, targetContext);
+            LotClosureTotals totals = upsertLotStockAggregates(e.getProductId(), region, dDeb, dFin, targetContext,
+                    unite);
+            LocalDate summaryDate = dFin.equals(LocalDate.now()) ? LocalDate.now() : dFin;
+            StockAgregate summary = applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                    e.getProductId(),
+                    unite == null ? e.getMesureId() : unite,
+                    region,
+                    targetContext,
+                    e.getNumlot(),
+                    null,
+                    summaryDate,
+                    resolveUnitCost(e),
+                    totals.initial,
+                    totals.entrees,
+                    totals.sorties,
+                    totals.expiree,
+                    totals.finalQty);
+//            System.out.println(" RT ---- OK ");
+//            System.out.println("Stock lot-agregate regenere (region=" + region + "): produit="
+//                    + e.getProductId().getNomProduit() + ", synthese pieces finales=" + totals.finalQty);
+            return summary;
+        }
+
+        List<Recquisition> lotHeads = findDistinctLotHeads(e);
+        if (lotHeads.isEmpty() && e.getNumlot() != null && !e.getNumlot().isBlank()) {
+            lotHeads.add(e);
+        }
+
+        List<StockAgregate> rowsToPersist = new ArrayList<>();
+        double totalInitial = 0d;
+        double totalEntries = 0d;
+        double totalSorties = 0d;
+        double totalExpiree = 0d;
+        double totalFinal = 0d;
+        LocalDate aggregateTs = dFin.equals(LocalDate.now()) ? LocalDate.now() : dFin;
+
+        for (Recquisition lotHead : lotHeads) {
+            String lot = lotHead.getNumlot();
+            if (lot == null || lot.isBlank()) {
+                continue;
+            }
+            String lotNorm = lot.trim();
+            LotPeriodPieces m = computeLotPeriodPiecesNoRegion(productId, lotNorm, dDeb, dFin);
+
+            StockAgregate lotAggregate = applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                    e.getProductId(),
+                    unite == null ? e.getMesureId() : unite,
+                    region,
+                    targetContext,
+                    lotNorm,
+                    resolveLotDateExpirationForStockAgregate(productId, lotNorm, region, lotHead.getDateExpiry()),
+                    aggregateTs,
+                    resolveUnitCost(lotHead),
+                    m.stockInitial(),
+                    m.entrees(),
+                    m.sorties(),
+                    m.expiree(),
+                    m.finalValid());
+            rowsToPersist.add(lotAggregate);
+
+            totalInitial += m.stockInitial();
+            totalEntries += m.entrees();
+            totalSorties += m.sorties();
+            totalExpiree += m.expiree();
+            totalFinal += m.finalValid();
+        }
+
+        if (!rowsToPersist.isEmpty()) {
+            // purgeDailyLotAggregatesForProduct(productId, region, dDeb, dFin, targetContext);
+            persistLotAggregates(rowsToPersist);
+            System.out.println("---VVVV---");
+            System.out.println("Stock lot-agregate regenere: produit=" + e.getProductId().getNomProduit()
+                    + ", lots=" + rowsToPersist.size() + ", totalFinal=" + totalFinal);
+        }
+
+        return applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                e.getProductId(),
+                unite == null ? e.getMesureId() : unite,
+                region,
+                targetContext,
+                null,
+                null,
+                aggregateTs,
+                resolveUnitCost(e),
+                totalInitial,
+                totalEntries,
+                totalSorties,
+                totalExpiree,
+                totalFinal);
+    }
+
+    public Recquisition findRecquisition(String ref, String prodId, String numlot, String region) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.reference = ? AND s.numlot = ? "
+                    + "AND s.region = ? ORDER BY s.date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                    query.setParameter(1, prodId).setParameter(2, ref)
+                            .setParameter(3, numlot).setParameter(4, region);
+                    query.setMaxResults(1);
+                    return (Recquisition) query.getSingleResult();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
+            query.setParameter(1, prodId).setParameter(2, ref)
+                    .setParameter(3, numlot).setParameter(4, region);
+            query.setMaxResults(1);
+            return (Recquisition) query.getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    private double resolveUnitCost(Recquisition rq) {
+        if (rq == null) {
+            return 0d;
+        }
+        if (rq.getMesureId() == null || rq.getMesureId().getQuantContenu() == null
+                || rq.getMesureId().getQuantContenu() == 0d) {
+            return rq.getCoutAchat();
+        }
+        return rq.getCoutAchat() / rq.getMesureId().getQuantContenu();
+    }
+
+    /**
+     * Valeur MAX(dateexpiry) renvoyée par une requête native (SQLite / JDBC).
+     */
+    private static LocalDate localDateFromSqlNative(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate ld) {
+            return ld;
+        }
+        if (value instanceof Timestamp ts) {
+            return ts.toLocalDateTime().toLocalDate();
+        }
+        if (value instanceof java.sql.Date d) {
+            return d.toLocalDate();
+        }
+        if (value instanceof Date ud) {
+            return new java.sql.Date(ud.getTime()).toLocalDate();
+        }
+        return null;
+    }
+
+    /**
+     * Date de péremption à enregistrer sur {@link StockAgregate} pour un lot :
+     * d’abord celle du mouvement représentatif, sinon le maximum parmi les
+     * réquisitions du même produit / lot (et région si fournie), pour permettre
+     * les sélections « lots expirés » sur {@code stock_agregate}.
+     */
+    private LocalDate resolveLotDateExpirationForStockAgregate(String productUid, String numlot, String region,
+            LocalDate candidateFromRecquisition) {
+        if (candidateFromRecquisition != null) {
+            return candidateFromRecquisition;
+        }
+        if (productUid == null || numlot == null || numlot.isBlank()) {
+            return null;
+        }
+        String lotKey = numlot.trim();
+        try {
+            StringBuilder sb = new StringBuilder(
+                    "SELECT MAX(r.dateexpiry) FROM recquisition r WHERE r.product_id = ? AND r.numlot = ? "
+                    + "AND r.dateexpiry IS NOT NULL ");
+            if (region != null && !region.isBlank()) {
+                sb.append("AND r.region LIKE ? ");
+            }
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query q = em.createNativeQuery(sb.toString());
+                    q.setParameter(1, productUid);
+                    q.setParameter(2, lotKey);
+                    if (region != null && !region.isBlank()) {
+                        q.setParameter(3, region);
+                    }
+                    List<?> rows = q.getResultList();
+                    if (rows.isEmpty()) {
+                        return null;
+                    }
+                    return localDateFromSqlNative(rows.get(0));
+                });
+            }
+            Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+            q.setParameter(1, productUid);
+            q.setParameter(2, lotKey);
+            if (region != null && !region.isBlank()) {
+                q.setParameter(3, region);
+            }
+            List<?> rows = q.getResultList();
+            if (rows.isEmpty()) {
+                return null;
+            }
+            return localDateFromSqlNative(rows.get(0));
+        } catch (Exception ex) {
+            Logger.getLogger(RecquisitionService.class.getName()).log(Level.FINE,
+                    "resolveLotDateExpirationForStockAgregate: " + ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+    private List<Recquisition> findDistinctLotHeads(Recquisition seed) {
+        List<Recquisition> source;
+        String productId = seed.getProductId().getUid();
+        String region = seed.getRegion();
+        if (region == null || region.isBlank()) {
+            source = findRecquisitionByProduit(productId);
+        } else {
+            source = findRecquisitionByProduitRegion(productId, region);
+        }
+        Map<String, Recquisition> byLot = new HashMap<>();
+        if (source != null) {
+            for (Recquisition rq : source) {
+                String lot = rq.getNumlot();
+                if (lot == null || lot.isBlank()) {
+                    continue;
+                }
+                Recquisition current = byLot.get(lot);
+                if (current == null || (rq.getDate() != null
+                        && (current.getDate() == null || rq.getDate().isAfter(current.getDate())))) {
+                    byLot.put(lot, rq);
+                }
+            }
+        }
+        return new ArrayList<>(byLot.values());
+    }
+
+    public List<Recquisition> findDistinctLotHeads(Produit p, String region) {
+        List<Recquisition> source;
+        String productId = p.getUid();
+        if (region == null || region.isBlank()) {
+            source = findRecquisitionByProduit(productId);
+        } else {
+            source = findRecquisitionByProduitRegion(productId, region);
+        }
+        Map<String, Recquisition> byLot = new HashMap<>();
+        if (source != null) {
+            for (Recquisition rq : source) {
+                String lot = rq.getNumlot();
+                if (lot == null || lot.isBlank()) {
+                    continue;
+                }
+                Recquisition current = byLot.get(lot);
+                if (current == null || (rq.getDate() != null
+                        && (current.getDate() == null || rq.getDate().isAfter(current.getDate())))) {
+                    byLot.put(lot, rq);
+                }
+            }
+        }
+        return new ArrayList<>(byLot.values());
+    }
+
+    private void purgeDailyLotAggregatesForProducts(String productId, String region, LocalDate dayDebut,
+            LocalDate dayFin, String context) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("DELETE FROM stock_agregate WHERE product_id = ? ");
+        sb.append("AND date BETWEEN ? AND ? AND context = ? AND num_lot IS NOT NULL ");
+        if (region != null && !region.isBlank()) {
+            sb.append("AND region = ? ");
+        }
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
-                em.persist(stock);
-                return stock;
-            }).thenAccept(es -> {
-                System.out.println("Stock de " + es.getProductId().getNomProduit() + " enregistree");
-            });
-        } else {
-            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().persist(stock);
-            tx.commit();
+                Query q = em.createNativeQuery(sb.toString());
+                q.setParameter(1, productId);
+                q.setParameter(2, dayDebut);
+                q.setParameter(3, dayFin.plusDays(1));
+                q.setParameter(4, context);
+                if (region != null && !region.isBlank()) {
+                    q.setParameter(5, region);
+                }
+                q.executeUpdate();
+                return true;
+            }).join();
+            return;
         }
-        return stock;
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+        if (!tx.isActive()) {
+            tx.begin();
+        }
+        Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        q.setParameter(1, productId);
+        q.setParameter(2, dayDebut);
+        q.setParameter(3, dayFin.plusDays(1));
+        q.setParameter(4, context);
+        if (region != null && !region.isBlank()) {
+            q.setParameter(5, region);
+        }
+        q.executeUpdate();
+        tx.commit();
+    }
+
+    private void persistLotAggregates(List<StockAgregate> rows) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                for (StockAgregate row : rows) {
+                    Produit p = row.getProductId();
+                    boolean exists = isStockExists(p.getUid(), row.getNumlot(), row.getDate(), row.getDate());
+                    if (!exists) {
+                        em.persist(row);
+                    } else {
+                        StockAgregate stk = findStockAgregate(row.getUid());
+                        stk.setSorties(row.getSorties());
+                        stk.setCoutAchat(row.getCoutAchat());
+                        stk.setEntrees(row.getEntrees());
+                        stk.setFinalQuantity(row.getFinalQuantity());
+                        stk.setInitialQuantity(row.getInitialQuantity());
+                        stk.setNumlot(row.getNumlot());
+                        em.merge(stk);
+                    }
+                }
+                return rows.size();
+            }).join();
+            return;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+        if (!tx.isActive()) {
+            tx.begin();
+        }
+        for (StockAgregate row : rows) {
+            Produit p = row.getProductId();
+            boolean exists = isStockExists(p.getUid(), row.getNumlot(), row.getDate(), row.getDate());
+            if (!exists) {
+                ManagedSessionFactory.getEntityManager().persist(row);
+            } else {
+                StockAgregate stk = findStockAgregate(row.getUid());
+                stk.setSorties(row.getSorties());
+                stk.setCoutAchat(row.getCoutAchat());
+                stk.setEntrees(row.getEntrees());
+                stk.setFinalQuantity(row.getFinalQuantity());
+                stk.setInitialQuantity(row.getInitialQuantity());
+                stk.setNumlot(row.getNumlot());
+                ManagedSessionFactory.getEntityManager().merge(stk);
+            }
+
+        }
+        tx.commit();
     }
 
     @Override
@@ -289,7 +818,7 @@ public class RecquisitionService implements RecquisitionStorage {
     public List<Recquisition> findRecquisitionByProduit(String objId) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ");
+            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString(), Recquisition.class)
                         .setParameter(1, objId).getResultList());
@@ -389,7 +918,7 @@ public class RecquisitionService implements RecquisitionStorage {
     public List<Recquisition> findRecquisitionByProduitRegion(String uid, String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ");
+            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
@@ -405,6 +934,38 @@ public class RecquisitionService implements RecquisitionStorage {
         } catch (NoResultException e) {
             return null;
         }
+    }
+
+    @Override
+    public List<StockAgregate> findAgregateDistinctlyByLot(String prod, String region) {
+        try {
+            Map<String, StockAgregate> result = new HashMap<>();
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? AND s.final_quantity > 0 ORDER BY s.date_expiration ASC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
+                    query.setParameter(1, prod);
+                    query.setParameter(2, region == null ? "%" : region);
+                    List<StockAgregate> rst = query.getResultList();
+                    for (StockAgregate stockAgregate : rst) {
+                        result.put(stockAgregate.getNumlot(), stockAgregate);
+                    }
+                    return List.copyOf(result.values());
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
+            query.setParameter(1, prod);
+            query.setParameter(2, region == null ? "%" : region);
+            List<StockAgregate> rst = query.getResultList();
+            for (StockAgregate stockAgregate : rst) {
+                result.put(stockAgregate.getNumlot(), stockAgregate);
+            }
+            return new ArrayList<>(result.values());
+        } catch (NoResultException e) {
+            return null;
+        }
+
     }
 
     @Override
@@ -590,7 +1151,7 @@ public class RecquisitionService implements RecquisitionStorage {
     public List<Recquisition> findRecquisitionByProduit(String uid, String numlot, String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.numlot = ?  AND s.region = ? ");
+            sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.numlot = ?  AND s.region = ? ORDER BY date DESC ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
@@ -876,6 +1437,15 @@ public class RecquisitionService implements RecquisitionStorage {
             sb.append("SELECT SUM(r.quantite*m.quantcontenu) e FROM retour_depot r,recquisition q,mesure m "
                     + "WHERE q.product_id = ? AND r.mesure_id = m.uid ");
             sb.append(" AND q.uid = r.recquisition_id AND r.region = ? ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    query.setParameter(1, proId);
+                    query.setParameter(2, region);
+                    Double dos = (Double) query.getSingleResult();
+                    return dos == null ? 0 : dos;
+                });
+            }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, proId);
             query.setParameter(2, region);
@@ -1248,8 +1818,8 @@ public class RecquisitionService implements RecquisitionStorage {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Double.class);
                     query.setParameter(1, proId);
-                    query.setParameter(2, numlot);
-                    query.setParameter(3, region);
+                    query.setParameter(2, region);
+                    query.setParameter(3, numlot);
                     Double dos = (Double) query.getSingleResult();
                     return dos == null ? 0 : dos;
                 });
@@ -1364,88 +1934,123 @@ public class RecquisitionService implements RecquisitionStorage {
 
     @Override
     public List<Rupture> findStockEnRupture() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(
-                "SELECT r.product_id, r.mesure_id, r.stockAlert, r.dateExpiry, r.date, r.region, r.coutachat, r.uid FROM recquisition r GROUP BY r.product_id ORDER BY r.date DESC ");
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString());
-                    List<Object[]> datas = query.getResultList();
-                    return ruptures(datas);
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
-            List<Object[]> datas = query.getResultList();
-            return ruptures(datas);
+            return rupturesFromStockAggregate(findRuptureGroupsFromStockAggregate(null));
         } catch (NoResultException e) {
             return null;
         }
     }
 
-    private List<Rupture> ruptures(List<Object[]> datas) {
+    private List<Rupture> rupturesFromStockAggregate(List<Object[]> datas) {
         List<Rupture> result = new ArrayList<>();
         for (Object[] data : datas) {
             Rupture r = new Rupture();
             String uidP = String.valueOf(data[0]);
             Produit pro = ProduitDelegate.findProduit(uidP);
-            r.setProduit(pro);
-            Mesure mezr = MesureDelegate.findMesure(String.valueOf(data[1]));
-            r.setMesure(mezr);
-            r.setRegion(String.valueOf(data[5]));
-            r.setUnitprice(Double.parseDouble(String.valueOf(data[6])));
-            if (!Objects.isNull(data[4])) {
-                try {
-                    String expr = String.valueOf(data[4]);
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    Date dt = sdf.parse(String.valueOf(expr));
-                    r.setDate(sdf.format(dt));
-                } catch (ParseException ex) {
-                    Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-                }
+            if (pro == null) {
+                continue;
             }
-            Double alrt = Double.valueOf(String.valueOf(data[2] == null ? "0" : data[2]));
+            r.setProduit(pro);
+            String region = data[1] == null ? null : String.valueOf(data[1]);
+            Recquisition seed = region == null || region.isBlank()
+                    ? getLastEntry(uidP)
+                    : getLastEntry(pro, region);
+            double totalFinalPieces = data[2] == null ? 0d : ((Number) data[2]).doubleValue();
+            Mesure mezr = seed != null && seed.getMesureId() != null
+                    ? seed.getMesureId()
+                    : findMinMesureForProduit(uidP);
+            if (!isRuptureByAggregate(totalFinalPieces, seed, mezr)) {
+                continue;
+            }
+            r.setMesure(mezr);
+            r.setRegion(region);
+            r.setUnitprice(resolveUnitCost(seed));
+            if (data[3] instanceof LocalDateTime dateTime) {
+                r.setDate(dateTime.toLocalDate().toString());
+            } else if (data[3] instanceof Timestamp ts) {
+                r.setDate(ts.toLocalDateTime().toLocalDate().toString());
+            } else if (data[3] != null) {
+                r.setDate(String.valueOf(data[3]));
+            }
+            Double alrt = seed == null ? 0d : seed.getStockAlert();
             r.setAlert(alrt);
-            String uidr = String.valueOf(data[7]);
-            List<PrixDeVente> prices = findPricesFor(uidr);
-            if (!prices.isEmpty()) {
-                PrixDeVente pv = prices.get(0);
-                Mesure mp = MesureDelegate.findMesure(pv.getMesureId().getUid());
-                r.setSalePrice(pv.getPrixUnitaire() + " " + pv.getDevise() + "/" + mp.getDescription());
+            if (seed != null) {
+                List<PrixDeVente> prices = findPricesFor(seed.getUid());
+                if (!prices.isEmpty()) {
+                    PrixDeVente pv = prices.get(0);
+                    Mesure mp = MesureDelegate.findMesure(pv.getMesureId().getUid());
+                    r.setSalePrice(pv.getPrixUnitaire() + " " + pv.getDevise() + "/" + mp.getDescription());
+                }
             }
             List<Stocker> prox = StockerDelegate.findDescSortedByDateStock(uidP);
             String loc = (prox.isEmpty() ? "N/A" : prox.get(0).getLocalisation());
             r.setLocalisation(loc);
             r.setSelect(false);
-            double alrpc = (alrt == null ? 0 : alrt) * mezr.getQuantContenu();
-            double rstpc = findRemainedInMagasinFor(uidP);
-            if (rstpc <= alrpc || r.isSelect()) {
-                r.setQuant(BigDecimal.valueOf(rstpc / mezr.getQuantContenu()).setScale(2, RoundingMode.HALF_EVEN)
-                        .doubleValue());
-                result.add(r);
-                // add to result list
-            }
+            double quantContenu = mezr == null || mezr.getQuantContenu() == null || mezr.getQuantContenu() <= 0
+                    ? 1d
+                    : mezr.getQuantContenu();
+            r.setQuant(BigDecimal.valueOf(totalFinalPieces / quantContenu).setScale(2, RoundingMode.HALF_EVEN)
+                    .doubleValue());
+            result.add(r);
         }
         return result;
     }
 
+    private boolean isRuptureByAggregate(double totalFinalPieces, Recquisition seed, Mesure mesure) {
+        if (totalFinalPieces <= 0) {
+            return true;
+        }
+        if (seed == null || seed.getStockAlert() == null || seed.getStockAlert() <= 0) {
+            return false;
+        }
+        double quantContenu = mesure == null || mesure.getQuantContenu() == null || mesure.getQuantContenu() <= 0
+                ? 1d
+                : mesure.getQuantContenu();
+        double alertPieces = seed.getStockAlert() * quantContenu;
+        return totalFinalPieces <= alertPieces;
+    }
+
+    private List<Object[]> findRuptureGroupsFromStockAggregate(String region) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT s.product_id, s.region, COALESCE(SUM(COALESCE(s.final_quantity, 0)), 0) AS total_final,
+                       MAX(s.date) AS last_date
+                FROM stock_agregate s
+                WHERE s.num_lot IS NOT NULL
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND COALESCE(s2.region, '') = COALESCE(s.region, '')
+                        AND s2.num_lot = s.num_lot
+                  )
+                """);
+        if (region != null && !region.isBlank()) {
+            sql.append(" AND s.region LIKE ? ");
+        }
+        sql.append("""
+                GROUP BY s.product_id, s.region
+                ORDER BY MAX(s.date) DESC
+                """);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sql.toString());
+                if (region != null && !region.isBlank()) {
+                    query.setParameter(1, region);
+                }
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql.toString());
+        if (region != null && !region.isBlank()) {
+            query.setParameter(1, region);
+        }
+        return query.getResultList();
+    }
+
     @Override
     public List<Rupture> findStockEnRupture(String region) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(
-                "SELECT r.product_id, r.mesure_id, r.stockAlert, r.dateExpiry, r.date, r.region, r.coutachat, r.uid FROM recquisition r WHERE r.region = ? GROUP BY r.product_id ORDER BY r.date DESC ");
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString());
-                    List<Object[]> datas = query.getResultList();
-                    return ruptures(datas);
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
-            query.setParameter(1, region);
-            List<Object[]> datas = query.getResultList();
-            return ruptures(datas);
+            return rupturesFromStockAggregate(findRuptureGroupsFromStockAggregate(region));
         } catch (NoResultException e) {
             return null;
         }
@@ -1463,7 +2068,7 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT s.uid, s.dateexpiry, s.date, s.region, s.numlot, s.stockalert,SUM(s.quantite*m.quantcontenu) as quantite ,s.reference,"
-                    + " s.observation,s.coutachat,s.mesure_id,s.product_id FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.region = ?"
+                    + " s.observation,s.coutachat,s.mesure_id,s.product_id, s.deleted_at, s.updated_at FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.region = ?"
                     + "  GROUP BY s.product_id, s.numlot ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -1487,7 +2092,7 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT s.uid, s.dateexpiry, s.date, s.region, s.numlot, s.stockalert,SUM(s.quantite*m.quantcontenu) as quantite ,s.reference, s.observation,s.coutachat,"
-                    + "s.mesure_id,s.product_id FROM recquisition s, mesure m WHERE s.mesure_id=m.uid  GROUP BY s.product_id, s.numlot");
+                    + "s.mesure_id,s.product_id, s.deleted_at, s.updated_at FROM recquisition s, mesure m WHERE s.mesure_id=m.uid  GROUP BY s.product_id, s.numlot");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
@@ -1507,7 +2112,7 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT s.uid, s.dateexpiry, s.date, s.region, s.numlot, s.stockalert,SUM(s.quantite*m.quantcontenu) as quantite ,s.reference, s.observation,"
-                    + "s.coutachat,s.mesure_id,s.product_id FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.region = ? AND s.date BETWEEN ? AND ?  GROUP BY s.product_id, s.numlot");
+                    + "s.coutachat,s.mesure_id,s.product_id, s.deleted_at, s.updated_at FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.region = ? AND s.date BETWEEN ? AND ?  GROUP BY s.product_id, s.numlot");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
@@ -1531,7 +2136,7 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT s.uid, s.dateexpiry, s.date, s.region, s.numlot, s.stockalert,SUM(s.quantite*m.quantcontenu) as quantite ,s.reference, s.observation,s.coutachat,"
-                    + "s.mesure_id,s.product_id FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.date BETWEEN ? AND ? GROUP BY s.product_id, s.numlot");
+                    + "s.mesure_id,s.product_id, s.deleted_at, s.updated_at FROM recquisition s, mesure m WHERE s.mesure_id=m.uid AND s.date BETWEEN ? AND ? GROUP BY s.product_id, s.numlot");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
@@ -1551,6 +2156,10 @@ public class RecquisitionService implements RecquisitionStorage {
 
     @Override
     public double findRemainedInMagasinByLot(String puid, String numlot) {
+        StockAgregate aggregate = findLatestStockAgregateByLot(puid, numlot);
+        if (aggregate != null && aggregate.getFinalQuantity() != null) {
+            return Math.max(0, aggregate.getFinalQuantity());
+        }
         double en = sumRecqusitionByLotFrom(puid, numlot);
         double so = sumLigneventeByLotFrom(puid, numlot);
         double ret = sumRetourDepotByLot(puid, numlot);
@@ -1559,6 +2168,10 @@ public class RecquisitionService implements RecquisitionStorage {
 
     @Override
     public double findRemainedInMagasinByLot(String puid, String numlot, String region) {
+        StockAgregate aggregate = findLatestStockAgregateByLot(puid, numlot, region);
+        if (aggregate != null && aggregate.getFinalQuantity() != null) {
+            return Math.max(0, aggregate.getFinalQuantity());
+        }
         double en = sumRecqusitionByLotFrom(puid, numlot, region);
         double so = sumLigneventeByLotFrom(puid, numlot, region);
         double ret = sumRetourDepotByLot(puid, numlot, region);
@@ -1571,10 +2184,18 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT SUM(r.quantite*m.quantcontenu) e FROM recquisition r,mesure m"
                     + " WHERE r.product_id = ? AND r.mesure_id=m.uid  ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString());
+                    query.setParameter(1, uid);
+                    Object d = query.getSingleResult();
+                    return d == null ? 0d : ((Number) d).doubleValue();
+                });
+            }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, uid);
-            Double d = (Double) query.getSingleResult();
-            return d == null ? 0 : d;
+            Object d = query.getSingleResult();
+            return d == null ? 0d : ((Number) d).doubleValue();
         } catch (NoResultException e) {
             return 0;
         }
@@ -1691,55 +2312,18 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate today1) {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("SELECT uid, SUM(s.initial_quantity) as initial_quantity , SUM(s.entrees) as entrees"
-                + ", SUM(s.sorties) as sorties,SUM(s.final_quantity) as final_quantity, SUM(s.expiree) as expiree, "
-                + "s.cout_achat, s.region, s.context, s.date, s.mesure_id, s.product_id "
-                + "FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.product_id = ?");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
-                query.setParameter(1, today.atStartOfDay());
-                query.setParameter(2, today1.atTime(23, 59, 59));
-                query.setParameter(3, prod.getUid());
-                List<StockAgregate> results = query.getResultList();
-                return results.isEmpty() ? null : results.get(0);
-            });
+        if (prod == null || prod.getUid() == null) {
+            return null;
         }
-        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
-        query.setParameter(1, today.atStartOfDay());
-        query.setParameter(2, today1.atTime(23, 59, 59));
-        query.setParameter(3, prod.getUid());
-        List<StockAgregate> results = query.getResultList();
-        return results.isEmpty() ? null : results.get(0);
+        return synthesizeStockAggregateFromLots(findLatestLotRowsForProduct(prod.getUid(), today, today1, null), null, null);
     }
 
     public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate otherDay, String region) {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("SELECT uid, SUM(s.initial_quantity) as initial_quantity , SUM(s.entrees) as entrees"
-                + ", SUM(s.sorties) as sorties,SUM(s.final_quantity) as final_quantity, SUM(s.expiree) as expiree, "
-                + "s.cout_achat, s.region, s.context, s.date,  s.mesure_id, s.product_id "
-                + "FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region = ? AND s.product_id = ?");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
-                query.setParameter(1, today.atStartOfDay());
-                query.setParameter(2, otherDay.atTime(23, 59, 59));
-                query.setParameter(3, region);
-                query.setParameter(4, prod.getUid());
-                List<StockAgregate> results = query.getResultList();
-                return results.isEmpty() ? null : results.get(0);
-            });
+        if (prod == null || prod.getUid() == null) {
+            return null;
         }
-        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
-        query.setParameter(1, today.atStartOfDay());
-        query.setParameter(2, otherDay.atTime(23, 59, 59));
-        query.setParameter(3, region);
-        query.setParameter(4, prod.getUid());
-        List<StockAgregate> results = query.getResultList();
-        return results.isEmpty() ? null : results.get(0);
+        return synthesizeStockAggregateFromLots(findLatestLotRowsForProduct(prod.getUid(), today, otherDay, region),
+                region, null);
     }
 
     @Override
@@ -1796,7 +2380,7 @@ public class RecquisitionService implements RecquisitionStorage {
             return null;
         }
         List<PrixDeVente> prices = new ArrayList<>();
-        Recquisition r = getLastEntry(Constants.getStringPref("meth", "fifo"), product, region);// getLastEntry(product);
+        Recquisition r = getLastEntry(product, region);// getLastEntry(product);
         for (Recquisition rx : rs) {
             List<PrixDeVente> pricez = findPricesFor(rx.getUid());
             if (!pricez.isEmpty()) {
@@ -1872,7 +2456,7 @@ public class RecquisitionService implements RecquisitionStorage {
             return null;
         }
         List<PrixDeVente> prices = new ArrayList<>();
-        Recquisition r = getHeaderRecq(Constants.getStringPref("meth", "fifo"), product, region);
+        Recquisition r = getLastEntry(product, region);
         for (Recquisition rx : rs) {
             List<PrixDeVente> pricez = findPricesFor(rx.getUid());
             if (!pricez.isEmpty()) {
@@ -1915,7 +2499,8 @@ public class RecquisitionService implements RecquisitionStorage {
                 Mesure mesure = aggreg.getMesureId();
                 if (mesure != null) {
                     // AND must have a price
-                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    PrixDeVente pvd = getExistingPricefor(r,
+                            MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
                     if (pvd != null) {
                         double qr = aggreg.getFinalQuantity();
                         // AND quantity must be > 0
@@ -1923,7 +2508,7 @@ public class RecquisitionService implements RecquisitionStorage {
                             double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu())
                                     .setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                             List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-                            
+
                             ListViewItem item = new ListViewItem();
                             item.setQuantiteRestant(qw);
                             item.setMesureAchat(mesure);
@@ -1932,13 +2517,13 @@ public class RecquisitionService implements RecquisitionStorage {
                             item.setPeremption(r.getDateExpiry());
                             item.setProduit(product);
                             item.setPurchasePrice(r.getCoutAchat());
-                            
+
                             Mesure detailMesure = pvd.getMesureId() == null
                                     ? findMinMesureForProduit(product.getUid())
                                     : pvd.getMesureId();
                             item.setMesureDetail(detailMesure);
                             item.setDetailPrice(pvd.getPrixUnitaire());
-                            
+
                             if (!gros.isEmpty()) {
                                 PrixDeVente grprix = gros.getLast();
                                 Mesure grosMesure = grprix.getMesureId() == null
@@ -1967,9 +2552,9 @@ public class RecquisitionService implements RecquisitionStorage {
         for (Produit product : produits) {
             // Must have a recent StockAgregate record for the region
             StockAgregate aggreg = findLatestStockAgregate(product.getUid(), region);
-            
+
             // AND must have a recquisition
-            Recquisition r = getLastEntry("lifo", product, region);
+            Recquisition r = getLastEntry(product, region);
             if (r == null) {
                 r = getLastEntry(product.getUid());
             }
@@ -1979,15 +2564,17 @@ public class RecquisitionService implements RecquisitionStorage {
                         : aggreg.getMesureId();
                 if (mesure != null) {
                     // AND must have a price
-                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    PrixDeVente pvd = getExistingPricefor(r,
+                            MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
                     if (pvd != null) {
                         double qr = aggreg.getFinalQuantity();
                         // AND quantity must be > 0
                         if (qr > 0) {
-                            double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu()).setScale(2, RoundingMode.HALF_EVEN)
+                            double qw = BigDecimal.valueOf(qr / mesure.getQuantContenu())
+                                    .setScale(2, RoundingMode.HALF_EVEN)
                                     .doubleValue();
                             List<PrixDeVente> gros = findGrossPrices(r.getUid(), mesure.getUid());
-                            
+
                             ListViewItem item = new ListViewItem();
                             item.setQuantiteRestant(qw);
                             item.setMesureAchat(mesure);
@@ -1996,15 +2583,16 @@ public class RecquisitionService implements RecquisitionStorage {
                             item.setPeremption(r.getDateExpiry());
                             item.setProduit(product);
                             item.setPurchasePrice(r.getCoutAchat());
-                            
+
                             Mesure detailMesure = pvd.getMesureId() == null ? findMinMesureForProduit(product.getUid())
                                     : pvd.getMesureId();
                             item.setMesureDetail(detailMesure);
                             item.setDetailPrice(pvd.getPrixUnitaire());
-                            
+
                             if (!gros.isEmpty()) {
                                 PrixDeVente grprix = gros.getLast();
-                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                Mesure grosMesure = grprix.getMesureId() == null
+                                        ? findMinMesureForProduit(product.getUid())
                                         : grprix.getMesureId();
                                 item.setMesureGros(grosMesure);
                                 item.setSalePrice(grprix.getPrixUnitaire());
@@ -2033,7 +2621,8 @@ public class RecquisitionService implements RecquisitionStorage {
                 Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
                         : aggreg.getMesureId();
                 if (mesure != null) {
-                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    PrixDeVente pvd = getExistingPricefor(r,
+                            MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
                     if (pvd != null) {
                         double qr = aggreg.getFinalQuantity();
                         if (qr > 0) {
@@ -2052,7 +2641,8 @@ public class RecquisitionService implements RecquisitionStorage {
                             item.setDetailPrice(pvd.getPrixUnitaire());
                             if (!gros.isEmpty()) {
                                 PrixDeVente grprix = gros.getLast();
-                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                Mesure grosMesure = grprix.getMesureId() == null
+                                        ? findMinMesureForProduit(product.getUid())
                                         : grprix.getMesureId();
                                 item.setMesureGros(grosMesure);
                                 item.setSalePrice(grprix.getPrixUnitaire());
@@ -2075,13 +2665,14 @@ public class RecquisitionService implements RecquisitionStorage {
         List<Produit> produits = getProduits(category);
         for (Produit product : produits) {
             StockAgregate aggreg = findLatestStockAgregate(product.getUid(), region);
-            Recquisition r = getHeaderRecq(Constants.getStringPref("meth", "fifo"), product, region);
-            
+            Recquisition r = getLastEntry(product, region);
+
             if (aggreg != null && r != null) {
                 Mesure mesure = (aggreg.getMesureId() == null) ? findMinMesureForProduit(product.getUid())
                         : aggreg.getMesureId();
                 if (mesure != null) {
-                    PrixDeVente pvd = getExistingPricefor(r, MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
+                    PrixDeVente pvd = getExistingPricefor(r,
+                            MesureDelegate.findAscSortedByQuantWithProduit(product.getUid()));
                     if (pvd != null) {
                         double qr = aggreg.getFinalQuantity();
                         if (qr > 0) {
@@ -2100,7 +2691,8 @@ public class RecquisitionService implements RecquisitionStorage {
                             item.setDetailPrice(pvd.getPrixUnitaire());
                             if (!gros.isEmpty()) {
                                 PrixDeVente grprix = gros.getLast();
-                                Mesure grosMesure = grprix.getMesureId() == null ? findMinMesureForProduit(product.getUid())
+                                Mesure grosMesure = grprix.getMesureId() == null
+                                        ? findMinMesureForProduit(product.getUid())
                                         : grprix.getMesureId();
                                 item.setMesureGros(grosMesure);
                                 item.setSalePrice(grprix.getPrixUnitaire());
@@ -2550,7 +3142,7 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     @Override
-    public Recquisition getLastEntry(String meth, Produit prod, String region) {
+    public Recquisition getLastEntry(Produit prod, String region) {
         if (region == null) {
             return getLastEntry(prod.getUid());
         }
@@ -2821,65 +3413,42 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     @Override
-    public double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("SELECT SUM(COALESCE(r.quantite,0)*COALESCE(m.quantcontenu,0)) px FROM recquisition r,mesure m "
-                + "WHERE r.product_id = ? AND r.date BETWEEN ? AND ? AND r.region LIKE ? AND "
-                + "r.mesure_id=m.uid");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Double entrees = (Double) (em.createNativeQuery(sb.toString(), Double.class)
-                        .setParameter(1, uid)
-                        .setParameter(2, Timestamp.valueOf(datedebut.atStartOfDay()))
-                        .setParameter(3, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
-                        .setParameter(4, region).getSingleResult());
-                return entrees == null ? 0 : entrees;
-            });
+    public double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        if (uid == null || lot == null || datedebut == null || datefin == null) {
+            return 0;
         }
-        Double entrees = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(),
-                Double.class).setParameter(1, uid)
-                .setParameter(2, datedebut.atStartOfDay())
-                .setParameter(3, datefin.atTime(23, 59, 59))
-                .setParameter(4, region).getSingleResult();
-        return entrees == null ? 0 : entrees;
+        if (region == null || region.isBlank()) {
+            return sumBatchedRecqusitionFrom(uid, lot, datedebut, datefin);
+        }
+        return sumBatchedRecqusitionFrom(uid, lot, datedebut, datefin, region);
     }
 
     @Override
-    public double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("SELECT SUM(COALESCE(s.quantite, 0)*COALESCE(m.quantcontenu, 0)) pieces FROM ligne_vente s, mesure m"
-                + " WHERE s.product_id = :pid AND s.mesure_id=m.uid AND s.reference_uid IN "
-                + "(SELECT v.uid FROM vente v WHERE v.region LIKE :regi "
-                + "AND v.dateVente BETWEEN :date1 AND :date2)");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Double sorties = (Double) em.createNativeQuery(sb.toString(), Double.class)
-                        .setParameter("pid", uid)
-                        .setParameter("date1", datedebut.atStartOfDay())
-                        .setParameter("date2", datefin.atTime(23, 59, 59))
-                        .setParameter("regi", region)
-                        .getSingleResult();
-                return sorties == null ? 0 : sorties;
-            });
+    public double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        if (uid == null || lot == null || datedebut == null || datefin == null) {
+            return 0;
         }
-        Double sorties = (Double) ManagedSessionFactory.getEntityManager()
-                .createNativeQuery(sb.toString(), Double.class)
-                .setParameter("pid", uid)
-                .setParameter("date1", datedebut.atStartOfDay())
-                .setParameter("date2", datefin.atTime(23, 59, 59))
-                .setParameter("regi", region)
-                .getSingleResult();
-        return sorties == null ? 0 : sorties;
+        if (region == null || region.isBlank()) {
+            return sumBatchedLigneventeFrom(uid, lot, datedebut, datefin);
+        }
+        return sumBatchedLigneventeFrom(uid, lot, datedebut, datefin, region);
+    }
+
+    public double stockInitialAlternative(String uid, LocalDate datedebut, String lot, String region) {
+        LocalDate veuille = datedebut.minusDays(1);
+        double entree = sommeEntreeSurPeriode(uid, LocalDate.EPOCH, veuille, lot, region);
+        double sortie = sommeSortieSurPeriode(uid, LocalDate.EPOCH, veuille, lot, region);
+        return Math.max(0, (entree - sortie));
     }
 
     @Override
-    public double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region) {
+    public double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String lot, String region) {
         StringBuilder sbE = new StringBuilder();
         sbE.append("SELECT SUM(COALESCE(r.quantite, 0)*COALESCE(m.quantcontenu, 0)) piece FROM recquisition r,mesure m "
-                + "WHERE r.product_id = :pid AND r.date < :date AND r.region LIKE :regi AND r.mesure_id=m.uid");
+                + "WHERE r.product_id = :pid AND r.date < :date AND r.numlot = :lot AND r.region LIKE :regi AND r.mesure_id=m.uid");
         StringBuilder sbS = new StringBuilder();
         sbS.append("SELECT SUM(COALESCE(s.quantite, 0)*COALESCE(m.quantcontenu, 0)) pieces FROM ligne_vente s, mesure m"
-                + " WHERE s.product_id = :pid AND s.mesure_id=m.uid AND s.reference_uid IN "
+                + " WHERE s.product_id = :pid AND s.numlot = :lot AND s.mesure_id=m.uid AND s.reference_uid IN "
                 + "(SELECT v.uid FROM vente v WHERE v.region LIKE :regi AND v.dateVente < :datefin)");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
@@ -2887,9 +3456,11 @@ public class RecquisitionService implements RecquisitionStorage {
                         Double.class).setParameter("pid", uid)
                         .setParameter("date", Timestamp.valueOf(datedebut.atStartOfDay()))
                         .setParameter("regi", region)
+                        .setParameter("lot", lot)
                         .getSingleResult();
                 Double sorties = (Double) em.createNativeQuery(sbS.toString(), Double.class)
                         .setParameter("pid", uid)
+                        .setParameter("lot", lot)
                         .setParameter("datefin", Timestamp.valueOf(datedebut.atStartOfDay()))
                         .setParameter("regi", region)
                         .getSingleResult();
@@ -2901,11 +3472,13 @@ public class RecquisitionService implements RecquisitionStorage {
                 Double.class).setParameter("pid", uid)
                 .setParameter("date", datedebut.atStartOfDay())
                 .setParameter("regi", region)
+                .setParameter("lot", lot)
                 .getSingleResult();
 
         Double sorties = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sbS.toString(),
                 Double.class).setParameter("pid", uid)
                 .setParameter("datefin", datedebut.atStartOfDay())
+                .setParameter("lot", lot)
                 .setParameter("regi", region)
                 .getSingleResult();
         double stok = (entrees == null ? 0 : entrees) - (sorties == null ? 0 : sorties);
@@ -2913,383 +3486,686 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     @Override
-    public double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-
-        StringBuilder sbE = new StringBuilder();
-        sbE.append("SELECT SUM(COALESCE(r.quantite, 0)*COALESCE(m.quantcontenu, 0)) piece FROM recquisition r,mesure m "
-                + "WHERE r.product_id = ?1 AND r.dateexpiry BETWEEN ?2 AND ?3"
-                + " AND r.region LIKE ?4 AND r.mesure_id=m.uid");
-        StringBuilder sbRq = new StringBuilder();
-        sbRq.append("SELECT * FROM recquisition r "
-                + "WHERE r.product_id = ?1 AND r.dateexpiry BETWEEN ?2 AND ?3 AND r.region LIKE ?4");
-        StringBuilder sbS = new StringBuilder();
-        sbS.append(
-                "SELECT (SUM(COALESCE(s.quantite,0)*COALESCE(m.quantcontenu, 0))) pieces FROM ligne_vente s, mesure m"
-                + " WHERE s.product_id = ?1 AND s.mesure_id=m.uid AND s.numlot = ?4 AND s.reference_uid IN "
-                + "(SELECT v.uid FROM vente v WHERE v.region LIKE ?5 AND v.dateVente BETWEEN ?2 AND ?3)");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                double sorties_exp0 = 0;
-                Double entrees_exp = (Double) em.createNativeQuery(sbE.toString(), Double.class)
-                        .setParameter(1, uid)
-                        .setParameter(3, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
-                        .setParameter(4, region).setParameter(2, Timestamp.valueOf(datedebut.atStartOfDay()))
-                        .getSingleResult();
-                List<Recquisition> experqs = em.createNativeQuery(sbRq.toString(), Recquisition.class)
-                        .setParameter(1, uid).setParameter(2, Timestamp.valueOf(datedebut.atStartOfDay()))
-                        .setParameter(3, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
-                        .setParameter(4, region)
-                        .getResultList();
-                for (Recquisition experq : experqs) {
-                    Double stx = (Double) em.createNativeQuery(sbS.toString(), Double.class)
-                            .setParameter(1, uid).setParameter(2, Timestamp.valueOf(datedebut.atStartOfDay()))
-                            .setParameter(3, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
-                            .setParameter(5, region)
-                            .setParameter(4, experq.getNumlot())
-                            .getSingleResult();
-                    sorties_exp0 += (stx == null ? 0 : stx);
-                }
-                double diff = (entrees_exp == null ? 0 : entrees_exp) - sorties_exp0;
-                return diff <= 0 ? 0 : diff;
-            });
-
+    public double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        if (uid == null || lot == null || lot.isBlank() || datedebut == null || datefin == null || region == null
+                || region.isBlank()) {
+            return 0;
         }
-
-        double sorties_exp = 0;
-        Double entrees_exp = (Double) ManagedSessionFactory.getEntityManager()
-                .createNativeQuery(sbE.toString(), Double.class)
-                .setParameter(1, uid)
-                .setParameter(3, datefin.atTime(23, 59, 59))
-                .setParameter(4, region).setParameter(2, datedebut.atStartOfDay())
-                .getSingleResult();
-        List<Recquisition> experqs = ManagedSessionFactory.getEntityManager()
-                .createNativeQuery(sbRq.toString(), Recquisition.class)
-                .setParameter(1, uid).setParameter(2, datedebut.atStartOfDay())
-                .setParameter(3, datefin.atTime(23, 59, 59))
-                .setParameter(4, region)
-                .getResultList();
-        for (Recquisition experq : experqs) {
-            Double stx = (Double) ManagedSessionFactory.getEntityManager()
-                    .createNativeQuery(sbS.toString(), Double.class)
-                    .setParameter(1, uid).setParameter(2, datedebut.atStartOfDay())
-                    .setParameter(3, datefin.atTime(23, 59, 59))
-                    .setParameter(5, region)
-                    .setParameter(4, experq.getNumlot())
-                    .getSingleResult();
-            sorties_exp += (stx == null ? 0 : stx);
-        }
-        double diff = (entrees_exp == null ? 0 : entrees_exp) - sorties_exp;
-        return diff <= 0 ? 0 : diff;
+        return getStockExpireeByLot(uid, lot, datedebut, datefin, region);
     }
 
     @Override
     public boolean cloturerStocks(String region, LocalDate datedebut, LocalDate datefin, String context) {
-        // Reset all aggregates that are NOT for this context to 0
-        List<StockAgregate> allAggregates = delegates.RepportDelegate.getStorage().findStockAgregate();
-        if (allAggregates != null) {
-            for (StockAgregate ag : allAggregates) {
-                if (ag.getContext() != null && !ag.getContext().equals(context)) {
-                    ag.setFinalQuantity(0d);
-                    ag.setEntrees(0d);
-                    ag.setSorties(0d);
-                    delegates.RepportDelegate.updateStockAgregate(ag);
-                }
-            }
-        }
+        // Cloture journaliere: produit + lot + region.
+        Executors.newSingleThreadExecutor()
+                .submit(() -> {
 
-        List<Produit> produits = getProduits();
-        for (Produit produit : produits) {
-            Recquisition rn = clotureStockProduit(produit, region, datedebut, datefin, context);
-            if (rn == null) {
-                cloturons(produit, region, datedebut, datedebut, context);
-            }
-        }
+                    LocalDate targetDay = datefin == null ? LocalDate.now() : datefin;
+                    LocalDate dEffDeb = datedebut == null ? targetDay : datedebut;
+                    LocalDate dEffFin = datefin == null ? targetDay : datefin;
+                    String targetContext = (context == null || context.isBlank())
+                            ? "Journalier du " + targetDay
+                            : context;
+                    List<Produit> produits = getProduits();
+                    for (Produit produit : produits) {
+                        Map<String, Recquisition> seeds = findLatestSeedsPerRegion(produit, region);
+                        if (seeds.isEmpty()) {
+                            continue;
+                        }
+                        int index = produits.indexOf(produit);
+                        for (Recquisition seed : seeds.values()) {
+                            if (seed != null) {
+                                saveStockFromRecquisition(seed, dEffDeb, dEffFin, targetContext);
+                            }
+                        }
+                        notifyCallback(index, produits.size(), produit);
+                    }
+                    notifyClotureFinish(produits.size());
+                });
         return true;
     }
 
-    public double findOnlyStockUnits(Produit produit, String region, LocalDate datedebut, LocalDate datefin) {
-        double E = sommeEntreeSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double SV = sommeSortieSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double stockInit = calculerStockInitialEnUnite(produit.getUid(), datedebut, region);
-        double expiree = getStockExpiree(produit.getUid(), datedebut, datefin, region);
-        double stockFinal = stockInit + E - SV;
-        double stockFinalValid = stockFinal - expiree;
-        return stockFinalValid;
-    }
-
-    public void cloturons(Produit produit, String region, LocalDate datedebut, LocalDate datefin,
-            String cloture_context) {
-        double E = sommeEntreeSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double SV = sommeSortieSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double stockInit = calculerStockInitialEnUnite(produit.getUid(), datedebut, region);
-        double expiree = getStockExpiree(produit.getUid(), datedebut, datefin, region);
-        double stockFinal = stockInit + E - SV;
-        double stockFinalValid = stockFinal - expiree;
-        Recquisition get = findDescSortedByDateForProduit(produit.getUid()).get(0);
-        System.out.println("Dernier rq " + get + " En " + E);
-        Mesure unite = MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
-        StockAgregate stock = findClosedStock(datedebut, datefin, produit.getUid(), region, cloture_context);
-        Double qdR = get.getMesureId().getQuantContenu();
-        double coutAch = get.getCoutAchat() / qdR;
-        if (stock == null) {
-            stock = new StockAgregate(DataId.generate());
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 58);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setFinalQuantity(stockFinalValid < 0 ? 0 : stockFinalValid);
-            stock.setContext(cloture_context);
-            stock.setMesureId(unite);
-            stock.setProductId(produit);
-            stock.setRegion(region);
-            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().persist(stock);
-            tx.commit();
-            System.out.println("Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
-        } else {
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 59);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setContext(cloture_context);
-            stock.setFinalQuantity(stockFinalValid);
-            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().merge(stock);
-            tx.commit();
-            System.out.println("Update Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
+    public double findOnlyStockUnits(Produit produit, String lot, String region, LocalDate datedebut, LocalDate datefin) {
+        if (produit == null || produit.getUid() == null) {
+            return 0;
         }
-
+        return computeLotPeriodPieces(produit.getUid(), lot, region, datedebut, datefin).finalValid();
     }
 
-    StockAgregate stock;
-
-    public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, double coutAch) {
+    /**
+     * Met à jour uniquement les lignes par lot avec la même agrégation que
+     * {@link #saveStockFromRecquisition} avec région.
+     */
+    public void cloturons(Produit produit, String lot, String region, LocalDate datedebut, LocalDate datefin,
+            String cloture_context) {
+        if (produit == null || produit.getUid() == null || region == null || region.isBlank() || datedebut == null
+                || datefin == null) {
+            return;
+        }
         Mesure unite = MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
-        stock = findClosedStock(datedebut, datefin, produit.getUid(), region, "Journalier du " + LocalDate.now());
-        double E = sommeEntreeSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double SV = sommeSortieSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double stockInit = calculerStockInitialEnUnite(produit.getUid(), datedebut, region);
-        double expiree = getStockExpiree(produit.getUid(), datedebut, datefin, region);
-        double stockFinal = stockInit + E - SV;
-        double stockFinalValid = stockFinal - expiree;
-        System.out.println("Stock final " + produit.getNomProduit() + " = " + stockFinalValid);
-        if (stock == null) {
-            stock = new StockAgregate(DataId.generate());
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 59);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setFinalQuantity(stockFinalValid < 0 ? 0 : stockFinalValid);
-            stock.setMesureId(unite);
-            stock.setProductId(produit);
-            stock.setContext("Journalier du " + LocalDate.now());
-            stock.setRegion(region);
+        LotClosureTotals totals = upsertLotStockAggregates(produit, region, datedebut, datefin, cloture_context, unite);
+
+        List<Recquisition> desc = findDescSortedByDateForProduit(produit.getUid());
+        if (desc == null || desc.isEmpty()) {
+            return;
+        }
+        Recquisition get = desc.get(0);
+        System.out.println("Dernier ---- rq " + get + " lot_param=" + lot + " synthese pieces finales=" + totals.finalQty);
+        System.out.println("Cloture lot-agregate " + produit.getNomProduit() + " " + totals.finalQty
+                + " sans synthese globale persistante");
+        System.out.println("Stock agreagator " + produit.getNomProduit() + " synthese=" + totals.finalQty);
+    }
+
+    /**
+     * Reconstruit les agrégats de stock où le numéro de lot est null, en
+     * utilisant la même logique de remplissage des quantités en unité.
+     */
+    public void backfillNullLotAggregates() {
+        System.out.println("Lancement du backfilling avec cloture a la veille...");
+        try {
+            List<StockAgregate> nullLots;
+            String jpql = "SELECT s FROM StockAgregate s WHERE s.numlot IS NULL";
             if (ManagedSessionFactory.isEmbedded()) {
-                ManagedSessionFactory.submitWrite(em -> {
-                    em.persist(stock);
-                    return stock;
-                }).thenAccept(e -> {
-                    System.out.println("Stock de " + e.getProductId().getNomProduit() + " enregistree");
-                });
+                nullLots = ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, StockAgregate.class).getResultList());
             } else {
-                EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!tx.isActive()) {
-                    tx.begin();
-                }
-                ManagedSessionFactory.getEntityManager().persist(stock);
-                tx.commit();
-                System.out.println("Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
+                nullLots = ManagedSessionFactory.getEntityManager().createQuery(jpql, StockAgregate.class).getResultList();
             }
-        } else {
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 58);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setContext("Journalier du " + LocalDate.now());
-            stock.setFinalQuantity(stockFinalValid < 0 ? 0 : stockFinalValid);
-            if (ManagedSessionFactory.isEmbedded()) {
-                ManagedSessionFactory.submitWrite(em -> {
-                    em.merge(stock);
-                    return stock;
-                }).thenAccept(e -> {
-                    System.out.println("Stock de " + e.getProductId().getNomProduit() + " modifiee");
+
+            if (nullLots == null || nullLots.isEmpty()) {
+                System.out.println("Aucun agrégat avec numlot null trouvé.");
+                return;
+            }
+            LocalDate ledger = LocalDate.of(1970, 1, 1);
+            int count = 0;
+
+            for (StockAgregate oldAgg : nullLots) {
+                Produit produit = oldAgg.getProductId();
+                String region = oldAgg.getRegion();
+                LocalDate aggDate = oldAgg.getDate();
+                if (produit == null || aggDate == null) {
+                    continue;
+                }
+
+                LocalDate veille = aggDate.minusDays(1);
+
+                // 1. Trouver le lot en question
+                String lotQ = "SELECT * FROM Recquisition r WHERE r.product_id = :pid AND r.date <= :dt ORDER BY r.date DESC LIMIT 1";
+                List<data.Recquisition> recqs = ManagedSessionFactory.executeRead(em
+                        -> em.createNativeQuery(lotQ, data.Recquisition.class)
+                                .setParameter("pid", produit.getUid())
+                                .setParameter("dt", aggDate.atStartOfDay())
+                                .getResultList()
+                );
+
+                if (recqs.isEmpty()) {
+                    continue;
+                }
+                data.Recquisition recq = recqs.get(0);
+                String lot = recq.getNumlot();
+                if (lot == null || lot.trim().isEmpty()) {
+                    continue;
+                }
+
+                // 2. Compute date of expiration
+                LocalDate exp = recq.getDateExpiry();
+                if (exp == null) {
+                    String prevQ = "SELECT * FROM Recquisition r WHERE r.product_id = :pid AND r.dateExpiry IS NOT NULL AND r.date < :dt ORDER BY r.date DESC LIMIT 1";
+                    List<data.Recquisition> prevs = ManagedSessionFactory.executeRead(em
+                            -> em.createNativeQuery(prevQ, data.Recquisition.class)
+                                    .setParameter("pid", produit.getUid())
+                                    .setParameter("dt", recq.getDate())
+                                    .getResultList()
+                    );
+                    if (!prevs.isEmpty()) {
+                        LocalDate prevExp = prevs.get(0).getDateExpiry();
+                        if (prevExp != null) {
+                            exp = prevExp.plusYears(5);
+                        }
+                    }
+                }
+
+                // 3. Date de derniere sortie ou derniere entree (jusqu'a la veille)
+                String sortieQ = "SELECT MAX(l.reference.dateVente) FROM LigneVente l WHERE l.productId.uid = :pid AND l.numlot = :lot AND l.reference.dateVente <= :dt";
+                LocalDateTime lastSortie = ManagedSessionFactory.executeRead(em -> {
+                    try {
+                        java.sql.Timestamp t = em.createQuery(sortieQ, java.sql.Timestamp.class)
+                                .setParameter("pid", produit.getUid())
+                                .setParameter("lot", lot)
+                                .setParameter("dt", new java.sql.Timestamp(veille.atTime(23, 59, 59).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()).toLocalDateTime())
+                                .getSingleResult();
+                        return t != null ? t.toLocalDateTime() : null;
+                    } catch (Exception e) {
+                        return null;
+                    }
                 });
-            } else {
-                EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!tx.isActive()) {
-                    tx.begin();
+
+                LocalDate newDate = null;
+                if (lastSortie != null) {
+                    newDate = lastSortie.toLocalDate();
                 }
-                ManagedSessionFactory.getEntityManager().merge(stock);
-                tx.commit();
-                System.out.println("Update Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
+                if (newDate == null) {
+                    String entreeQ = "SELECT MAX(r.date) FROM Recquisition r WHERE r.productId.uid = :pid AND r.numlot = :lot AND r.date <= :dt";
+                    LocalDateTime lastEntree = ManagedSessionFactory.executeRead(em -> {
+                        try {
+                            java.sql.Timestamp t = em.createQuery(entreeQ, java.sql.Timestamp.class)
+                                    .setParameter("pid", produit.getUid())
+                                    .setParameter("lot", lot)
+                                    .setParameter("dt", new java.sql.Timestamp(veille.atTime(23, 59, 59).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()).toLocalDateTime())
+                                    .getSingleResult();
+                            return t != null ? t.toLocalDateTime() : null;
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    });
+                    if (lastEntree != null) {
+                        newDate = lastEntree.toLocalDate();
+                    }
+                }
+
+                // 4. Cloturer à la veille (LEDGER à la veille)
+                LotPeriodPieces pieces = computeLotPeriodPieces(produit.getUid(), lot, region, ledger, veille);
+
+                oldAgg.setNumlot(lot);
+                oldAgg.setDateExpiration(exp);
+                if (newDate != null) {
+                    oldAgg.setDate(newDate);
+                }
+
+                oldAgg.setInitialQuantity(0d);
+                oldAgg.setEntrees(pieces.entrees());
+                oldAgg.setSorties(pieces.sorties());
+                oldAgg.setExpiree(pieces.expiree());
+                oldAgg.setFinalQuantity(pieces.finalValid());
+
+                if (ManagedSessionFactory.isEmbedded()) {
+                    final StockAgregate mergeAgg = oldAgg;
+                    ManagedSessionFactory.submitWrite(em -> {
+                        em.merge(mergeAgg);
+                        return null;
+                    }).join();
+                } else {
+                    EntityManager em = ManagedSessionFactory.getEntityManager();
+                    EntityTransaction tx = em.getTransaction();
+                    tx.begin();
+                    em.merge(oldAgg);
+                    tx.commit();
+                }
+                count++;
+                if (count % 5 == 0) {
+                    System.out.println(count + " agrégats backfillés à la veille...");
+                }
             }
+            System.out.println("Backfilling terminé avec succès. " + count + " agrégats remplacés.");
+        } catch (Exception ex) {
+            Logger.getLogger(RecquisitionService.class.getName()).log(Level.SEVERE, "Erreur lors du backfilling", ex);
         }
     }
 
     @Override
-    public Recquisition clotureStockProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin,
-            String cloture_context) {
-        Recquisition dernierR = getLastEntry("lifo", produit, region);
-        if (dernierR == null) {
-            return null;
+    public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region,
+            double coutAch, String numlot) {
+        rectifyStockInternal(produit, datedebut, datefin, region, coutAch, numlot);
+    }
+
+    /**
+     * Implémentation centrale de la rectification du stock agrégé.
+     * <p>
+     * Quatre cas selon la présence de {@code region} et de {@code numlot} :
+     * <ol>
+     * <li><b>région + lot</b> – upsert du seul lot dans cette région via
+     * {@link #upsertSingleLotStockAggregate}.</li>
+     * <li><b>région sans lot</b> – tous les lots de la région via
+     * {@link #upsertLotStockAggregates}.</li>
+     * <li><b>pas de région + lot</b> – upsert global du seul lot via
+     * {@link #upsertSingleLotStockAggregateNoRegion}.</li>
+     * <li><b>pas de région, pas de lot</b> – comportement original :
+     * {@link #saveStockFromRecquisition} sur la dernière réquisition (tous
+     * lots).</li>
+     * </ol>
+     */
+    private void rectifyStockInternal(Produit produit, LocalDate datedebut, LocalDate datefin,
+            String region, double coutAch, String numlot) {
+        if (produit == null || produit.getUid() == null) {
+            return;
         }
-        double E = sommeEntreeSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double SV = sommeSortieSurPeriode(produit.getUid(), datedebut, datefin, region);
-        double stockInit = calculerStockInitialEnUnite(produit.getUid(), datedebut, region);
-        double expiree = getStockExpiree(produit.getUid(), datedebut, datefin, region);
-        double stockFinal = stockInit + E - SV;
-        double stockFinalValid = stockFinal - expiree;
+        LocalDate targetDay = datefin == null ? LocalDate.now() : datefin;
+        LocalDate dDeb = datedebut == null ? targetDay : datedebut;
+        LocalDate dFin = datefin == null ? targetDay : datefin;
+        String targetContext = "Journalier du " + targetDay;
         Mesure unite = MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
-        stock = findClosedStock(datedebut, datefin, produit.getUid(), region, cloture_context);
-        Double qdR = dernierR.getMesureId().getQuantContenu();
-        double coutAch = dernierR.getCoutAchat() / qdR;
-        if (stock == null) {
-            stock = new StockAgregate(DataId.generate());
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 59);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setFinalQuantity(stockFinalValid < 0 ? 0 : stockFinalValid);
-            stock.setMesureId(unite);
-            stock.setProductId(produit);
-            stock.setContext(cloture_context);
-            stock.setRegion(region);
-            if (ManagedSessionFactory.isEmbedded()) {
-                ManagedSessionFactory.submitWrite(em -> {
-                    em.persist(stock);
-                    return stock;
-                }).thenAccept(e -> {
-                    System.out.println("Stock de " + e.getProductId().getNomProduit() + " enregistree");
-                });
+
+        if (region != null && !region.isBlank()) {
+            if (numlot != null && !numlot.isBlank()) {
+                // Cas 1 : lot précis + région
+                upsertSingleLotStockAggregate(
+                        produit, region, dDeb, dFin, targetContext, unite, numlot.trim(), coutAch);
             } else {
-                EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!tx.isActive()) {
-                    tx.begin();
-                }
-                ManagedSessionFactory.getEntityManager().persist(stock);
-                tx.commit();
-                System.out.println("Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
+                // Cas 2 : tous les lots pour la région
+                upsertLotStockAggregates(produit, region, dDeb, dFin, targetContext, unite, coutAch);
             }
-        } else {
-            stock.setCoutAchat(coutAch);
-            LocalDateTime dte = datefin.equals(LocalDate.now()) ? LocalDateTime.now() : datefin.atTime(23, 59, 58);
-            stock.setDate(dte);
-            stock.setEntrees(E);
-            stock.setSorties(SV);
-            stock.setInitialQuantity(stockInit);
-            stock.setExpiree(expiree);
-            stock.setContext(cloture_context);
-            stock.setFinalQuantity(stockFinalValid);
-            if (ManagedSessionFactory.isEmbedded()) {
+            return;
+        }
+
+        if (numlot != null && !numlot.isBlank()) {
+            // Cas 3 : lot précis sans région (grand livre global)
+            upsertSingleLotStockAggregateNoRegion(
+                    produit, dDeb, dFin, targetContext, unite, numlot.trim(), coutAch);
+            return;
+        }
+
+        // Cas 4 : tous lots, sans région – comportement original
+        Recquisition seed = getLastEntry(produit, null);
+        if (seed == null) {
+            seed = getLastEntry(produit.getUid());
+        }
+        if (seed == null) {
+            return;
+        }
+        if (resolveUnitCost(seed) <= 0 && coutAch > 0) {
+            Mesure seedMesure = seed.getMesureId();
+            double quantContenu = seedMesure == null || seedMesure.getQuantContenu() == null
+                    || seedMesure.getQuantContenu() <= 0 ? 1d : seedMesure.getQuantContenu();
+            seed.setCoutAchat(coutAch * quantContenu);
+        }
+        saveStockFromRecquisition(seed, dDeb, dFin, targetContext);
+    }
+
+    /**
+     * Upsert d'un seul lot dans {@code stock_agregate} pour une région et une
+     * période données. Suit exactement la même formule que
+     * {@link #upsertLotStockAggregates} mais se limite au lot {@code lotNorm} :
+     * calcul via {@link #computeLotPeriodPieces} (stock initial, entrées,
+     * sorties, périmés, final), puis {@code persist} si la ligne est nouvelle
+     * ou {@code merge} sinon.
+     */
+    private void upsertSingleLotStockAggregate(Produit produit, String region, LocalDate datedebut,
+            LocalDate datefin, String clotureContext, Mesure unite, String lotNorm, double fallbackUnitCost) {
+        LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, datedebut, datefin);
+
+        // Réquisition représentative (la plus récente) pour récupérer coût et date de péremption
+        List<Recquisition> lotRecqs = findRecquisitionByProduit(produit.getUid(), lotNorm, region);
+        double coutAch = 0d;
+        LocalDate dateExp = null;
+        if (lotRecqs != null && !lotRecqs.isEmpty()) {
+            Recquisition rep = lotRecqs.stream()
+                    .filter(r -> r.getDate() != null)
+                    .max((a, b) -> a.getDate().compareTo(b.getDate()))
+                    .orElse(lotRecqs.get(0));
+            coutAch = resolveUnitCost(rep);
+            dateExp = rep.getDateExpiry();
+        }
+        if (coutAch <= 0 && fallbackUnitCost > 0) {
+            coutAch = fallbackUnitCost;
+        }
+
+        LocalDate dte = datefin.equals(LocalDate.now()) ? LocalDate.now() : datefin;
+        StockAgregate lotStock = findClosedStockByLot(
+                datedebut, datefin, produit.getUid(), region, lotNorm, clotureContext);
+        boolean isNew = lotStock == null;
+        if (isNew) {
+            lotStock = new StockAgregate(DataId.generate());
+        }
+        lotStock = applyStockAggregateValues(lotStock, produit, unite, region, clotureContext, lotNorm,
+                resolveLotDateExpirationForStockAgregate(produit.getUid(), lotNorm, region, dateExp),
+                dte, coutAch, m.stockInitial(), m.entrees(), m.sorties(), m.expiree(), m.finalValid());
+        persistOrMergeStockAgregate(lotStock, isNew);
+        System.out.println("rectifyStock lot-upsert (region=" + region + "): produit="
+                + produit.getNomProduit() + ", lot=" + lotNorm + ", final=" + m.finalValid());
+    }
+
+    /**
+     * Upsert d'un seul lot dans {@code stock_agregate} sans filtre de région
+     * (grand livre global). Applique {@link #computeLotPeriodPiecesNoRegion}
+     * puis purge la ligne existante avant d'insérer la nouvelle valeur
+     * calculée.
+     */
+    private void upsertSingleLotStockAggregateNoRegion(Produit produit, LocalDate datedebut,
+            LocalDate datefin, String clotureContext, Mesure unite, String lotNorm, double fallbackUnitCost) {
+        LotPeriodPieces m = computeLotPeriodPiecesNoRegion(produit.getUid(), lotNorm, datedebut, datefin);
+
+        List<Recquisition> lotRecqs = findRecquisitionByProduit(produit.getUid(), lotNorm);
+        double coutAch = 0d;
+        LocalDate dateExp = null;
+        if (lotRecqs != null && !lotRecqs.isEmpty()) {
+            Recquisition rep = lotRecqs.stream()
+                    .filter(r -> r.getDate() != null)
+                    .max((a, b) -> a.getDate().compareTo(b.getDate()))
+                    .orElse(lotRecqs.get(0));
+            coutAch = resolveUnitCost(rep);
+            dateExp = rep.getDateExpiry();
+        }
+        if (coutAch <= 0 && fallbackUnitCost > 0) {
+            coutAch = fallbackUnitCost;
+        }
+
+        LocalDate dte = datefin.equals(LocalDate.now()) ? LocalDate.now() : datefin;
+        // Purge la ligne existante pour ce lot (sans filtre région) avant de réinsérer
+        purgeSingleLotAggregate(produit.getUid(), null, datedebut, datefin, clotureContext, lotNorm);
+        StockAgregate lotAggregate = applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                produit, unite, null, clotureContext, lotNorm,
+                resolveLotDateExpirationForStockAgregate(produit.getUid(), lotNorm, null, dateExp),
+                dte, coutAch, m.stockInitial(), m.entrees(), m.sorties(), m.expiree(), m.finalValid());
+        persistLotAggregates(List.of(lotAggregate));
+        System.out.println("rectifyStock lot-upsert (no-region): produit="
+                + produit.getNomProduit() + ", lot=" + lotNorm + ", final=" + m.finalValid());
+    }
+
+    /**
+     * Supprime la ligne {@code stock_agregate} correspondant exactement au
+     * triplet produit / lot / période pour le contexte de clôture donné. Si
+     * {@code region} est null ou vide, aucun filtre région n'est appliqué
+     * (suppression globale pour ce lot).
+     */
+    private void purgeSingleLotAggregate(String productId, String region, LocalDate dayDebut,
+            LocalDate dayFin, String context, String numlot) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("DELETE FROM stock_agregate WHERE product_id = ? ");
+        sb.append("AND date BETWEEN ? AND ? AND context = ? AND num_lot = ? ");
+        if (region != null && !region.isBlank()) {
+            sb.append("AND region = ? ");
+        }
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                Query q = em.createNativeQuery(sb.toString());
+                q.setParameter(1, productId);
+                q.setParameter(2, dayDebut);
+                q.setParameter(3, dayFin.plusDays(1));
+                q.setParameter(4, context);
+                q.setParameter(5, numlot);
+                if (region != null && !region.isBlank()) {
+                    q.setParameter(6, region);
+                }
+                q.executeUpdate();
+                return true;
+            }).join();
+            return;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+        if (!tx.isActive()) {
+            tx.begin();
+        }
+        Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        q.setParameter(1, productId);
+        q.setParameter(2, dayDebut);
+        q.setParameter(3, dayFin.plusDays(1));
+        q.setParameter(4, context);
+        q.setParameter(5, numlot);
+        if (region != null && !region.isBlank()) {
+            q.setParameter(6, region);
+        }
+        q.executeUpdate();
+        tx.commit();
+    }
+
+    /**
+     * Factorise la persistance ou la fusion d'un {@link StockAgregate}
+     * unitaire, en respectant le mode embarqué ou non.
+     */
+    private void persistOrMergeStockAgregate(StockAgregate lotStock, boolean isNew) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            StockAgregate finalRef = lotStock;
+            if (isNew) {
                 ManagedSessionFactory.submitWrite(em -> {
-                    em.merge(stock);
-                    return stock;
-                }).thenAccept(e -> {
-                    System.out.println("Stock de " + e.getProductId().getNomProduit() + " modifiee");
-                });
+                    em.persist(finalRef);
+                    return finalRef;
+                }).join();
+            } else {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.merge(finalRef);
+                    return finalRef;
+                }).join();
+            }
+            return;
+        }
+        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+        if (!tx.isActive()) {
+            tx.begin();
+        }
+        if (isNew) {
+            ManagedSessionFactory.getEntityManager().persist(lotStock);
+        } else {
+            ManagedSessionFactory.getEntityManager().merge(lotStock);
+        }
+        tx.commit();
+    }
+
+    @Override
+    public void clotureStockProduit(Produit produit, String lot, String region, LocalDate datedebut, LocalDate datefin,
+            String cloture_context) {
+        if (produit == null || produit.getUid() == null || region == null || region.isBlank()) {
+            System.out.println("produit/region est null pro " + produit + " region = " + region);
+            return;
+        }
+        Recquisition seed = findRecquisitionByProduit(produit.getUid(), lot, region)
+                .getFirst();
+        if (seed == null) {
+            System.out.println("Recquis seed est null " + seed);
+            return;
+        }
+        saveStockFromRecquisition(seed, datedebut, datefin, cloture_context);
+    }
+
+    /**
+     * Une ligne {@link StockAgregate} par combinaison (produit, numéro de lot,
+     * région, contexte de clôture, fenêtre de dates) : les quantités agrégées
+     * (initial, entrées, sorties, périmé, final) correspondent à ce lot sur la
+     * période.
+     */
+    private LotClosureTotals upsertLotStockAggregates(Produit produit, String region, LocalDate datedebut,
+            LocalDate datefin, String clotureContext, Mesure unite) {
+        return upsertLotStockAggregates(produit, region, datedebut, datefin, clotureContext, unite, 0d);
+    }
+
+    private LotClosureTotals upsertLotStockAggregates(Produit produit, String region, LocalDate datedebut,
+            LocalDate datefin, String clotureContext, Mesure unite, double fallbackUnitCost) {
+        LotClosureTotals totals = new LotClosureTotals();
+        if (produit == null || region == null || datedebut == null || datefin == null) {
+            return totals;
+        }
+        List<Recquisition> distinctLots = findDistinctLotsForProduitRegion(produit.getUid(), region);
+        if (distinctLots.isEmpty()) {
+            return totals;
+        }
+        LocalDate dte = datefin.equals(LocalDate.now()) ? LocalDate.now() : datefin;
+        for (Recquisition lotRecq : distinctLots) {
+            String lot = lotRecq.getNumlot();
+            if (lot == null || lot.isBlank()) {
+                continue;
+            }
+            String lotNorm = lot.trim();
+            LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, datedebut, datefin);
+            totals.add(m.entrees(), m.sorties(), m.stockInitial(), m.expiree(), m.finalValid());
+            double stockFinalValid = m.finalValid();
+            double coutAch = resolveUnitCost(lotRecq);
+            if (coutAch <= 0 && fallbackUnitCost > 0) {
+                coutAch = fallbackUnitCost;
+            }
+            StockAgregate lotStock = findClosedStockByLot(datedebut, datefin, produit.getUid(), region, lotNorm,
+                    clotureContext);
+            boolean exists = (lotStock != null);
+            if (!exists) {
+                lotStock = new StockAgregate(DataId.generate());
+            }
+            lotStock = applyStockAggregateValues(lotStock,
+                    produit,
+                    unite,
+                    region,
+                    clotureContext,
+                    lotNorm,
+                    resolveLotDateExpirationForStockAgregate(produit.getUid(), lotNorm, region, lotRecq.getDateExpiry()),
+                    dte,
+                    coutAch,
+                    m.stockInitial(),
+                    m.entrees(),
+                    m.sorties(),
+                    m.expiree(),
+                    stockFinalValid);
+            if (ManagedSessionFactory.isEmbedded()) {
+                StockAgregate finalLotStock = lotStock;
+                if (!exists) {
+                    ManagedSessionFactory.submitWrite(em -> {
+                        em.persist(finalLotStock);
+                        return finalLotStock;
+                    }).join();
+                } else {
+                    ManagedSessionFactory.submitWrite(em -> {
+                        em.merge(finalLotStock);
+                        return finalLotStock;
+                    }).join();
+                }
             } else {
                 EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
                 if (!tx.isActive()) {
                     tx.begin();
                 }
-                ManagedSessionFactory.getEntityManager().merge(stock);
+                if (!exists) {
+                    // System.out.println("Persisting stock...");
+                    ManagedSessionFactory.getEntityManager().persist(lotStock);
+                } else {
+                    // System.out.println("Merging stock....");
+                    ManagedSessionFactory.getEntityManager().merge(lotStock);
+                }
                 tx.commit();
-                System.out.println("Update Stock agreagator..." + produit.getNomProduit() + " " + stockFinalValid);
             }
         }
-        return dernierR;
+        return totals;
+    }
+
+    public List<Recquisition> findDistinctLotsForProduitRegion(String productId, String region) {
+        List<Recquisition> recquisitions = getSortedAccordingToInventoryMethodAt(productId, region);
+        if (recquisitions == null || recquisitions.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Recquisition> lotMap = new HashMap<>();
+        for (Recquisition recq : recquisitions) {
+            if (recq == null || recq.getNumlot() == null || recq.getNumlot().isBlank()) {
+                continue;
+            }
+            Recquisition existing = lotMap.get(recq.getNumlot());
+            if (existing == null || (recq.getDate() != null
+                    && (existing.getDate() == null || recq.getDate().isAfter(existing.getDate())))) {
+                lotMap.put(recq.getNumlot(), recq);
+            }
+        }
+        return new ArrayList<>(lotMap.values());
+    }
+
+    private double calculerStockInitialEnUniteByLot(String uid, String numlot, LocalDate datedebut, String region) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND "
+                    + "s.region LIKE ? AND s.num_lot = ? AND s.date < ? ORDER BY s.date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> rows = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, uid)
+                            .setParameter(2, region)
+                            .setParameter(3, numlot)
+                            .setParameter(4, datedebut.atStartOfDay())
+                            .setMaxResults(1)
+                            .getResultList();
+                    if (!rows.isEmpty()) {
+                        Double q = rows.get(0).getFinalQuantity();
+                        return q == null ? 0 : Math.max(0, q);
+                    }
+                    return 0d;
+                });
+            }
+            List<StockAgregate> rows = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, uid)
+                    .setParameter(2, region)
+                    .setParameter(3, numlot)
+                    .setParameter(4, datedebut.atStartOfDay())
+                    .setMaxResults(1)
+                    .getResultList();
+            if (!rows.isEmpty()) {
+                Double q = rows.get(0).getFinalQuantity();
+                return q == null ? 0 : Math.max(0, q);
+            }
+        } catch (Exception e) {
+        }
+        return 0;
+    }
+
+    private double getStockExpireeByLot(String uid, String numlot, LocalDate datedebut, LocalDate datefin,
+            String region) {
+        try {
+            StringBuilder sbE = new StringBuilder();
+            sbE.append(
+                    "SELECT SUM(COALESCE(r.quantite, 0)*COALESCE(m.quantcontenu, 0)) piece FROM recquisition r,mesure m "
+                    + "WHERE r.product_id = ?1 AND r.numlot = ?2 AND r.dateexpiry BETWEEN ?3 AND ?4 "
+                    + "AND r.region LIKE ?5 AND r.mesure_id=m.uid");
+            StringBuilder sbS = new StringBuilder();
+            sbS.append(
+                    "SELECT SUM(COALESCE(s.quantite,0)*COALESCE(m.quantcontenu, 0)) pieces FROM ligne_vente s, mesure m "
+                    + "WHERE s.product_id = ?1 AND s.numlot = ?2 AND s.mesure_id=m.uid AND s.reference_uid IN "
+                    + "(SELECT v.uid FROM vente v WHERE v.region LIKE ?5 AND v.dateVente BETWEEN ?3 AND ?4)");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Double entreesExp = (Double) em.createNativeQuery(sbE.toString(), Double.class)
+                            .setParameter(1, uid)
+                            .setParameter(2, numlot)
+                            .setParameter(3, Timestamp.valueOf(datedebut.atStartOfDay()))
+                            .setParameter(4, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
+                            .setParameter(5, region)
+                            .getSingleResult();
+                    Double sortiesExp = (Double) em.createNativeQuery(sbS.toString(), Double.class)
+                            .setParameter(1, uid)
+                            .setParameter(2, numlot)
+                            .setParameter(3, Timestamp.valueOf(datedebut.atStartOfDay()))
+                            .setParameter(4, Timestamp.valueOf(datefin.atTime(23, 59, 59)))
+                            .setParameter(5, region)
+                            .getSingleResult();
+                    double diff = (entreesExp == null ? 0 : entreesExp) - (sortiesExp == null ? 0 : sortiesExp);
+                    return diff <= 0 ? 0 : diff;
+                });
+            }
+            Double entreesExp = (Double) ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sbE.toString(), Double.class)
+                    .setParameter(1, uid)
+                    .setParameter(2, numlot)
+                    .setParameter(3, datedebut.atStartOfDay())
+                    .setParameter(4, datefin.atTime(23, 59, 59))
+                    .setParameter(5, region)
+                    .getSingleResult();
+            Double sortiesExp = (Double) ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sbS.toString(), Double.class)
+                    .setParameter(1, uid)
+                    .setParameter(2, numlot)
+                    .setParameter(3, datedebut.atStartOfDay())
+                    .setParameter(4, datefin.atTime(23, 59, 59))
+                    .setParameter(5, region)
+                    .getSingleResult();
+            double diff = (entreesExp == null ? 0 : entreesExp) - (sortiesExp == null ? 0 : sortiesExp);
+            return diff <= 0 ? 0 : diff;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     //
-    private StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid, String region,
-            String cloture_type) {
-        StringBuilder sb = new StringBuilder();
-        Query query;
-        sb.append(
-                "SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.product_id = ?");
-        if (ManagedSessionFactory.isEmbedded()) {
-            try {
-                return ManagedSessionFactory
-                        .executeRead(em -> {
-                            List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
-                                .setParameter(1, today.atStartOfDay())
-                                .setParameter(2, today1.atTime(23, 59, 59))
-                                .setParameter(3, region)
-                                .setParameter(4, uid)
-                                .getResultList();
-                            return results.isEmpty() ? null : results.get(0);
-                        });
-            } catch (Exception e) {
-                return null;
-            }
-        }
-        query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
-        query.setParameter(1, today.atStartOfDay());
-        query.setParameter(2, today1.atTime(23, 59, 59));
-        query.setParameter(3, region);
-        query.setParameter(4, uid);
-        List<StockAgregate> results = query.getResultList();
-        return results.isEmpty() ? null : results.get(0);
-    }
-
+    /**
+     * Ligne d’agrégat lot pour la même clôture que l’écriture : produit, lot,
+     * région, période (borne {@code date}), et {@code context} (ex. «
+     * Journalier du … »).
+     */
     @Override
-    public StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid) {
+    public StockAgregate findClosedStockByLot(LocalDate today, LocalDate today1, String uid, String region,
+            String numlot, String context) {
         try {
             StringBuilder sb = new StringBuilder();
-            Query query;
-            sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.product_id = ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                try {
-                    return ManagedSessionFactory
-                            .executeRead(em -> (StockAgregate) em.createNativeQuery(sb.toString(), StockAgregate.class)
-                            .setParameter(1, today.atStartOfDay())
-                            .setParameter(2, today1.atTime(23, 59, 59))
-                            .setParameter(3, uid)
-                            .setMaxResults(1).getSingleResult());
-                } catch (NoResultException e) {
-                    return null;
-                }
-            }
-            query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
-            query.setParameter(1, today.atStartOfDay());
-            query.setParameter(2, today1.atTime(23, 59, 59));
-            query.setParameter(3, uid);
-            query.setMaxResults(1);
-            return (StockAgregate) query.getSingleResult();
-        } catch (NoResultException ex) {
-            return null;
-        }
-    }
-
-    private StockAgregate findLatestStockAgregate(String productId) {
-        try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? ORDER BY date DESC");
+            sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? "
+                    + "AND s.product_id = ? AND s.num_lot = ? AND s.context = ?");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
-                            .setParameter(1, productId)
+                            .setParameter(1, today)
+                            .setParameter(2, today1.plusDays(1))
+                            .setParameter(3, region)
+                            .setParameter(4, uid)
+                            .setParameter(5, numlot)
+                            .setParameter(6, context)
                             .setMaxResults(1)
                             .getResultList();
                     return results.isEmpty() ? null : results.get(0);
@@ -3297,7 +4173,12 @@ public class RecquisitionService implements RecquisitionStorage {
             }
             List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sb.toString(), StockAgregate.class)
-                    .setParameter(1, productId)
+                    .setParameter(1, today)
+                    .setParameter(2, today1.plusDays(1))
+                    .setParameter(3, region)
+                    .setParameter(4, uid)
+                    .setParameter(5, numlot)
+                    .setParameter(6, context)
                     .setMaxResults(1)
                     .getResultList();
             return results.isEmpty() ? null : results.get(0);
@@ -3306,15 +4187,134 @@ public class RecquisitionService implements RecquisitionStorage {
         }
     }
 
+    //
+    private StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid, String region,
+            String cloture_type) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? ");
+        sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL AND s.context = ? ORDER BY s.date DESC");
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, today)
+                            .setParameter(2, today1.plusDays(1))
+                            .setParameter(3, region)
+                            .setParameter(4, uid)
+                            .setParameter(5, cloture_type)
+                            .getResultList();
+                    return synthesizeStockAggregateFromLots(results, region, cloture_type);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, today)
+                    .setParameter(2, today1.plusDays(1))
+                    .setParameter(3, region)
+                    .setParameter(4, uid)
+                    .setParameter(5, cloture_type)
+                    .getResultList();
+            return synthesizeStockAggregateFromLots(results, region, cloture_type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? ");
+            sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL ORDER BY s.date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, today)
+                            .setParameter(2, today1.plusDays(1))
+                            .setParameter(3, uid)
+                            .getResultList();
+                    return synthesizeStockAggregateFromLots(results, null, null);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, today)
+                    .setParameter(2, today1.plusDays(1))
+                    .setParameter(3, uid)
+                    .getResultList();
+            return synthesizeStockAggregateFromLots(results, null, null);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private StockAgregate findLatestStockAgregate(String productId) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.num_lot IS NOT NULL ");
+            sb.append("AND s.date = (");
+            sb.append("SELECT MAX(s2.date) FROM stock_agregate s2 ");
+            sb.append("WHERE s2.product_id = s.product_id ");
+            sb.append("AND COALESCE(s2.region, '') = COALESCE(s.region, '') ");
+            sb.append("AND s2.num_lot = s.num_lot) ORDER BY s.date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, productId)
+                            .getResultList();
+                    return synthesizeStockAggregateFromLots(results, null, null);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, productId)
+                    .getResultList();
+            return synthesizeStockAggregateFromLots(results, null, null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private StockAgregate findLatestStockAgregate(String productId, String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND region LIKE ? ORDER BY date DESC");
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? ");
+            sb.append("AND s.num_lot IS NOT NULL AND s.date = (");
+            sb.append("SELECT MAX(s2.date) FROM stock_agregate s2 ");
+            sb.append("WHERE s2.product_id = s.product_id AND s2.region = s.region AND s2.num_lot = s.num_lot)");
+            sb.append(" ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, productId)
                             .setParameter(2, region)
+                            .getResultList();
+                    return synthesizeStockAggregateFromLots(results, region, null);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .getResultList();
+            return synthesizeStockAggregateFromLots(results, region, null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private StockAgregate findLatestStockAgregateByLot(String productId, String numlot) {
+        if (numlot == null || numlot.isBlank()) {
+            return null;
+        }
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? ORDER BY date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, productId)
+                            .setParameter(2, numlot)
                             .setMaxResults(1)
                             .getResultList();
                     return results.isEmpty() ? null : results.get(0);
@@ -3323,7 +4323,39 @@ public class RecquisitionService implements RecquisitionStorage {
             List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sb.toString(), StockAgregate.class)
                     .setParameter(1, productId)
-                    .setParameter(2, region)
+                    .setParameter(2, numlot)
+                    .setMaxResults(1)
+                    .getResultList();
+            return results.isEmpty() ? null : results.get(0);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private StockAgregate findLatestStockAgregateByLot(String productId, String numlot, String region) {
+        if (numlot == null || numlot.isBlank()) {
+            return null;
+        }
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append(
+                    "SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? AND region LIKE ? ORDER BY date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
+                            .setParameter(1, productId)
+                            .setParameter(2, numlot)
+                            .setParameter(3, region)
+                            .setMaxResults(1)
+                            .getResultList();
+                    return results.isEmpty() ? null : results.get(0);
+                });
+            }
+            List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
+                    .createNativeQuery(sb.toString(), StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, numlot)
+                    .setParameter(3, region)
                     .setMaxResults(1)
                     .getResultList();
             return results.isEmpty() ? null : results.get(0);
@@ -3350,6 +4382,23 @@ public class RecquisitionService implements RecquisitionStorage {
         query.setParameter(2, atime);
         List<Recquisition> result = query.getResultList();
         return !result.isEmpty();
+    }
+
+    public boolean isStockExists(String puid, String lot, LocalDate debut, LocalDate fin) {
+        String jpql = "SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END "
+                + "FROM stock_agregate c WHERE c.product_id = ? AND c.num_lot = ? "
+                + "AND date BETWEEN ? AND ?";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> (Boolean) em.createNativeQuery(jpql, Boolean.class)
+                    .setParameter(1, puid).setParameter(2, lot)
+                    .setParameter(3, debut).setParameter(4, fin.plusDays(1))
+                    .getSingleResult());
+        }
+        return (Boolean) ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(jpql, Boolean.class)
+                .setParameter(1, puid).setParameter(2, lot)
+                .setParameter(3, debut).setParameter(4, fin.plusDays(1))
+                .getSingleResult();
     }
 
     public double sommeCompterSurPeriode(String prod, LocalDate dateDebut, LocalDate dateFin, String region) {
@@ -3529,13 +4578,13 @@ public class RecquisitionService implements RecquisitionStorage {
             if (co == null) {
                 continue;
             }
-            double sommeEntreeSurPeriode = sommeEntreeSurPeriode(produit.getUid(), debutInv, finInv, region);
-            double sommeSortieSurPeriode = sommeSortieSurPeriode(produit.getUid(), debutInv, finInv, region);
+            LotPeriodPieces aggLot = computeLotPeriodPieces(produit.getUid(), com.getNumlot(), region, debutInv,
+                    finInv);
             double sommeCompterSurPeriode = sommeCompterSurPeriode(produit.getUid(), debutInv, finInv, region);
             StockAgregate stock = findClosedStock(finInv, finInv, produit.getUid(), region, "Journalier du " + finInv);
             double stokTheo_j = (stock == null) ? 0 : stock.getFinalQuantity();
-            double stockJuste = ((sommeEntreeSurPeriode - sommeSortieSurPeriode) + sommeCompterSurPeriode)
-                    - ((sommeCompterSurPeriode == 0 || sommeEntreeSurPeriode == 0) ? 0 : stokTheo_j);
+            double stockJuste = ((aggLot.entrees() - aggLot.sorties()) + sommeCompterSurPeriode)
+                    - ((sommeCompterSurPeriode == 0 || aggLot.entrees() == 0) ? 0 : stokTheo_j);
             Mesure mez = findMinMesureForProduit(produit.getUid());
             System.out.println("Stock juste pour " + produit.getNomProduit() + " est : " + stockJuste + " "
                     + mez.getDescription());
@@ -3574,7 +4623,7 @@ public class RecquisitionService implements RecquisitionStorage {
 
             }
             // la cloture du stock le jour meme de cloture d'inventaire
-            clotureStockProduit(produit, region, finInv, finInv, "Journalier du " + finInv);
+            clotureStockProduit(produit, com.getNumlot(), region, finInv, finInv, "Journalier du " + finInv);
         }
         List<LigneVente> lvs = findLvByReference(aju.getUid());
         if (lvs.isEmpty()) {
@@ -3641,7 +4690,7 @@ public class RecquisitionService implements RecquisitionStorage {
     @Override
     public double findCurrentStockFor(Produit produit, String region) {
         LocalDate leo = LocalDate.now();
-        StockAgregate aggreg = findClosedStock(leo, leo, produit.getUid(), region, "Journalier du " + leo);
+        StockAgregate aggreg = findStock(produit.getUid(), leo, leo, region);
         if (aggreg == null) {
             Recquisition dernierR = getLastEntry(produit.getUid());
             if (dernierR == null) {
@@ -3653,33 +4702,243 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     private StockAgregate findStock(String puid, LocalDate today, LocalDate today1, String region) {
-        try {
-            StringBuilder sb = new StringBuilder();
+        return synthesizeStockAggregateFromLots(findLatestLotRowsForProduct(puid, today, today1, region), region, null);
+    }
 
-            sb.append(
-                    "SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.product_id = ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
-                    query.setParameter(1, today.atStartOfDay());
-                    query.setParameter(2, today1.atTime(23, 59, 59));
-                    query.setParameter(3, region);
-                    query.setParameter(4, puid);
-                    StockAgregate result = (StockAgregate) query.setMaxResults(1).getSingleResult();
-                    return result;
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(),
-                    StockAgregate.class);
-            query.setParameter(1, today.atStartOfDay());
-            query.setParameter(2, today1.atTime(23, 59, 59));
-            query.setParameter(3, region);
-            query.setParameter(4, puid);
-            StockAgregate result = (StockAgregate) query.setMaxResults(1).getSingleResult();
-            return result;
-        } catch (NoResultException e) {
-            return null;
+    private List<StockAgregate> findLatestLotRowsForProduct(String productId, LocalDate dateFrom, LocalDate dateTo,
+            String region) {
+        if (productId == null || dateFrom == null || dateTo == null || region == null || region.isBlank()) {
+            return List.of();
         }
+        String sql = """
+                SELECT * FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date BETWEEN ? AND ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ?
+                  )
+                ORDER BY s.date DESC
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .setParameter(3, dateFrom)
+                    .setParameter(4, dateTo.plusDays(1))
+                    .setParameter(5, dateFrom)
+                    .setParameter(6, dateTo.plusDays(1))
+                    .getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(sql, StockAgregate.class)
+                .setParameter(1, productId)
+                .setParameter(2, region)
+                .setParameter(3, dateFrom)
+                .setParameter(4, dateTo.plusDays(1))
+                .setParameter(5, dateFrom)
+                .setParameter(6, dateTo.plusDays(1))
+                .getResultList();
+    }
+
+    private List<StockAgregate> findLatestLotRowsForProduct(String productId,
+            String lot, LocalDate dateFrom, LocalDate dateTo,
+            String region) {
+        if (productId == null || dateFrom == null || dateTo == null || region == null || region.isBlank()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT * FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot = ?
+                  AND s.date BETWEEN ? AND ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ?
+                  )
+                ORDER BY s.date DESC
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .setParameter(3, lot)
+                    .setParameter(4, dateFrom)
+                    .setParameter(5, dateTo.plusDays(1))
+                    .setParameter(6, dateFrom)
+                    .setParameter(7, dateTo.plusDays(1))
+                    .getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(sql, StockAgregate.class)
+                .setParameter(1, productId)
+                .setParameter(2, region)
+                .setParameter(3, lot)
+                .setParameter(4, dateFrom)
+                .setParameter(5, dateTo.plusDays(1))
+                .setParameter(6, dateFrom)
+                .setParameter(7, dateTo.plusDays(1))
+                .getResultList();
+    }
+
+//    private List<StockAgregate> findLatestLotRowsForProduct(String productId, LocalDate dateFrom, LocalDate dateTo,
+//            String region) {
+//        if (productId == null || dateFrom == null || dateTo == null || region == null || region.isBlank()) {
+//            return List.of();
+//        }
+//        String sql = """
+//                SELECT * FROM stock_agregate s
+//                WHERE s.product_id = ?
+//                  AND s.region LIKE ?
+//                  AND s.num_lot IS NOT NULL
+//                  AND s.date BETWEEN ? AND ?
+//                  AND s.date = (
+//                      SELECT MAX(s2.date)
+//                      FROM stock_agregate s2
+//                      WHERE s2.product_id = s.product_id
+//                        AND s2.region = s.region
+//                        AND s2.num_lot = s.num_lot
+//                        AND s2.date BETWEEN ? AND ?
+//                  )
+//                ORDER BY s.date DESC
+//                """;
+//        if (ManagedSessionFactory.isEmbedded()) {
+//            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
+//                    .setParameter(1, productId)
+//                    .setParameter(2, region)
+//                    .setParameter(3, dateFrom.atStartOfDay())
+//                    .setParameter(4, dateTo.atTime(23, 59, 59))
+//                    .setParameter(5, dateFrom.atStartOfDay())
+//                    .setParameter(6, dateTo.atTime(23, 59, 59))
+//                    .getResultList());
+//        }
+//        return ManagedSessionFactory.getEntityManager()
+//                .createNativeQuery(sql, StockAgregate.class)
+//                .setParameter(1, productId)
+//                .setParameter(2, region)
+//                .setParameter(3, dateFrom.atStartOfDay())
+//                .setParameter(4, dateTo.atTime(23, 59, 59))
+//                .setParameter(5, dateFrom.atStartOfDay())
+//                .setParameter(6, dateTo.atTime(23, 59, 59))
+//                .getResultList();
+//    }
+    @Override
+    public List<StockAgregate> findLatestLotStockAgregates(String productId) {
+        if (productId == null || productId.isBlank()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT * FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.num_lot IS NOT NULL
+                  AND COALESCE(s.final_quantity, 0) > 0
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND COALESCE(s2.region, '') = COALESCE(s.region, '')
+                        AND s2.num_lot = s.num_lot
+                  )
+                ORDER BY s.date DESC
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
+                    .setParameter(1, productId)
+                    .getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(sql, StockAgregate.class)
+                .setParameter(1, productId)
+                .getResultList();
+    }
+
+    @Override
+    public List<StockAgregate> findLatestLotStockAgregates(String productId, String region) {
+        if (productId == null || productId.isBlank() || region == null || region.isBlank()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT * FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot IS NOT NULL
+                  AND COALESCE(s.final_quantity, 0) > 0
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                  )
+                ORDER BY s.date DESC
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(sql, StockAgregate.class)
+                .setParameter(1, productId)
+                .setParameter(2, region)
+                .getResultList();
+    }
+
+    private List<StockAgregate> findLatestLotRowsByExpirationInterval(LocalDate dateExp1, LocalDate dateExp2,
+            String region) {
+        if (dateExp1 == null || dateExp2 == null) {
+            return List.of();
+        }
+        StringBuilder sql = new StringBuilder("""
+                SELECT * FROM stock_agregate s
+                WHERE s.num_lot IS NOT NULL
+                  AND s.date_expiration IS NOT NULL
+                  AND COALESCE(s.final_quantity, 0) > 0
+                  AND s.date_expiration BETWEEN ? AND ?
+                """);
+        if (region != null && !region.isBlank()) {
+            sql.append(" AND s.region LIKE ? ");
+        }
+        sql.append("""
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND COALESCE(s2.region, '') = COALESCE(s.region, '')
+                        AND s2.num_lot = s.num_lot
+                  )
+                ORDER BY s.date_expiration ASC, s.product_id ASC, s.num_lot ASC
+                """);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sql.toString(), StockAgregate.class);
+                query.setParameter(1, dateExp1);
+                query.setParameter(2, dateExp2);
+                if (region != null && !region.isBlank()) {
+                    query.setParameter(3, region);
+                }
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql.toString(), StockAgregate.class);
+        query.setParameter(1, dateExp1);
+        query.setParameter(2, dateExp2);
+        if (region != null && !region.isBlank()) {
+            query.setParameter(3, region);
+        }
+        return query.getResultList();
     }
 
     // expireds
@@ -3801,34 +5060,208 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     @Override
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId) {
+        try {
+            String sql = """
+                    SELECT COALESCE(SUM(COALESCE(s.final_quantity,0)),0)
+                    FROM stock_agregate s
+                    WHERE s.product_id = ?
+                      AND s.num_lot IS NOT NULL
+                      AND s.date = (
+                          SELECT MAX(s2.date)
+                          FROM stock_agregate s2
+                          WHERE s2.product_id = s.product_id
+                            AND s2.region = s.region
+                            AND s2.num_lot = s.num_lot
+                      )
+                    """;
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Object rst = em.createNativeQuery(sql)
+                            .setParameter(1, productId)
+                            .getSingleResult();
+                    return rst == null ? 0d : ((Number) rst).doubleValue();
+                });
+            }
+            Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, productId)
+                    .getSingleResult();
+            return rst == null ? 0d : ((Number) rst).doubleValue();
+        } catch (NoResultException ex) {
+            return 0d;
+        }
+    }
+
+    @Override
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId, String region) {
+        try {
+            String sql = """
+                    SELECT COALESCE(SUM(COALESCE(s.final_quantity,0)),0)
+                    FROM stock_agregate s
+                    WHERE s.product_id = ?
+                      AND s.region LIKE ?
+                      AND s.num_lot IS NOT NULL
+                      AND s.date = (
+                          SELECT MAX(s2.date)
+                          FROM stock_agregate s2
+                          WHERE s2.product_id = s.product_id
+                            AND s2.region = s.region
+                            AND s2.num_lot = s.num_lot
+                      )
+                    """;
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Object rst = em.createNativeQuery(sql)
+                            .setParameter(1, productId)
+                            .setParameter(2, region)
+                            .getSingleResult();
+                    return rst == null ? 0d : ((Number) rst).doubleValue();
+                });
+            }
+            Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, productId)
+                    .setParameter(2, region)
+                    .getSingleResult();
+            return rst == null ? 0d : ((Number) rst).doubleValue();
+        } catch (NoResultException ex) {
+            return 0d;
+        }
+    }
+
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId, String lot, String region) {
+        try {
+            String sql = """
+                    SELECT COALESCE(SUM(COALESCE(s.final_quantity,0)),0)
+                    FROM stock_agregate s
+                    WHERE s.product_id = ?
+                      AND s.region LIKE ?
+                      AND s.num_lot = ?
+                      AND s.date = (
+                          SELECT MAX(s2.date)
+                          FROM stock_agregate s2
+                          WHERE s2.product_id = s.product_id
+                            AND s2.region = s.region
+                            AND s2.num_lot = s.num_lot
+                      )
+                    """;
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Object rst = em.createNativeQuery(sql)
+                            .setParameter(1, productId)
+                            .setParameter(2, region).setParameter(3, lot)
+                            .getSingleResult();
+                    return rst == null ? 0d : ((Number) rst).doubleValue();
+                });
+            }
+            Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, productId)
+                    .setParameter(2, region).setParameter(3, lot)
+                    .getSingleResult();
+            return rst == null ? 0d : ((Number) rst).doubleValue();
+        } catch (NoResultException ex) {
+            return 0d;
+        }
+    }
+
+    @Override
+    public int verifyAndCorrectStockAggregateConsistency(String region) {
+        int corrected = 0;
+        final boolean globalScope = isGlobalScope(region);
+        final double epsilon = 0.0001d;
+        List<Produit> produits = ProduitDelegate.findProduits();
+        for (Produit produit : produits) {
+            String productId = produit.getUid();
+            double fromAggregate = globalScope
+                    ? sumLatestLotFinalQuantityFromStockAggregate(productId)
+                    : sumLatestLotFinalQuantityFromStockAggregate(productId, region);
+            double fromLedger = globalScope
+                    ? findRemainedInMagasinFor(productId)
+                    : findRemainedInMagasinFor(productId, region);
+            if (Math.abs(fromAggregate - fromLedger) <= epsilon) {
+                continue;
+            }
+
+            Map<String, Recquisition> seeds = findLatestSeedsPerRegion(produit, region);
+            if (seeds.isEmpty()) {
+                continue;
+            }
+            if (globalScope) {
+                for (Recquisition seed : seeds.values()) {
+                    if (seed != null) {
+                        saveStockFromRecquisition(seed);
+                    }
+                }
+                corrected++;
+            } else {
+                Recquisition seed = seeds.get(region);
+                if (seed != null) {
+                    saveStockFromRecquisition(seed);
+                    corrected++;
+                }
+            }
+        }
+        return corrected;
+    }
+
+    private boolean isGlobalScope(String region) {
+        return region == null || region.isBlank() || "%".equals(region);
+    }
+
+    private Map<String, Recquisition> findLatestSeedsPerRegion(Produit produit, String region) {
+        List<Recquisition> recqs = isGlobalScope(region)
+                ? findRecquisitionByProduit(produit.getUid())
+                : findRecquisitionByProduitRegion(produit.getUid(), region);
+        Map<String, Recquisition> latestPerRegion = new HashMap<>();
+        if (recqs == null || recqs.isEmpty()) {
+            return latestPerRegion;
+        }
+        recqs.forEach(rq -> {
+            String rqRegion = rq.getRegion();
+            if (!(rqRegion == null || rqRegion.isBlank())) {
+                Recquisition current = latestPerRegion.get(rqRegion);
+                if (current == null
+                        || (rq.getDate() != null && current.getDate() != null && rq.getDate().isAfter(current.getDate()))
+                        || (current.getDate() == null && rq.getDate() != null)) {
+                    latestPerRegion.put(rqRegion, rq);
+                }
+            }
+        });
+        return latestPerRegion;
+    }
+
+    @Override
     public List<Peremption> showExpiredAtInterval(LocalDate dateExp1, LocalDate dateEpx2, String region) {
         List<Peremption> result = new ArrayList<>();
-        List<Produit> produits = getProduits();
-        for (Produit produit : produits) {
-            String localisation = getLocation(produit.getUid());
-            List<ExpiredItem> expins = entreeExpiree(produit.getUid(), dateExp1, dateEpx2, region);
-            for (ExpiredItem expin : expins) {
-                List<ExpiredItem> sorties = sortieExpiree(produit.getUid(), expin.numlot(), dateExp1, dateEpx2, region);
-                double reste = expin.quantite();
-                if (!sorties.isEmpty()) {
-                    ExpiredItem ei = sorties.getFirst();
-                    reste = reste - ei.quantite();
-                }
-                Peremption per = new Peremption();
-                per.setCodebar(produit.getCodebar());
-                per.setCoutAchat(expin.coutAchat());
-                per.setDateExpiry(expin.dateExpire());
-                per.setLot(expin.numlot());
-                per.setMesure(expin.mesure().getDescription());
-                per.setProduit(produit.getNomProduit() + " " + produit.getModele() + " " + produit.getTaille());
-                per.setProduitUid(produit.getUid());
-                per.setLocalisation(localisation == null ? region : localisation);
-                per.setQuantite(reste);
-                per.setRegion(expin.region());
-                per.setValeur(BigDecimal.valueOf(reste * expin.coutAchat()).setScale(2, RoundingMode.HALF_EVEN)
-                        .doubleValue());
-                result.add(per);
+        if (dateExp1 == null || dateEpx2 == null) {
+            return result;
+        }
+        List<StockAgregate> expiredLots = findLatestLotRowsByExpirationInterval(dateExp1, dateEpx2, region);
+        for (StockAgregate lotStock : expiredLots) {
+            if (lotStock == null || lotStock.getProductId() == null) {
+                continue;
             }
+            Produit produit = lotStock.getProductId();
+            double reste = safeStockAggregateValue(lotStock.getFinalQuantity());
+            if (reste <= 0) {
+                continue;
+            }
+            String localisation = getLocation(produit.getUid());
+            Mesure mesure = lotStock.getMesureId() == null ? findMinMesureForProduit(produit.getUid()) : lotStock.getMesureId();
+            Peremption per = new Peremption();
+            per.setCodebar(produit.getCodebar());
+            per.setCoutAchat(safeStockAggregateValue(lotStock.getCoutAchat()));
+            per.setDateExpiry(lotStock.getDateExpiration());
+            per.setLot(lotStock.getNumlot());
+            per.setMesure(mesure == null ? "" : mesure.getDescription());
+            per.setProduit(produit.getNomProduit() + " " + produit.getModele() + " " + produit.getTaille());
+            per.setProduitUid(produit.getUid());
+            per.setLocalisation(localisation == null ? lotStock.getRegion() : localisation);
+            per.setQuantite(reste);
+            per.setRegion(lotStock.getRegion());
+            per.setValeur(BigDecimal.valueOf(reste * safeStockAggregateValue(lotStock.getCoutAchat()))
+                    .setScale(2, RoundingMode.HALF_EVEN)
+                    .doubleValue());
+            result.add(per);
         }
         return result;
     }
