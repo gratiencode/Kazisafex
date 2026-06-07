@@ -55,22 +55,23 @@ public class ManagedSessionFactory {
             String dbUrl = "jdbc:mysql://" + dbHost + ":" + dbPort + "/ksf_" + databaseName
                     + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&"
                     + "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''";
+            String dbUser = resolveDbUser();
+            String dbPassword = resolveDbPassword();
             properties.put(EntityManagerProperties.JDBC_DRIVER, "com.mysql.cj.jdbc.Driver");
             properties.put(EntityManagerProperties.JDBC_URL, dbUrl);
-            properties.put(EntityManagerProperties.JDBC_USER, resolveDbUser());
-            properties.put(EntityManagerProperties.JDBC_PASSWORD, resolveDbPassword());
+            properties.put(EntityManagerProperties.JDBC_USER, dbUser);
+            properties.put(EntityManagerProperties.JDBC_PASSWORD, dbPassword);
             emf = Persistence.createEntityManagerFactory("kazisafe-jmx", properties);
+            SchemaAutoUpdater.ensureCoreSchema(false, dbUrl, dbUser, dbPassword);
             threadLocal = new ThreadLocal<>();
         } else {
 
             // ---SQLite---
             String dbPath = dbPath("kazi_" + databaseName);
-            String dbUrl = "jdbc:sqlite:" + dbPath + ".db?journal_mode=WAL&busy_timeout=120000&synchronous=normal";
+            String dbUrl = "jdbc:sqlite:" + dbPath + ".db?journal_mode=WAL&busy_timeout=120000&synchronous=NORMAL&limit_compound_select=0";
             properties.put("hibernate.connection.driver_class", "org.sqlite.JDBC");
             properties.put("hibernate.connection.url", dbUrl);
-            if (!isFileExist(dbPath + ".db")) {
-                properties.put("hibernate.hbm2ddl.auto", "update");
-            }
+            properties.put("hibernate.hbm2ddl.auto", "update");
             properties.put("hibernate.session_factory.statement_inspector",
                     "services.dialect.SqliteStatementInspector");
             if (!SecurePreferences.hasStoredValue()) {
@@ -83,6 +84,7 @@ public class ManagedSessionFactory {
             }
             properties.put("eclipselink.session.customizer", "services.utils.SQLiteSessionCustomizer");
             emf = Persistence.createEntityManagerFactory("SQlitePU", properties);
+            SchemaAutoUpdater.ensureCoreSchema(true, dbUrl, null, null);
             writeQueue = new WriteQueueManager(emf);
             threadLocal = null; // inutile pour sqlite
             System.out.println("-SQLite-");

@@ -255,13 +255,13 @@ public class InventaireService implements InventaireStorage {
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), Inventaire.class);
-                query.setParameter(1, code);
+                query.setParameter(1, code).setMaxResults(1);
                 List<Inventaire> result = query.getResultList();
                 return !result.isEmpty() ? result.get(0) : null;
             });
         }
         Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Inventaire.class);
-        query.setParameter(1, code);
+        query.setParameter(1, code).setMaxResults(1);
         List<Inventaire> result = query.getResultList();
         return !result.isEmpty() ? result.get(0) : null;
     }

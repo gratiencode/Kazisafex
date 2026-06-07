@@ -403,6 +403,7 @@
                                     </ImageView>
                                  </children>
                               </Pane>
+                              <ProgressIndicator fx:id="pi_refresh_inv" layoutX="1083.0" layoutY="103.0" prefHeight="30.0" prefWidth="30.0" visible="false" AnchorPane.rightAnchor="138.0" AnchorPane.topAnchor="103.0" />
                               <Label layoutX="34.0" layoutY="110.0" prefHeight="16.0" prefWidth="78.0" text="%xcritere_de_select" AnchorPane.leftAnchor="34.0" />
                               <ComboBox fx:id="cbx_choose_critere_de_selection" layoutX="119.0" layoutY="106.0" prefHeight="24.0" prefWidth="178.0" promptText="%xcritere_de_select" style="-fx-background-radius: 5;" AnchorPane.leftAnchor="119.0" />
                               <TextField fx:id="input_txt_criteres_mens" layoutX="307.0" layoutY="106.0" prefHeight="24.0" prefWidth="49.0" AnchorPane.leftAnchor="307.0" />

@@ -4,6 +4,7 @@ module com.endeleya.kazisafex {
     requires javafx.graphics;
     requires javafx.media;
     requires javafx.web;
+    requires jdk.jsobject;
 
     requires java.desktop;
     requires java.prefs;
@@ -29,6 +30,11 @@ module com.endeleya.kazisafex {
     requires okio;
     requires okhttp.eventsource;
     requires launchdarkly.logging;
+    requires langchain4j;
+    requires langchain4j.core;
+    requires langchain4j.http.client;
+    requires langchain4j.ollama;
+    requires langgraph4j.core;
 
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.datatype.jsr310;
@@ -56,6 +62,7 @@ module com.endeleya.kazisafex {
 
     opens com.endeleya.kazisafex to javafx.fxml, javafx.graphics;
     opens data to org.hibernate.orm.core, com.fasterxml.jackson.databind, javafx.base;
+    opens services.dialect to org.hibernate.orm.core;
     opens data.finance to com.fasterxml.jackson.databind;
     opens data.helpers to com.fasterxml.jackson.databind;
 

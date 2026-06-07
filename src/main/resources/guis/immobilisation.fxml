@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.Cursor?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
-<?import javafx.scene.image.Image?>
-<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
-<?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
 <AnchorPane prefHeight="615.0" prefWidth="1211.0" style="-fx-background-color: #ffffff; -fx-background-radius: 12;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.ImmobilisationController">
@@ -19,19 +17,21 @@
             <Font name="System Bold" size="22.0" />
          </font>
       </Label>
-      <Pane layoutX="24.0" layoutY="58.0" prefHeight="125.0" prefWidth="1165.0" style="-fx-background-color: #ffffff; -fx-border-color: #e5e7eb; -fx-border-radius: 10; -fx-background-radius: 10;">
+      <AnchorPane layoutX="24.0" layoutY="80.0" prefHeight="123.0" prefWidth="1165.0" style="-fx-background-color: white; -fx-border-color: #eeeeee; -fx-background-radius: 12; -fx-border-radius: 12;" AnchorPane.leftAnchor="24.0" AnchorPane.rightAnchor="22.0" AnchorPane.topAnchor="80.0">
          <children>
-            <TextField fx:id="txt_libelle" layoutX="13.0" layoutY="20.0" prefHeight="30.0" prefWidth="260.0" promptText="Libelle immobilisation" />
-            <TextField fx:id="txt_categorie" layoutX="286.0" layoutY="20.0" prefHeight="30.0" prefWidth="210.0" promptText="Categorie" />
-            <TextField fx:id="txt_valeur" layoutX="509.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur origine USD" />
-            <TextField fx:id="txt_residuelle" layoutX="692.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur residuelle USD" />
-            <TextField fx:id="txt_duree" layoutX="875.0" layoutY="20.0" prefHeight="30.0" prefWidth="120.0" promptText="Duree (mois)" />
-            <Button fx:id="btn_create" layoutX="1008.0" layoutY="20.0" mnemonicParsing="false" onAction="#create" prefHeight="30.0" prefWidth="145.0" style="-fx-background-color: #44cef5;" text="Ajouter" textFill="WHITE" />
-            <Button layoutX="870.0" layoutY="73.0" mnemonicParsing="false" onAction="#openAmortissement" prefHeight="30.0" prefWidth="283.0" style="-fx-background-color: #0ea5e9;" text="Voir fiche d'amortissement (Rapports)" textFill="WHITE" />
+            <TextField fx:id="txt_libelle" layoutX="13.0" layoutY="20.0" prefHeight="30.0" prefWidth="260.0" promptText="Libelle immobilisation" AnchorPane.leftAnchor="13.0" AnchorPane.rightAnchor="891.0" AnchorPane.topAnchor="20.0" />
+            <TextField fx:id="txt_valeur" layoutX="509.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur origine USD" AnchorPane.rightAnchor="486.0" AnchorPane.topAnchor="20.0" />
+            <TextField fx:id="txt_residuelle" layoutX="692.0" layoutY="20.0" prefHeight="30.0" prefWidth="170.0" promptText="Valeur residuelle USD" AnchorPane.rightAnchor="303.0" AnchorPane.topAnchor="20.0" />
+            <TextField fx:id="txt_duree" layoutX="875.0" layoutY="20.0" prefHeight="30.0" prefWidth="120.0" promptText="Duree (mois)" AnchorPane.rightAnchor="170.0" AnchorPane.topAnchor="20.0" />
+            <Button fx:id="btn_create" layoutX="1008.0" layoutY="20.0" mnemonicParsing="false" onAction="#create" prefHeight="30.0" prefWidth="145.0" style="-fx-background-color: #44cef5;" text="Ajouter" textFill="WHITE" AnchorPane.rightAnchor="12.0" AnchorPane.topAnchor="20.0" />
+            <Button fx:id="btn_update" layoutX="1008.0" layoutY="55.0" mnemonicParsing="false" onAction="#update" prefHeight="30.0" prefWidth="145.0" style="-fx-background-color: #f59e0b;" text="Modifier" textFill="WHITE" AnchorPane.rightAnchor="12.0" AnchorPane.topAnchor="55.0" />
+            <Button fx:id="btn_delete" layoutX="1008.0" layoutY="90.0" mnemonicParsing="false" onAction="#delete" prefHeight="30.0" prefWidth="145.0" style="-fx-background-color: #ef4444;" text="Supprimer" textFill="WHITE" AnchorPane.rightAnchor="12.0" AnchorPane.topAnchor="90.0" />
+            <Button layoutX="710.0" layoutY="73.0" mnemonicParsing="false" onAction="#openAmortissement" prefHeight="30.0" prefWidth="283.0" style="-fx-background-color: #0ea5e9;" text="Voir fiche d'amortissement (Rapports)" textFill="WHITE" AnchorPane.rightAnchor="172.0" AnchorPane.topAnchor="73.0" />
             <Label fx:id="lbl_status" layoutX="16.0" layoutY="80.0" prefHeight="20.0" prefWidth="700.0" text="..." />
+            <ComboBox fx:id="txt_categorie" editable="true" layoutX="291.0" layoutY="20.0" prefHeight="30.0" prefWidth="203.0" promptText="Type d'immobilisation" AnchorPane.rightAnchor="671.0" AnchorPane.topAnchor="20.0" />
          </children>
-      </Pane>
-      <TableView fx:id="tb_immobilisation" layoutX="24.0" layoutY="197.0" prefHeight="393.0" prefWidth="1165.0">
+      </AnchorPane>
+      <TableView fx:id="tb_immobilisation" layoutX="24.0" layoutY="220.0" onMouseClicked="#showDetails" prefHeight="378.0" prefWidth="1165.0" AnchorPane.bottomAnchor="17.0" AnchorPane.leftAnchor="24.0" AnchorPane.rightAnchor="22.0" AnchorPane.topAnchor="220.0">
         <columns>
           <TableColumn fx:id="col_libelle" prefWidth="177.0" text="Libelle" />
           <TableColumn fx:id="col_categorie" prefWidth="112.0" text="Categorie" />
@@ -47,13 +47,6 @@
             <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
          </columnResizePolicy>
       </TableView>
-      <ImageView fitHeight="25.0" fitWidth="27.0" layoutX="1160.0" layoutY="18.0" onMouseClicked="#refresh" pickOnBounds="true" preserveRatio="true">
-         <image>
-            <Image url="@../icons/reverse32.png" />
-         </image>
-         <cursor>
-            <Cursor fx:constant="HAND" />
-         </cursor>
-      </ImageView>
+      <DatePicker fx:id="dpk_date_acq_immo" layoutX="970.0" layoutY="28.0" prefHeight="30.0" prefWidth="203.0" promptText="Date d'acquisition" AnchorPane.rightAnchor="38.0" AnchorPane.topAnchor="28.0" />
    </children>
 </AnchorPane>

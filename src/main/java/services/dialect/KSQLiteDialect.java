@@ -46,6 +46,8 @@ public class KSQLiteDialect extends Dialect {
     public boolean dropConstraints() {
         return false;
     }
+    
+    
 
     @Override
     public boolean hasAlterTable() {

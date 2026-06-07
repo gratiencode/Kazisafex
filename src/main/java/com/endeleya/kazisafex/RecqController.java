@@ -231,6 +231,12 @@ public class RecqController implements Initializable {
         return instance;
     }
 
+    public void addProduit(Produit p) {
+        if (lsproduit != null && p != null) {
+            lsproduit.add(p);
+        }
+    }
+
     String payload;
 
     public void setup(Entreprise eze, String action, String payload, Livraison liv) {
@@ -238,7 +244,7 @@ public class RecqController implements Initializable {
         this.action = action;
         this.payload = payload;
         lsproduit = FXCollections.observableArrayList(ProduitDelegate.findProduits());
-        lsdestocker = FXCollections.observableArrayList(DestockerDelegate.findDestockers());
+        lsdestocker = FXCollections.observableArrayList();
         livraizons = FXCollections.observableArrayList();
         prices = FXCollections.observableArrayList();
         cbx_choose_livraison.setItems(livraizons);
@@ -247,6 +253,14 @@ public class RecqController implements Initializable {
             dpk_date_req.setDisable(false);
             cbx_choose_produit_req.setDisable(true);
             cbx_choose_livraison.setDisable(true);
+            ObservableList<Destocker> filtered = FXCollections.observableArrayList();
+            filtered.addAll(DestockerDelegate.findDestockers(region));
+//            for (Destocker d : lsdestocker) {
+//                if (ref.equals(d.getReference())) {
+//                    filtered.add(d);
+//                }
+//            }
+            cbx_ref_req.setItems(filter(filtered, lsproduit, region));
 //            if (cbx_choose_produit_req != null) {
 //                cbx_choose_produit_req.setVisible(true);
 //            }
@@ -261,13 +275,7 @@ public class RecqController implements Initializable {
             cbx_choose_livraison.setDisable(false);
             livraizons.addAll(LivraisonDelegate.findLivraisons());
             setChoosenDelivery(liv);
-//            ObservableList<Destocker> filtered = FXCollections.observableArrayList();
-//            for (Destocker d : lsdestocker) {
-//                if (ref.equals(d.getReference())) {
-//                    filtered.add(d);
-//                }
-//            }
-//            cbx_ref_req.setItems(filter(filtered, lsproduit, region));
+            
         }
         ksf = KazisafeServiceFactory.createService(pref.get("token", null));
 
@@ -458,7 +466,7 @@ public class RecqController implements Initializable {
         cbx_choose_mesure_vente.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             mesurePv = newValue;
         });
-        
+
         cbx_choose_produit_req.setConverter(new StringConverter<Produit>() {
             @Override
             public String toString(Produit object) {
@@ -504,6 +512,16 @@ public class RecqController implements Initializable {
                         recquisition = null;
                     } else {
                         recquisition = fromlast;
+                    }
+                    if (prices != null && tilepn_prices1 != null) {
+                        prices.clear();
+                        tilepn_prices1.getChildren().removeAll();
+                        if (choosenPro != null) {
+                            List<PrixDeVente> prizes = RecquisitionDelegate.findLastPrices(choosenPro.getUid());
+                            for (PrixDeVente pv : prizes) {
+                                addPrice(pv, tilepn_prices1,true);
+                            }
+                        }
                     }
                 }
             }
@@ -627,6 +645,7 @@ public class RecqController implements Initializable {
         md.setOnAction((ActionEvent event) -> {
             Recquisition lot = t_requisitions.getSelectionModel().getSelectedItem();
             obllot.remove(lot);
+
             List<PrixDeVente> prs = PrixDeVenteDelegate.findPricesForRecq(lot.getUid());
             for (PrixDeVente pv : prs) {
                 PrixDeVenteDelegate.deletePrixDeVente(pv);
@@ -643,7 +662,7 @@ public class RecqController implements Initializable {
             tilepn_prices1.getChildren().removeAll();
             List<PrixDeVente> prs = PrixDeVenteDelegate.findPricesForRecq(lot.getUid());
             for (PrixDeVente pv : prs) {
-                addPrice(pv, tilepn_prices1);
+                addPrice(pv, tilepn_prices1,true);
             }
         });
 
@@ -656,7 +675,7 @@ public class RecqController implements Initializable {
             if (prod != null) {
                 List<PrixDeVente> prices = RecquisitionDelegate.findLastPrices(prod.getUid());
                 for (PrixDeVente pv : prices) {
-                    addPrice(pv, tilepn_prices1);
+                    addPrice(pv, tilepn_prices1,false);
                 }
             }
         }
@@ -666,6 +685,8 @@ public class RecqController implements Initializable {
     public void createRecqusition(ActionEvent evt) {
         if (action.equals(tools.Constants.ACTION_UPDATE)) {
             updateRecquisition();
+            LocalDate leo = LocalDate.now();
+            RecquisitionDelegate.rectifyStock(choosenPro, leo, leo, region, recquisition.getNumlot());
             recquisition = null;
             MainUI.notify(null, "Succes", "Modifié avec succès.", 4, "info");
             close(evt);
@@ -716,6 +737,9 @@ public class RecqController implements Initializable {
     private void saveRecqusitionByHttp(Recquisition req) {
 
         Executors.newSingleThreadExecutor().submit(() -> {
+            if (!Util.isInternetAndBaseApiReachable()) {
+                return;
+            }
             int attempt = 0;
             while (attempt < MAX_RETRY) {
                 try {
@@ -745,6 +769,9 @@ public class RecqController implements Initializable {
     private void savePriceByHttp(PrixDeVente pv) {
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
+                    if (!Util.isInternetAndBaseApiReachable()) {
+                        return;
+                    }
                     try {
                         cx.await();
                         int atempt = 0;
@@ -812,6 +839,9 @@ public class RecqController implements Initializable {
     }
 
     private void saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures) {
+        if (!Util.isInternetAndBaseApiReachable()) {
+            return;
+        }
         ProduitHelper produitHelper = createProduitHelper(produit, base64Image, mesures);
         try {
             Response<Produit> response = ksf.saveLite(produitHelper).execute();
@@ -875,7 +905,7 @@ public class RecqController implements Initializable {
         pv.setMesureId(mesurePv);
         pv.setRecquisitionId(savdr == null ? recquisition : savdr);
         if (findPrix(prices, pv) == null) {
-            addPrice(pv, tilepn_prices1);
+            addPrice(pv, tilepn_prices1,false);
             got = null;
         } else {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("xpriceinterval"), 3, "error");
@@ -885,7 +915,7 @@ public class RecqController implements Initializable {
     int priceindex;
     PrixDeVente got;
 
-    private void addPrice(PrixDeVente pv, TilePane tilep) {
+    private void addPrice(PrixDeVente pv, TilePane tilep, boolean dontSave) {
         ContextMenu contM = new ContextMenu();
         MenuItem mi = new MenuItem("Supprimer");
         MenuItem mi2 = new MenuItem("Modifier");
@@ -907,14 +937,16 @@ public class RecqController implements Initializable {
         l.setTooltip(new Tooltip(price));
         tilep.getChildren().add(l);
         prices.add(pv);
-        PrixDeVente pvx = PrixDeVenteDelegate.findPrixDeVente(pv.getUid());
-        if (pvx != null) {
-            PrixDeVenteDelegate.updatePrixDeVente(pv);
-        } else {
-            PrixDeVenteDelegate.savePrixDeVente(pv);
+        if (!dontSave) {
+            PrixDeVente pvx = PrixDeVenteDelegate.findPrixDeVente(pv.getUid());
+            if (pvx != null) {
+                PrixDeVenteDelegate.updatePrixDeVente(pv);
+            } else {
+                PrixDeVenteDelegate.savePrixDeVente(pv);
+            }
+            savePriceByHttp(pv);
+            MainUI.notify(null, "Succes", "Prix ajouté avec succès.", 2, "info");
         }
-        savePriceByHttp(pv);
-        MainUI.notify(null, "Succes", "Prix ajouté avec succès.", 2, "info");
         mi.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
@@ -953,7 +985,6 @@ public class RecqController implements Initializable {
                 prices.remove(priceindex);
                 tilep.getChildren().remove(priceindex);
                 tilep.getChildren().removeAll(n);
-
             }
         });
 
@@ -982,7 +1013,16 @@ public class RecqController implements Initializable {
     @FXML
     private void addLot(ActionEvent event) {
         if (addRecquisition(action)) {
+            LocalDate leo = LocalDate.now();
+            RecquisitionDelegate.rectifyStock(choosenPro, leo, leo, region, recquisition.getNumlot());
             pricepane.setVisible(true);
+            prices.clear();
+            tilepn_prices1.getChildren().removeAll();
+            List<PrixDeVente> prs = RecquisitionDelegate.findLastPrices(choosenPro.getUid());
+            for (PrixDeVente pv : prs) {
+                addPrice(pv, tilepn_prices1,true);
+            }
+
         }
     }
 
@@ -1117,9 +1157,7 @@ public class RecqController implements Initializable {
                 req = RecquisitionDelegate.updateRecquisition(recquisition);
                 obllot.set(index, req);
             }
-            Mesure m = req.getMesureId();
-            double cau = req.getCoutAchat() / m.getQuantContenu();
-            RecquisitionDelegate.rectifyStock(req.getProductId(), LocalDate.now(), LocalDate.now(), region, cau);
+            RecquisitionDelegate.cloturerUnProduit(choosenPro, recquisition.getNumlot(), region, LocalDate.now(), LocalDate.now(), null);
             txt_totalot.setText(obllot.size() + " Lot(s)");
             saveRecqusitionByHttp(req);
             ok = true;

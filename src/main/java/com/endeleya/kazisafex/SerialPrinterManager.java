@@ -1,6 +1,5 @@
 package com.endeleya.kazisafex;
 
-import com.endeleya.kazisafex.tools.SerialPrintService;
 import com.fazecast.jSerialComm.SerialPort;
 import java.util.ArrayList;
 import java.util.List;

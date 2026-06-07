@@ -177,7 +177,7 @@ public class ProduitService implements ProduitStorage {
             }
             Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findAll");
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (jakarta.persistence.EntityNotFoundException e) {
             return null;
         }
     }

@@ -88,4 +88,24 @@ public interface StockerStorage {
     public double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region);
 
     public void rectifyStockDepot(data.Produit produit, LocalDate dte, String region, double coutAch);
+
+    /**
+     * Rectifies stock_depot_agregate for a specific product/lot combination.
+     * Computes: stockInitial + SUM(stocker[numlot]) - SUM(destocker[numlot])
+     * and upserts the aggregate row.
+     */
+    public void rectifyStockDepotByLot(data.Produit produit, String numlot, String region, double coutAch, java.time.LocalDate dateExpir);
+
+    public void backfillDepotAggregates(String region);
+
+    /**
+     * Returns the latest known final stock quantity in pieces for a product/lot/region
+     * from stock_depot_agregate (most recent row).
+     */
+    public double findLatestDepotStockByLot(String productId, String numlot, String region);
+
+    /**
+     * Returns all distinct lots for a product/region from stock_depot_agregate.
+     */
+    public List<data.StockDepotAgregate> findLatestLotDepotStockAggregates(String productId, String region);
 }

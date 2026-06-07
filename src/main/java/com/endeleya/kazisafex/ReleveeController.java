@@ -600,7 +600,7 @@ public class ReleveeController implements Initializable {
                     payee += choosenBill.getPayedamount();
                     restapayer += (choosenBill.getTotalamount() - choosenBill.getPayedamount());
                     txt_bill_num_facture.setText("Facture #" + choosenBill.getNumero());
-                    txt_bill_date_vente.setText(tools.Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date()));
+                    txt_bill_date_vente.setText(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
 
                     tbl_bill_facts.setFixedCellSize(25);
                     pane_tab.prefHeightProperty().bind(tbl_bill_facts.fixedCellSizeProperty().multiply(Bindings.size(tbl_bill_facts.getItems()).add(2)));
@@ -709,8 +709,8 @@ public class ReleveeController implements Initializable {
             Facture r = param.getValue();
 
             return new SimpleStringProperty("Periode du "
-                    + Constants.USER_READABLE_FORMAT.format(r.getStartDate()) + " - "
-                    + Constants.USER_READABLE_FORMAT.format(r.getEndDate()));
+                    + (r.getStartDate() != null ? r.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-") + " - "
+                    + (r.getEndDate() != null ? r.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-"));
         });
         col_bill_qte.setCellValueFactory((TableColumn.CellDataFeatures<Facture, String> param) -> {
             Facture r = param.getValue();
@@ -733,8 +733,8 @@ public class ReleveeController implements Initializable {
             Facture r = param.getValue();
 
             return new SimpleStringProperty("Periode du "
-                    + Constants.USER_READABLE_FORMAT.format(r.getStartDate()) + " - "
-                    + Constants.USER_READABLE_FORMAT.format(r.getEndDate()));
+                    + (r.getStartDate() != null ? r.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-") + " - "
+                    + (r.getEndDate() != null ? r.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-"));
         });
         col_bill_arr_numero.setCellValueFactory((TableColumn.CellDataFeatures<Facture, String> param) -> {
             Facture r = param.getValue();

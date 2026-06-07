@@ -16,6 +16,7 @@ import data.StockAgregate;
 import data.helpers.CardHelper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import services.ClotureCallback;
 import tools.ListViewItem;
 import tools.Rupture;
 import utilities.Peremption;
@@ -43,10 +44,14 @@ public interface RecquisitionStorage {
     public List<Recquisition> findRecquisitions(int start, int max);
 
     public List<Recquisition> findRecquisitionByProduit(String objId);
+    
+    public Recquisition findRecquisition(String ref, String prodId, String numlot, String region);
 
     public List<Recquisition> findRecquisitionByProduit(String objId, String lot);
 
     public List<Recquisition> findRecquisitionByProduitRegion(String uid, String region);
+    
+    public List<StockAgregate> findAgregateDistinctlyByLot(String prod, String region);
 
     public List<Recquisition> findDescSortedByDateForProduit(String uid);
 
@@ -69,6 +74,8 @@ public interface RecquisitionStorage {
     public List<Object[]> findGoods();
 
     public List<Object[]> findGoodsFromRegion(String region);
+    
+    public void setClotureListener(ClotureCallback listener);
 
     public List<Object[]> findGoodsCategorized(String cat);
 
@@ -180,30 +187,53 @@ public interface RecquisitionStorage {
 
     public void adjustAfterInventory(Inventaire inventaire, String region);
 
-    public Recquisition getLastEntry(String meth, Produit prod, String region);
+    public Recquisition getLastEntry(Produit prod, String region);
 
-    public double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region);
+    public double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin,String lot, String region);
 
-    public double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region);
+    public double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin,String lot, String region);
 
-    public double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region);
+    public double calculerStockInitialEnUnite(String uid, LocalDate datedebut,String lot, String region);
 
-    public double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin, String region);
+    public double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin,String lot, String region);
 
     public boolean cloturerStocks(String region, LocalDate datedebut, LocalDate datefin,String context);
     
-    public void rectifyStock(Produit produit,LocalDate datedebut,LocalDate datefin,String region,double coutAch);
+    public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, String numlot);
+    
+    public StockAgregate findClosedStockByLot(LocalDate today, LocalDate today1, String uid, String region, String numlot, String context);
     
     public double findCurrentStockFor(Produit produit,String region);
     
     public List<Peremption> showExpiredAtInterval(LocalDate dateExp1, LocalDate dateEpx2, String region);
     
     public StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid);
+    public void cloturerUnProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin);
 
-    public Recquisition clotureStockProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin,String context);
-    
+    public void clotureStockProduit(Produit produit, String lot,String region, LocalDate datedebut, LocalDate datefin,String context);
+    public List<Recquisition> findDistinctLotHeads(Produit p, String region);
     public List<Recquisition> findOrphanRecquisitions(String prodId);
+    public void fixUndesiredRecqusitionOf(LocalDate d1, LocalDate d2, String region);
     
     public List<PrixDeVente> findLastPrices(String prodId);
+
+    public List<StockAgregate> findLatestLotStockAgregates(String productId);
+
+    public List<StockAgregate> findLatestLotStockAgregates(String productId, String region);
+
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId);
+
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId, String region);
+    
+    public double sumLatestLotFinalQuantityFromStockAggregate(String productId,String lot, String region);
+    
+    public List<Recquisition> findDistinctLotsForProduitRegion(String productId, String region);
+
+    public int verifyAndCorrectStockAggregateConsistency(String region);
+
+    public StockAgregate updateStockAgregate(StockAgregate sa);
+
+    public StockAgregate findStockAgregate(String prod, String numlot, String region, boolean destryed);
+    
 
 }

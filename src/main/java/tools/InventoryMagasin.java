@@ -24,6 +24,7 @@ public class InventoryMagasin {
     private double coutAchat;
     private String lot;
     private String localisation;
+    private boolean destroyed;
     private String prixDeVente;
     private String devise;
     private double alerte;
@@ -166,7 +167,7 @@ public class InventoryMagasin {
         this.prixDeVente = prixDeVente;
     }
 
-    public double getSockInitial() {
+    public double getStockInitial() {
       return this.stockInitial;
     }
 
@@ -180,6 +181,14 @@ public class InventoryMagasin {
 
     public void setDevise(String devise) {
         this.devise = devise;
+    }
+
+    public boolean isDestroyed() {
+        return destroyed;
+    }
+
+    public void setDestroyed(boolean destroyed) {
+        this.destroyed = destroyed;
     }
 
   

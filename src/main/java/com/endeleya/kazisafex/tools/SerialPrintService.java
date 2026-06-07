@@ -168,8 +168,10 @@ public class SerialPrintService implements PrintService {
                 } finally {
                     port.closePort();
                 }
-            } else {
-                throw new PrintException("Could not open serial port: " + service.getPortSystemName());
+            }
+            else {
+                  tools.MainUI.notify(null, "Impression", "Aucune imprimante trouvée pour ce parametre.", 4, "warning");
+//                throw new PrintException("Could not open serial port: " + service.getPortSystemName());
             }
         }
     }

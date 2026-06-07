@@ -317,19 +317,26 @@ public class LigneVenteService implements LigneVenteStorage {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT SUM(quantite*m.quantcontenu) as q FROM ligne_vente l, mesure m WHERE l.product_id = ? AND l.numlot = ? AND l.mesure_id=m.uid AND l.deleted_at IS NULL");
             if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
+                Double d = ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString());
                     query.setParameter(1, idpro);
                     query.setParameter(2, lot);
-                    Double d = (Double) query.getSingleResult();
-                    return d == null ? 0 : d;
+                    Object o = query.getSingleResult();
+                    if (o == null) {
+                        return 0.0;
+                    }
+                    return ((Number) o).doubleValue();
                 });
+                return d == null ? 0 : d;
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, idpro);
             query.setParameter(2, lot);
-            Double d = (Double) query.getSingleResult();
-            return d == null ? 0 : d;
+            Object o = query.getSingleResult();
+            if (o == null) {
+                return 0;
+            }
+            return ((Number) o).doubleValue();
         } catch (NoResultException e) {
             return 0;
         }
@@ -431,14 +438,14 @@ public class LigneVenteService implements LigneVenteStorage {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString());
                     query.setParameter(1, idpro);
-                    Double d = (Double) query.getSingleResult();
-                    return d == null ? 0 : d;
+                    Object d = query.getSingleResult();
+                    return d == null ? 0d : ((Number) d).doubleValue();
                 });
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, idpro);
-            Double d = (Double) query.getSingleResult();
-            return d == null ? 0 : d;
+            Object d = query.getSingleResult();
+            return d == null ? 0d : ((Number) d).doubleValue();
         } catch (NoResultException e) {
             return 0;
         }
@@ -455,15 +462,15 @@ public class LigneVenteService implements LigneVenteStorage {
                     Query query = em.createNativeQuery(sb.toString());
                     query.setParameter(1, idpro);
                     query.setParameter(2, region);
-                    Double d = (Double) query.getSingleResult();
-                    return d == null ? 0 : d;
+                    Object d = query.getSingleResult();
+                    return d == null ? 0d : ((Number) d).doubleValue();
                 });
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, idpro);
             query.setParameter(2, region);
-            Double d = (Double) query.getSingleResult();
-            return d == null ? 0 : d;
+            Object d = query.getSingleResult();
+            return d == null ? 0d : ((Number) d).doubleValue();
         } catch (NoResultException e) {
             return 0;
         }

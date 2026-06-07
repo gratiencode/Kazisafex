@@ -5,6 +5,11 @@
  */
 package com.endeleya.kazisafex;
 
+import com.endeleya.ia.IaResponseHandler;
+import com.endeleya.ia.AiAgents;
+import com.endeleya.ia.ChatHtmlTemplate;
+import com.endeleya.ia.JemimaAssistantClient;
+import com.endeleya.ia.JemimaTools;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +19,10 @@ import delegates.LigneVenteDelegate;
 import delegates.RepportDelegate;
 import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,23 +52,30 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Side;
+import javafx.scene.Cursor;
 import javafx.scene.chart.AreaChart;
 import javafx.scene.chart.PieChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 
 import javafx.scene.shape.Circle;
@@ -110,6 +126,8 @@ import com.launchdarkly.eventsource.EventHandler;
 import com.launchdarkly.eventsource.EventSource;
 import delegates.PermissionDelegate;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -117,11 +135,24 @@ import java.time.Month;
 import java.time.Year;
 import java.time.ZoneId;
 import java.time.format.TextStyle;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.ToolBar;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebEvent;
+import javafx.scene.web.WebView;
+import javafx.stage.FileChooser;
+import javax.imageio.ImageIO;
+import netscape.javascript.JSObject;
 import okhttp3.Headers;
 import tools.TopTen;
 import tools.Droit;
@@ -162,6 +193,13 @@ public class MainuiController implements Initializable {
             System.out.println("Teminaison de la conso");
         }
     };
+
+    EventSource evs;
+
+    String initialHtml = ChatHtmlTemplate.content();
+    private final JemimaAssistantClient jemimaAssistantClient = JemimaAssistantClient.getInstance();
+    private final List<File> aiAttachments = new ArrayList<>();
+    private final Set<String> handledSecureMysqlRequests = ConcurrentHashMap.newKeySet();
 
     public static MainuiController getInstance() {
         if (instance == null) {
@@ -274,6 +312,24 @@ public class MainuiController implements Initializable {
     private Button btn_theme_toggle;
     @FXML
     public Label txt_states_features;
+    @FXML
+    private SplitPane main_spliter;
+    @FXML
+    private AnchorPane ai_panel;
+    @FXML
+    private WebView ia_webvu_chat;
+    WebEngine webE;
+    IaResponseHandler responseHandler;
+    boolean isNofication = false;
+    @FXML
+    private TextArea txt_input_iaquery;
+    @FXML
+    private MenuButton btnmenu_choose_aimedia;
+    @FXML
+    private HBox box_ai_attachment_previews;
+    @FXML
+    private Label txt_selected_attachment;
+    private ChatBridge chatBridge;
 
     public Label getSync_txt_message() {
         return sync_txt_message;
@@ -294,6 +350,9 @@ public class MainuiController implements Initializable {
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        new Thread(() -> {
+            new services.RecquisitionService().backfillNullLotAggregates();
+        }).start();
         bundle = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         appName.setText("Kazisafe");
@@ -311,7 +370,7 @@ public class MainuiController implements Initializable {
         download_update_pgb.setVisible(false);
         install_update_link.setVisible(false);
         localPath = MainUI.cPath("/Media/Update");
-        MainUI.cPath(File.separator+"datastore");
+        MainUI.cPath(File.separator + "datastore");
         pref.put("ksf_version", tools.Constants.APP_VERSION);
         taux = pref.getDouble("taux2change", 2300);
         network = new NetLoockup();
@@ -334,6 +393,159 @@ public class MainuiController implements Initializable {
 
         cloturer(LocalDate.now(), LocalDate.now(), "Journalier du " + LocalDate.now().toString());
         // sync();
+        initializeAi();
+        main_spliter.getItems().removeAll(ai_panel);
+        main_spliter.setDividerPosition(0, 1);
+    }
+
+    public void initializeAi() {
+        webE = ia_webvu_chat.getEngine();
+        installChatBridge();
+        installChatReplyFallback();
+        webE.loadContent(initialHtml);
+        txt_input_iaquery.addEventFilter(KeyEvent.KEY_PRESSED, this::handleAiInputKey);
+        btnmenu_choose_aimedia.getItems().clear();
+        responseHandler = new IaResponseHandler();
+        responseHandler.setOnAiMessageListener((String message, String name) -> {
+            System.out.println("msg : " + message);
+            Platform.runLater(() -> {
+                if (name.equals("[on-going]")) {
+                    webE.executeScript("appendBotPartial(" + escapeForJS(message) + ")");
+                } else if (name.equals("[end]")) {
+                    webE.executeScript("appendBotPartial(" + escapeForJS(message) + ")");
+                    webE.executeScript("endBotMessage()");
+                    evs.close();
+                } else if (name.equals("[notification]")) {
+                    if (!isNofication) {
+                        webE.executeScript("appendBotPartial(" + escapeForJS(message) + ")");
+                        webE.executeScript("endBotMessage()");
+                        isNofication = true;
+                        evs.close();
+                    }
+                }
+            });
+        });
+        MenuItem imagemenu = new MenuItem("Joindre une image");
+        MenuItem fichiermenu = new MenuItem("Joindre un fichier");
+        btnmenu_choose_aimedia.getItems().add(imagemenu);
+        btnmenu_choose_aimedia.getItems().add(fichiermenu);
+        imagemenu.setOnAction((ActionEvent event) -> {
+            addAttachemnts();
+        });
+        fichiermenu.setOnAction((ActionEvent event) -> {
+            addAttachemnts();
+        });
+    }
+
+    private void installChatBridge() {
+        chatBridge = new ChatBridge();
+        webE.getLoadWorker().stateProperty().addListener((observable, oldState, newState) -> {
+            if (newState == Worker.State.SUCCEEDED) {
+                exposeChatBridge();
+            }
+        });
+        if (webE.getLoadWorker().getState() == Worker.State.SUCCEEDED) {
+            exposeChatBridge();
+        }
+    }
+
+    private void exposeChatBridge() {
+        try {
+            JSObject window = (JSObject) webE.executeScript("window");
+            window.setMember("kazisafeChat", chatBridge);
+        } catch (Exception ex) {
+            Logger.getLogger(MainuiController.class.getName()).log(Level.FINE, "Chat bridge not ready", ex);
+        }
+    }
+
+    private void installChatReplyFallback() {
+        webE.titleProperty().addListener((observable, oldTitle, newTitle) -> handleChatReplyPayload(newTitle));
+        webE.setOnAlert((WebEvent<String> event) -> {
+            handleChatReplyPayload(event.getData());
+        });
+    }
+
+    private void handleChatReplyPayload(String data) {
+        if (data == null) {
+            return;
+        }
+        String replyPrefix = "__KAZISAFE_REPLY__";
+        String copyPrefix = "__KAZISAFE_COPY__";
+        if (data.startsWith(replyPrefix)) {
+            attachJemimaReplyToInput(decodeChatActionPayload(data.substring(replyPrefix.length())));
+        } else if (data.startsWith(copyPrefix)) {
+            copyTextToClipboard(decodeChatActionPayload(data.substring(copyPrefix.length())));
+        }
+    }
+
+    private String decodeChatActionPayload(String payload) {
+        int nonceIndex = payload.lastIndexOf('|');
+        if (nonceIndex >= 0) {
+            payload = payload.substring(0, nonceIndex);
+        }
+        return java.net.URLDecoder.decode(payload, StandardCharsets.UTF_8);
+    }
+
+    public class ChatBridge {
+
+        public void replyToJemima(String message) {
+            Platform.runLater(() -> attachJemimaReplyToInput(message));
+        }
+
+        public void copyJemimaMessage(String message) {
+            Platform.runLater(() -> copyTextToClipboard(message));
+        }
+    }
+
+    private void copyTextToClipboard(String message) {
+        ClipboardContent content = new ClipboardContent();
+        content.putString(message == null ? "" : message);
+        Clipboard.getSystemClipboard().setContent(content);
+    }
+
+    private void attachJemimaReplyToInput(String message) {
+        String cleaned = cleanQuotedJemimaMessage(message);
+        if (cleaned.isBlank()) {
+            return;
+        }
+        String quote = "Message de Jemima auquel je réponds:\n\"\"\"\n"
+                + cleaned
+                + "\n\"\"\"\n\n";
+        String current = txt_input_iaquery.getText() == null ? "" : txt_input_iaquery.getText();
+        if (current.isBlank()) {
+            txt_input_iaquery.setText(quote);
+        } else if (!current.contains(quote)) {
+            txt_input_iaquery.setText(quote + current);
+        }
+        txt_input_iaquery.requestFocus();
+        txt_input_iaquery.positionCaret(txt_input_iaquery.getText().length());
+    }
+
+    private String cleanQuotedJemimaMessage(String message) {
+        if (message == null) {
+            return "";
+        }
+        String cleaned = message
+                .replaceAll("!\\[[^\\]]*\\]\\(data:image/[^)]+\\)", "[image]")
+                .replaceAll("(?s)<think>.*?</think>", "")
+                .replace("\r", "")
+                .trim();
+        if (cleaned.length() > 1800) {
+            cleaned = cleaned.substring(0, 1800).trim() + "\n...";
+        }
+        return cleaned;
+    }
+
+    private String escapeForJS(String text) {
+        return ChatHtmlTemplate.jsString(text);
+    }
+
+    private String throwableMessage(Throwable error) {
+        if (error == null) {
+            return "erreur inconnue retournée par le flux IA.";
+        }
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
     }
 
     @FXML
@@ -375,13 +587,13 @@ public class MainuiController implements Initializable {
             ag.setLocalTaskStateListener(new LocalTaskStateListener() {
                 @Override
                 public void onFinish(boolean isfinished, String name) {
-                    if (name.contains("stock")) {
-                        sync_txt_message.setVisible(false);
-                        sync_pg_bar.setVisible(false);
-                        Platform.runLater(() -> {
+                    Platform.runLater(() -> {
+                        if (name.contains("stock")) {
+                            sync_txt_message.setVisible(false);
+                            sync_pg_bar.setVisible(false);
                             summarise();
-                        });
-                    }
+                        }
+                    });
                 }
 
                 @Override
@@ -437,7 +649,7 @@ public class MainuiController implements Initializable {
     public List<Vente> getVentes(LocalDate date) {
         LocalDate kesho = date.plusDays(1);
         List<Vente> vts = VenteDelegate.findAllByDateInterval(date, kesho);// db.findAllByDateInterval(Vente.class, d1,
-                                                                           // kesho);
+        // kesho);
         if (vts == null) {
             return null;
         }
@@ -525,7 +737,7 @@ public class MainuiController implements Initializable {
     public List<Vente> getVentes(LocalDate date, String region) {
         LocalDate kesho = date.plusDays(1);
         List<Vente> vts = VenteDelegate.findAllByDateInterval(date, kesho, region);// db.findAllByDateIntervalInRegion(Vente.class,
-                                                                                   // d1, kesho, region);
+        // d1, kesho, region);
         return vts;
     }
 
@@ -586,7 +798,7 @@ public class MainuiController implements Initializable {
         serie_prixderevient.setName(bundle.getString("xgraph.seri2_depens").trim());
         serie_resultat.setName(bundle.getString("xgraph.seri3_marg").trim());
         int month = LocalDate.now().getMonthValue();
-        System.out.println("mois en cours " + month);
+        // System.out.println("mois en cours " + month);
         List<Metric> kpis;
 
         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
@@ -631,7 +843,7 @@ public class MainuiController implements Initializable {
 
     public void summarise() {
         maker.setMainCurrency(pref.get("mainCur", "USD"));
-        System.out.println("is summary called");
+        // System.out.println("is summary called");
         creanceToday();
         loadSaleChart();
         loadProChart();
@@ -649,7 +861,7 @@ public class MainuiController implements Initializable {
         } else {
             entries = VenteDelegate.getTop10ProductDesc(region);
         }
-        System.out.println("entree " + entries.size());
+        // System.out.println("entree " + entries.size());
         for (TopTen top : entries) {
             PieChart.Data data = new PieChart.Data(top.nomp(), top.quantite());
 
@@ -731,18 +943,30 @@ public class MainuiController implements Initializable {
 
     private ImageView menuForView(String viewName) {
         return switch (viewName) {
-            case tools.Constants.MAIN -> home;
-            case tools.Constants.PRODUIT -> products_gate;
-            case tools.Constants.CAISSES -> caisse;
-            case tools.Constants.IMMOBILISATIONS -> immobilisation;
-            case tools.Constants.STORAGE -> stockage;
-            case tools.Constants.POS -> pos;
-            case tools.Constants.PRODUCTION -> production;
-            case tools.Constants.AGENTS -> agents;
-            case tools.Constants.REPPORTS -> rapport;
-            case tools.Constants.ENTREPRISE -> compagnie;
-            case tools.Constants.PARAMETRES -> parametre;
-            default -> null;
+            case tools.Constants.MAIN ->
+                home;
+            case tools.Constants.PRODUIT ->
+                products_gate;
+            case tools.Constants.CAISSES ->
+                caisse;
+            case tools.Constants.IMMOBILISATIONS ->
+                immobilisation;
+            case tools.Constants.STORAGE ->
+                stockage;
+            case tools.Constants.POS ->
+                pos;
+            case tools.Constants.PRODUCTION ->
+                production;
+            case tools.Constants.AGENTS ->
+                agents;
+            case tools.Constants.REPPORTS ->
+                rapport;
+            case tools.Constants.ENTREPRISE ->
+                compagnie;
+            case tools.Constants.PARAMETRES ->
+                parametre;
+            default ->
+                null;
         };
     }
 
@@ -882,7 +1106,7 @@ public class MainuiController implements Initializable {
                         .add("Authorization", "Bearer " + token).build();
                 EventSource.Builder evb = new EventSource.Builder(evh, URI.create(url))
                         .headers(headers)
-                        .reconnectTime(1, TimeUnit.SECONDS).readTimeout(29, TimeUnit.HOURS);
+                        .reconnectTime(30, TimeUnit.SECONDS).readTimeout(29, TimeUnit.HOURS);
                 EventSource evs = evb.build();
                 if (evh instanceof tools.NotificationHandler) {
                     ((tools.NotificationHandler) evh).setEventSource(evs);
@@ -955,24 +1179,36 @@ public class MainuiController implements Initializable {
     }
 
     @FXML
-    private void onHoverHome(MouseEvent event) {
-        ImageView img = (ImageView) event.getSource();
-        MainUI.setShadowEffect(img);
+    private void onHoverHome(Event event) {
+        Object obj = event.getSource();
+        if (obj instanceof ImageView img) {
+            MainUI.setShadowEffect(img);
+        } else if (obj instanceof Label img) {
+            MainUI.setShadowEffect(img);
+        }
     }
 
     @FXML
-    private void onExitOverlay(MouseEvent event) {
-        ImageView img = (ImageView) event.getSource();
-        MainUI.setShadowAlertEffect(img);
+    private void onExitOverlay(Event event) {
+        Object obj = event.getSource();
+        if (obj instanceof ImageView img) {
+            MainUI.setShadowAlertEffect(img);
+        } else if (obj instanceof Label img) {
+            MainUI.setShadowAlertEffect(img);
+        }
     }
 
     @FXML
     private void onOutHome(MouseEvent event) {
-        ImageView img = (ImageView) event.getSource();
-        if (img == activeMenuIcon) {
-            return;
+        Object obj = event.getSource();
+        if (obj instanceof ImageView img) {
+            if (img == activeMenuIcon) {
+                return;
+            }
+            MainUI.removeShaddowEffect(img);
+        } else if (obj instanceof Label img) {
+            MainUI.removeShaddowEffect(img);
         }
-        MainUI.removeShaddowEffect(img);
     }
 
     public void centerImage(ImageView imageView) {
@@ -1046,7 +1282,7 @@ public class MainuiController implements Initializable {
                 role = loginResult.getRole();
                 List<Permission> perms = drx.readValue(loginResult.getJsonPermissions(),
                         new TypeReference<List<Permission>>() {
-                        });
+                });
                 List<Permission> tosave = perms.stream()
                         .map(p -> {
                             p.setTablename(loginResult.getUserContract());
@@ -1136,6 +1372,7 @@ public class MainuiController implements Initializable {
         entreprisex.setIdentification(logr.getRccm());
         entreprisex.setNumeroImpot(logr.getNumeroImpot());
         entreprisex.setPhones(logr.getPhoneEntrerprise());
+        AiAgents.getInstance().startForUser(logr.getUserId(), logr.getEntrepriseId());
 
         Platform.runLater(new Runnable() {
             @Override
@@ -1152,27 +1389,27 @@ public class MainuiController implements Initializable {
         if (logr.getUserId() != null && !logr.getUserId().isBlank()) {
             kazisafe.downloadUserPhotoSecurely(logr.getUserId())
                     .enqueue(new Callback<ResponseBody>() {
-                    @Override
-                    public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
-                        if (rspns.isSuccessful()) {
-                            InputStream is = rspns.body().byteStream();
-                            Image image = new Image(is, 90, 94, true, true);
-                            img_profile.setImage(MainUI.makeTransparent(image));
-                            Circle clip = new Circle(16);
-                            clip.setStrokeType(StrokeType.CENTERED);
-                            clip.setStroke(Color.valueOf("#44cef5"));
-                            clip.setStrokeWidth(3);
-                            clip.setCenterX(img_profile.getFitWidth() / 2);
-                            clip.setCenterY(img_profile.getFitHeight() / 2);
-                            img_profile.setClip(clip);
-                            centerImage(img_profile);
+                        @Override
+                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
+                            if (rspns.isSuccessful()) {
+                                InputStream is = rspns.body().byteStream();
+                                Image image = new Image(is, 90, 94, true, true);
+                                img_profile.setImage(MainUI.makeTransparent(image));
+                                Circle clip = new Circle(16);
+                                clip.setStrokeType(StrokeType.CENTERED);
+                                clip.setStroke(Color.valueOf("#44cef5"));
+                                clip.setStrokeWidth(3);
+                                clip.setCenterX(img_profile.getFitWidth() / 2);
+                                clip.setCenterY(img_profile.getFitHeight() / 2);
+                                img_profile.setClip(clip);
+                                centerImage(img_profile);
+                            }
                         }
-                    }
 
-                    @Override
-                    public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
-                        System.err.println("Erreur image profile " + thrwbl.getMessage());
-                    }
+                        @Override
+                        public void onFailure(Call<ResponseBody> call, Throwable thrwbl) {
+                            System.err.println("Erreur image profile " + thrwbl.getMessage());
+                        }
                     });
         }
         kazisafe.downloadLogo(logr.getEntrepriseId())
@@ -1606,7 +1843,6 @@ public class MainuiController implements Initializable {
         Tooltip.install(parametre, perf);
     }
 
-    @FXML
     private void synchronizeWithServer(MouseEvent event) {
         if (isConnected) {
             SyncEngine.getInstance().syncWithHttpProtocol(label_status, kazisafe);
@@ -1625,8 +1861,10 @@ public class MainuiController implements Initializable {
 
     @FXML
     private void callAssistantDialog(MouseEvent event) {
-        MainUI.showAssistantIa(tools.Constants.ASSISTANT_DLG, 663, 685, this.entreprisex,
-                this.user_connected.getText());
+        openAiPanel(event);
+//        MainUI.showAssistantIa(tools.Constants.ASSISTANT_DLG, 663, 685, this.entreprisex,
+//                this.user_connected.getText());
+
     }
 
     private static class DownloadTask extends Task<Void> {
@@ -1643,8 +1881,7 @@ public class MainuiController implements Initializable {
         protected Void call() throws Exception {
             URLConnection connexion = new URL("https://www.kazisafe.com/download/" + this.url).openConnection();
             long taille = connexion.getContentLengthLong();
-            try (InputStream is = connexion.getInputStream();
-                    OutputStream os = Files.newOutputStream(Paths.get(localPath + "/" + url))) {
+            try (InputStream is = connexion.getInputStream(); OutputStream os = Files.newOutputStream(Paths.get(localPath + "/" + url))) {
                 long nread = 0L;
                 byte[] buffer = new byte[8192];
                 int n;
@@ -1735,5 +1972,375 @@ public class MainuiController implements Initializable {
             result = s;
         }
         return result;
+    }
+
+    @FXML
+    public void closeAiPanel(Event e) {
+        main_spliter.getItems().removeAll(ai_panel);
+        main_spliter.setDividerPosition(0, 1);
+    }
+
+    public void openAiPanel(Event e) {
+        if(main_spliter.getItems().contains(ai_panel)){
+            return;
+        }
+        main_spliter.getItems().add(ai_panel);
+        main_spliter.setDividerPosition(0, 0.9);
+    }
+
+    @FXML
+    private void sendMessage(Event event) {
+        this.token = pref.get("token", null);
+        sendText();
+    }
+
+    private String urlWithMessage(String message) {
+        String q = URLEncoder.encode(message, StandardCharsets.UTF_8);
+        String url = KazisafeServiceFactory.BASE_URL + "ia/ask?q=" + q;
+        return url;
+    }
+
+    private void sendText() {
+        String question = txt_input_iaquery.getText() == null ? "" : txt_input_iaquery.getText().trim();
+        List<File> attachments = new ArrayList<>(aiAttachments);
+        if (question.isBlank() && attachments.isEmpty()) {
+            MainUI.notify(null, "", "Veuillez envoyer un message valide", 4, "error");
+            return;
+        }
+        new Thread(() -> {
+            Platform.runLater(() -> {
+                webE.executeScript("appendUser(" + escapeForJS(question + userAttachmentPreviewMarkdown(attachments)) + ")");
+                txt_input_iaquery.clear();
+                aiAttachments.clear();
+                refreshAttachmentLabel();
+            });
+            
+            jemimaAssistantClient.stream(question, attachments,getEntreprisex().getNomEntreprise(), new JemimaAssistantClient.StreamCallback() {
+                @Override
+                public void onToken(String token) {
+                    Platform.runLater(() -> {
+                        if (!handleSecureMysqlPasswordRequest(token)) {
+                            webE.executeScript("appendBotAnswer(" + escapeForJS(token) + ")");
+                        }
+                    });
+                }
+
+                @Override
+                public void onProcess(String message) {
+                    Platform.runLater(() -> {
+                        if (!handleSecureMysqlPasswordRequest(message)) {
+                            webE.executeScript("showBotProcess(" + escapeForJS(message) + ")");
+                        }
+                    });
+                }
+
+                @Override
+                public void onComplete() {
+                    Platform.runLater(() -> webE.executeScript("endBotMessage()"));
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    Platform.runLater(() -> {
+                        webE.executeScript("appendBotPartial(" + escapeForJS("Impossible de joindre Jemima via Ollama: " + throwableMessage(error)) + ")");
+                        webE.executeScript("endBotMessage()");
+                    });
+                }
+            });
+        }).start();
+
+    }
+
+    private boolean handleSecureMysqlPasswordRequest(String message) {
+        SecureMysqlRequest request = SecureMysqlRequest.from(message);
+        if (request == null) {
+            return false;
+        }
+        if (!handledSecureMysqlRequests.add(request.key())) {
+            return true;
+        }
+        webE.executeScript("showBotProcess(" + escapeForJS("Saisie sécurisée du mot de passe root MySQL requise.") + ")");
+        Optional<String> password = requestMysqlRootPassword(request);
+        if (password.isEmpty() || password.get().isBlank()) {
+            webE.executeScript("appendBotAnswer(" + escapeForJS("Configuration annulée: aucun mot de passe root MySQL n'a été saisi.") + ")");
+            webE.executeScript("endBotMessage()");
+            return true;
+        }
+        runSecureMysqlAction(request, password.get());
+        return true;
+    }
+
+    private Optional<String> requestMysqlRootPassword(SecureMysqlRequest request) {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Mot de passe MySQL");
+        dialog.setHeaderText("Saisie sécurisée requise");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Mot de passe root MySQL");
+        VBox content = new VBox(8);
+        content.getChildren().addAll(
+                new Label("Replica: " + request.replicaHost() + ":" + request.replicaPort()),
+                new Label("Le mot de passe ne sera pas affiché dans le chat."),
+                passwordField);
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setResultConverter(button -> button == ButtonType.OK ? passwordField.getText() : null);
+        Platform.runLater(passwordField::requestFocus);
+        return dialog.showAndWait();
+    }
+
+    private void runSecureMysqlAction(SecureMysqlRequest request, String password) {
+        new Thread(() -> {
+            JemimaTools tools = AiAgents.getInstance().getJemimaTools();
+            String token = tools.registerMysqlRootPasswordToken(password);
+            String result;
+            if ("test".equalsIgnoreCase(request.action())) {
+                result = tools.testMysqlReplicaStatus(request.replicaHost(), request.replicaPort(), token);
+            } else {
+                result = tools.executeMysqlReplicaConfiguration(request.planId(), request.replicaHost(), request.replicaPort(), token);
+            }
+            Platform.runLater(() -> {
+                webE.executeScript("appendBotAnswer(" + escapeForJS(result) + ")");
+                webE.executeScript("endBotMessage()");
+            });
+        }, "jemima-secure-mysql-action").start();
+    }
+
+    private record SecureMysqlRequest(String action, String planId, String replicaHost, int replicaPort) {
+
+        private static SecureMysqlRequest from(String message) {
+            if (message == null) {
+                return null;
+            }
+            int index = message.indexOf(JemimaTools.SECURE_MYSQL_PASSWORD_REQUEST);
+            if (index < 0) {
+                return null;
+            }
+            String payload = message.substring(index).split("\\R", 2)[0];
+            String action = "";
+            String planId = "";
+            String replicaHost = "";
+            int replicaPort = 3306;
+            for (String part : payload.split("\\|")) {
+                int equal = part.indexOf('=');
+                if (equal <= 0) {
+                    continue;
+                }
+                String key = part.substring(0, equal).trim();
+                String value = part.substring(equal + 1).trim();
+                switch (key) {
+                    case "action" ->
+                        action = value;
+                    case "planId" ->
+                        planId = value;
+                    case "replicaHost" ->
+                        replicaHost = value;
+                    case "replicaPort" ->
+                        replicaPort = parsePort(value);
+                    default -> {
+                    }
+                }
+            }
+            if (replicaHost.isBlank()) {
+                return null;
+            }
+            return new SecureMysqlRequest(action, planId, replicaHost, replicaPort);
+        }
+
+        private static int parsePort(String value) {
+            try {
+                int parsed = Integer.parseInt(value);
+                return parsed <= 0 ? 3306 : parsed;
+            } catch (NumberFormatException ex) {
+                return 3306;
+            }
+        }
+
+        private String key() {
+            return action + "|" + planId + "|" + replicaHost + "|" + replicaPort;
+        }
+    }
+
+    private void addAttachemnts() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Joindre un fichier à Jemima");
+        List<File> selectedFiles = chooser.showOpenMultipleDialog(ia_webvu_chat.getScene().getWindow());
+        if (selectedFiles == null || selectedFiles.isEmpty()) {
+            return;
+        }
+        aiAttachments.addAll(selectedFiles);
+        refreshAttachmentLabel();
+    }
+
+    private void refreshAttachmentLabel() {
+        if (txt_selected_attachment == null) {
+            return;
+        }
+        if (aiAttachments.isEmpty()) {
+            txt_selected_attachment.setText("Aucun attache");
+            clearAttachmentPreviews();
+            return;
+        }
+        txt_selected_attachment.setText(aiAttachments.size() + " fichier(s) joint(s)");
+        refreshAttachmentPreviews();
+    }
+
+    private void refreshAttachmentPreviews() {
+        if (box_ai_attachment_previews == null) {
+            return;
+        }
+        clearAttachmentPreviews();
+        int limit = Math.min(aiAttachments.size(), 8);
+        for (int i = 0; i < limit; i++) {
+            ImageView preview = createAttachmentPreview(aiAttachments.get(i));
+            if (preview != null) {
+                box_ai_attachment_previews.getChildren().add(preview);
+            }
+        }
+        if (aiAttachments.size() > limit) {
+            Label more = new Label("+" + (aiAttachments.size() - limit));
+            more.setStyle("-fx-text-fill: #72819c; -fx-font-size: 11px; -fx-padding: 0 4 0 2;");
+            box_ai_attachment_previews.getChildren().add(more);
+        }
+        box_ai_attachment_previews.setVisible(!box_ai_attachment_previews.getChildren().isEmpty());
+    }
+
+    private ImageView createAttachmentPreview(File file) {
+        if (file == null) {
+            return null;
+        }
+        try {
+            Image image = isImageAttachment(file)
+                    ? new Image(file.toURI().toString(), 30, 30, true, true)
+                    : new Image(getClass().getResourceAsStream(attachmentIcon(file)), 30, 30, true, true);
+            ImageView preview = new ImageView(image);
+            preview.setFitHeight(30);
+            preview.setFitWidth(30);
+            preview.setPreserveRatio(true);
+            preview.setPickOnBounds(true);
+            preview.setCursor(Cursor.HAND);
+            preview.setOnMouseClicked(event -> {
+                aiAttachments.remove(file);
+                refreshAttachmentLabel();
+            });
+            Tooltip.install(preview, new Tooltip(file.getName() + "\nCliquer pour retirer ce fichier"));
+            return preview;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private void clearAttachmentPreviews() {
+        if (box_ai_attachment_previews != null) {
+            box_ai_attachment_previews.getChildren().clear();
+            box_ai_attachment_previews.setVisible(false);
+        }
+    }
+
+    private boolean isImageAttachment(File file) {
+        String name = file.getName().toLowerCase(Locale.ROOT);
+        return name.endsWith(".png")
+                || name.endsWith(".jpg")
+                || name.endsWith(".jpeg")
+                || name.endsWith(".gif")
+                || name.endsWith(".bmp")
+                || name.endsWith(".webp");
+    }
+
+    private String userAttachmentPreviewMarkdown(List<File> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder("\n\n|Fichiers joints|\n|---|\n");
+        for (File file : attachments) {
+            if (file == null) {
+                continue;
+            }
+            String imageMarkdown = isImageAttachment(file)
+                    ? attachmentImageMarkdown(file)
+                    : attachmentIconMarkdown(file);
+            builder.append("|")
+                    .append(imageMarkdown)
+                    .append(" ")
+                    .append(markdownTableCell(file.getName()))
+                    .append("|\n");
+        }
+        return builder.toString();
+    }
+
+    private String attachmentImageMarkdown(File file) {
+        try {
+            BufferedImage source = ImageIO.read(file);
+            if (source == null) {
+                return attachmentIconMarkdown(file);
+            }
+            BufferedImage thumb = thumbnail(source, 220, 160);
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                ImageIO.write(thumb, "png", out);
+                return dataImageMarkdown(file.getName(), out.toByteArray());
+            }
+        } catch (IOException ex) {
+            return attachmentIconMarkdown(file);
+        }
+    }
+
+    private BufferedImage thumbnail(BufferedImage source, int maxWidth, int maxHeight) {
+        double scale = Math.min((double) maxWidth / source.getWidth(), (double) maxHeight / source.getHeight());
+        scale = Math.min(1d, scale);
+        int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+        int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+        BufferedImage target = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = target.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(source, 0, 0, width, height, null);
+        } finally {
+            graphics.dispose();
+        }
+        return target;
+    }
+
+    private String attachmentIconMarkdown(File file) {
+        try (InputStream input = getClass().getResourceAsStream(attachmentIcon(file))) {
+            if (input == null) {
+                return "`FICHIER`";
+            }
+            return dataImageMarkdown(file.getName(), input.readAllBytes());
+        } catch (IOException ex) {
+            return "`FICHIER`";
+        }
+    }
+
+    private String dataImageMarkdown(String alt, byte[] bytes) {
+        return "![" + markdownAlt(alt) + "](data:image/png;base64," + Base64.getEncoder().encodeToString(bytes) + ")";
+    }
+
+    private String markdownAlt(String value) {
+        return value == null ? "fichier" : value.replace("]", "").replace("[", "").replace("\n", " ");
+    }
+
+    private String markdownTableCell(String value) {
+        return value == null ? "-" : value.replace("|", "/").replace("\n", " ").replace("\r", " ").trim();
+    }
+
+    private String attachmentIcon(File file) {
+        String name = file.getName().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".pdf")) {
+            return "/icons/download-pdf.png";
+        }
+        if (name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".csv")) {
+            return "/icons/xls(4).png";
+        }
+        return "/icons/effacer-le-fichier.png";
+    }
+
+    private void handleAiInputKey(KeyEvent event) {
+        if (event.getCode() == KeyCode.ENTER && event.isShiftDown()) {
+            event.consume();
+            txt_input_iaquery.insertText(txt_input_iaquery.getCaretPosition(), System.lineSeparator());
+        } else if (event.getCode() == KeyCode.ENTER) {
+            event.consume();
+            sendMessage(event);
+        }
     }
 }

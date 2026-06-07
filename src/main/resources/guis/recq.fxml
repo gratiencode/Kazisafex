@@ -93,6 +93,36 @@
                         </Label>
                         <Separator layoutX="-2.0" layoutY="99.0" prefHeight="3.0" prefWidth="702.0" AnchorPane.leftAnchor="-2.0" AnchorPane.rightAnchor="-1.0" />
                         <TextField fx:id="tf_alerte_req" layoutX="525.0" layoutY="54.0" prefHeight="30.0" prefWidth="148.0" promptText="%xalerte_stk" AnchorPane.rightAnchor="27.0" />
+                        <Label layoutX="38.0" layoutY="8.0" style="-fx-background-color: white;" text="%xcol.lot">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="363.0" layoutY="46.0" prefHeight="16.0" prefWidth="86.0" style="-fx-background-color: white;" text="%xcout_achat_unitaire">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="38.0" layoutY="46.0" style="-fx-background-color: white;" text="%xcol.quantite">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="538.0" layoutY="46.0" style="-fx-background-color: white;" text="%xalerte_stk">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="492.0" layoutY="7.0" style="-fx-background-color: white;" text="Observation (facultatif)">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="236.0" layoutY="8.0" style="-fx-background-color: white;" text="%xdate_expir_oblig">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
                      </children>
                   </AnchorPane>
                </content>
@@ -194,6 +224,21 @@
                </content>
             </ScrollPane>
             <Separator layoutX="1.0" layoutY="202.0" prefHeight="4.0" prefWidth="476.0" />
+            <Label layoutX="25.0" layoutY="60.0" style="-fx-background-color: white;" text="Qte min">
+               <font>
+                  <Font size="11.0" />
+               </font>
+            </Label>
+            <Label layoutX="191.0" layoutY="60.0" style="-fx-background-color: white;" text="Qte max">
+               <font>
+                  <Font size="11.0" />
+               </font>
+            </Label>
+            <Label layoutX="24.0" layoutY="109.0" style="-fx-background-color: white;" text="Prix de vente">
+               <font>
+                  <Font size="11.0" />
+               </font>
+            </Label>
          </children>
          <effect>
             <DropShadow />

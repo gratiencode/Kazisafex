@@ -17,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -34,11 +35,13 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.chart.LineChart;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
@@ -60,21 +63,23 @@ import data.Vente;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import services.utils.RegionRegistry;
 import tools.ChartItem;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.FinancialStatementPdfExporter;
+import tools.FinancialStatementRow;
 import tools.Util;
 import tools.VenteReporter;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import data.core.KazisafeServiceFactory;
-import data.finance.BilanReport;
-import data.finance.CompteResultatReport;
 import delegates.PeriodeDelegate;
 import delegates.RepportDelegate;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Executors;
 import javafx.scene.image.Image;
+import services.FinancialStatementAgregateService;
 import tools.SaleReport;
 
 /**
@@ -114,6 +119,8 @@ public class RepportController implements Initializable {
     @FXML
     private Label txt_depense_report;
     @FXML
+    private Label txt_amort_report;
+    @FXML
     private Label txt_creance_report;
 
     @FXML
@@ -139,8 +146,7 @@ public class RepportController implements Initializable {
     @FXML
     Label totalSaleperCat;
 
-    private BilanReport currentBilan;
-    private CompteResultatReport currentCR;
+    private final FinancialStatementAgregateService financialStatementService = new FinancialStatementAgregateService();
 
     private static RepportController instance;
     Entreprise entreprise;
@@ -223,6 +229,8 @@ public class RepportController implements Initializable {
     @FXML
     private ComboBox<String> cbx_periodicity;
     @FXML
+    private ComboBox<String> cbx_financial_history_span;
+    @FXML
     private Label lbl_comment_CA;
     @FXML
     private ImageView img_indic_CA;
@@ -257,49 +265,70 @@ public class RepportController implements Initializable {
     @FXML
     private Label lbl_imo_status;
     @FXML
-    private Label lbl_bilan_immobilise;
-    @FXML
-    private Label lbl_bilan_circulant;
-    @FXML
-    private Label lbl_bilan_dispo;
-    @FXML
-    private Label lbl_bilan_total_actif;
-    @FXML
-    private Label lbl_bilan_capitaux;
-    @FXML
-    private Label lbl_bilan_dettes;
-    @FXML
-    private Label lbl_bilan_total_passif;
-    @FXML
-    private Label lbl_cr_ca;
-    @FXML
-    private Label lbl_cr_cout_vente;
-    @FXML
-    private Label lbl_cr_marge;
-    @FXML
-    private Label lbl_cr_dep_ops;
-    @FXML
-    private Label lbl_cr_amort;
-    @FXML
-    private Label lbl_cr_var_stock;
-    @FXML
-    private Label lbl_cr_result_expl;
-    @FXML
-    private Label lbl_cr_impot;
-    @FXML
-    private Label lbl_cr_result_net;
-    @FXML
-    private Label lbl_cr_industriel;
-    @FXML
-    private Label lbl_flux_encaiss;
-    @FXML
-    private Label lbl_flux_decaiss;
-    @FXML
-    private Label lbl_flux_net;
-    @FXML
     private AnchorPane pane_financial_states;
+    @FXML
+    private TableView<FinancialStatementRow> tb_fin_bilan;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_code;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_rubrique;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_nature;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_n;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_n1;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_n2;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_n3;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_bilan_n4;
+    @FXML
+    private TableView<FinancialStatementRow> tb_fin_cr;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_code;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_rubrique;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_nature;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_n;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_n1;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_n2;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_n3;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_cr_n4;
+    @FXML
+    private TableView<FinancialStatementRow> tb_fin_flux;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_code;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_rubrique;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_nature;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_n;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_n1;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_n2;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_n3;
+    @FXML
+    private TableColumn<FinancialStatementRow, String> col_fin_flux_n4;
 
     private ObservableList<Immobilisation> immobilisations;
+    private final ObservableList<FinancialStatementRow> bilanRows = FXCollections.observableArrayList();
+    private final ObservableList<FinancialStatementRow> compteResultatRows = FXCollections.observableArrayList();
+    private final ObservableList<FinancialStatementRow> fluxRows = FXCollections.observableArrayList();
+    private int financialHistorySpan = 5;
+
+    @FXML
+    private CheckBox chk_filter_zeros;
 
     public RepportController() {
         instance = this;
@@ -530,8 +559,8 @@ public class RepportController implements Initializable {
         ltxt_result_reporterie = FXCollections.observableArrayList();
         lsventes = FXCollections.observableArrayList();
         cbx_duration_report
-                .setItems(FXCollections.observableArrayList("Ponctuel", "Par jours", "Par mois", "Par année"));
-        cbx_periodicity.setItems(FXCollections.observableArrayList("Mensuel", "Annuel"));
+                .setItems(FXCollections.observableArrayList("Ponctuel", "Par jours", "Par mois", "Par trimestre", "Par année"));
+        cbx_periodicity.setItems(FXCollections.observableArrayList("Mensuel", "Trimestriel", "Annuel"));
         cbx_periodicity.getSelectionModel().selectFirst();
         cbx_regions.setItems(regions);
         tbreport.setItems(ventePr);
@@ -611,6 +640,7 @@ public class RepportController implements Initializable {
                         return;
                     }
                     region = newValue;
+                    loadFinancialStatements();
                     Executors.newSingleThreadExecutor()
                             .submit(() -> {
                                 List<SaleReport> rps = rapporterParProduit(dpk_debut_report.getValue(),
@@ -624,12 +654,14 @@ public class RepportController implements Initializable {
                 (ObservableValue<? extends LocalDate> observable, LocalDate oldValue, LocalDate newValue) -> {
                     evaluate();
                     summarise();
+                    refreshFinancialColumnHeaders();
                     loadFinancialStatements();
                 });
         dpk_fin_report.valueProperty().addListener(
                 (ObservableValue<? extends LocalDate> observable, LocalDate oldValue, LocalDate newValue) -> {
                     evaluate();
                     summarise();
+                    refreshFinancialColumnHeaders();
                     loadFinancialStatements();
                 });
         dpk_debut_report.setValue(LocalDate.now().minusMonths(LocalDate.now().getMonthValue() - 1));
@@ -646,46 +678,154 @@ public class RepportController implements Initializable {
                     "warning");
             return;
         }
-        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Rapport regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
 
     }
 
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
+    private void configureFinancialTables() {
+        configureFinancialTable(tb_fin_bilan, col_fin_bilan_code, col_fin_bilan_rubrique, col_fin_bilan_nature,
+                col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4);
+        configureFinancialTable(tb_fin_cr, col_fin_cr_code, col_fin_cr_rubrique, col_fin_cr_nature, col_fin_cr_n,
+                col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4);
+        configureFinancialTable(tb_fin_flux, col_fin_flux_code, col_fin_flux_rubrique, col_fin_flux_nature,
+                col_fin_flux_n, col_fin_flux_n1, col_fin_flux_n2, col_fin_flux_n3, col_fin_flux_n4);
+        tb_fin_bilan.setItems(bilanRows);
+        tb_fin_cr.setItems(compteResultatRows);
+        tb_fin_flux.setItems(fluxRows);
+        configureFinancialHistorySelector();
+        configureFilterZeros();
+    }
 
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
+    private void configureFilterZeros() {
+        if (chk_filter_zeros != null) {
+            chk_filter_zeros.selectedProperty().addListener((obs, oldVal, newVal) -> {
+                loadFinancialStatements(); // Reload/re-filter when toggled
+            });
+        }
+    }
+
+    private void configureFinancialTable(TableView<FinancialStatementRow> table,
+            TableColumn<FinancialStatementRow, String> codeCol,
+            TableColumn<FinancialStatementRow, String> rubriqueCol,
+            TableColumn<FinancialStatementRow, String> natureCol,
+            TableColumn<FinancialStatementRow, String> nCol,
+            TableColumn<FinancialStatementRow, String> n1Col,
+            TableColumn<FinancialStatementRow, String> n2Col,
+            TableColumn<FinancialStatementRow, String> n3Col,
+            TableColumn<FinancialStatementRow, String> n4Col) {
+        codeCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getCode()));
+        rubriqueCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getRubrique()));
+        natureCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getNature()));
+        nCol.setCellValueFactory(param -> new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmountN())));
+        n1Col.setCellValueFactory(param -> new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmountN1())));
+        n2Col.setCellValueFactory(param -> new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmountN2())));
+        n3Col.setCellValueFactory(param -> new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmountN3())));
+        n4Col.setCellValueFactory(param -> new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmountN4())));
+        
+        table.getColumns().setAll(codeCol, rubriqueCol, natureCol, nCol, n1Col, n2Col, n3Col, n4Col);
+        
+        table.setRowFactory(tv -> new TableRow<>() {
+            @Override
+            protected void updateItem(FinancialStatementRow item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setStyle("");
+                    return;
+                }
+                if (item.isTotalLine()) {
+                    setStyle("-fx-font-weight: bold; -fx-background-color: #d2e8f0;");
+                } else if (item.isSectionHeader()) {
+                    setStyle("-fx-font-weight: bold; -fx-background-color: #dcf4fc;");
+                } else {
+                    setStyle("");
                 }
             }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
+        });
+    }
+
+    private void configureFinancialHistorySelector() {
+        if (cbx_financial_history_span == null) {
+            return;
         }
-        return result;
+        cbx_financial_history_span.setItems(FXCollections.observableArrayList("4 trimestres", "3 ans", "5 ans"));
+        cbx_financial_history_span.getSelectionModel().select("5 ans");
+        cbx_financial_history_span.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue == null) {
+                return;
+            }
+            financialHistorySpan = newValue.startsWith("4") ? 4 : (newValue.startsWith("3") ? 3 : 5);
+            refreshFinancialColumnHeaders();
+            loadFinancialStatements();
+        });
+        refreshFinancialColumnHeaders();
+    }
+
+    private void refreshFinancialColumnHeaders() {
+        LocalDate endDate = dpk_fin_report != null && dpk_fin_report.getValue() != null ? dpk_fin_report.getValue() : LocalDate.now();
+        if (financialHistorySpan == 4) {
+            applyQuarterHeaders(col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4, endDate);
+            applyQuarterHeaders(col_fin_cr_n, col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4, endDate);
+            applyQuarterHeaders(col_fin_flux_n, col_fin_flux_n1, col_fin_flux_n2, col_fin_flux_n3, col_fin_flux_n4, endDate);
+        } else {
+            int endYear = endDate.getYear();
+            applyYearHeaders(col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4, endYear);
+            applyYearHeaders(col_fin_cr_n, col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4, endYear);
+            applyYearHeaders(col_fin_flux_n, col_fin_flux_n1, col_fin_flux_n2, col_fin_flux_n3, col_fin_flux_n4, endYear);
+        }
+        boolean showFiveYears = financialHistorySpan == 5;
+        boolean showFourQuarters = financialHistorySpan == 4;
+        col_fin_bilan_n3.setVisible(showFiveYears || showFourQuarters);
+        col_fin_bilan_n4.setVisible(showFiveYears);
+        col_fin_cr_n3.setVisible(showFiveYears || showFourQuarters);
+        col_fin_cr_n4.setVisible(showFiveYears);
+        col_fin_flux_n3.setVisible(showFiveYears || showFourQuarters);
+        col_fin_flux_n4.setVisible(showFiveYears);
+    }
+
+    private void applyYearHeaders(TableColumn<FinancialStatementRow, String> nCol,
+            TableColumn<FinancialStatementRow, String> n1Col,
+            TableColumn<FinancialStatementRow, String> n2Col,
+            TableColumn<FinancialStatementRow, String> n3Col,
+            TableColumn<FinancialStatementRow, String> n4Col,
+            int endYear) {
+        nCol.setText(String.valueOf(endYear));
+        n1Col.setText(String.valueOf(endYear - 1));
+        n2Col.setText(String.valueOf(endYear - 2));
+        n3Col.setText(String.valueOf(endYear - 3));
+        n4Col.setText(String.valueOf(endYear - 4));
+    }
+
+    private void applyQuarterHeaders(TableColumn<FinancialStatementRow, String> nCol,
+            TableColumn<FinancialStatementRow, String> n1Col,
+            TableColumn<FinancialStatementRow, String> n2Col,
+            TableColumn<FinancialStatementRow, String> n3Col,
+            TableColumn<FinancialStatementRow, String> n4Col,
+            LocalDate endDate) {
+        int quarter = (endDate.getMonthValue() - 1) / 3 + 1;
+        int year = endDate.getYear();
+        nCol.setText("T" + quarter + " " + year);
+        
+        quarter--;
+        if (quarter < 1) { quarter = 4; year--; }
+        n1Col.setText("T" + quarter + " " + year);
+        
+        quarter--;
+        if (quarter < 1) { quarter = 4; year--; }
+        n2Col.setText("T" + quarter + " " + year);
+        
+        quarter--;
+        if (quarter < 1) { quarter = 4; year--; }
+        n3Col.setText("T" + quarter + " " + year);
+        
+        n4Col.setText("");
+    }
+
+    private String formatFinancialAmount(Double amount) {
+        if (amount == null) {
+            return "0";
+        }
+        return Util.toPlain(scale(amount));
     }
 
     @FXML
@@ -839,6 +979,7 @@ public class RepportController implements Initializable {
                     System.out.println("is summary called");
                     dashCardVente();
                     dashCardDepense();
+                    dashCardAmort();
                     dashCardResult();
                     creanceToday();
                 });
@@ -846,7 +987,10 @@ public class RepportController implements Initializable {
     }
 
     private String detectRegion(String role) {
-        return role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name()) ? "%" : region;
+        if (role == null) {
+            return region;
+        }
+        return role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? "%" : region;
     }
 
     private void ponctuel() {
@@ -869,6 +1013,7 @@ public class RepportController implements Initializable {
             }
             evaluate();
             summarise();
+            refreshFinancialColumnHeaders();
             loadFinancialStatements();
         }
     }
@@ -965,6 +1110,7 @@ public class RepportController implements Initializable {
         MainUI.setPattern(dpk_debut_report);
         dpk_debut_report.setValue(LocalDate.now());
         dpk_fin_report.setValue(LocalDate.now().minusMonths(1));
+        configureFinancialTables();
         configTableVentePerProd();
         devise = pref.get("mainCur", "USD");
         region = pref.get("region", "...");
@@ -1032,6 +1178,18 @@ public class RepportController implements Initializable {
         Platform.runLater(() -> {
             txt_depense_report.setText(devise + " "
                     + formatNumber(BigDecimal.valueOf(exp).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+        });
+    }
+
+    public void dashCardAmort() {
+        LocalDate kesho = dpk_fin_report.getValue();
+        LocalDate d1 = dpk_debut_report.getValue();
+        double amort = RepportDelegate.aggregatedAmortizationOf(d1, kesho, region == null ? "%" : region);
+        Platform.runLater(() -> {
+            if (txt_amort_report != null) {
+                txt_amort_report.setText(devise + " "
+                        + formatNumber(BigDecimal.valueOf(amort).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+            }
         });
     }
 
@@ -1135,14 +1293,8 @@ public class RepportController implements Initializable {
 
     @FXML
     private void exportFinancialStates(MouseEvent event) {
-        if (currentBilan == null || currentCR == null) {
-            MainUI.notify(null, "Ereur", "Veuillez d'abord charger les états financiers", 3, "error");
-            return;
-        }
-        double chargesInd = RepportDelegate.industrialExpenseOf(dpk_debut_report.getValue(), dpk_fin_report.getValue(),
-                detectRegion(role));
-        Util.exportXlsFinancialStates(currentBilan, currentCR, chargesInd,
-                entreprise != null ? entreprise.getNomEntreprise() : "Enterprise");
+        MainUI.notify(null, "Info", "Utilisez les icônes PDF de chaque état pour générer le document voulu.", 3,
+                "info");
     }
 
     private double scale(Double value) {
@@ -1183,157 +1335,128 @@ public class RepportController implements Initializable {
         LocalDate d1 = dpk_debut_report.getValue() == null ? LocalDate.now().withDayOfMonth(1)
                 : dpk_debut_report.getValue();
         LocalDate d2 = dpk_fin_report.getValue() == null ? LocalDate.now() : dpk_fin_report.getValue();
-        if (kazisafe != null) {
-            String usedRegion = role != null && role.contains(Role.ALL_ACCESS.name()) ? null : region;
-            kazisafe.getBilan(d1.toString(), d2.toString(), usedRegion).enqueue(new Callback<BilanReport>() {
-                @Override
-                public void onResponse(Call<BilanReport> call, Response<BilanReport> rspns) {
-                    if (rspns.isSuccessful() && rspns.body() != null) {
-                        Platform.runLater(() -> renderBilan(rspns.body()));
-                    } else {
-                        computeFinancialOffline(d1, d2);
-                    }
-                }
-
-                @Override
-                public void onFailure(Call<BilanReport> call, Throwable thrwbl) {
-                    computeFinancialOffline(d1, d2);
-                }
-            });
-            kazisafe.getCompteResultat(d1.toString(), d2.toString(), usedRegion)
-                    .enqueue(new Callback<CompteResultatReport>() {
-                        @Override
-                        public void onResponse(Call<CompteResultatReport> call, Response<CompteResultatReport> rspns) {
-                            if (rspns.isSuccessful() && rspns.body() != null) {
-                                Platform.runLater(() -> renderCompteResultat(rspns.body(), d1, d2));
-                            } else {
-                                computeFinancialOffline(d1, d2);
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<CompteResultatReport> call, Throwable thrwbl) {
-                            computeFinancialOffline(d1, d2);
-                        }
-                    });
-            return;
-        }
-        computeFinancialOffline(d1, d2);
-    }
-
-    private void computeFinancialOffline(LocalDate d1, LocalDate d2) {
         String usedRegion = detectRegion(role);
-        double stockValue = RepportDelegate.findStockValue(d1, d2, usedRegion,
-                d1.equals(d2) ? "Journalier du " + d1 : "Intervale du " + d1 + " au " + d2);
-        double ca = RepportDelegate.chiffreDaffaire(d1, d2, usedRegion);
-        double coutVente = RepportDelegate.chargeVariable(d1, d2, usedRegion);
-        double depensesOps = RepportDelegate.operationExpenseOf(d1, d2, usedRegion);
-        double chargesInd = RepportDelegate.industrialExpenseOf(d1, d2, usedRegion);
-        double amort = immobilisations == null ? 0d
-                : immobilisations.stream().mapToDouble(i -> i.dotationMensuelleUsd() * i.moisEcoules(d2)).sum();
-        double immobilise = immobilisations == null ? 0d
-                : immobilisations.stream().mapToDouble(i -> i.valeurNetteUsd(d2)).sum();
+        int span = financialHistorySpan;
+        boolean filterZeros = chk_filter_zeros != null && chk_filter_zeros.isSelected();
+        Executors.newSingleThreadExecutor().submit(() -> {
+            try {
+                List<FinancialStatementRow> bilan;
+                List<FinancialStatementRow> compte;
+                List<FinancialStatementRow> flux;
+                if (span == 4) {
+                    financialStatementService.ensureQuarterlyStatements(d2, span, usedRegion);
+                    bilan = financialStatementService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_BILAN, d2, span, usedRegion);
+                    compte = financialStatementService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d2, span, usedRegion);
+                    flux = financialStatementService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d2, span, usedRegion);
+                } else {
+                    int anchorYear = d2.getYear();
+                    financialStatementService.ensureYearlyStatements(anchorYear, span, usedRegion);
+                    bilan = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_BILAN, anchorYear, span, usedRegion);
+                    compte = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, anchorYear, span, usedRegion);
+                    flux = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, anchorYear, span, usedRegion);
+                }
 
-        // Calcul des actifs (Assets)
-        double receivables = delegates.ClientDelegate.getTotalDebt();
-        double available = delegates.TraisorerieDelegate.soldeUsdOnPeriod(null, d1, d2, usedRegion);
-        double actifCourant = stockValue + receivables + available;
-        double totalActif = actifCourant + immobilise;
+                if (filterZeros) {
+                    bilan = filterZeroRows(bilan);
+                    compte = filterZeroRows(compte);
+                    flux = filterZeroRows(flux);
+                }
 
-        // Calcul des passifs (Liabilities)
-        double shortTermDebt = delegates.FournisseurDelegate.getTotalDebt();
-        double longTermDebt = delegates.TraisorerieDelegate.getTotalBankDebt();
-        double otherPassif = Math.max(0d, depensesOps - chargesInd) + chargesInd;
+                List<FinancialStatementRow> finalBilan = bilan;
+                List<FinancialStatementRow> finalCompte = compte;
+                List<FinancialStatementRow> finalFlux = flux;
 
-        double margeBrute = ca - coutVente;
-        double resultExpl = margeBrute - depensesOps - amort;
-        double impots = Math.max(0d, resultExpl * 0.3);
-        double resultNet = resultExpl - impots;
-
-        // Le capital est la contrepartie pour equilibrer (Assets - Other Liabilities)
-        double capitaux = totalActif - shortTermDebt - longTermDebt - otherPassif;
-
-        BilanReport bilan = new BilanReport();
-        bilan.setActifNonCourant(immobilise);
-        bilan.setActifCourant(actifCourant);
-        bilan.setTotalActif(totalActif);
-        bilan.setPassifCourant(shortTermDebt);
-        bilan.setPassifNonCourant(longTermDebt + otherPassif);
-        bilan.setCapitauxPropres(capitaux);
-        bilan.setTotalPassif(totalActif); // Toujours equilibre
-
-        CompteResultatReport cr = new CompteResultatReport();
-        cr.setChiffreAffaires(ca);
-        cr.setCoutDesVentes(coutVente);
-        cr.setMargeBrute(margeBrute);
-        cr.setDepensesOperationnelles(depensesOps);
-        cr.setAmortissements(amort);
-        cr.setVariationStock(stockValue);
-        cr.setResultatExploitation(resultExpl);
-        cr.setImpotsEstimes(impots);
-        cr.setResultatNet(resultNet);
-
-        Platform.runLater(() -> {
-            renderBilan(bilan);
-            renderCompteResultat(cr, d1, d2);
-            lbl_cr_industriel.setText(formatMonnaie(chargesInd));
-            renderCashFlow(cr.getChiffreAffaires(), cr.getCoutDesVentes(), cr.getDepensesOperationnelles(),
-                    cr.getAmortissements(), chargesInd);
+                Platform.runLater(() -> {
+                    bilanRows.setAll(finalBilan);
+                    compteResultatRows.setAll(finalCompte);
+                    fluxRows.setAll(finalFlux);
+                });
+            } catch (Exception ex) {
+                Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE,
+                        "Erreur de chargement des états financiers", ex);
+                Platform.runLater(() -> MainUI.notify(null, "Erreur",
+                        "Impossible de générer les états financiers sur cette période", 4, "error"));
+            }
         });
     }
 
-    private void renderBilan(BilanReport bilan) {
-        this.currentBilan = bilan;
-        double immobilise = bilan.getActifNonCourant();
-        double circulant = Math.max(0d, bilan.getActifCourant());
-        double dispo = Math.max(0d,
-                circulant - RepportDelegate.findStockValue(dpk_debut_report.getValue(), dpk_fin_report.getValue(),
-                        detectRegion(role),
-                        dpk_debut_report.getValue().equals(dpk_fin_report.getValue())
-                                ? "Journalier du " + dpk_debut_report.getValue()
-                                : "Intervale du " + dpk_debut_report.getValue() + " au " + dpk_fin_report.getValue()));
-        lbl_bilan_immobilise.setText(formatMonnaie(immobilise));
-        lbl_bilan_circulant.setText(formatMonnaie(circulant));
-        lbl_bilan_dispo.setText(formatMonnaie(dispo));
-        lbl_bilan_total_actif.setText(formatMonnaie(bilan.getTotalActif()));
-
-        lbl_bilan_capitaux.setText(formatMonnaie(bilan.getCapitauxPropres()));
-        lbl_bilan_dettes.setText(formatMonnaie(bilan.getPassifCourant() + bilan.getPassifNonCourant()));
-        lbl_bilan_total_passif.setText(formatMonnaie(bilan.getTotalPassif()));
+    private boolean isZeroAmount(Double amount) {
+        return amount == null || Math.abs(amount) < 0.001;
     }
 
-    private void renderCompteResultat(CompteResultatReport cr, LocalDate d1, LocalDate d2) {
-        this.currentCR = cr;
-        lbl_cr_ca.setText(formatMonnaie(cr.getChiffreAffaires()));
-        lbl_cr_cout_vente.setText(formatMonnaie(cr.getCoutDesVentes()));
-        lbl_cr_marge.setText(formatMonnaie(cr.getMargeBrute()));
-        lbl_cr_dep_ops.setText(formatMonnaie(cr.getDepensesOperationnelles()));
-        lbl_cr_amort.setText(formatMonnaie(cr.getAmortissements()));
-        lbl_cr_var_stock.setText(formatMonnaie(cr.getVariationStock()));
-        lbl_cr_result_expl.setText(formatMonnaie(cr.getResultatExploitation()));
-        lbl_cr_impot.setText(formatMonnaie(cr.getImpotsEstimes()));
-        lbl_cr_result_net.setText(formatMonnaie(cr.getResultatNet()));
-        if (lbl_cr_industriel.getText() == null || lbl_cr_industriel.getText().isBlank()) {
-            String usedRegion = detectRegion(role);
-            lbl_cr_industriel.setText(formatMonnaie(RepportDelegate.industrialExpenseOf(d1, d2, usedRegion)));
-        }
-        double chargesInd = RepportDelegate.industrialExpenseOf(d1, d2, detectRegion(role));
-        renderCashFlow(cr.getChiffreAffaires(), cr.getCoutDesVentes(), cr.getDepensesOperationnelles(),
-                cr.getAmortissements(), chargesInd);
+    private List<FinancialStatementRow> filterZeroRows(List<FinancialStatementRow> rows) {
+        return rows.stream().filter(row -> {
+            if (row.isSectionHeader()) return true;
+            boolean allZeros = isZeroAmount(row.getAmountN()) &&
+                               isZeroAmount(row.getAmountN1()) &&
+                               isZeroAmount(row.getAmountN2()) &&
+                               isZeroAmount(row.getAmountN3()) &&
+                               isZeroAmount(row.getAmountN4());
+            return !allZeros;
+        }).collect(Collectors.toList());
+    }
+
+    @FXML
+    private void exportBilanPdf(MouseEvent event) {
+        exportFinancialPdf("Bilan Comptable Financier", tb_fin_bilan.getItems());
+    }
+
+    @FXML
+    private void exportCompteResultatPdf(MouseEvent event) {
+        exportFinancialPdf("Compte de Résultat Standard", tb_fin_cr.getItems());
+    }
+
+    @FXML
+    private void exportFluxPdf(MouseEvent event) {
+        exportFinancialPdf("Tableau de Flux de Trésorerie", tb_fin_flux.getItems());
     }
 
     private String formatMonnaie(double amount) {
         return devise + " " + Util.toPlain(scale(amount));
     }
 
-    private void renderCashFlow(double encaissements, double coutVentes, double depensesOps, double amortissements,
-            double chargesIndustrielles) {
-        double decaissements = Math.max(0d, coutVentes) + Math.max(0d, depensesOps) + Math.max(0d, amortissements)
-                + Math.max(0d, chargesIndustrielles);
-        double fluxNet = encaissements - decaissements;
-        lbl_flux_encaiss.setText(formatMonnaie(encaissements));
-        lbl_flux_decaiss.setText(formatMonnaie(decaissements));
-        lbl_flux_net.setText(formatMonnaie(fluxNet));
+    private void exportFinancialPdf(String title, List<FinancialStatementRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            MainUI.notify(null, "Erreur", "Aucune donnée financière à exporter pour cette période", 3, "error");
+            return;
+        }
+        LocalDate start = dpk_debut_report.getValue() == null ? LocalDate.now() : dpk_debut_report.getValue();
+        LocalDate end = dpk_fin_report.getValue() == null ? LocalDate.now() : dpk_fin_report.getValue();
+        
+        List<String> dataHeaders = new java.util.ArrayList<>();
+        if (financialHistorySpan == 5) {
+            dataHeaders.add(col_fin_bilan_n.getText());
+            dataHeaders.add(col_fin_bilan_n1.getText());
+            dataHeaders.add(col_fin_bilan_n2.getText());
+            dataHeaders.add(col_fin_bilan_n3.getText());
+            dataHeaders.add(col_fin_bilan_n4.getText());
+        } else if (financialHistorySpan == 4) {
+            dataHeaders.add(col_fin_bilan_n.getText());
+            dataHeaders.add(col_fin_bilan_n1.getText());
+            dataHeaders.add(col_fin_bilan_n2.getText());
+            dataHeaders.add(col_fin_bilan_n3.getText());
+        } else {
+            dataHeaders.add(col_fin_bilan_n.getText());
+            dataHeaders.add(col_fin_bilan_n1.getText());
+            dataHeaders.add(col_fin_bilan_n2.getText());
+        }
+
+        new Thread(() -> {
+            try {
+                File file = FinancialStatementPdfExporter.export(entreprise, title, start, end, rows, dataHeaders);
+                Desktop.getDesktop().open(file);
+            } catch (IOException ex) {
+                Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                Platform.runLater(() -> MainUI.notify(null, "Erreur", "Echec de génération du PDF demandé", 4,
+                        "error"));
+            }
+        }).start();
     }
 
     private void loadSaleChart() {

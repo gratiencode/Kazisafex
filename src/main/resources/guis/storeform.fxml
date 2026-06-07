@@ -72,12 +72,43 @@
                            <font>
                               <Font size="16.0" />
                            </font></Label>
-                        <Label fx:id="txt_somme_ct_lot1" layoutX="27.0" layoutY="111.0" prefHeight="30.0" prefWidth="234.0" style="-fx-border-color: #44cef5;" text="%xtotal">
+                        <Label fx:id="txt_somme_ct_lot1" layoutX="438.0" layoutY="111.0" prefHeight="30.0" prefWidth="234.0" style="-fx-border-color: #44cef5;" text="%xtotal" AnchorPane.bottomAnchor="15.0" AnchorPane.rightAnchor="27.0">
                            <font>
                               <Font size="16.0" />
                            </font></Label>
                         <Separator layoutX="-2.0" layoutY="99.0" prefHeight="3.0" prefWidth="702.0" AnchorPane.leftAnchor="-2.0" AnchorPane.rightAnchor="-1.0" />
                         <TextField fx:id="tf_stock_allot" layoutX="525.0" layoutY="54.0" prefHeight="30.0" prefWidth="148.0" promptText="%xalerte_stk" AnchorPane.rightAnchor="27.0" />
+                        <TextField fx:id="tf_pv_estime_stk" layoutX="25.0" layoutY="111.0" prefHeight="30.0" prefWidth="186.0" promptText="Prix de vente (facultative)" />
+                        <Label layoutX="36.0" layoutY="6.0" style="-fx-background-color: white;" text="%xcol.lot">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="36.0" layoutY="45.0" style="-fx-background-color: white;" text="%xcol.quantite">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="363.0" layoutY="45.0" prefHeight="16.0" prefWidth="83.0" style="-fx-background-color: white;" text="%xcout_achat_unitaire">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="536.0" layoutY="46.0" prefHeight="16.0" prefWidth="83.0" style="-fx-background-color: white;" text="%xalerte_stk">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="494.0" layoutY="5.0" prefHeight="16.0" prefWidth="83.0" style="-fx-background-color: white;" text="%xlocalisation">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
+                        <Label layoutX="37.0" layoutY="102.0" prefHeight="16.0" prefWidth="153.0" style="-fx-background-color: white;" text="Prix de vente (facultative)">
+                           <font>
+                              <Font size="11.0" />
+                           </font>
+                        </Label>
                      </children>
                   </AnchorPane>
             </content>

@@ -33,6 +33,23 @@ import tools.Tables;
  */
 public class DestockerService implements DestockerStorage {
 
+    @Override
+    public List<Destocker> findDestockers(String region) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM destocker WHERE region = ? ORDER BY dateDestockage DESC");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Destocker.class);
+                query.setParameter(1, region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Destocker.class);
+        query.setParameter(1, region);
+        return query.getResultList();
+
+    }
+
     private static final class DepotLotSnapshot {
 
         private final Produit produit;
@@ -347,7 +364,7 @@ public class DestockerService implements DestockerStorage {
                 ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(e));
             });
         } catch (EntityNotFoundException e) {
-            
+
         } //
     }
 

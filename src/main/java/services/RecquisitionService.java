@@ -46,6 +46,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import data.PermitTo;
 import delegates.PermissionDelegate;
+import java.time.Month;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
 import java.util.prefs.Preferences;
@@ -184,7 +185,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element LV " + e.getNumlot() + " enregistree");
-            }).join();
+            });
             return cat;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -202,20 +203,26 @@ public class RecquisitionService implements RecquisitionStorage {
 
     @Override
     public Recquisition updateRecquisition(Recquisition cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.merge(cat);
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.merge(cat);
+                    return cat;
+                }).thenAccept(e -> {
+                    System.out.println("Element req " + e.getReference() + " enregistree");
+                });
                 return cat;
-            }).join();
+            }
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+            if (!tx.isActive()) {
+                tx.begin();
+            }
+            ManagedSessionFactory.getEntityManager().merge(cat);
+            tx.commit();
             return cat;
+        } catch (Exception e) {
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().merge(cat);
-        tx.commit();
-        return cat;
+        return null;
     }
 
     @Override
@@ -224,7 +231,7 @@ public class RecquisitionService implements RecquisitionStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
-            }).join();
+            });
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -256,6 +263,77 @@ public class RecquisitionService implements RecquisitionStorage {
     public StockAgregate saveStockFromRecquisition(Recquisition e) {
         LocalDate today = LocalDate.now();
         return saveStockFromRecquisition(e, today, today, "Journalier du " + today);
+    }
+
+    @Override
+    public StockAgregate updateStockAgregate(StockAgregate cat) {
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.merge(cat);
+                    return cat;
+                }).thenAccept(e -> {
+                    System.out.println("Element stock agregate" + e.getNumlot() + " updated");
+                });
+                return cat;
+            }
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+            if (!tx.isActive()) {
+                tx.begin();
+            }
+            ManagedSessionFactory.getEntityManager().merge(cat);
+            tx.commit();
+            return cat;
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    @Override
+    public StockAgregate findStockAgregate(String prod, String numlot, String region, boolean destroyed) {
+        if (prod == null || numlot == null) {
+            return null;
+        }
+        String sql = """
+                SELECT * FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot = ?
+                  AND s.date BETWEEN ? AND ? AND s.destroyed = ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ? AND s2.destroyed = s.destroyed
+                  )
+                ORDER BY s.date DESC
+                """;
+        LocalDate now = LocalDate.now();
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> (StockAgregate) em.createNativeQuery(sql, StockAgregate.class)
+                    .setParameter(1, prod)
+                    .setParameter(2, (region == null ? "%" : region))
+                    .setParameter(3, numlot)
+                    .setParameter(4, now)
+                    .setParameter(5, now.plusDays(1))
+                    .setParameter(6, destroyed)
+                    .setParameter(7, now)
+                    .setParameter(8, now.plusDays(1)).setMaxResults(1)
+                    .getSingleResult());
+        }
+        return (StockAgregate) ManagedSessionFactory.getEntityManager()
+                .createNativeQuery(sql, StockAgregate.class)
+                .setParameter(1, prod)
+                .setParameter(2, (region == null ? "%" : region))
+                .setParameter(3, numlot)
+                .setParameter(4, now)
+                .setParameter(5, now.plusDays(1))
+                .setParameter(6, destroyed)
+                .setParameter(7, now)
+                .setParameter(8, now.plusDays(1)).setMaxResults(1)
+                .getSingleResult();
     }
 
     /**
@@ -295,15 +373,17 @@ public class RecquisitionService implements RecquisitionStorage {
                 || datedebut == null || datefin == null) {
             return new LotPeriodPieces(0, 0, 0, 0, 0);
         }
-
+        System.out.println("Interval date : du " + datedebut + " a " + datefin);
         double entrees = sumBatchedRecqusitionFrom(productUid, numlot, datedebut, datefin, region);
         double sorties = sumBatchedLigneventeFrom(productUid, numlot, datedebut, datefin, region);
         double stockInit
-                = //                isStockExists(productUid, numlot)?
-                //                calculerStockInitialEnUniteByLot(productUid, numlot, datedebut, region):
+                = //                isStockExists(productUid, numlot, datedebut, datefin)
+                //                ? calculerStockInitialEnUniteByLot(productUid, numlot, datedebut, region):
                 stockInitialAlternative(productUid, datedebut, numlot, region);
-        double expiree = getStockExpireeByLot(productUid, numlot, datedebut, datefin, region);
+        double expiree = 0;
+        //getStockExpireeByLot(productUid, numlot, datedebut, datefin, region);
         double finalValid = Math.max(0, (stockInit + entrees - sorties));
+        System.out.println("LES TOCKS RETROUVES batch->" + numlot + ": -> SI=" + stockInit + " E=" + entrees + " S=" + sorties + " SF=" + finalValid);
         return new LotPeriodPieces(entrees, sorties, stockInit, expiree, finalValid);
     }
 
@@ -351,6 +431,7 @@ public class RecquisitionService implements RecquisitionStorage {
         row.setDateExpiration(dateExpiration);
         row.setDate(aggregateDate);
         row.setCoutAchat(coutAchat);
+        row.setDestroyed(target == null ? false : (target.isDestroyed() == null ? false : target.isDestroyed()));
         row.setInitialQuantity(stockInitial);
         row.setEntrees(entrees);
         row.setSorties(sorties);
@@ -451,7 +532,7 @@ public class RecquisitionService implements RecquisitionStorage {
         final String productId = e.getProductId().getUid();
         final String region = e.getRegion();
         final Mesure unite = MesureDelegate.findByProduitAndQuant(productId, 1d);
-
+        System.out.println("Region du seed entrant en param -> " + region);
         if (region != null && !region.isBlank()) {
 //            purgeDailyLotAggregatesForProduct(productId, region, dDeb, dFin, targetContext);
             LotClosureTotals totals = upsertLotStockAggregates(e.getProductId(), region, dDeb, dFin, targetContext,
@@ -545,6 +626,40 @@ public class RecquisitionService implements RecquisitionStorage {
                 totalFinal);
     }
 
+    private StockAgregate saveStockFromRecquisition(Recquisition e, String lotIn, LocalDate datedebut, LocalDate datefin) {
+        if (e == null || e.getProductId() == null) {
+            return null;
+        }
+        final LocalDate dDeb = datedebut == null ? LocalDate.now() : datedebut;
+        final LocalDate dFin = datefin == null ? dDeb : datefin;
+        final String productId = e.getProductId().getUid();
+        final String region = e.getRegion();
+        final Mesure unite = MesureDelegate.findByProduitAndQuant(productId, 1d);
+        System.out.println("Region du seed One entrant en param -> " + region);
+        LotClosureTotals totals = upsertOneLotStockAgregate(e, region, dDeb, dFin, lotIn, unite, 0d);
+        LocalDate summaryDate = dFin.equals(LocalDate.now()) ? LocalDate.now() : dFin;
+        StockAgregate summary = applyStockAggregateValues(new StockAgregate(DataId.generate()),
+                e.getProductId(),
+                unite == null ? e.getMesureId() : unite,
+                region,
+                "Journalier du " + summaryDate.toString(),
+                e.getNumlot(),
+                null,
+                summaryDate,
+                resolveUnitCost(e),
+                totals.initial,
+                totals.entrees,
+                totals.sorties,
+                totals.expiree,
+                totals.finalQty);
+        System.out.println(" RT --rectify1-- OK ");
+        System.out.println("Stock lot-agregate regenere (region=" + region + "): produit="
+                + e.getProductId().getNomProduit() + ", synthese pieces finales=" + totals.finalQty);
+        return summary;
+
+    }
+
+    @Override
     public Recquisition findRecquisition(String ref, String prodId, String numlot, String region) {
         try {
             StringBuilder sb = new StringBuilder();
@@ -683,6 +798,7 @@ public class RecquisitionService implements RecquisitionStorage {
         return new ArrayList<>(byLot.values());
     }
 
+    @Override
     public List<Recquisition> findDistinctLotHeads(Produit p, String region) {
         List<Recquisition> source;
         String productId = p.getUid();
@@ -708,43 +824,50 @@ public class RecquisitionService implements RecquisitionStorage {
         return new ArrayList<>(byLot.values());
     }
 
-    private void purgeDailyLotAggregatesForProducts(String productId, String region, LocalDate dayDebut,
-            LocalDate dayFin, String context) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("DELETE FROM stock_agregate WHERE product_id = ? ");
-        sb.append("AND date BETWEEN ? AND ? AND context = ? AND num_lot IS NOT NULL ");
-        if (region != null && !region.isBlank()) {
-            sb.append("AND region = ? ");
+    private List<Recquisition> findWithInterval(LocalDate d1, LocalDate d2, String region) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM recquisition s WHERE s.date BETWEEN ? AND ? AND s.region = ? ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                    query.setParameter(1, d1.atStartOfDay());
+                    query.setParameter(2, d2.atTime(23, 59, 59));
+                    query.setParameter(3, region);
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
+            query.setParameter(1, d1.atStartOfDay());
+            query.setParameter(2, d2.atTime(23, 59, 59));
+            query.setParameter(3, region);
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
         }
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                Query q = em.createNativeQuery(sb.toString());
-                q.setParameter(1, productId);
-                q.setParameter(2, dayDebut);
-                q.setParameter(3, dayFin.plusDays(1));
-                q.setParameter(4, context);
-                if (region != null && !region.isBlank()) {
-                    q.setParameter(5, region);
+    }
+
+    @Override
+    public void fixUndesiredRecqusitionOf(LocalDate d1, LocalDate d2, String region) {
+        List<Recquisition> reqs = findWithInterval(d1, d2, region);
+        for (Recquisition req : reqs) {
+            List<PrixDeVente> pvs = findPricesFor(req.getUid());
+            for (PrixDeVente pv : pvs) {
+                if (pv.getUpdatedAt() == null) {
+                    req.setDate(d1.minusDays(3).atStartOfDay());
+                    req.setObservation("Auto-correct");
+                    updateRecquisition(req);
+                    break;
                 }
-                q.executeUpdate();
-                return true;
-            }).join();
-            return;
+                if (pv.getUpdatedAt().isBefore(req.getUpdatedAt())) {
+                    req.setDate(pv.getUpdatedAt());
+                    req.setObservation("Auto-correct");
+                    updateRecquisition(req);
+                    break;
+                }
+            }
+
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
-        q.setParameter(1, productId);
-        q.setParameter(2, dayDebut);
-        q.setParameter(3, dayFin.plusDays(1));
-        q.setParameter(4, context);
-        if (region != null && !region.isBlank()) {
-            q.setParameter(5, region);
-        }
-        q.executeUpdate();
-        tx.commit();
     }
 
     private void persistLotAggregates(List<StockAgregate> rows) {
@@ -941,12 +1064,13 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             Map<String, StockAgregate> result = new HashMap<>();
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? AND s.final_quantity > 0 ORDER BY s.date_expiration ASC");
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? "
+                    + "AND s.final_quantity > 0 AND s.destroyed = ? ORDER BY s.date_expiration ASC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
                     query.setParameter(1, prod);
-                    query.setParameter(2, region == null ? "%" : region);
+                    query.setParameter(2, region == null ? "%" : region).setParameter(3, Boolean.FALSE);
                     List<StockAgregate> rst = query.getResultList();
                     for (StockAgregate stockAgregate : rst) {
                         result.put(stockAgregate.getNumlot(), stockAgregate);
@@ -956,7 +1080,7 @@ public class RecquisitionService implements RecquisitionStorage {
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
             query.setParameter(1, prod);
-            query.setParameter(2, region == null ? "%" : region);
+            query.setParameter(2, region == null ? "%" : region).setParameter(3, Boolean.FALSE);
             List<StockAgregate> rst = query.getResultList();
             for (StockAgregate stockAgregate : rst) {
                 result.put(stockAgregate.getNumlot(), stockAgregate);
@@ -2015,13 +2139,13 @@ public class RecquisitionService implements RecquisitionStorage {
                 SELECT s.product_id, s.region, COALESCE(SUM(COALESCE(s.final_quantity, 0)), 0) AS total_final,
                        MAX(s.date) AS last_date
                 FROM stock_agregate s
-                WHERE s.num_lot IS NOT NULL
+                WHERE s.num_lot IS NOT NULL AND s.destroyed = 'FALSE'
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot
+                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
                   )
                 """);
         if (region != null && !region.isBlank()) {
@@ -3314,8 +3438,7 @@ public class RecquisitionService implements RecquisitionStorage {
             String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append(
-                    "SELECT SUM(r.quantite*m.quantcontenu) e FROM recquisition r,mesure m WHERE r.product_id = ? AND r.mesure_id=m.uid  AND r.numlot = ?");
+            sb.append("SELECT SUM(r.quantite*m.quantcontenu) e FROM recquisition r,mesure m WHERE r.product_id = ? AND r.mesure_id=m.uid  AND r.numlot = ?");
             sb.append(" AND r.date BETWEEN ? AND ? AND r.region = ? ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -3436,9 +3559,9 @@ public class RecquisitionService implements RecquisitionStorage {
 
     public double stockInitialAlternative(String uid, LocalDate datedebut, String lot, String region) {
         LocalDate veuille = datedebut.minusDays(1);
-        double entree = sommeEntreeSurPeriode(uid, LocalDate.EPOCH, veuille, lot, region);
-        double sortie = sommeSortieSurPeriode(uid, LocalDate.EPOCH, veuille, lot, region);
-        return Math.max(0, (entree - sortie));
+        double entrees = sumBatchedRecqusitionFrom(uid, lot, LocalDate.of(2000, Month.JANUARY, 01), veuille, region);
+        double sorties = sumBatchedLigneventeFrom(uid, lot, LocalDate.of(2000, Month.JANUARY, 01), veuille, region);
+        return Math.max(0, (entrees - sorties));
     }
 
     @Override
@@ -3702,9 +3825,8 @@ public class RecquisitionService implements RecquisitionStorage {
     }
 
     @Override
-    public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region,
-            double coutAch, String numlot) {
-        rectifyStockInternal(produit, datedebut, datefin, region, coutAch, numlot);
+    public void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, String numlot) {
+        rectifyStockInternal(produit, datedebut, datefin, region, numlot);
     }
 
     /**
@@ -3724,50 +3846,23 @@ public class RecquisitionService implements RecquisitionStorage {
      * </ol>
      */
     private void rectifyStockInternal(Produit produit, LocalDate datedebut, LocalDate datefin,
-            String region, double coutAch, String numlot) {
-        if (produit == null || produit.getUid() == null) {
+            String region, String numlot) {
+        if (produit == null || produit.getUid() == null || region == null || region.isBlank()) {
+            System.out.println("produit/region est null pro " + produit + " region = " + region);
             return;
         }
-        LocalDate targetDay = datefin == null ? LocalDate.now() : datefin;
-        LocalDate dDeb = datedebut == null ? targetDay : datedebut;
-        LocalDate dFin = datefin == null ? targetDay : datefin;
-        String targetContext = "Journalier du " + targetDay;
-        Mesure unite = MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
+        List<Recquisition> lseed = findRecquisitionByProduit(produit.getUid(), numlot, region);
 
-        if (region != null && !region.isBlank()) {
-            if (numlot != null && !numlot.isBlank()) {
-                // Cas 1 : lot précis + région
-                upsertSingleLotStockAggregate(
-                        produit, region, dDeb, dFin, targetContext, unite, numlot.trim(), coutAch);
-            } else {
-                // Cas 2 : tous les lots pour la région
-                upsertLotStockAggregates(produit, region, dDeb, dFin, targetContext, unite, coutAch);
-            }
-            return;
-        }
+        Recquisition seed = lseed.isEmpty() ? null : lseed.getFirst();
 
-        if (numlot != null && !numlot.isBlank()) {
-            // Cas 3 : lot précis sans région (grand livre global)
-            upsertSingleLotStockAggregateNoRegion(
-                    produit, dDeb, dFin, targetContext, unite, numlot.trim(), coutAch);
-            return;
-        }
-
-        // Cas 4 : tous lots, sans région – comportement original
-        Recquisition seed = getLastEntry(produit, null);
         if (seed == null) {
-            seed = getLastEntry(produit.getUid());
-        }
-        if (seed == null) {
+            System.out.println("Recquis seed single est null " + seed);
             return;
         }
-        if (resolveUnitCost(seed) <= 0 && coutAch > 0) {
-            Mesure seedMesure = seed.getMesureId();
-            double quantContenu = seedMesure == null || seedMesure.getQuantContenu() == null
-                    || seedMesure.getQuantContenu() <= 0 ? 1d : seedMesure.getQuantContenu();
-            seed.setCoutAchat(coutAch * quantContenu);
-        }
-        saveStockFromRecquisition(seed, dDeb, dFin, targetContext);
+        System.out.println("Lot entrant single lot param " + numlot + " lot req sortant ->" + seed.getNumlot());
+        StockAgregate sa = saveStockFromRecquisition(seed, numlot, datedebut, datefin);
+        System.out.println("le stock agregate single processed = " + sa.getNumlot() + " -> " + sa.getProductId().getNomProduit() + " -> " + sa.getFinalQuantity());
+
     }
 
     /**
@@ -3860,7 +3955,7 @@ public class RecquisitionService implements RecquisitionStorage {
             LocalDate dayFin, String context, String numlot) {
         StringBuilder sb = new StringBuilder();
         sb.append("DELETE FROM stock_agregate WHERE product_id = ? ");
-        sb.append("AND date BETWEEN ? AND ? AND context = ? AND num_lot = ? ");
+        sb.append("AND date BETWEEN ? AND ? AND context = ? AND num_lot = ? AND destroyed = 'FALSE' ");
         if (region != null && !region.isBlank()) {
             sb.append("AND region = ? ");
         }
@@ -3908,12 +4003,12 @@ public class RecquisitionService implements RecquisitionStorage {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.persist(finalRef);
                     return finalRef;
-                }).join();
+                });
             } else {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.merge(finalRef);
                     return finalRef;
-                }).join();
+                });
             }
             return;
         }
@@ -3929,6 +4024,13 @@ public class RecquisitionService implements RecquisitionStorage {
         tx.commit();
     }
 
+    public void cloturerUnProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin) {
+        List<Recquisition> rqs = findRecquisitionByProduitRegion(produit.getUid(), region);
+        for (Recquisition rq : rqs) {
+            clotureStockProduit(produit, rq.getNumlot(), region, datedebut, datefin, null);
+        }
+    }
+
     @Override
     public void clotureStockProduit(Produit produit, String lot, String region, LocalDate datedebut, LocalDate datefin,
             String cloture_context) {
@@ -3936,13 +4038,17 @@ public class RecquisitionService implements RecquisitionStorage {
             System.out.println("produit/region est null pro " + produit + " region = " + region);
             return;
         }
-        Recquisition seed = findRecquisitionByProduit(produit.getUid(), lot, region)
-                .getFirst();
+        List<Recquisition> lseed = findRecquisitionByProduit(produit.getUid(), lot, region);
+
+        Recquisition seed = lseed.isEmpty() ? null : lseed.getFirst();
+
         if (seed == null) {
             System.out.println("Recquis seed est null " + seed);
             return;
         }
-        saveStockFromRecquisition(seed, datedebut, datefin, cloture_context);
+        System.out.println("Lot entrant param " + lot + " lot req sortant ->" + seed.getNumlot());
+        StockAgregate sa = saveStockFromRecquisition(seed, datedebut, datefin, cloture_context);
+        System.out.println("le stock agregate processed = " + sa.getNumlot() + " -> " + sa.getProductId().getNomProduit() + " -> " + sa.getFinalQuantity());
     }
 
     /**
@@ -3953,10 +4059,10 @@ public class RecquisitionService implements RecquisitionStorage {
      */
     private LotClosureTotals upsertLotStockAggregates(Produit produit, String region, LocalDate datedebut,
             LocalDate datefin, String clotureContext, Mesure unite) {
-        return upsertLotStockAggregates(produit, region, datedebut, datefin, clotureContext, unite, 0d);
+        return upsertLotStockAgregate(produit, region, datedebut, datefin, clotureContext, unite, 0d);
     }
 
-    private LotClosureTotals upsertLotStockAggregates(Produit produit, String region, LocalDate datedebut,
+    private LotClosureTotals upsertLotStockAgregate(Produit produit, String region, LocalDate datedebut,
             LocalDate datefin, String clotureContext, Mesure unite, double fallbackUnitCost) {
         LotClosureTotals totals = new LotClosureTotals();
         if (produit == null || region == null || datedebut == null || datefin == null) {
@@ -4006,12 +4112,12 @@ public class RecquisitionService implements RecquisitionStorage {
                     ManagedSessionFactory.submitWrite(em -> {
                         em.persist(finalLotStock);
                         return finalLotStock;
-                    }).join();
+                    });
                 } else {
                     ManagedSessionFactory.submitWrite(em -> {
                         em.merge(finalLotStock);
                         return finalLotStock;
-                    }).join();
+                    });
                 }
             } else {
                 EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -4028,6 +4134,79 @@ public class RecquisitionService implements RecquisitionStorage {
                 tx.commit();
             }
         }
+        return totals;
+    }
+
+    private LotClosureTotals upsertOneLotStockAgregate(Recquisition seed, String region, LocalDate datedebut,
+            LocalDate datefin, String lot, Mesure unite, double fallbackUnitCost) {
+        LotClosureTotals totals = new LotClosureTotals();
+        Produit produit = seed.getProductId();
+        if (produit == null || region == null || datedebut == null || datefin == null) {
+            return totals;
+        }
+
+        LocalDate dte = datefin.equals(LocalDate.now()) ? LocalDate.now() : datefin;
+        if (lot == null || lot.isBlank()) {
+            return totals;
+        }
+        String lotNorm = lot.trim();
+        LocalDate leo = LocalDate.now();
+        LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, leo, leo);
+        totals.add(m.entrees(), m.sorties(), m.stockInitial(), m.expiree(), m.finalValid());
+        double stockFinalValid = m.finalValid();
+        double coutAch = resolveUnitCost(seed);
+        if (coutAch <= 0 && fallbackUnitCost > 0) {
+            coutAch = fallbackUnitCost;
+        }
+
+        StockAgregate lotStock = findClosedStockByLot(datedebut, datefin, produit.getUid(), region, lotNorm,
+                null);
+        boolean exists = (lotStock != null);
+        if (!exists) {
+            lotStock = new StockAgregate(DataId.generate());
+        }
+        lotStock = applyStockAggregateValues(lotStock,
+                produit,
+                unite,
+                region,
+                "Journalier du " + dte,
+                lotNorm,
+                resolveLotDateExpirationForStockAgregate(produit.getUid(), lotNorm, region, seed.getDateExpiry()),
+                dte,
+                coutAch,
+                m.stockInitial(),
+                m.entrees(),
+                m.sorties(),
+                m.expiree(),
+                stockFinalValid);
+        if (ManagedSessionFactory.isEmbedded()) {
+            StockAgregate finalLotStock = lotStock;
+            if (!exists) {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.persist(finalLotStock);
+                    return finalLotStock;
+                });
+            } else {
+                ManagedSessionFactory.submitWrite(em -> {
+                    em.merge(finalLotStock);
+                    return finalLotStock;
+                });
+            }
+        } else {
+            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
+            if (!tx.isActive()) {
+                tx.begin();
+            }
+            if (!exists) {
+                // System.out.println("Persisting stock...");
+                ManagedSessionFactory.getEntityManager().persist(lotStock);
+            } else {
+                // System.out.println("Merging stock....");
+                ManagedSessionFactory.getEntityManager().merge(lotStock);
+            }
+            tx.commit();
+        }
+
         return totals;
     }
 
@@ -4054,14 +4233,14 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND "
-                    + "s.region LIKE ? AND s.num_lot = ? AND s.date < ? ORDER BY s.date DESC");
+                    + "s.region LIKE ? AND s.num_lot = ? AND s.date < ? AND s.destroyed = ? ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> rows = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, uid)
                             .setParameter(2, region)
                             .setParameter(3, numlot)
-                            .setParameter(4, datedebut.atStartOfDay())
+                            .setParameter(4, datedebut).setParameter(5, Boolean.FALSE)
                             .setMaxResults(1)
                             .getResultList();
                     if (!rows.isEmpty()) {
@@ -4076,7 +4255,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     .setParameter(1, uid)
                     .setParameter(2, region)
                     .setParameter(3, numlot)
-                    .setParameter(4, datedebut.atStartOfDay())
+                    .setParameter(4, datedebut).setParameter(5, Boolean.FALSE)
                     .setMaxResults(1)
                     .getResultList();
             if (!rows.isEmpty()) {
@@ -4156,7 +4335,7 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? "
-                    + "AND s.product_id = ? AND s.num_lot = ? AND s.context = ?");
+                    + "AND s.product_id = ? AND s.num_lot = ? ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
@@ -4165,7 +4344,6 @@ public class RecquisitionService implements RecquisitionStorage {
                             .setParameter(3, region)
                             .setParameter(4, uid)
                             .setParameter(5, numlot)
-                            .setParameter(6, context)
                             .setMaxResults(1)
                             .getResultList();
                     return results.isEmpty() ? null : results.get(0);
@@ -4178,7 +4356,6 @@ public class RecquisitionService implements RecquisitionStorage {
                     .setParameter(3, region)
                     .setParameter(4, uid)
                     .setParameter(5, numlot)
-                    .setParameter(6, context)
                     .setMaxResults(1)
                     .getResultList();
             return results.isEmpty() ? null : results.get(0);
@@ -4192,7 +4369,7 @@ public class RecquisitionService implements RecquisitionStorage {
             String cloture_type) {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? ");
-        sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL AND s.context = ? ORDER BY s.date DESC");
+        sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL AND s.context = ? AND s.destroyed = ? ORDER BY s.date DESC");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -4201,7 +4378,7 @@ public class RecquisitionService implements RecquisitionStorage {
                             .setParameter(2, today1.plusDays(1))
                             .setParameter(3, region)
                             .setParameter(4, uid)
-                            .setParameter(5, cloture_type)
+                            .setParameter(5, cloture_type).setParameter(6, Boolean.FALSE)
                             .getResultList();
                     return synthesizeStockAggregateFromLots(results, region, cloture_type);
                 });
@@ -4212,7 +4389,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     .setParameter(2, today1.plusDays(1))
                     .setParameter(3, region)
                     .setParameter(4, uid)
-                    .setParameter(5, cloture_type)
+                    .setParameter(5, cloture_type).setParameter(6, Boolean.FALSE)
                     .getResultList();
             return synthesizeStockAggregateFromLots(results, region, cloture_type);
         } catch (Exception e) {
@@ -4225,13 +4402,13 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM stock_agregate s WHERE s.date BETWEEN ? AND ? ");
-            sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL ORDER BY s.date DESC");
+            sb.append("AND s.product_id = ? AND s.num_lot IS NOT NULL AND s.destroyed = ? ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, today)
                             .setParameter(2, today1.plusDays(1))
-                            .setParameter(3, uid)
+                            .setParameter(3, uid).setParameter(4, Boolean.FALSE)
                             .getResultList();
                     return synthesizeStockAggregateFromLots(results, null, null);
                 });
@@ -4240,7 +4417,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     .createNativeQuery(sb.toString(), StockAgregate.class)
                     .setParameter(1, today)
                     .setParameter(2, today1.plusDays(1))
-                    .setParameter(3, uid)
+                    .setParameter(3, uid).setParameter(4, Boolean.FALSE)
                     .getResultList();
             return synthesizeStockAggregateFromLots(results, null, null);
         } catch (Exception ex) {
@@ -4251,23 +4428,23 @@ public class RecquisitionService implements RecquisitionStorage {
     private StockAgregate findLatestStockAgregate(String productId) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.num_lot IS NOT NULL ");
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.num_lot IS NOT NULL AND s.destroyed = ? ");
             sb.append("AND s.date = (");
             sb.append("SELECT MAX(s2.date) FROM stock_agregate s2 ");
             sb.append("WHERE s2.product_id = s.product_id ");
             sb.append("AND COALESCE(s2.region, '') = COALESCE(s.region, '') ");
-            sb.append("AND s2.num_lot = s.num_lot) ORDER BY s.date DESC");
+            sb.append("AND s2.num_lot = s.num_lot AND s2.destroyed=s.destroyed ) ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
-                            .setParameter(1, productId)
+                            .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                             .getResultList();
                     return synthesizeStockAggregateFromLots(results, null, null);
                 });
             }
             List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sb.toString(), StockAgregate.class)
-                    .setParameter(1, productId)
+                    .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                     .getResultList();
             return synthesizeStockAggregateFromLots(results, null, null);
         } catch (Exception e) {
@@ -4279,15 +4456,15 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? ");
-            sb.append("AND s.num_lot IS NOT NULL AND s.date = (");
+            sb.append("AND s.num_lot IS NOT NULL AND s.destroyed = ? AND s.date = (");
             sb.append("SELECT MAX(s2.date) FROM stock_agregate s2 ");
-            sb.append("WHERE s2.product_id = s.product_id AND s2.region = s.region AND s2.num_lot = s.num_lot)");
+            sb.append("WHERE s2.product_id = s.product_id AND s2.region = s.region AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed)");
             sb.append(" ORDER BY s.date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, productId)
-                            .setParameter(2, region)
+                            .setParameter(2, region).setParameter(3, Boolean.FALSE)
                             .getResultList();
                     return synthesizeStockAggregateFromLots(results, region, null);
                 });
@@ -4295,7 +4472,7 @@ public class RecquisitionService implements RecquisitionStorage {
             List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sb.toString(), StockAgregate.class)
                     .setParameter(1, productId)
-                    .setParameter(2, region)
+                    .setParameter(2, region).setParameter(3, Boolean.FALSE)
                     .getResultList();
             return synthesizeStockAggregateFromLots(results, region, null);
         } catch (Exception e) {
@@ -4309,12 +4486,12 @@ public class RecquisitionService implements RecquisitionStorage {
         }
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? ORDER BY date DESC");
+            sb.append("SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? AND destroyed = ? ORDER BY date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, productId)
-                            .setParameter(2, numlot)
+                            .setParameter(2, numlot).setParameter(3, Boolean.FALSE)
                             .setMaxResults(1)
                             .getResultList();
                     return results.isEmpty() ? null : results.get(0);
@@ -4323,7 +4500,7 @@ public class RecquisitionService implements RecquisitionStorage {
             List<StockAgregate> results = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sb.toString(), StockAgregate.class)
                     .setParameter(1, productId)
-                    .setParameter(2, numlot)
+                    .setParameter(2, numlot).setParameter(3, Boolean.FALSE)
                     .setMaxResults(1)
                     .getResultList();
             return results.isEmpty() ? null : results.get(0);
@@ -4339,13 +4516,13 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(
-                    "SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? AND region LIKE ? ORDER BY date DESC");
+                    "SELECT * FROM stock_agregate WHERE product_id = ? AND num_lot = ? AND region LIKE ? AND destroyed = ? ORDER BY date DESC");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockAgregate> results = em.createNativeQuery(sb.toString(), StockAgregate.class)
                             .setParameter(1, productId)
                             .setParameter(2, numlot)
-                            .setParameter(3, region)
+                            .setParameter(3, region).setParameter(4, Boolean.FALSE)
                             .setMaxResults(1)
                             .getResultList();
                     return results.isEmpty() ? null : results.get(0);
@@ -4355,7 +4532,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     .createNativeQuery(sb.toString(), StockAgregate.class)
                     .setParameter(1, productId)
                     .setParameter(2, numlot)
-                    .setParameter(3, region)
+                    .setParameter(3, region).setParameter(4, Boolean.FALSE)
                     .setMaxResults(1)
                     .getResultList();
             return results.isEmpty() ? null : results.get(0);
@@ -4387,17 +4564,17 @@ public class RecquisitionService implements RecquisitionStorage {
     public boolean isStockExists(String puid, String lot, LocalDate debut, LocalDate fin) {
         String jpql = "SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END "
                 + "FROM stock_agregate c WHERE c.product_id = ? AND c.num_lot = ? "
-                + "AND date BETWEEN ? AND ?";
+                + "AND c.date BETWEEN ? AND ? AND c.destroyed = ?";
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> (Boolean) em.createNativeQuery(jpql, Boolean.class)
                     .setParameter(1, puid).setParameter(2, lot)
-                    .setParameter(3, debut).setParameter(4, fin.plusDays(1))
+                    .setParameter(3, debut).setParameter(4, fin.plusDays(1)).setParameter(5, Boolean.FALSE)
                     .getSingleResult());
         }
         return (Boolean) ManagedSessionFactory.getEntityManager()
                 .createNativeQuery(jpql, Boolean.class)
                 .setParameter(1, puid).setParameter(2, lot)
-                .setParameter(3, debut).setParameter(4, fin.plusDays(1))
+                .setParameter(3, debut).setParameter(4, fin.plusDays(1)).setParameter(5, Boolean.FALSE)
                 .getSingleResult();
     }
 
@@ -4715,14 +4892,14 @@ public class RecquisitionService implements RecquisitionStorage {
                 WHERE s.product_id = ?
                   AND s.region LIKE ?
                   AND s.num_lot IS NOT NULL
-                  AND s.date BETWEEN ? AND ?
+                  AND s.date BETWEEN ? AND ? AND s.destroyed = ?
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND s2.region = s.region
                         AND s2.num_lot = s.num_lot
-                        AND s2.date BETWEEN ? AND ?
+                        AND s2.date BETWEEN ? AND ? AND s2.destroyed = s.destroyed
                   )
                 ORDER BY s.date DESC
                 """;
@@ -4732,8 +4909,9 @@ public class RecquisitionService implements RecquisitionStorage {
                     .setParameter(2, region)
                     .setParameter(3, dateFrom)
                     .setParameter(4, dateTo.plusDays(1))
-                    .setParameter(5, dateFrom)
-                    .setParameter(6, dateTo.plusDays(1))
+                    .setParameter(5, Boolean.FALSE)
+                    .setParameter(6, dateFrom)
+                    .setParameter(7, dateTo.plusDays(1))
                     .getResultList());
         }
         return ManagedSessionFactory.getEntityManager()
@@ -4742,8 +4920,9 @@ public class RecquisitionService implements RecquisitionStorage {
                 .setParameter(2, region)
                 .setParameter(3, dateFrom)
                 .setParameter(4, dateTo.plusDays(1))
-                .setParameter(5, dateFrom)
-                .setParameter(6, dateTo.plusDays(1))
+                .setParameter(5, Boolean.FALSE)
+                .setParameter(6, dateFrom)
+                .setParameter(7, dateTo.plusDays(1))
                 .getResultList();
     }
 
@@ -4758,14 +4937,14 @@ public class RecquisitionService implements RecquisitionStorage {
                 WHERE s.product_id = ?
                   AND s.region LIKE ?
                   AND s.num_lot = ?
-                  AND s.date BETWEEN ? AND ?
+                  AND s.date BETWEEN ? AND ? AND s.destroyed = ?
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND s2.region = s.region
                         AND s2.num_lot = s.num_lot
-                        AND s2.date BETWEEN ? AND ?
+                        AND s2.date BETWEEN ? AND ? AND s2.destroyed=s.destroyed
                   )
                 ORDER BY s.date DESC
                 """;
@@ -4776,8 +4955,9 @@ public class RecquisitionService implements RecquisitionStorage {
                     .setParameter(3, lot)
                     .setParameter(4, dateFrom)
                     .setParameter(5, dateTo.plusDays(1))
-                    .setParameter(6, dateFrom)
-                    .setParameter(7, dateTo.plusDays(1))
+                    .setParameter(6, Boolean.FALSE)
+                    .setParameter(7, dateFrom)
+                    .setParameter(8, dateTo.plusDays(1))
                     .getResultList());
         }
         return ManagedSessionFactory.getEntityManager()
@@ -4787,8 +4967,9 @@ public class RecquisitionService implements RecquisitionStorage {
                 .setParameter(3, lot)
                 .setParameter(4, dateFrom)
                 .setParameter(5, dateTo.plusDays(1))
-                .setParameter(6, dateFrom)
-                .setParameter(7, dateTo.plusDays(1))
+                .setParameter(6, Boolean.FALSE)
+                .setParameter(7, dateFrom)
+                .setParameter(8, dateTo.plusDays(1))
                 .getResultList();
     }
 
@@ -4842,24 +5023,24 @@ public class RecquisitionService implements RecquisitionStorage {
                 SELECT * FROM stock_agregate s
                 WHERE s.product_id = ?
                   AND s.num_lot IS NOT NULL
-                  AND COALESCE(s.final_quantity, 0) > 0
+                  AND COALESCE(s.final_quantity, 0) > 0 AND s.destroyed = ?
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot
+                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
                   )
                 ORDER BY s.date DESC
                 """;
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
-                    .setParameter(1, productId)
+                    .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                     .getResultList());
         }
         return ManagedSessionFactory.getEntityManager()
                 .createNativeQuery(sql, StockAgregate.class)
-                .setParameter(1, productId)
+                .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                 .getResultList();
     }
 
@@ -4873,26 +5054,26 @@ public class RecquisitionService implements RecquisitionStorage {
                 WHERE s.product_id = ?
                   AND s.region LIKE ?
                   AND s.num_lot IS NOT NULL
-                  AND COALESCE(s.final_quantity, 0) > 0
+                  AND COALESCE(s.final_quantity, 0) > 0 AND s.destroyed = ?
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND s2.region = s.region
-                        AND s2.num_lot = s.num_lot
+                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
                   )
                 ORDER BY s.date DESC
                 """;
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sql, StockAgregate.class)
                     .setParameter(1, productId)
-                    .setParameter(2, region)
+                    .setParameter(2, region).setParameter(3, Boolean.FALSE)
                     .getResultList());
         }
         return ManagedSessionFactory.getEntityManager()
                 .createNativeQuery(sql, StockAgregate.class)
                 .setParameter(1, productId)
-                .setParameter(2, region)
+                .setParameter(2, region).setParameter(3, Boolean.FALSE)
                 .getResultList();
     }
 
@@ -4906,7 +5087,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 WHERE s.num_lot IS NOT NULL
                   AND s.date_expiration IS NOT NULL
                   AND COALESCE(s.final_quantity, 0) > 0
-                  AND s.date_expiration BETWEEN ? AND ?
+                  AND s.date_expiration BETWEEN ? AND ? AND s.destroyed = 'FALSE'
                 """);
         if (region != null && !region.isBlank()) {
             sql.append(" AND s.region LIKE ? ");
@@ -4917,7 +5098,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot
+                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
                   )
                 ORDER BY s.date_expiration ASC, s.product_id ASC, s.num_lot ASC
                 """);
@@ -5065,26 +5246,26 @@ public class RecquisitionService implements RecquisitionStorage {
             String sql = """
                     SELECT COALESCE(SUM(COALESCE(s.final_quantity,0)),0)
                     FROM stock_agregate s
-                    WHERE s.product_id = ?
+                    WHERE s.product_id = ? AND s.destroyed = ? 
                       AND s.num_lot IS NOT NULL
                       AND s.date = (
                           SELECT MAX(s2.date)
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot
+                            AND s2.num_lot = s.num_lot AND s2.destroyed=s.destroyed
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Object rst = em.createNativeQuery(sql)
-                            .setParameter(1, productId)
+                            .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                             .getSingleResult();
                     return rst == null ? 0d : ((Number) rst).doubleValue();
                 });
             }
             Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                    .setParameter(1, productId)
+                    .setParameter(1, productId).setParameter(2, Boolean.FALSE)
                     .getSingleResult();
             return rst == null ? 0d : ((Number) rst).doubleValue();
         } catch (NoResultException ex) {
@@ -5100,13 +5281,13 @@ public class RecquisitionService implements RecquisitionStorage {
                     FROM stock_agregate s
                     WHERE s.product_id = ?
                       AND s.region LIKE ?
-                      AND s.num_lot IS NOT NULL
+                      AND s.num_lot IS NOT NULL AND s.destroyed = ? 
                       AND s.date = (
                           SELECT MAX(s2.date)
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot
+                            AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
@@ -5114,6 +5295,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     Object rst = em.createNativeQuery(sql)
                             .setParameter(1, productId)
                             .setParameter(2, region)
+                            .setParameter(3, Boolean.FALSE)
                             .getSingleResult();
                     return rst == null ? 0d : ((Number) rst).doubleValue();
                 });
@@ -5121,6 +5303,7 @@ public class RecquisitionService implements RecquisitionStorage {
             Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
                     .setParameter(1, productId)
                     .setParameter(2, region)
+                    .setParameter(3, Boolean.FALSE)
                     .getSingleResult();
             return rst == null ? 0d : ((Number) rst).doubleValue();
         } catch (NoResultException ex) {
@@ -5128,6 +5311,7 @@ public class RecquisitionService implements RecquisitionStorage {
         }
     }
 
+    @Override
     public double sumLatestLotFinalQuantityFromStockAggregate(String productId, String lot, String region) {
         try {
             String sql = """
@@ -5135,27 +5319,27 @@ public class RecquisitionService implements RecquisitionStorage {
                     FROM stock_agregate s
                     WHERE s.product_id = ?
                       AND s.region LIKE ?
-                      AND s.num_lot = ?
+                      AND s.num_lot = ? AND s.destroyed = ?
                       AND s.date = (
                           SELECT MAX(s2.date)
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot
+                            AND s2.num_lot = s.num_lot AND s2.destroyed=s.destroyed
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Object rst = em.createNativeQuery(sql)
                             .setParameter(1, productId)
-                            .setParameter(2, region).setParameter(3, lot)
+                            .setParameter(2, region).setParameter(3, lot).setParameter(4, Boolean.FALSE)
                             .getSingleResult();
                     return rst == null ? 0d : ((Number) rst).doubleValue();
                 });
             }
             Object rst = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
                     .setParameter(1, productId)
-                    .setParameter(2, region).setParameter(3, lot)
+                    .setParameter(2, region).setParameter(3, lot).setParameter(4, Boolean.FALSE)
                     .getSingleResult();
             return rst == null ? 0d : ((Number) rst).doubleValue();
         } catch (NoResultException ex) {
@@ -5219,15 +5403,46 @@ public class RecquisitionService implements RecquisitionStorage {
             String rqRegion = rq.getRegion();
             if (!(rqRegion == null || rqRegion.isBlank())) {
                 Recquisition current = latestPerRegion.get(rqRegion);
+                Produit p = rq.getProductId();
                 if (current == null
                         || (rq.getDate() != null && current.getDate() != null && rq.getDate().isAfter(current.getDate()))
                         || (current.getDate() == null && rq.getDate() != null)) {
-                    latestPerRegion.put(rqRegion, rq);
+                    StockAgregate s = findLastAgregateByLot(p.getUid(), rq.getNumlot(), region);
+                    if (s == null || !s.isDestroyed()) {
+                        latestPerRegion.put(rqRegion, rq);
+                    }
                 }
             }
         });
         return latestPerRegion;
     }
+
+    private StockAgregate findLastAgregateByLot(String prod, String numlot, String region) {
+        try {
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? "
+                    + "AND s.final_quantity > 0 AND s.num_lot = ? ORDER BY s.date DESC");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
+                    query.setParameter(1, prod);
+                    query.setParameter(2, region == null ? "%" : region);
+                    query.setParameter(3, numlot).setMaxResults(1);
+                    return (StockAgregate) query.getSingleResult();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
+            query.setParameter(1, prod);
+            query.setParameter(2, region == null ? "%" : region);
+            query.setParameter(3, numlot).setMaxResults(1);
+            return (StockAgregate) query.getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+
+    }
+//    
 
     @Override
     public List<Peremption> showExpiredAtInterval(LocalDate dateExp1, LocalDate dateEpx2, String region) {

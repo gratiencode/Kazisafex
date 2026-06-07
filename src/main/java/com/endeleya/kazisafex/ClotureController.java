@@ -67,6 +67,7 @@ import javafx.util.StringConverter;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import services.utils.RegionRegistry;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -305,30 +306,8 @@ public class ClotureController implements Initializable {
                 }
             }
         });
-        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Rapport regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_region);
         initTable();
         olc.setAll(PeriodeDelegate.findPeriodes());
         tf_cloture_recherche.textProperty().addListener(new ChangeListener<String>() {
@@ -497,21 +476,6 @@ public class ClotureController implements Initializable {
             return Constants.PERIODE_MENSUELLE;
         }
         return null;
-    }
-
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
     }
 
     public void setEntreprise(Entreprise entreprise) {

@@ -178,6 +178,12 @@ public interface Kazisafe {
         @POST("v1/finance/immobilisations")
         Call<Immobilisation> createImmobilisation(@Body Immobilisation immobilisation);
 
+        @PATCH("v1/finance/immobilisations/{uid}")
+        Call<Immobilisation> updateImmobilisation(@Path("uid") String uid, @Body Immobilisation immobilisation);
+
+        @DELETE("v1/finance/immobilisations/{uid}")
+        Call<Void> deleteImmobilisation(@Path("uid") String uid);
+
         @PATCH("immobilisations/sync")
         Call<WebResult> syncImmobilisations(@Body List<Immobilisation> immobilisations);
 

@@ -49,10 +49,10 @@ public class RepportDelegate {
      * @param serie1 serie de vente
      * @param serie2 serie de cout-acquisition
      * @param serie3 serie de marge
-     * @param debut  date debut periode
-     * @param fin    date fin periode
-     * @param role   role utilisateur
-     * @param taux   taux de change
+     * @param debut date debut periode
+     * @param fin date fin periode
+     * @param role role utilisateur
+     * @param taux taux de change
      * @param region region ou site
      */
     public static void metrify(XYChart<String, Number> vChart, String serie1, String serie2, String serie3,
@@ -87,6 +87,11 @@ public class RepportDelegate {
 
     public static StockAgregate findCurrentStock(Produit prod, String region, LocalDate today, LocalDate otherDay) {
         return getStorage().findStockFor(prod, today, otherDay, region);
+    }
+
+    public static StockAgregate findCurrentStock(Produit prod, 
+            String lot, LocalDate today, LocalDate otherDay, String region) {
+        return getStorage().findStockFor(prod, lot, today, otherDay, region);
     }
 
     public static boolean repportInBackground(LocalDate dateDebut, LocalDate dateFin, String region) {
@@ -174,8 +179,20 @@ public class RepportDelegate {
         return getStorage().findByContext(context);
     }
 
+    public static List<StockAgregate> findLatestStockAgregates(String region) {
+        return getStorage().findLatestStockAgregates(region);
+    }
+
+    public static List<StockAgregate> findLatestStockAgregates(String region, LocalDate atDate) {
+        return getStorage().findLatestStockAgregates(region, atDate);
+    }
+
     public static StockAgregate updateStockAgregate(StockAgregate sa) {
         return getStorage().updateStockAgregate(sa);
+    }
+
+    public static Double aggregatedAmortizationOf(LocalDate d1, LocalDate d2, String region) {
+        return getStorage().aggregatedAmortizationOf(d1, d2, region);
     }
 
 }

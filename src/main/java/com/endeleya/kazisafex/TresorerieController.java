@@ -24,7 +24,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.Executors;
@@ -78,6 +80,7 @@ import data.DepenseAgregate;
 import delegates.DepenseDelegate;
 import delegates.DepenseAgregateDelegate;
 import data.Entreprise;
+import services.utils.RegionRegistry;
 import data.Facture;
 import data.Operation;
 import data.Refresher;
@@ -526,10 +529,13 @@ public class TresorerieController implements Initializable {
         col_categorie_depense_real.setText("Nom de la Depense");
 
         col_date_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
-            return new SimpleStringProperty(Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(param.getValue().getDate())));
+            if (param.getValue().getDate() == null) {
+                return new SimpleStringProperty("N/A");
+            }
+            return new SimpleStringProperty(param.getValue().getDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         });
         col_ref_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
-            return new SimpleStringProperty(param.getValue().getImputation()); // using imputation for Reference / Nom Depense
+            return new SimpleStringProperty(param.getValue().getImputation() != null ? param.getValue().getImputation() : "-");
         });
         col_categorie_depense_real.setCellValueFactory((TableColumn.CellDataFeatures<DepenseAgregate, String> param) -> {
             return new SimpleStringProperty(param.getValue().getDepenseId() != null ? param.getValue().getDepenseId().getNomDepense() : param.getValue().getUid()); // maybe Depense ID or category string later. Default emptyish if not set
@@ -711,21 +717,21 @@ public class TresorerieController implements Initializable {
         System.out.println("DEBUG ls_depense.setItems appelé");
         cbx_depenses.setItems(depenses);
         lstrz = new ArrayList<>();
+        List<DepenseAgregate> rawDep;
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
             cbx_region.setVisible(true);
             lstrz.addAll(TraisorerieDelegate.findTraisoreries());
             comptes.addAll(CompteTresorDelegate.findCompteTresors());
             depenses.addAll(DepenseDelegate.findDepenses());
-            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates());
+            rawDep = DepenseAgregateDelegate.findDepenseAgregates();
         } else {
             cbx_region.setVisible(false);
-            lstrz.addAll(TraisorerieDelegate.findTraisoreries(region));// .fidatabase.findAllByRegion(Traisorerie.class,
-            // region));
-            comptes.addAll(CompteTresorDelegate.findCompteTresors(region));// database.findAllByRegion(CompteTresor.class,
-            // region));
-            depenses.addAll(DepenseDelegate.findDepenses(region));// database.findAllByRegion(Depense.class, region));
-            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates(region));
+            lstrz.addAll(TraisorerieDelegate.findTraisoreries(region));
+            comptes.addAll(CompteTresorDelegate.findCompteTresors(region));
+            depenses.addAll(DepenseDelegate.findDepenses(region));
+            rawDep = DepenseAgregateDelegate.findDepenseAgregates(region);
         }
+        fillDepensesRealiseesAggregate(rawDep);
 
         Platform.runLater(() -> {
             count_compte.setText(String.format(bundle.getString("xitems"), comptes.size()));
@@ -738,33 +744,13 @@ public class TresorerieController implements Initializable {
         math = String.valueOf(((int) (Math.random() * 100001)));
         txt_reference_trans.setText("Reference: " + math);
         txt_reference_dep.setText("Reference: " + math);
-        kazisafe.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        if (reg != null) {
-                            pref.put("region" + (++i), reg);
-                        }
-                    }
-                    System.err.println("Agent regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
-        cbx_region_compte.getSelectionModel().selectFirst();
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_region);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_compte);
+        RegionRegistry.selectSavedRegion(pref, cbx_rgion_deps);
+        if (cbx_region_compte.getValue() == null && !cbx_region_compte.getItems().isEmpty()) {
+            cbx_region_compte.getSelectionModel().selectFirst();
+        }
         cbx_type_compte.getSelectionModel().selectFirst();
         tbl_transaction.setItems(lstransaction);
         // list_sms_recov.setItems(listSMS);
@@ -1319,23 +1305,6 @@ public class TresorerieController implements Initializable {
         }
     }
 
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    if (!result.contains(key)) {
-                        result.add(key);
-                    }
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
-    }
-
     public void search(String query) {
         List<Traisorerie> result = new ArrayList<>();
         for (Traisorerie t : lstrz) {
@@ -1609,6 +1578,8 @@ public class TresorerieController implements Initializable {
         MainUI.setPattern(dpk_fin_trans);
         MainUI.setPattern(dpk_date_recov);
         MainUI.setPattern(dpk_date_ech_recov);
+        MainUI.setPattern(dpk_debut_depense_real);
+        MainUI.setPattern(dpk_fin_depense_real);
 
         dpk_date_trans.setValue(LocalDate.now());
         dpk_date_dep.setValue(LocalDate.now());
@@ -1653,6 +1624,26 @@ public class TresorerieController implements Initializable {
                 }
             }
         });
+    }
+
+    @FXML
+    public void refreshDepenseByDate(ActionEvent evt) {
+        if (dpk_debut_depense_real.getValue() != null && dpk_fin_depense_real.getValue() != null) {
+            depensesRealisees.clear();
+            depenses.clear();
+            List<DepenseAgregate> rawData;
+            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+                rawData = DepenseAgregateDelegate.findDepenseAgregates(dpk_debut_depense_real.getValue(), dpk_fin_depense_real.getValue(),null);
+                depenses.addAll(DepenseDelegate.findDepenses());
+            } else {
+                rawData = DepenseAgregateDelegate.findDepenseAgregates(dpk_debut_depense_real.getValue(),dpk_fin_depense_real.getValue(),region);
+                depenses.addAll(DepenseDelegate.findDepenses(region));
+            }
+
+            fillDepensesRealiseesAggregate(rawData);
+            cbx_depenses.setItems(depenses);
+            MainUI.notify(null, "Succès", "Liste des dépenses rafraîchie", 2, "info");
+        }
     }
 
     @FXML
@@ -2147,17 +2138,68 @@ public class TresorerieController implements Initializable {
         // Rafraîchir la liste des dépenses réalisées
         depensesRealisees.clear();
         depenses.clear();
+        List<DepenseAgregate> rawData;
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates());
+            rawData = DepenseAgregateDelegate.findDepenseAgregates();
             depenses.addAll(DepenseDelegate.findDepenses());
         } else {
-            depensesRealisees.addAll(DepenseAgregateDelegate.findDepenseAgregates(region));
+            rawData = DepenseAgregateDelegate.findDepenseAgregates(region);
             depenses.addAll(DepenseDelegate.findDepenses(region));
         }
-        tbl_depenses_realisees.setItems(depensesRealisees);
+
+        fillDepensesRealiseesAggregate(rawData);
         cbx_depenses.setItems(depenses);
-        computeDepensesRealiseesTotal();
         MainUI.notify(null, "Succès", "Liste des dépenses rafraîchie", 2, "info");
+    }
+
+    private void fillDepensesRealiseesAggregate(List<DepenseAgregate> rawData) {
+        depensesRealisees.clear();
+        if (rawData == null || rawData.isEmpty()) {
+            computeDepensesRealiseesTotal();
+            return;
+        }
+
+        // Grouping by Depense and Date (per day)
+        Map<String, DepenseAgregate> grouped = new HashMap<>();
+        for (DepenseAgregate da : rawData) {
+            String depId = da.getDepenseId() != null ? da.getDepenseId().getUid() : "OTHERS";
+            String dayStr = da.getDate() != null ? da.getDate().toLocalDate().toString() : "NODATE";
+            String key = depId + "_" + dayStr;
+
+            if (grouped.containsKey(key)) {
+                DepenseAgregate existing = grouped.get(key);
+                existing.setMontantUsd(existing.getMontantUsd() + (da.getMontantUsd() == null ? 0 : da.getMontantUsd()));
+                existing.setMontantCdf(existing.getMontantCdf() + (da.getMontantCdf() == null ? 0 : da.getMontantCdf()));
+            } else {
+                DepenseAgregate newDa = new DepenseAgregate();
+                newDa.setDepenseId(da.getDepenseId());
+                newDa.setMontantUsd(da.getMontantUsd() == null ? 0 : da.getMontantUsd());
+                newDa.setMontantCdf(da.getMontantCdf() == null ? 0 : da.getMontantCdf());
+                newDa.setImputation("Cumulé");
+                newDa.setUid(da.getUid()); // keep one of the UIDs or set the composite key
+                newDa.setDate(da.getDate() != null ? da.getDate().toLocalDate().atStartOfDay() : null);
+                grouped.put(key, newDa);
+            }
+        }
+
+        // Sorting by date descending to keep the table readable
+        List<DepenseAgregate> sortedList = new ArrayList<>(grouped.values());
+        sortedList.sort((d1, d2) -> {
+            if (d1.getDate() == null && d2.getDate() == null) {
+                return 0;
+            }
+            if (d1.getDate() == null) {
+                return 1;
+            }
+            if (d2.getDate() == null) {
+                return -1;
+            }
+            return d2.getDate().compareTo(d1.getDate());
+        });
+
+        depensesRealisees.addAll(sortedList);
+        tbl_depenses_realisees.setItems(depensesRealisees);
+        computeDepensesRealiseesTotal();
     }
 
     private void computeDepensesRealiseesTotal() {

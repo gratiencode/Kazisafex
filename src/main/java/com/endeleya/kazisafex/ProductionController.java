@@ -99,6 +99,7 @@ import javafx.util.StringConverter;
 import javafx.util.converter.NumberStringConverter;
 import retrofit2.Call;
 import retrofit2.Response;
+import services.utils.RegionRegistry;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -548,7 +549,8 @@ public class ProductionController implements Initializable {
         ols_repartirs = FXCollections.observableArrayList();
         ols_imputers = FXCollections.observableArrayList();
         ols_imputeraff_indir = FXCollections.observableArrayList();
-        ols_produits.addAll(ProduitDelegate.findProduits());
+        
+        ols_produits.addAll(ProduitDelegate.findProduits()==null?List.of():ProduitDelegate.findProduits());
         cbx_mesure_to_prod.setItems(ols_mesures);
         cbx_mesure_deprod.setItems(ols_mesure_deprod);
         cbx_produits_prod.setItems(ols_produits);
@@ -594,8 +596,6 @@ public class ProductionController implements Initializable {
         cbx_region_prod.setItems(regions);
         cbx_region_deprod.setItems(regions);
         cbx_region_dest_deprod.setItems(regions);
-        cbx_region_intrant.getSelectionModel().selectFirst();
-        cbx_region_intraposage.getSelectionModel().selectFirst();
         initCombos();
         initTables();
         initUpdaTable();
@@ -680,29 +680,13 @@ public class ProductionController implements Initializable {
                         }
                     }
                 });
-        kazisafe.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_depot);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_intrant);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_intraposage);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_prod);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_deprod);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_dest_deprod);
         cbx_produits_prod.getSelectionModel().selectFirst();
         cbx_produits_prod.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Produit> observable, Produit oldValue, Produit newValue) -> {
             Produit pr = newValue;
@@ -911,19 +895,6 @@ public class ProductionController implements Initializable {
         return somme;
     }
 
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
-    }
     private String NON_COMMENCE = "Non commencée", LANCEE = "Lancée", EN_COURS = "En cours...", TERMINEE = "Términée", SUSPENDUE = "Suspendue", ANNULEE = "Annulée", REPRISE = "Réprise", EN_ETUDE = "En étude", EN_TEST = "En test";
 
     private void loadData() {
@@ -957,10 +928,10 @@ public class ProductionController implements Initializable {
         ols_imputers.addAll(ImputerDelegate.findImputers());
         ols_imputeraff_indir.addAll(ImputerDelegate.findImputers());
         cbx_sku_intrant.getSelectionModel().selectFirst();
-        cbx_region_depot.getSelectionModel().selectFirst();
-        cbx_region_intrant.getSelectionModel().selectFirst();
-        cbx_region_intraposage.getSelectionModel().selectFirst();
-        cbx_region_deprod.getSelectionModel().selectFirst();
+        RegionRegistry.selectSavedRegion(pref, cbx_region_depot);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_intrant);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_intraposage);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_deprod);
         cbx_type_depot.getSelectionModel().selectFirst();
         cbx_type_intrant.getSelectionModel().selectFirst();
         MainUI.setPattern(dpk_dateexp_intrapos);

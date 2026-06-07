@@ -27,6 +27,12 @@ public class ImmobilisationDelegate {
     }
 
     public static void deleteImmobilisation(Immobilisation obj) {
+        List<data.ImmobilisationAgregate> ags = getAgregateStorage().findByImmobilisation(obj.getUid());
+        if (ags != null && !ags.isEmpty()) {
+            for (data.ImmobilisationAgregate ag : ags) {
+                getAgregateStorage().deleteImmobilisationAgregate(ag);
+            }
+        }
         getImmobilisationStorage().deleteImmobilisation(obj);
     }
 
@@ -69,5 +75,37 @@ public class ImmobilisationDelegate {
 
     public static boolean isExists(String uid, LocalDateTime attime) {
         return getImmobilisationStorage().isExists(uid, attime);
+    }
+
+    public static IServices.ImmobilisationAgregateStorage getAgregateStorage() {
+        return (IServices.ImmobilisationAgregateStorage) ServiceLocator.getInstance()
+                .getService(Tables.IMMOBILISATION_AGREGATE);
+    }
+
+    public static void agregate() {
+        List<Immobilisation> lims = findImmobilisations();
+        if (lims == null || lims.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (Immobilisation im : lims) {
+            data.ImmobilisationAgregate ag = new data.ImmobilisationAgregate();
+            ag.setDate(now);
+            ag.setImmobilisationId(im);
+            ag.setRegion(im.getRegion());
+            ag.setValeurBrutte(im.getValeurOrigineUsd());
+            ag.setAmmortissement(im.amortissementCumulUsd(now.toLocalDate()));
+            ag.setValeurNette(im.valeurNetteUsd(now.toLocalDate()));
+            getAgregateStorage().createImmobilisationAgregate(ag);
+        }
+    }
+
+    public static boolean shouldAgregate() {
+        List<data.ImmobilisationAgregate> last = getAgregateStorage().findImmobilisationAgregates(0, 1);
+        if (last == null || last.isEmpty()) {
+            return true;
+        }
+        LocalDateTime lastDate = last.get(0).getDate();
+        return java.time.Duration.between(lastDate, LocalDateTime.now()).toDays() >= 15;
     }
 }

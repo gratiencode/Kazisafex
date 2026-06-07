@@ -21,6 +21,26 @@ import java.time.LocalDateTime;
  */
 public class SaleItem {
 
+    /**
+     * Niveau d’affichage dans l’historique POS (arbre date → facture → lignes).
+     */
+    public enum HistoriqueNiveau {
+        /**
+         * Agrégat pour une journée (pas une vente réelle).
+         */
+        JOUR,
+        /**
+         * Une facture / vente.
+         */
+        FACTURE,
+        /**
+         * Une ligne de vente.
+         */
+        LIGNE
+    }
+
+    private HistoriqueNiveau historiqueNiveau = HistoriqueNiveau.FACTURE;
+
     private int idVente;
     private double saleAmountUsd;
     private double saleAmountCdf;
@@ -38,12 +58,11 @@ public class SaleItem {
     private List<Vente> ventes;
     private List<LigneVente> ligneVenteList;
 
-    private long saleItemUid=0;
+    private long saleItemUid = 0;
     private double unitPrice;
     private double totalCost;
     private Produit productObj;
     private Mesure mesureObj;
-
 
     public SaleItem() {
     }
@@ -201,7 +220,7 @@ public class SaleItem {
     }
 
     public List<LigneVente> getItems() {
-        return ligneVenteList;
+        return ligneVenteList == null ? List.of() : ligneVenteList;
     }
 
     public java.util.Date getDate() {
@@ -217,7 +236,7 @@ public class SaleItem {
     public void setItems(List<LigneVente> items) {
         this.ligneVenteList = items;
         if (items != null && !items.isEmpty()) {
-            this.pu = items.get(0).getPrixUnit();
+            this.pu = items.get(0).getPrixUnit()==null?0d:items.get(0).getPrixUnit();
             this.quantite = items.stream().mapToDouble(LigneVente::getQuantite).sum();
             this.produit = items.get(0).getProductId().getNomProduit();
             this.mesure = items.get(0).getMesureId().getDescription();
@@ -229,14 +248,12 @@ public class SaleItem {
 //            this.dateDeVente = ldt.toLocalDate();
 //        }
 //    }
-
     public void setDate(LocalDateTime date) {
         if (date != null) {
             this.dateDeVente = date.toLocalDate();
             this.dateHeureVente = date;
         }
     }
-
 
     public double getUnitPrice() {
         return unitPrice;
@@ -264,7 +281,6 @@ public class SaleItem {
         this.produit = product.getNomProduit();
     }
 
-
     public LocalDate getDatEcheance() {
         return datEcheance;
     }
@@ -276,7 +292,6 @@ public class SaleItem {
     public void setDateEcheance(LocalDate datEcheance) {
         this.datEcheance = datEcheance;
     }
-
 
     public LocalDateTime getDateHeureVente() {
         return dateHeureVente;
@@ -292,6 +307,14 @@ public class SaleItem {
 
     public void setSaleItemUid(long saleItemUid) {
         this.saleItemUid = saleItemUid;
+    }
+
+    public HistoriqueNiveau getHistoriqueNiveau() {
+        return historiqueNiveau;
+    }
+
+    public void setHistoriqueNiveau(HistoriqueNiveau historiqueNiveau) {
+        this.historiqueNiveau = historiqueNiveau != null ? historiqueNiveau : HistoriqueNiveau.FACTURE;
     }
 
 }

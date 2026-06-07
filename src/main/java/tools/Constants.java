@@ -58,8 +58,6 @@ public class Constants {
     public static final SimpleDateFormat DATE_ONLY_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
     public static final SimpleDateFormat YEAR_AND_MONTH_FORMAT = new SimpleDateFormat("yyyy-MM");
     public static final SimpleDateFormat YEAR_ONLY_FORMAT = new SimpleDateFormat("yyyy");
-    public static final SimpleDateFormat USER_READABLE_FORMAT = new SimpleDateFormat("dd/MM/yyyy");
-    public static final SimpleDateFormat DATE_HEURE_USER_READABLE_FORMAT = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
     public static final SimpleDateFormat TIMESTAMPED_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss");
     public static final Calendar Calendrier = Calendar.getInstance();
     public static final long MILLSECONDS_JOURN = 86400000;

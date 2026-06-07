@@ -69,6 +69,7 @@ import data.Mesure;
 import data.PrixDeVente;
 import data.Produit;
 import data.Recquisition;
+import data.StockAgregate;
 import data.Stocker;
 import org.apache.commons.lang3.StringUtils;
 import tools.Constants;
@@ -81,11 +82,9 @@ import delegates.TraisorerieDelegate;
 import java.time.LocalDate;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 
 /**
@@ -118,7 +117,7 @@ public class PanierappenderController implements Initializable {
     @FXML
     private Button btn_add2cart;
     @FXML
-    private ComboBox<Recquisition> cbx_lot_recquisitionee;
+    private ComboBox<StockAgregate> cbx_lot_recquisitionee;
     @FXML
     private Label txt_peremption;
     @FXML
@@ -130,12 +129,13 @@ public class PanierappenderController implements Initializable {
     List<PrixDeVente> prices;
     List<Mesure> mesures;
 
-    ObservableList<Recquisition> lisrecquisition;
+    ObservableList<StockAgregate> lisrecquisition;
 
     Produit prod;
 
     Mesure choosenmez;
     Recquisition choosenRecquisition;
+    StockAgregate choosenLotStock;
     Preferences pref;
     double taux2change;
     double quant = 1, reste;
@@ -143,6 +143,8 @@ public class PanierappenderController implements Initializable {
     ResourceBundle bundle;
     long id;
     double resteEnPiece;
+    private final Map<String, Double> lotRemainingPiecesCache = new HashMap<>();
+    private final Map<String, Recquisition> lotMetadataCache = new HashMap<>();
     @FXML
     private RadioButton thermal, jet;
     @FXML
@@ -178,27 +180,16 @@ public class PanierappenderController implements Initializable {
         jet.setToggleGroup(printerGroup);
         pane_print.setVisible(false);
         config();
+        cbx_lot_recquisitionee.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            applySelectedLot(newValue);
+        });
         cbx_mesure_selected.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             choosenmez = newValue;
             if (choosenRecquisition == null) {
                 return;
             }
-            String numlotx = choosenRecquisition.getNumlot();
-            double sumLot;
-            if (hasGlobalStockAccess()) {
-                resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
-                sumLot = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), numlotx);
-            } else {
-                resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
-                sumLot = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), numlotx, region);
-            }
             prices = getRecentPrice(prod.getUid()).getValue();//PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
-
-            reste = (resteEnPiece / choosenmez.getQuantContenu());
-            txt_available_quant.setText(reste + " " + choosenmez.getDescription());
-            if (txt_qte_lot != null) {
-                txt_qte_lot.setText((sumLot / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-            }
+            refreshAvailableQuantitiesLabels();
             if (!tf_input_quant.getText().isEmpty() && StringUtils.isNumeric(tf_input_quant.getText())) {
                 Double d = Double.valueOf(tf_input_quant.getText());
                 List<PrixDeVente> pvds = PrixDeVenteDelegate.findSpecificByQuant(choosenRecquisition, choosenmez, d);
@@ -277,7 +268,7 @@ public class PanierappenderController implements Initializable {
 
     @FXML
     ComboBox<Printer> cbx_printers;
-
+//appel initial
     public void setProduit(Entreprise eze, Kazisafe ksf, Produit produit, String action, long id) {
         if (produit == null) {
             return;
@@ -305,57 +296,53 @@ public class PanierappenderController implements Initializable {
         cbx_printers.getSelectionModel().select(defaultPrinter);
         txt_product_name.setText(prod.getNomProduit() + " " + (prod.getMarque() == null ? "" : prod.getMarque()) + " " + (prod.getModele() == null ? "" : prod.getModele()) + ""
                 + " " + (prod.getTaille() == null ? "" : prod.getTaille()) + " " + (prod.getCouleur() == null ? "" : prod.getCouleur()));
-        List<Recquisition> lsks = getRecquisitionList(meth, role, region, prod);
-        if (lsks == null) {
-            lsks = Collections.emptyList();
-        }
-        for (Recquisition lsk : lsks) {
-            if (lsk.getNumlot() == null) {
-                lsk.setNumlot(lsk.getDate().toString());
-            }
-            if (!isSameLotExistInRecqs(lsk.getNumlot())) {
-                // Respecter le scope d'acces: global (toutes regions) ou region courante.
-                double q = hasGlobalStockAccess()
-                        ? RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot())
-                        : RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lsk.getNumlot(), region);
-                if (q > 0) {
-                    lisrecquisition.add(lsk);
-                }
-            }
-        }
+        refreshRecquisitionLots();
         System.out.println("Recqusis met size " + lisrecquisition.size());
-//        Recquisition choosen = chooseValideRecquisitionx(lisrecquisition);
-        cbx_lot_recquisitionee.getSelectionModel().selectFirst();//.select(choosen);
-        choosenRecquisition = cbx_lot_recquisitionee.getValue();
-        
+        StockAgregate preferred = pickPreferredLotForSelection();
+        if (preferred != null) {
+            cbx_lot_recquisitionee.getSelectionModel().select(preferred);
+        } else {
+            cbx_lot_recquisitionee.getSelectionModel().clearSelection();
+        }
+        choosenLotStock = cbx_lot_recquisitionee.getValue();
+        choosenRecquisition = resolveRecquisitionMetadata(choosenLotStock);
+
         Map.Entry<Recquisition, List<PrixDeVente>> recent = getRecentPrice(prod.getUid());
-        if (choosenRecquisition == null) {
+        if (choosenLotStock == null) {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("choosemeth"), 4, "error");
-            choosenRecquisition = recent.getKey();
-            if (choosenRecquisition != null) {
-                lisrecquisition.add(choosenRecquisition);
+            StockAgregate fallbackLot = buildFallbackLotStock(recent.getKey());
+            if (fallbackLot != null) {
+                boolean alreadyListed = lisrecquisition.stream()
+                        .anyMatch(r -> Objects.equals(r.getNumlot(), fallbackLot.getNumlot()));
+                if (!alreadyListed) {
+                    lisrecquisition.add(fallbackLot);
+                }
+                String fallbackLotNum = fallbackLot.getNumlot();
+                if (fallbackLotNum != null && !fallbackLotNum.isBlank() && !lotRemainingPiecesCache.containsKey(fallbackLotNum)) {
+                    lotRemainingPiecesCache.put(fallbackLotNum, getCurrentRemainingPiecesForLot(fallbackLotNum));
+                }
+                cbx_lot_recquisitionee.getSelectionModel().select(fallbackLot);
+                choosenLotStock = fallbackLot;
+                choosenRecquisition = resolveRecquisitionMetadata(fallbackLot);
             }
         }
-        if (choosenRecquisition == null) {
+        if (choosenLotStock == null || choosenRecquisition == null) {
             MainUI.notify(null, bundle.getString("error"), "Aucun lot disponible pour ce produit.", 4, "error");
             return;
         }
-        applyBgColorIfExpired(choosenRecquisition);
-        List<Stocker> locals = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosenRecquisition.getNumlot());
+        applySelectedLot(choosenLotStock);
+        List<Stocker> locals = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosenLotStock.getNumlot());
         Stocker local = locals.isEmpty() ? null : locals.get(0);
         localisabel.setText(local == null ? "" : local.getLocalisation());
         System.out.println("Recs size " + lisrecquisition.size());
 //        Recquisition headerRecq = PosController.getInstance().getHeaderRecq(prod);
 //        String numlot = choosenRecquisition == null ? headerRecq.getNumlot() : choosenRecquisition.getNumlot();
 
-        // Quantite totale restante du produit (somme de tous les lots du scope).
-        resteEnPiece = getCurrentRemainingPieces();
-
 //        prices = PrixDeVenteDelegate.findPricesForRecq(choosenRecquisition.getUid());
         if (prices == null) {
             prices = recent.getValue() == null ? new ArrayList<>() : new ArrayList<>(recent.getValue());
         }
-        txt_alerte_pa.setText(choosenRecquisition.getStockAlert() + " " + choosenmez.getDescription());
+        updateAlertLabel();
         if (prices.isEmpty()) {
             for (Recquisition rx : RecquisitionDelegate.toLifoOrdering(prod.getUid())) {
                 List<PrixDeVente> pricez = PrixDeVenteDelegate.findPricesForRecq(rx.getUid());
@@ -371,18 +358,7 @@ public class PanierappenderController implements Initializable {
                 }
             }
         }
-        txt_available_quant.setText((resteEnPiece / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-        double sumLotIn = 0;
-        if (choosenRecquisition != null) {
-             if (hasGlobalStockAccess()) {
-                 sumLotIn = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), choosenRecquisition.getNumlot());
-             } else {
-                 sumLotIn = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), choosenRecquisition.getNumlot(), region);
-             }
-        }
-        if (txt_qte_lot != null) {
-            txt_qte_lot.setText((sumLotIn / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-        }
+        refreshAvailableQuantitiesLabels();
         List<PrixDeVente> pvxs = pickPrice(prices, choosenmez, 1);
         if (!pvxs.isEmpty()) {
             PrixDeVente pvx = pvxs.get(0);
@@ -413,7 +389,7 @@ public class PanierappenderController implements Initializable {
             applyPrices(prices);
         }
         String text = "#" + prod.getUid() + "-" + choosenmez.getQuantContenu() + "-" + tf_input_quant.getText() + "-"
-                + "" + choosenRecquisition.getNumlot() + "-" + dev;
+                + "" + choosenLotStock.getNumlot() + "-" + dev;
         try {
             writeCartItem(text.trim());
         } catch (IOException ex) {
@@ -463,68 +439,151 @@ public class PanierappenderController implements Initializable {
             }
         });
 
-        cbx_lot_recquisitionee.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Recquisition>() {
-            @Override
-            public void changed(ObservableValue<? extends Recquisition> observable, Recquisition oldValue, Recquisition newValue) {
-                if (newValue != null) {
-                    choosenRecquisition = newValue;
-                    LocalDate date = choosenRecquisition.getDateExpiry();
-                    txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date.toString());
-                    txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-//                    if (date == null) {
-//                        return;
-//                    }
-                    String lot = choosenRecquisition.getNumlot();
-                    double sum;
-                    Mesure mzr = choosenRecquisition.getMesureId();
-
-                    Mesure mz = MesureDelegate.findMesure(mzr.getUid());
-                    if (mz == null) {
-                        List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(choosenRecquisition.getProductId().getUid());
-                        mz = mesures.get(0);
-                    }
-
-                    double dispo = choosenRecquisition.getQuantite();
-                    double stalertpc = (choosenRecquisition.getStockAlert() * mz.getQuantContenu());
-                    double alerte = stalertpc / choosenmez.getQuantContenu();
-                    txt_alerte_pa.setText("Alt:" + alerte + " " + choosenmez.getDescription());
-                    if (hasGlobalStockAccess()) {
-                        resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid());
-                        sum = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lot);
-                    } else {
-                        resteEnPiece = RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
-                        sum = RecquisitionDelegate.findRemainedInMagasinByLot(prod.getUid(), lot, region);
-                    }
-                    reste = resteEnPiece / choosenmez.getQuantContenu();
-                    txt_available_quant.setText(reste + " " + choosenmez.getDescription());
-                    if (txt_qte_lot != null) {
-                        txt_qte_lot.setText((sum / choosenmez.getQuantContenu()) + " " + choosenmez.getDescription());
-                    }
-                    applyBgColorIfExpired(choosenRecquisition);
-                    List<Stocker> lstk = StockerDelegate.findStockerByProduitLot(choosenRecquisition.getProductId().getUid(), choosenRecquisition.getNumlot());
-                    if (lstk.isEmpty()) {
-                        return;
-                    }
-                    localisabel.setText(lstk.get(0).getLocalisation());
-                }
-            }
-        });
-
-        LocalDate date = choosenRecquisition.getDateExpiry();
-        txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date.toString());
-        applyBgColorIfExpired(choosenRecquisition);
+        updatePeremptionLabel(choosenLotStock);
         tf_input_quant.requestFocus();
     }
     
-    private void applyBgColorIfExpired(Recquisition req) {
-        int exp = isStockExpired(req);
+    private void applySelectedLot(StockAgregate lotStock) {
+        choosenLotStock = lotStock;
+        choosenRecquisition = resolveRecquisitionMetadata(lotStock);
+        updatePeremptionLabel(lotStock);
+        updateAlertLabel();
+        refreshAvailableQuantitiesLabels();
+        updateLotLocationLabel();
+    }
+
+    private void updatePeremptionLabel(StockAgregate lotStock) {
+        LocalDate date = lotStock == null ? null : lotStock.getDateExpiration();
+        txt_peremption.setText(date == null ? bundle.getString("noperish") : "  Exp : " + date);
+        applyBgColorIfExpired(date);
+    }
+
+    private void updateAlertLabel() {
+        if (txt_alerte_pa == null || choosenmez == null) {
+            return;
+        }
+        if (choosenRecquisition == null) {
+            txt_alerte_pa.setText("Alt:0 " + choosenmez.getDescription());
+            return;
+        }
+        Mesure mzr = choosenRecquisition.getMesureId();
+        Mesure mz = mzr == null ? null : MesureDelegate.findMesure(mzr.getUid());
+        if (mz == null && choosenLotStock != null && choosenLotStock.getMesureId() != null) {
+            mz = choosenLotStock.getMesureId();
+        }
+        if (mz == null && prod != null) {
+            List<Mesure> mesuresProduit = MesureDelegate.findAscSortedByQuantWithProduit(prod.getUid());
+            mz = mesuresProduit.isEmpty() ? null : mesuresProduit.get(0);
+        }
+        double stockAlert = choosenRecquisition.getStockAlert() == null ? 0 : choosenRecquisition.getStockAlert();
+        double quantContenu = mz == null || mz.getQuantContenu() == null || mz.getQuantContenu() == 0 ? 1 : mz.getQuantContenu();
+        double alerte = (stockAlert * quantContenu) / choosenmez.getQuantContenu();
+        txt_alerte_pa.setText("Alt:" + BigDecimal.valueOf(alerte).setScale(3, RoundingMode.HALF_EVEN).doubleValue() + " " + choosenmez.getDescription());
+    }
+
+    private void updateLotLocationLabel() {
+        if (localisabel == null) {
+            return;
+        }
+        if (prod == null || choosenLotStock == null || choosenLotStock.getNumlot() == null) {
+            localisabel.setText("");
+            return;
+        }
+        List<Stocker> lots = StockerDelegate.findStockerByProduitLot(prod.getUid(), choosenLotStock.getNumlot());
+        if (lots.isEmpty()) {
+            localisabel.setText("");
+            return;
+        }
+        localisabel.setText(lots.get(0).getLocalisation());
+    }
+
+    private Recquisition resolveRecquisitionMetadata(StockAgregate lotStock) {
+        if (lotStock == null) {
+            return null;
+        }
+        String numlot = lotStock.getNumlot();
+        if (numlot == null || numlot.isBlank()) {
+            return synthesizeRecquisitionFromLotStock(lotStock);
+        }
+        if (lotMetadataCache.containsKey(numlot)) {
+            return lotMetadataCache.get(numlot);
+        }
+        List<Recquisition> recquisitions = hasGlobalStockAccess()
+                ? RecquisitionDelegate.findRecquisitionByProduit(prod.getUid(), numlot)
+                : RecquisitionDelegate.findRecquisitionByProduit(prod.getUid(), numlot, region);
+        Recquisition metadata = recquisitions == null ? null : recquisitions.stream()
+                .filter(Objects::nonNull)
+                .max(Comparator.comparing(Recquisition::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElse(null);
+        if (metadata == null) {
+            metadata = synthesizeRecquisitionFromLotStock(lotStock);
+        } else {
+            enrichRecquisitionFromLotStock(metadata, lotStock);
+        }
+        lotMetadataCache.put(numlot, metadata);
+        return metadata;
+    }
+
+    private Recquisition synthesizeRecquisitionFromLotStock(StockAgregate lotStock) {
+        if (lotStock == null) {
+            return null;
+        }
+        Recquisition recquisition = new Recquisition(lotStock.getUid());
+        enrichRecquisitionFromLotStock(recquisition, lotStock);
+        if (recquisition.getStockAlert() == null) {
+            recquisition.setStockAlert(0d);
+        }
+        return recquisition;
+    }
+
+    private void enrichRecquisitionFromLotStock(Recquisition recquisition, StockAgregate lotStock) {
+        if (recquisition == null || lotStock == null) {
+            return;
+        }
+        recquisition.setNumlot(lotStock.getNumlot());
+        recquisition.setDate(lotStock.getDate().atStartOfDay());
+        if (recquisition.getDateExpiry() == null) {
+            recquisition.setDateExpiry(lotStock.getDateExpiration());
+        }
+        if (recquisition.getMesureId() == null) {
+            recquisition.setMesureId(lotStock.getMesureId());
+        }
+        if (recquisition.getProductId() == null) {
+            recquisition.setProductId(lotStock.getProductId());
+        }
+        if (recquisition.getCoutAchat() <= 0 && lotStock.getCoutAchat() != null) {
+            recquisition.setCoutAchat(lotStock.getCoutAchat());
+        }
+    }
+
+    private StockAgregate buildFallbackLotStock(Recquisition recquisition) {
+        if (recquisition == null || recquisition.getNumlot() == null || recquisition.getNumlot().isBlank()) {
+            return null;
+        }
+        double lotRemainingPieces = getCurrentRemainingPiecesForLot(recquisition.getNumlot());
+        if (lotRemainingPieces <= 0) {
+            return null;
+        }
+        StockAgregate fallback = new StockAgregate(recquisition.getUid());
+        fallback.setNumlot(recquisition.getNumlot());
+        fallback.setDate(recquisition.getDate().toLocalDate());
+        fallback.setDateExpiration(recquisition.getDateExpiry());
+        fallback.setMesureId(recquisition.getMesureId());
+        fallback.setProductId(recquisition.getProductId());
+        fallback.setCoutAchat(recquisition.getCoutAchat());
+        fallback.setFinalQuantity(lotRemainingPieces);
+        return fallback;
+    }
+
+    private void applyBgColorIfExpired(LocalDate dateExpiration) {
+        int exp = isStockExpired(dateExpiration);
         switch (exp) {
             case -1 -> // Expired
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
             case 1 -> // 1 Month
-                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#db8109"), new CornerRadii(20), new Insets(4))));
-            case 3 -> // 3 Months
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
+            case 3 -> // 3 Months
+                txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#db8109"), new CornerRadii(20), new Insets(4))));
             case 6 -> // 6 Months
                 txt_peremption.setBackground(new Background(new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
             case 12 -> // 12 Months
@@ -645,43 +704,150 @@ public class PanierappenderController implements Initializable {
         return rst;
     }
 
-    private List<Recquisition> getRecquisitionList(String meth, String role, String region, Produit prod) {
-        List<Recquisition> result = null;
-        switch (meth) {
-            case "ppps":
-                if (hasGlobalStockAccess()) {
-                    result = RecquisitionDelegate.toFefoOrdering(prod.getUid());
-                } else {
-                    result = RecquisitionDelegate.toFefoOrdering(prod.getUid(), region);
-                }
-                break;
-            case "fifo":
-                if (hasGlobalStockAccess()) {
-                    result = RecquisitionDelegate.toFifoOrdering(prod.getUid());
-                } else {
-                    result = RecquisitionDelegate.toFifoOrdering(prod.getUid(), region);
-                }
-                break;
-            case "lifo":
-                if (hasGlobalStockAccess()) {
-                    result = RecquisitionDelegate.toLifoOrdering(prod.getUid());
-                } else {
-                    result = RecquisitionDelegate.toLifoOrdering(prod.getUid(), region);
-                }
-                break;
-            default:
-                break;
+    private void refreshRecquisitionLots() {
+        lisrecquisition.clear();
+        lotRemainingPiecesCache.clear();
+        lotMetadataCache.clear();
+        if (prod == null) {
+            return;
         }
-        return result;
-    }
-
-    private boolean isSameLotExistInRecqs(String numlot) {
-        for (Recquisition recquisition : lisrecquisition) {
-            if (recquisition.getNumlot().equals(numlot)) {
-                return true;
+        List<StockAgregate> groupedLots = hasGlobalStockAccess()
+                ? RecquisitionDelegate.findLatestLotStockAgregates(prod.getUid())
+                : RecquisitionDelegate.findLatestLotStockAgregates(prod.getUid(), region);
+        if (groupedLots == null || groupedLots.isEmpty()) {
+            return;
+        }
+        Map<String, StockAgregate> uniqueLots = new HashMap<>();
+        for (StockAgregate recquisition : groupedLots) {
+            if (recquisition == null || recquisition.getProductId() == null) {
+                continue;
+            }
+            if (!prod.getUid().equals(recquisition.getProductId().getUid())) {
+                continue;
+            }
+            String lot = recquisition.getNumlot();
+            if (lot == null || lot.isBlank()) {
+                lot = recquisition.getDate() == null ? null : recquisition.getDate().toString();
+                recquisition.setNumlot(lot);
+            }
+            if (lot == null || lot.isBlank()) {
+                continue;
+            }
+            double lotRemainingPieces = recquisition.getFinalQuantity() == null
+                    ? getCurrentRemainingPiecesForLot(lot)
+                    : Math.max(0, recquisition.getFinalQuantity());
+            if (lotRemainingPieces <= 0) {
+                continue;
+            }
+            recquisition.setFinalQuantity(lotRemainingPieces);
+            lotRemainingPiecesCache.put(lot, lotRemainingPieces);
+            StockAgregate existing = uniqueLots.get(lot);
+            if (existing == null || isMoreRecent(recquisition, existing)) {
+                uniqueLots.put(lot, recquisition);
             }
         }
-        return false;
+        List<StockAgregate> lots = new ArrayList<>(uniqueLots.values());
+        sortLotsByInventoryMethod(lots);
+        lisrecquisition.setAll(lots);
+    }
+
+    private StockAgregate pickPreferredLotForSelection() {
+        if (prod == null || lisrecquisition.isEmpty()) {
+            return null;
+        }
+        Recquisition preferred = hasGlobalStockAccess()
+                ? RecquisitionDelegate.getHeaderRecq(meth, prod)
+                : RecquisitionDelegate.getHeaderRecq(meth, prod, region);
+        if (preferred == null || preferred.getNumlot() == null) {
+            return lisrecquisition.get(0);
+        }
+        for (StockAgregate lot : lisrecquisition) {
+            if (Objects.equals(preferred.getNumlot(), lot.getNumlot())) {
+                return lot;
+            }
+        }
+        return lisrecquisition.get(0);
+    }
+
+    private void sortLotsByInventoryMethod(List<StockAgregate> lots) {
+        if (lots == null || lots.size() < 2) {
+            return;
+        }
+        Comparator<StockAgregate> comparator;
+        switch (meth) {
+            case "ppps":
+                comparator = Comparator.comparing(StockAgregate::getDateExpiration, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(StockAgregate::getDate, Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
+            case "lifo":
+                comparator = Comparator.comparing(StockAgregate::getDate, Comparator.nullsLast(Comparator.reverseOrder()));
+                break;
+            case "fifo":
+            default:
+                comparator = Comparator.comparing(StockAgregate::getDate, Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
+        }
+        lots.sort(comparator);
+    }
+
+    private boolean isMoreRecent(StockAgregate candidate, StockAgregate current) {
+        if (candidate == null) {
+            return false;
+        }
+        if (current == null) {
+            return true;
+        }
+        if (candidate.getDate() == null) {
+            return false;
+        }
+        if (current.getDate() == null) {
+            return true;
+        }
+        return candidate.getDate().isAfter(current.getDate());
+    }
+
+    private void refreshAvailableQuantitiesLabels() {
+        if (choosenmez == null || prod == null) {
+            return;
+        }
+        resteEnPiece = getCurrentRemainingPieces();
+        reste = toMesureQuantity(resteEnPiece, choosenmez);
+        txt_available_quant.setText(reste + " " + choosenmez.getDescription());
+        if (txt_qte_lot == null) {
+            return;
+        }
+        if (choosenLotStock == null || choosenLotStock.getNumlot() == null) {
+            txt_qte_lot.setText(0 + " " + choosenmez.getDescription());
+            return;
+        }
+        String selectedLot = choosenLotStock.getNumlot();
+        double lotPieces = choosenLotStock.getFinalQuantity() == null
+                ? (lotRemainingPiecesCache.containsKey(selectedLot)
+                        ? lotRemainingPiecesCache.get(selectedLot)
+                        : getCurrentRemainingPiecesForLot(selectedLot))
+                : Math.max(0, choosenLotStock.getFinalQuantity());
+        lotRemainingPiecesCache.put(selectedLot, lotPieces);
+        txt_qte_lot.setText(toMesureQuantity(lotPieces, choosenmez) + " " + choosenmez.getDescription());
+    }
+
+    private double toMesureQuantity(double pieces, Mesure mesure) {
+        if (mesure == null || mesure.getQuantContenu() == null || mesure.getQuantContenu() <= 0) {
+            return 0;
+        }
+        return BigDecimal.valueOf(pieces / mesure.getQuantContenu())
+                .setScale(3, RoundingMode.HALF_EVEN)
+                .doubleValue();
+    }
+
+    private double getCurrentRemainingPiecesForLot(String numlot) {
+        if (prod == null || numlot == null || numlot.isBlank()) {
+            return 0;
+        }
+        // Quantite par lot provenant directement de stock_agregate
+        double pieces = hasGlobalStockAccess()
+                ? RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(prod.getUid(), numlot, "%")
+                : RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(prod.getUid(), numlot, region);
+        return Math.max(0, pieces);
     }
 
 //    private void printBCWithThermal(String printerName, String bcode) {
@@ -756,12 +922,12 @@ public class PanierappenderController implements Initializable {
 
     }
 
-    private int isStockExpired(Recquisition e) {
+    private int isStockExpired(LocalDate dateExpiration) {
         long now = System.currentTimeMillis();
-        if (e.getDateExpiry() == null) {
+        if (dateExpiration == null) {
             return 555;
         }
-        long exp = Constants.Datetime.dateInMillis(e.getDateExpiry());
+        long exp = Constants.Datetime.dateInMillis(dateExpiration);
         long un_mois = Constants.UN_MOIS;
         long interval = exp - now;
         long mois3 = (un_mois * 3);
@@ -896,14 +1062,14 @@ public class PanierappenderController implements Initializable {
                         .findFirst().orElse(null);
             }
         });
-        cbx_lot_recquisitionee.setConverter(new StringConverter<Recquisition>() {
+        cbx_lot_recquisitionee.setConverter(new StringConverter<StockAgregate>() {
             @Override
-            public String toString(Recquisition object) {
+            public String toString(StockAgregate object) {
                 return object == null ? null : object.getNumlot();
             }
 
             @Override
-            public Recquisition fromString(String string) {
+            public StockAgregate fromString(String string) {
                 return cbx_lot_recquisitionee.getItems()
                         .stream()
                         .filter(object -> (object.getNumlot())
@@ -927,7 +1093,7 @@ public class PanierappenderController implements Initializable {
 
     @FXML
     public void addToCart(Event ebt) {
-        if (prod == null || choosenmez == null || choosenRecquisition == null) {
+        if (prod == null || choosenmez == null || choosenRecquisition == null || choosenLotStock == null) {
             MainUI.notify(null, bundle.getString("error"), "Produit, lot ou mesure manquant.", 4, "error");
             return;
         }
@@ -962,15 +1128,15 @@ public class PanierappenderController implements Initializable {
         // choosenmez.getQuantContenu();
         double qpc = qr
                 * choosenmez.getQuantContenu();
-        Recquisition last = cbx_lot_recquisitionee.getValue();
+        Recquisition last = choosenRecquisition;
         Mesure mi = last.getMesureId();
-        Mesure m = MesureDelegate.findMesure(mi.getUid());
+        Mesure m = mi == null ? null : MesureDelegate.findMesure(mi.getUid());
         if (m == null) {
-            List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(prod.getUid());
-            m = mesures.get(0);
+            List<Mesure> mesurs = MesureDelegate.findAscSortedByQuantWithProduit(prod.getUid());
+            m = mesurs.isEmpty() ? null : mesures.get(0);
         }
         Double oal = last.getStockAlert();
-        double alt = ((oal == null ? 0 : oal) * m.getQuantContenu()) / choosenmez.getQuantContenu();
+        double alt = ((oal == null ? 0 : oal) * (m == null ? 1 : m.getQuantContenu())) / choosenmez.getQuantContenu();
         double rst = rest - qpc;
         if (PosController.getInstance().isAlertReached(prod.getUid())) {
             if (rst <= 0) {
@@ -1013,7 +1179,7 @@ public class PanierappenderController implements Initializable {
                 coutAchat = order.get(0).getCoutAchat();
             }
         }
-        Mesure chrmez = cbx_lot_recquisitionee.getValue().getMesureId();
+        Mesure chrmez = choosenLotStock.getMesureId() == null ? last.getMesureId() : choosenLotStock.getMesureId();
         if (chrmez == null || chrmez.getQuantContenu() == 0) {
             MainUI.notify(null, bundle.getString("error"), "Mesure de lot invalide.", 4, "error");
             return;
@@ -1029,10 +1195,10 @@ public class PanierappenderController implements Initializable {
         lv.setCoutAchat((ctpc * chznpc));
         lv.setMontantUsd(valeurTotalUsd);
         lv.setPrixUnit(prixUnitUsd);
-        lv.setNumlot(cbx_lot_recquisitionee.getValue().getNumlot());
+        lv.setNumlot(choosenLotStock.getNumlot());
         lv.setProductId(prod);
         lv.setQuantite(qr);
-//        if (PosController.getInstance().isInScanMode()) {
+//        if (PosController.getInstance().isInScanMode()) { 
         MainuiController.getInstance().reinitSearchBar();
 //        }
         PosController.getInstance().addCartItem(lv);
@@ -1084,10 +1250,11 @@ public class PanierappenderController implements Initializable {
         if (prod == null) {
             return 0;
         }
-        // Quantite en pieces du produit, sommee sur tous les lots du scope utilisateur.
-        return hasGlobalStockAccess()
-                ? RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid())
-                : RecquisitionDelegate.findRemainedInMagasinFor(prod.getUid(), region);
+        // Quantite POS/panier en pieces: somme des final_quantity depuis stock_agregate.
+        double pieces = hasGlobalStockAccess()
+                ? RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(prod.getUid())
+                : RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(prod.getUid(), region);
+        return Math.max(0, pieces);
     }
 
     private double parseDoubleOrDefault(String value, double fallback) {

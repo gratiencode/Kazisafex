@@ -67,6 +67,7 @@ import javafx.scene.layout.AnchorPane;
 import tools.DataId;
 import data.Presence;
 import delegates.PresenceDelegate;
+import services.utils.RegionRegistry;
 import tools.Util;
 import javafx.scene.control.DatePicker;
 import data.FingerprintMapping;
@@ -300,30 +301,8 @@ public class AgentController implements Initializable {
                         txt_phone_agent.setText(choosenU.getPhone());
                     }
                 });
-        kazisafe.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Agent regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_region_affect);
         refreshAgent(entr.getUid());
         refreshRoles();
         loadPresences();
@@ -430,21 +409,6 @@ public class AgentController implements Initializable {
                     }
                 });
 
-    }
-
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
     }
 
     @FXML
@@ -800,7 +764,7 @@ public class AgentController implements Initializable {
         ObservableList<Employee> rst = FXCollections.observableArrayList();
         for (Employee emp : employes) {
             String oc = emp.getNom() + " " + emp.getPhone() + " " + emp.getPoste() + " " + emp.getPrenom() + ""
-                    + " " + emp.getRegion() + " " + Constants.USER_READABLE_FORMAT.format(emp.getEngagementDate());
+                    + " " + emp.getRegion() + " " + (emp.getEngagementDate() != null ? emp.getEngagementDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "");
             if (oc.toUpperCase().contains(query.toUpperCase())) {
                 rst.add(emp);
             }

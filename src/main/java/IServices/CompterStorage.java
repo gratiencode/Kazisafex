@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.time.LocalDateTime;
+import tools.ComptageItem;
 
 /**
  *
@@ -52,4 +53,6 @@ public interface CompterStorage {
     public Compter findComptageByInventaireProduit(String iuid, String puid);
     
     public void removeNoCountedProducts(Inventaire inv);
+    
+    public void confirmerComptage(ComptageItem comptage);
 }

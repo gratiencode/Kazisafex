@@ -852,6 +852,10 @@ public class ProduitItemController implements Initializable {
                 if (sfc != null) {
                     sfc.addProduit(prodi);
                 }
+                RecqController req = RecqController.getInstance();
+                if (req != null) {
+                    req.addProduit(prodi);
+                }
                 PosController pos = PosController.getInstance();
                 if (pos != null) {
                     pos.addProductItem(prodi);
@@ -983,6 +987,9 @@ public class ProduitItemController implements Initializable {
     }
 
     private void saveMesureByHttp(Mesure c) {
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
+        }
         kazisafe.saveMesure(c).enqueue(new Callback<Mesure>() {
             @Override
             public void onResponse(Call<Mesure> call, Response<Mesure> response) {
@@ -1000,6 +1007,9 @@ public class ProduitItemController implements Initializable {
     }
 
     private void saveCategoryByHttp(Category c) {
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
+        }
         kazisafe.saveCategory(c).enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> rspns) {
@@ -1014,6 +1024,7 @@ public class ProduitItemController implements Initializable {
     }
 
     private void sendProduitIfNotExist(Produit produit, List<Mesure> mesures) {
+        
         byte[] imageBytes = produit.getImage();
         if (choosenFile != null) {
             try {
@@ -1025,6 +1036,9 @@ public class ProduitItemController implements Initializable {
 
         if (imageBytes == null) {
             imageBytes = loadDefaultImage();
+        }
+        if(!Util.isInternetAndBaseApiReachable()){
+            return;
         }
         String base64Image = Base64.getEncoder().encodeToString(imageBytes);
         saveProduitByHttps(produit, base64Image, mesures);

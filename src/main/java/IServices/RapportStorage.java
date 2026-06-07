@@ -13,16 +13,11 @@ import data.SaleAgregate;
 import data.StockAgregate;
 import data.Traisorerie;
 import data.Vente;
-import jakarta.persistence.EntityTransaction;
-import jakarta.persistence.NoResultException;
-import jakarta.persistence.Query;
 import tools.RecentSale;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
-import java.time.LocalDateTime;
 import javafx.scene.chart.XYChart;
-import services.ManagedSessionFactory;
 import tools.Metric;
 import tools.ResultStatementItem;
 import tools.SaleReport;
@@ -132,6 +127,11 @@ public interface RapportStorage {
 
     public List<StockAgregate> findByContext(String context);
 
+    public List<StockAgregate> findLatestStockAgregates(String region);
+    public List<StockAgregate> findLatestStockAgregates(String region, LocalDate atDate);
+
+    public StockAgregate findStockFor(Produit prod, String lot, LocalDate today, LocalDate otherDay, String region);
+
     public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate today1);
 
     public SaleAgregate findSaleReportFor(String prod, LocalDate today, LocalDate today1, String region);
@@ -167,4 +167,6 @@ public interface RapportStorage {
     public Double operationExpenseOf(LocalDate d1, LocalDate d2, String region);
 
     public Double industrialExpenseOf(LocalDate d1, LocalDate d2, String region);
+    
+    public Double aggregatedAmortizationOf(LocalDate d1, LocalDate d2, String region);
 }

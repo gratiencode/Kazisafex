@@ -9,28 +9,22 @@ import delegates.DestockerDelegate;
 import delegates.FournisseurDelegate;
 import delegates.LivraisonDelegate;
 import delegates.MesureDelegate;
-import delegates.PrixDeVenteDelegate;
 import delegates.ProduitDelegate;
 import delegates.RecquisitionDelegate;
 import delegates.StockerDelegate;
 import data.core.KazisafeServiceFactory;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URL;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -44,7 +38,6 @@ import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -61,13 +54,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
-import javafx.scene.layout.CornerRadii;
-import javafx.scene.layout.Pane;
-import javafx.scene.layout.TilePane;
-import javafx.scene.paint.Color;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import data.network.Kazisafe;
@@ -132,12 +118,11 @@ public class StoreformController implements Initializable {
     // @FXML
     // private TextField tf_cout_unitr_stk;
     @FXML
-    private Label txt_somme_ct_stk, txt_somme_ct_lot1;
+    private Label txt_somme_ct_lot1;
     @FXML
     Tab lottab; // standtab removed
     @FXML
     TabPane tabPanelot;
-    @FXML
     private ImageView img_btn_apply_price;
     @FXML
     private Label txt_count_stk;
@@ -167,7 +152,6 @@ public class StoreformController implements Initializable {
     @FXML
     private TableColumn<Stocker, String> col_date_expir_lot;
 
-    @FXML
     private TextField tf_localisation_stk;
 //     @FXML
 //     private TextField tf_stock_alerte_stk;
@@ -182,10 +166,8 @@ public class StoreformController implements Initializable {
     @FXML
     private TextField tf_cout_achlot;
 
-    @FXML
     Label txt_equivalentCdf;
 
-    @FXML
     ImageView btn_add_price;
 
     @FXML
@@ -220,15 +202,15 @@ public class StoreformController implements Initializable {
     String region;
     String role;
     Kazisafe ksf;
-    @FXML
     TextField tf_qte_min;
-    @FXML
     TextField tf_qte_max;
 //     @FXML
 //     TextField tf_prix_de_vente;
 
 
     private static StoreformController instance;
+    @FXML
+    private TextField tf_pv_estime_stk;
 
     public StoreformController() {
         instance = this;
@@ -384,7 +366,6 @@ public class StoreformController implements Initializable {
      
     }
 
-    @FXML
     public void closepricepane(Event e) {
 //         dpk_date_expir_stk.setValue(null);
 //         tf_cout_unitr_stk.clear();
@@ -520,7 +501,6 @@ public class StoreformController implements Initializable {
     }
 */
 
-    @FXML
     public void clearPrices(Event e) {
 /*
          if (!tilepn_prices1.getChildren().isEmpty() && !prices.isEmpty()) {
@@ -534,7 +514,6 @@ public class StoreformController implements Initializable {
 */
     }
 
-    @FXML
     public void closeFloatingPane(Event evt) {
         Node n = (Node) evt.getSource();
         Parent p = n.getParent();
@@ -556,7 +535,6 @@ public class StoreformController implements Initializable {
         return null;
     }
 
-    @FXML
     public void gotoProduct(Event e) {
         MainuiController.getInstance().switchToProduct((MouseEvent) e);
     }
@@ -601,7 +579,6 @@ public class StoreformController implements Initializable {
         st.close();
     }
 
-    @FXML
     private void showSupplyAndDeliveryBox(Event e) {
         MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 630, null, ksf, entreprise);
     }
@@ -764,6 +741,9 @@ public class StoreformController implements Initializable {
             choosenStock.setLocalisation(tf_localisalot.getText());
             choosenStock.setProductId(cbx_choose_produit_stk.getValue());
             choosenStock.setNumlot(tf_numlot.getText());
+            if(!tf_pv_estime_stk.getText().isBlank()){
+                choosenStock.setPrixVenteEstime(Double.parseDouble(tf_pv_estime_stk.getText()));
+            }
             choosenStock.setQuantite(Double.parseDouble(tf_quant_lot.getText()));
             choosenStock.setMesureId(cbx_choose_mesurelot.getValue());
             choosenStock.setObservation(chlivraisonf.getObservation());

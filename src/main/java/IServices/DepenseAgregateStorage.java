@@ -6,6 +6,7 @@
 package IServices;
 
 import data.DepenseAgregate;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +30,8 @@ public interface DepenseAgregateStorage {
     public List<DepenseAgregate> findDepenseAgregates(int start, int max);
 
     public List<DepenseAgregate> findDepenseAgregates(String region);
+    
+    public List<DepenseAgregate> findDepenseAgregates(LocalDate date1,LocalDate date2,String region);
     
     public List<DepenseAgregate> findDepenseAgregates(LocalDateTime date, String imputation);
 

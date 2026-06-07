@@ -1,10 +1,6 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.endeleya.kazisafex;
 
+import com.endeleya.kazisafex.Kazisafex;
 import com.fazecast.jSerialComm.SerialPort;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -22,6 +18,7 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.RadioButton;
@@ -37,12 +34,10 @@ import tools.MainUI;
 import tools.SyncEngine;
 
 /**
- * FXML Controller class
- *
- * @author eroot
+ * 
+ * @author endeleya
  */
 public class ParametreController implements Initializable {
-
     @FXML
     private ToggleButton tgbtn_session;
     @FXML
@@ -65,7 +60,11 @@ public class ParametreController implements Initializable {
     @FXML
     Spinner<Integer> spinner;
     @FXML
-    ComboBox<String> cbx_param_paper_size;
+    ComboBox<String> cbx_param_font_size_head;
+    @FXML
+    ComboBox<String> cbx_param_font_size_body;
+    @FXML
+    ComboBox<String> cbx_param_font_size_footer;
     @FXML
     private TextField text_msg;
     @FXML
@@ -78,9 +77,9 @@ public class ParametreController implements Initializable {
     private CheckBox avertiBill;
     ToggleGroup methodGroup;
     ToggleGroup mode_stock;
+    ToggleGroup mode_printer;
     ResourceBundle bundle;
     String mainCur;
-
     Preferences pref;
     private static ParametreController instance;
     @FXML
@@ -93,7 +92,6 @@ public class ParametreController implements Initializable {
     private CheckBox print_total_usd;
     @FXML
     private ComboBox<SerialPort> cbx_display_ports;
-
     @FXML
     private RadioButton rb_emarque;
     @FXML
@@ -102,6 +100,12 @@ public class ParametreController implements Initializable {
     private TextField tf_ip_serveur;
     @FXML
     private TextField tf_port_serveur;
+    @FXML
+    private RadioButton mm58;
+    @FXML
+    private RadioButton mm72;
+    @FXML
+    private RadioButton mm80;
 
     public ParametreController() {
         instance = this;
@@ -113,383 +117,335 @@ public class ParametreController implements Initializable {
 
     @FXML
     public void configTaux(Event evt) {
-        if (tf_taux_de_change.getText().isEmpty()) {
-            MainUI.notify(null, bundle.getString("error"), bundle.getString("inputaux"), 4, "error");
+        if (this.tf_taux_de_change.getText().isEmpty()) {
+            MainUI.notify(null, (String)this.bundle.getString("error"), (String)this.bundle.getString("inputaux"), (long)4L, (String)"error");
             return;
         }
         try {
-            pref.putDouble("taux2change", Double.parseDouble(tf_taux_de_change.getText()));
-            MainUI.notify(null, "Info", bundle.getString("ratesaved"), 4, "Info");
-        } catch (NumberFormatException e) {
-            MainUI.notify(null, bundle.getString("error"), bundle.getString("rateerror"), 4, "error");
+            this.pref.putDouble("taux2change", Double.parseDouble(this.tf_taux_de_change.getText()));
+            MainUI.notify(null, (String)"Info", (String)this.bundle.getString("ratesaved"), (long)4L, (String)"Info");
+        }
+        catch (NumberFormatException e) {
+            MainUI.notify(null, (String)this.bundle.getString("error"), (String)this.bundle.getString("rateerror"), (long)4L, (String)"error");
         }
     }
 
     @FXML
     public void configPrint(Event evt) {
-        ToggleButton tbtn = (ToggleButton) evt.getSource();
-        if (tbtn.getText().equals(bundle.getString("xbtn.no"))) {
-            tbtn.setText(bundle.getString("xbtn.yes"));
-            pref.putBoolean("print", true);
+        ToggleButton tbtn = (ToggleButton)evt.getSource();
+        if (tbtn.getText().equals(this.bundle.getString("xbtn.no"))) {
+            tbtn.setText(this.bundle.getString("xbtn.yes"));
+            this.pref.putBoolean("print", true);
         } else {
-            tbtn.setText(bundle.getString("xbtn.no"));
-            pref.putBoolean("print", false);
+            tbtn.setText(this.bundle.getString("xbtn.no"));
+            this.pref.putBoolean("print", false);
         }
     }
 
     @FXML
     public void configSync(Event evt) {
-        ToggleButton tbtn = (ToggleButton) evt.getSource();
-        if (tbtn.getText().equals(bundle.getString("xbtn.no"))) {
-            tbtn.setText(bundle.getString("xbtn.yes"));
-            pref.putBoolean("sync", true);
-            cbx_frequence.setDisable(false);
+        ToggleButton tbtn = (ToggleButton)evt.getSource();
+        if (tbtn.getText().equals(this.bundle.getString("xbtn.no"))) {
+            tbtn.setText(this.bundle.getString("xbtn.yes"));
+            this.pref.putBoolean("sync", true);
+            this.cbx_frequence.setDisable(false);
         } else {
-            tbtn.setText(bundle.getString("xbtn.no"));
-            pref.putBoolean("sync", false);
-            cbx_frequence.setDisable(true);
+            tbtn.setText(this.bundle.getString("xbtn.no"));
+            this.pref.putBoolean("sync", false);
+            this.cbx_frequence.setDisable(true);
         }
     }
 
     public void configFreqSync(Event evt) {
-        pref.putInt("sync-freq", cbx_frequence.getValue());
-//        SyncEngine.getInstance().start();
-        Executors.newSingleThreadExecutor()
-                .execute(() -> {
-
-                    MainUI.notify(null, "Info", bundle.getString("synconfigsaved"), 4, "Info");
-                });
+        this.pref.putInt("sync-freq", (Integer)this.cbx_frequence.getValue());
+        Executors.newSingleThreadExecutor().execute(() -> MainUI.notify(null, (String)"Info", (String)this.bundle.getString("synconfigsaved"), (long)4L, (String)"Info"));
     }
 
     @FXML
     public void configSession(Event evt) {
-        ToggleButton tbtn = (ToggleButton) evt.getSource();
-
-        if (tbtn.getText().equals(bundle.getString("xbtn.no"))) {
-            tbtn.setText(bundle.getString("xbtn.yes"));
-            pref.putBoolean("session", true);
-        } else if (tbtn.getText().equals(bundle.getString("xbtn.yes"))) {
-            tbtn.setText(bundle.getString("xbtn.no"));
-            pref.putBoolean("session", false);
+        ToggleButton tbtn = (ToggleButton)evt.getSource();
+        if (tbtn.getText().equals(this.bundle.getString("xbtn.no"))) {
+            tbtn.setText(this.bundle.getString("xbtn.yes"));
+            this.pref.putBoolean("session", true);
+        } else if (tbtn.getText().equals(this.bundle.getString("xbtn.yes"))) {
+            tbtn.setText(this.bundle.getString("xbtn.no"));
+            this.pref.putBoolean("session", false);
         }
     }
 
     @FXML
     public void configDarkTheme(Event evt) {
-        ToggleButton tbtn = (ToggleButton) evt.getSource();
-        boolean darkEnabled = tbtn.getText().equals(bundle.getString("xbtn.no"));
-        tbtn.setText(darkEnabled ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
+        ToggleButton tbtn;
+        boolean darkEnabled = (tbtn = (ToggleButton)evt.getSource()).getText().equals(this.bundle.getString("xbtn.no"));
+        tbtn.setText(darkEnabled ? this.bundle.getString("xbtn.yes") : this.bundle.getString("xbtn.no"));
         tbtn.setSelected(darkEnabled);
-        pref.putBoolean(Kazisafex.DARK_THEME_PREF, darkEnabled);
-        Node source = (Node) evt.getSource();
+        this.pref.putBoolean("dark_theme_enabled", darkEnabled);
+        Node source = (Node)evt.getSource();
         if (source != null && source.getScene() != null) {
-            Kazisafex.applyTheme(source.getScene());
+            Kazisafex.applyTheme((Scene)source.getScene());
         }
         if (MainUI.mainStage != null && MainUI.mainStage.getScene() != null) {
-            Kazisafex.applyTheme(MainUI.mainStage.getScene());
+            Kazisafex.applyTheme((Scene)MainUI.mainStage.getScene());
         }
     }
 
     @FXML
     public void setMessage4CustomersOnBill(Event evt) {
-        pref.put("mesc", message4client.getText());
-        MainUI.notify(null, bundle.getString("success"), bundle.getString("msgconf"), 4, "info");
+        this.pref.put("mesc", this.message4client.getText());
+        MainUI.notify(null, (String)this.bundle.getString("success"), (String)this.bundle.getString("msgconf"), (long)4L, (String)"info");
     }
 
     public void init() {
-        boolean session = pref.getBoolean("session", false);
-        boolean darkTheme = pref.getBoolean(Kazisafex.DARK_THEME_PREF, false);
-        boolean sync = pref.getBoolean("sync", true),
-                print = pref.getBoolean("print", true),
-                embd = pref.getBoolean("embedded_db", true);
-        mainCur = pref.get("mainCur", "USD");
-        cbx_main_cur.setValue(mainCur);
-        tf_taux_de_change.setText(pref.get("taux2change", "2800"));
-        tgbtn_print_bill.setSelected(print);
-        tgbtn_sync.setSelected(sync);
-        tgbtn_session.setSelected(session);
-        tgbtn_dark_theme.setSelected(darkTheme);
-        int cvalue = pref.getInt("sync-freq", 120);
-        cbx_frequence.setValue(cvalue);
-        tgbtn_session.setText(session ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
-        tgbtn_dark_theme.setText(darkTheme ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
-        tgbtn_sync.setText(sync ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
-        tgbtn_print_bill.setText(print ? bundle.getString("xbtn.yes") : bundle.getString("xbtn.no"));
-        String message = pref.get("mesc", bundle.getString("goodsoldmsg"));
-        message4client.setText(message);
-        cbx_param_paper_size.setItems(FXCollections.observableArrayList(bundle.getString("xlbl.level3"), bundle.getString("xlbl.level2"), bundle.getString("xlbl.level1")));
-        cbx_main_cur.setItems(FXCollections.observableArrayList("USD", "CDF"));
-        cbx_counter.setItems(FXCollections.observableArrayList(
-                bundle.getString("xlbl.random_counter"),
-                bundle.getString("xlbl.init_counter_bill_day"),
-                bundle.getString("xlbl.init_counter_bill_month"),
-                bundle.getString("xlbl.init_counter_bill_year"),
-                bundle.getString("xlbl.never_init_counter_bill_day")));
-        boolean pmark = pref.getBoolean("print_mark", true);
-        boolean pmodel = pref.getBoolean("print_mark", true);
-        boolean ptail = pref.getBoolean("print_tail", true);
-        boolean ptotal = pref.getBoolean("print_total_usd", true);
-        print_mark.setSelected(pmark);
-        print_modele.setSelected(pmodel);
-        print_tail.setSelected(ptail);
-        print_total_usd.setSelected(ptotal);
-        int slt = pref.getInt("print-option-size", 0);
-        int cont = pref.getInt("count-logic", 0);
-        cbx_param_paper_size.getSelectionModel().select(slt);
-        cbx_counter.getSelectionModel().select(cont);
-        String meth = pref.get("meth", "fifo");
-        ppps.setToggleGroup(methodGroup);
-        fifo.setToggleGroup(methodGroup);
-        lifo.setToggleGroup(methodGroup);
-        rb_emarque.setToggleGroup(mode_stock);
-        rb_serveur.setToggleGroup(mode_stock);
-        boolean avert = pref.getBoolean("averti", true);
-        avertiBill.setSelected(avert);
+        boolean session = this.pref.getBoolean("session", false);
+        boolean darkTheme = this.pref.getBoolean("dark_theme_enabled", false);
+        boolean sync = this.pref.getBoolean("sync", true);
+        boolean print = this.pref.getBoolean("print", true);
+        boolean embd = this.pref.getBoolean("embedded_db", true);
+        this.mainCur = this.pref.get("mainCur", "USD");
+        this.cbx_main_cur.setValue(this.mainCur);
+        this.tf_taux_de_change.setText(this.pref.get("taux2change", "2800"));
+        int w = this.pref.getInt("print-lines-dashcount", 48);
+        switch (w) {
+            case 48: {
+                this.mm80.setSelected(true);
+                break;
+            }
+            case 42: {
+                this.mm72.setSelected(true);
+                break;
+            }
+            case 30: {
+                this.mm58.setSelected(true);
+                break;
+            }
+        }
+        this.tgbtn_print_bill.setSelected(print);
+        this.tgbtn_sync.setSelected(sync);
+        this.tgbtn_session.setSelected(session);
+        this.tgbtn_dark_theme.setSelected(darkTheme);
+        int cvalue = this.pref.getInt("sync-freq", 120);
+        this.cbx_frequence.setValue(cvalue);
+        this.tgbtn_session.setText(session ? this.bundle.getString("xbtn.yes") : this.bundle.getString("xbtn.no"));
+        this.tgbtn_dark_theme.setText(darkTheme ? this.bundle.getString("xbtn.yes") : this.bundle.getString("xbtn.no"));
+        this.tgbtn_sync.setText(sync ? this.bundle.getString("xbtn.yes") : this.bundle.getString("xbtn.no"));
+        this.tgbtn_print_bill.setText(print ? this.bundle.getString("xbtn.yes") : this.bundle.getString("xbtn.no"));
+        String message = this.pref.get("mesc", this.bundle.getString("goodsoldmsg"));
+        this.message4client.setText(message);
+        this.cbx_param_font_size_head.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
+        this.cbx_param_font_size_body.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
+        this.cbx_param_font_size_footer.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
+        this.cbx_main_cur.setItems(FXCollections.observableArrayList(new String[]{"USD", "CDF"}));
+        this.cbx_counter.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.random_counter"), 
+                this.bundle.getString("xlbl.init_counter_bill_day"), this.bundle.getString("xlbl.init_counter_bill_month"), this.bundle.getString("xlbl.init_counter_bill_year"), this.bundle.getString("xlbl.never_init_counter_bill_day")));
+        boolean pmark = this.pref.getBoolean("print_mark", true);
+        boolean pmodel = this.pref.getBoolean("print_mark", true);
+        boolean ptail = this.pref.getBoolean("print_tail", true);
+        boolean ptotal = this.pref.getBoolean("print_total_usd", true);
+        this.print_mark.setSelected(pmark);
+        this.print_modele.setSelected(pmodel);
+        this.print_tail.setSelected(ptail);
+        this.print_total_usd.setSelected(ptotal);
+        int slt = this.pref.getInt("print-option-size", 0);
+        int body = this.pref.getInt("print-body-size", 0);
+        int foot = this.pref.getInt("print-footer-size", 0);
+        int cont = this.pref.getInt("count-logic", 0);
+        this.cbx_param_font_size_head.getSelectionModel().select(slt - 1);
+        this.cbx_param_font_size_body.getSelectionModel().select(body - 1);
+        this.cbx_param_font_size_footer.getSelectionModel().select(foot - 1);
+        this.cbx_counter.getSelectionModel().select(cont);
+        String meth = this.pref.get("meth", "fifo");
+        this.ppps.setToggleGroup(this.methodGroup);
+        this.fifo.setToggleGroup(this.methodGroup);
+        this.lifo.setToggleGroup(this.methodGroup);
+        this.rb_emarque.setToggleGroup(this.mode_stock);
+        this.rb_serveur.setToggleGroup(this.mode_stock);
+        this.mm58.setToggleGroup(this.mode_printer);
+        this.mm72.setToggleGroup(this.mode_printer);
+        this.mm80.setToggleGroup(this.mode_printer);
+        boolean avert = this.pref.getBoolean("averti", true);
+        this.avertiBill.setSelected(avert);
         if (meth.equals("ppps")) {
-            ppps.setSelected(true);
+            this.ppps.setSelected(true);
         } else if (meth.equals("fifo")) {
-            fifo.setSelected(true);
+            this.fifo.setSelected(true);
         } else if (meth.equals("lifo")) {
-            lifo.setSelected(true);
+            this.lifo.setSelected(true);
         }
-        int port = pref.getInt("default_mysql_port", 3306);
-        String host = pref.get("default_mysql_host", "localhost");
-        tf_ip_serveur.setText(host);
-        tf_port_serveur.setText(Integer.toString(port));
-        rb_emarque.selectedProperty()
-                .addListener((ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) -> {
-                    if (t1) {
-                        pref.putBoolean("embedded_db", true);
-                        MainUI.notify(null, bundle.getString("success"), "Utilisation de la Base interne activee", 4, "info");
-                    }
-                });
-        rb_serveur.selectedProperty()
-                .addListener((ObservableValue<? extends Boolean> ov, Boolean t, Boolean t1) -> {
-                    if (t1) {
-                        pref.putBoolean("embedded_db", false);
-                        MainUI.notify(null, bundle.getString("success"), "Utilisation de la Base MySQL activee", 4, "info");
-                    }
-                });
+        int port = this.pref.getInt("default_mysql_port", 3306);
+        String host = this.pref.get("default_mysql_host", "localhost");
+        this.tf_ip_serveur.setText(host);
+        this.tf_port_serveur.setText(Integer.toString(port));
+        this.mm80.selectedProperty().addListener((ov, t, t1) -> this.pref.putInt("print-lines-dashcount", 48));
+        this.mm58.selectedProperty().addListener((ov, t, t1) -> this.pref.putInt("print-lines-dashcount", 30));
+        this.mm72.selectedProperty().addListener((ov, t, t1) -> this.pref.putInt("print-lines-dashcount", 42));
+        this.rb_emarque.selectedProperty().addListener((ov, t, t1) -> {
+            if (t1.booleanValue()) {
+                this.pref.putBoolean("embedded_db", true);
+                MainUI.notify(null, (String)this.bundle.getString("success"), (String)"Utilisation de la Base interne activee", (long)4L, (String)"info");
+            }
+        });
+        this.rb_serveur.selectedProperty().addListener((ov, t, t1) -> {
+            if (t1.booleanValue()) {
+                this.pref.putBoolean("embedded_db", false);
+                MainUI.notify(null, (String)this.bundle.getString("success"), (String)"Utilisation de la Base MySQL activee", (long)4L, (String)"info");
+            }
+        });
         if (embd) {
-            rb_emarque.setSelected(true);
+            this.rb_emarque.setSelected(true);
         } else {
-            rb_serveur.setSelected(true);
+            this.rb_serveur.setSelected(true);
         }
-        cbx_main_cur.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+        this.cbx_main_cur.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                pref.put("mainCur", newValue);
+                this.pref.put("mainCur", (String)newValue);
             }
         });
-        avertiBill.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
+        this.avertiBill.selectedProperty().addListener((ChangeListener)new ChangeListener<Boolean>(){
+
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                pref.putBoolean("averti", newValue);
+                ParametreController.this.pref.putBoolean("averti", newValue);
             }
         });
-        cbx_counter.getSelectionModel().selectedIndexProperty().addListener(new ChangeListener<Number>() {
-            @Override
+        this.cbx_counter.getSelectionModel().selectedIndexProperty().addListener((ChangeListener)new ChangeListener<Number>(){
+
             public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-                /**
-                 * Style title = new
-                 * Style().setJustification(EscPosConst.Justification.Center).setFontSize(Style.FontSize._3,
-                 * Style.FontSize._3); Style identite = new
-                 * Style().setJustification(EscPosConst.Justification.Center).setFontSize(Style.FontSize._1,
-                 * Style.FontSize._1); Style client = new
-                 * Style(printer.getStyle()).setBold(true)
-                 * .setUnderline(Style.Underline.OneDotThick); Style gras = new
-                 * Style(printer.getStyle())
-                 * .setJustification(EscPosConst.Justification.Right)
-                 * .setBold(true); Style right = new Style(printer.getStyle())
-                 * .setJustification(EscPosConst.Justification.Right); Style
-                 * left = new Style(printer.getStyle())
-                 */
                 int index = newValue.intValue();
                 if (index > -1) {
-                    pref.putInt("count-logic", index);
+                    ParametreController.this.pref.putInt("count-logic", index);
                 }
             }
         });
+        this.cbx_param_font_size_head.getSelectionModel().selectedIndexProperty().addListener((ChangeListener)new ChangeListener<Number>(){
 
-        cbx_param_paper_size.getSelectionModel().selectedIndexProperty().addListener(new ChangeListener<Number>() {
-            @Override
             public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-                /**
-                 * Style title = new
-                 * Style().setJustification(EscPosConst.Justification.Center).setFontSize(Style.FontSize._3,
-                 * Style.FontSize._3); Style identite = new
-                 * Style().setJustification(EscPosConst.Justification.Center).setFontSize(Style.FontSize._1,
-                 * Style.FontSize._1); Style client = new
-                 * Style(printer.getStyle()).setBold(true)
-                 * .setUnderline(Style.Underline.OneDotThick); Style gras = new
-                 * Style(printer.getStyle())
-                 * .setJustification(EscPosConst.Justification.Right)
-                 * .setBold(true); Style right = new Style(printer.getStyle())
-                 * .setJustification(EscPosConst.Justification.Right); Style
-                 * left = new Style(printer.getStyle())
-                 */
                 int index = newValue.intValue();
-                switch (index) {
-                    case 2:
-                        pref.putInt("print-option-size", 2);
-                        pref.putInt("print-title-size", 2);
-                        pref.putInt("print-body-size", 1);
-                        pref.putInt("print-identite-size", 1);
-                        pref.putInt("print-lines-dashcount", 30);
-                        break;
-                    case 1:
-                        pref.putInt("print-option-size", 1);
-                        pref.putInt("print-title-size", 2);
-                        pref.putInt("print-body-size", 1);
-                        pref.putInt("print-identite-size", 1);
-                        pref.putInt("print-lines-dashcount", 42);
-                        break;
-                    case 0:
-                        pref.putInt("print-option-size", 0);
-                        pref.putInt("print-title-size", 3);
-                        pref.putInt("print-body-size", 1);
-                        pref.putInt("print-identite-size", 1);
-                        pref.putInt("print-lines-dashcount", 48);
-                        break;
-                }
+                ParametreController.this.pref.putInt("print-option-size", index + 1);
+                ParametreController.this.pref.putInt("print-title-size", index + 1);
+                ParametreController.this.pref.putInt("print-identite-size", index + 1);
             }
         });
-        ppps.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
+        this.cbx_param_font_size_body.getSelectionModel().selectedIndexProperty().addListener((ChangeListener)new ChangeListener<Number>(){
+
+            public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                int index = newValue.intValue();
+                ParametreController.this.pref.putInt("print-body-size", index + 1);
+            }
+        });
+        this.cbx_param_font_size_footer.getSelectionModel().selectedIndexProperty().addListener((ChangeListener)new ChangeListener<Number>(){
+
+            public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                int index = newValue.intValue();
+                ParametreController.this.pref.putInt("print-footer-size", index + 1);
+            }
+        });
+        this.ppps.selectedProperty().addListener((ChangeListener)new ChangeListener<Boolean>(){
+
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
-                    pref.put("meth", "ppps");
-                    MainUI.notify(null, bundle.getString("success"), bundle.getString("methpppsaved"), 3, "info");
+                if (newValue.booleanValue()) {
+                    ParametreController.this.pref.put("meth", "ppps");
+                    MainUI.notify(null, (String)ParametreController.this.bundle.getString("success"), (String)ParametreController.this.bundle.getString("methpppsaved"), (long)3L, (String)"info");
                 }
             }
         });
-        fifo.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
+        this.fifo.selectedProperty().addListener((ChangeListener)new ChangeListener<Boolean>(){
+
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
-                    pref.put("meth", "fifo");
-                    MainUI.notify(null, bundle.getString("success"), bundle.getString("methfifosaved"), 3, "info");
+                if (newValue.booleanValue()) {
+                    ParametreController.this.pref.put("meth", "fifo");
+                    MainUI.notify(null, (String)ParametreController.this.bundle.getString("success"), (String)ParametreController.this.bundle.getString("methfifosaved"), (long)3L, (String)"info");
                 }
             }
         });
-        lifo.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-            if (newValue) {
-                pref.put("meth", "lifo");
-                MainUI.notify(null, "Succes", bundle.getString("methlifosaved"), 3, "info");
+        this.lifo.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue.booleanValue()) {
+                this.pref.put("meth", "lifo");
+                MainUI.notify(null, (String)"Succes", (String)this.bundle.getString("methlifosaved"), (long)3L, (String)"info");
             }
         });
-        text_msg.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+        this.text_msg.textProperty().addListener((observable, oldValue, newValue) -> {
             if (!newValue.isEmpty()) {
-                pref.put("ads_mesg", newValue);
+                this.pref.put("ads_mesg", (String)newValue);
             }
         });
-        cbx_display_ports.setConverter(new StringConverter<SerialPort>() {
-            @Override
+        this.cbx_display_ports.setConverter((StringConverter)new StringConverter<SerialPort>(){
+
             public String toString(SerialPort object) {
                 return object == null ? null : object.getSystemPortName();
             }
 
-            @Override
             public SerialPort fromString(String string) {
-                return cbx_display_ports.getItems()
-                        .stream()
-                        .filter(f -> (f.getSystemPortName())
-                        .equalsIgnoreCase(string))
-                        .findFirst().orElse(null);
+                return ParametreController.this.cbx_display_ports.getItems().stream().filter(f -> f.getSystemPortName().equalsIgnoreCase(string)).findFirst().orElse(null);
             }
         });
-        SerialPort ports[] = SerialPort.getCommPorts();
-        cbx_display_ports.setItems(FXCollections.observableArrayList(ports));
-        cbx_display_ports.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends SerialPort> observable, SerialPort oldValue, SerialPort newValue) -> {
+        SerialPort[] ports = SerialPort.getCommPorts();
+        this.cbx_display_ports.setItems(FXCollections.observableArrayList(ports));
+        this.cbx_display_ports.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                pref.put("display_port", newValue.getSystemPortName());
+                this.pref.put("display_port", newValue.getSystemPortName());
             }
         });
-
     }
 
     private void onHoverHome(MouseEvent event) {
-        ImageView img = (ImageView) event.getSource();
-        MainUI.setShadowEffect(img);
+        ImageView img = (ImageView)event.getSource();
+        MainUI.setShadowEffect((Node)img);
     }
 
     private void onOutHome(MouseEvent event) {
-        ImageView img = (ImageView) event.getSource();
-        MainUI.removeShaddowEffect(img);
+        ImageView img = (ImageView)event.getSource();
+        MainUI.removeShaddowEffect((Node)img);
     }
 
-    /**
-     * Initializes the controller class.
-     *
-     * @param url
-     * @param rb
-     */
-    @Override
     public void initialize(URL url, ResourceBundle rb) {
-        bundle = rb;
-        pref = Preferences.userNodeForPackage(SyncEngine.class);
-        cbx_frequence.setItems(FXCollections.observableArrayList(30, 60, 90, 120, 180, 300, 360, 600, 1200, 1440));
-        cbx_frequence.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Integer> observable, Integer oldValue, Integer newValue) -> {
-            Executors.newSingleThreadExecutor()
-                    .execute(() -> {
-//                        pref.putInt("sync-freq", newValue);
-//                        
-//                        SyncEngine.getInstance().start();
-//                        MainUI.notify(null, "Info", bundle.getString("synconfigsaved"), 4, "Info");
-                    });
-        });
-        methodGroup = new ToggleGroup();
-        mode_stock = new ToggleGroup();
-        SpinnerValueFactory<Integer> values = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 5, 1);
-        values.setValue(pref.getInt("bill-copy", 1));
-        spinner.setValueFactory(values);
-        spinner.valueProperty().addListener((ObservableValue<? extends Integer> observable, Integer oldValue, Integer newValue) -> {
+        this.bundle = rb;
+        this.pref = Preferences.userNodeForPackage(SyncEngine.class);
+        this.cbx_frequence.setItems(FXCollections.observableArrayList(new Integer[]{30, 60, 90, 120, 180, 300, 360, 600, 1200, 1440}));
+        this.cbx_frequence.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> Executors.newSingleThreadExecutor().execute(() -> {}));
+        this.methodGroup = new ToggleGroup();
+        this.mode_stock = new ToggleGroup();
+        this.mode_printer = new ToggleGroup();
+        SpinnerValueFactory.IntegerSpinnerValueFactory values = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 5, 1);
+        values.setValue(this.pref.getInt("bill-copy", 1));
+        this.spinner.setValueFactory((SpinnerValueFactory)values);
+        this.spinner.valueProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                pref.putInt("bill-copy", newValue);
+                this.pref.putInt("bill-copy", (int)newValue);
             }
         });
-
-        print_mark.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-            pref.putBoolean("print_mark", newValue);
-        });
-        print_modele.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-            pref.putBoolean("print_modele", newValue);
-        });
-        print_tail.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-            pref.putBoolean("print_tail", newValue);
-        });
-        print_total_usd.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-            pref.putBoolean("print_total_usd", newValue);
-        });
+        this.print_mark.selectedProperty().addListener((observable, oldValue, newValue) -> this.pref.putBoolean("print_mark", (boolean)newValue));
+        this.print_modele.selectedProperty().addListener((observable, oldValue, newValue) -> this.pref.putBoolean("print_modele", (boolean)newValue));
+        this.print_tail.selectedProperty().addListener((observable, oldValue, newValue) -> this.pref.putBoolean("print_tail", (boolean)newValue));
+        this.print_total_usd.selectedProperty().addListener((observable, oldValue, newValue) -> this.pref.putBoolean("print_total_usd", (boolean)newValue));
     }
 
     @FXML
     private void saveConfigurations(ActionEvent event) {
         boolean go = true;
-        if (tf_ip_serveur.getText().isEmpty()) {
+        if (this.tf_ip_serveur.getText().isEmpty()) {
             go = false;
         }
-        if (tf_port_serveur.getText().isEmpty()) {
+        if (this.tf_port_serveur.getText().isEmpty()) {
             go = false;
         }
         if (go) {
             try {
-                if (InetAddress.getByName(tf_ip_serveur.getText()).isReachable(5000)) {
-                    pref.putInt("default_mysql_port", Integer.parseInt(tf_port_serveur.getText()));
-                    pref.put("default_mysql_host", tf_ip_serveur.getText());
-                    MainUI.notify(null, "Info", "Succes : Configuration enregistree", 4, "info");
+                if (InetAddress.getByName(this.tf_ip_serveur.getText()).isReachable(5000)) {
+                    this.pref.putInt("default_mysql_port", Integer.parseInt(this.tf_port_serveur.getText()));
+                    this.pref.put("default_mysql_host", this.tf_ip_serveur.getText());
+                    MainUI.notify(null, (String)"Info", (String)"Succes : Configuration enregistree", (long)4L, (String)"info");
                 }
-            } catch (IOException ex) {
+            }
+            catch (IOException ex) {
                 Logger.getLogger(ParametreController.class.getName()).log(Level.SEVERE, null, ex);
             }
         } else {
-            MainUI.notify(null, "Info", "Erreur : Configuration non enregistree", 4, "error");
+            MainUI.notify(null, (String)"Info", (String)"Erreur : Configuration non enregistree", (long)4L, (String)"error");
         }
     }
 
     @FXML
     private void reinitSync(ActionEvent event) {
-        pref.putLong(tools.Constants.SYNC_ELLAPSED_TIME, 0);
-        MainUI.notify(null, "Info", "Configuration fiat avec succes, la prochaine synchronisation sera totale", 4, "info");
+        this.pref.putLong("_last_sync_happenedAt0_", 0L);
+        MainUI.notify(null, (String)"Info", (String)"Configuration fiat avec succes, la prochaine synchronisation sera totale", (long)4L, (String)"info");
     }
-
 }

@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.prefs.Preferences;
 import tools.Agregator;
+import tools.ComptageItem;
 import tools.Constants;
 import tools.DataId;
 import tools.SyncEngine;
@@ -74,7 +75,7 @@ public class CompterService implements CompterStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            editStock(cat);
+            editStock(cat,true);
             System.out.println("Element " + cat.getProductId().getNomProduit() + " comptee");
             return cat;
         }
@@ -84,7 +85,7 @@ public class CompterService implements CompterStorage {
         }
         ManagedSessionFactory.getEntityManager().persist(cat);
         tx.commit();
-        editStock(cat);
+        editStock(cat,true);
         return cat;
     }
 
@@ -96,7 +97,7 @@ public class CompterService implements CompterStorage {
                     em.merge(cat);
                     return cat;
                 }).join();
-                editStock(cat);
+                editStock(cat,false);
                 System.out.println("Element " + cat.getProductId().getNomProduit() + " recomptee");
                 return cat;
             }
@@ -106,7 +107,7 @@ public class CompterService implements CompterStorage {
             }
             ManagedSessionFactory.getEntityManager().merge(cat);
             tx.commit();
-            editStock(cat);
+            editStock(cat,false);
         } catch (jakarta.persistence.EntityNotFoundException e) {
             System.err.println("Erreur Message : " + e.getMessage());
         }
@@ -540,8 +541,25 @@ public class CompterService implements CompterStorage {
         query.executeUpdate();
         tx.commit();
     }
+    
+    @Override
+    public void confirmerComptage(ComptageItem comptage){
+        Compter c= new Compter();
+        c.setProductId(comptage.getProduit());
+        c.setMesureId(comptage.getMesure());
+        Inventaire inv=delegates.InventaireDelegate.
+                findInventaireByCode(comptage.getCodeInventaire());
+        if(inv!=null){
+            c.setRegion(inv.getRegion());
+            c.setInventaireId(inv);
+            c.setNumlot(comptage.getNumlot());
+            c.setCoutAchat(comptage.getCoutAchat());
+            c.setDateExpiration(comptage.getDateExpiration());
+            editStock(c,false);
+        }
+    }
 
-    private void editStock(Compter compter) {
+    private void editStock(Compter compter,boolean isNew) {
         Produit prod = compter.getProductId();
         String region = compter.getRegion();
         Inventaire inv = compter.getInventaireId();
@@ -550,7 +568,8 @@ public class CompterService implements CompterStorage {
         // Avant tout ajustement : purger les anciens enregistrements #INV pour ce produit/lot
         // (évite le doublon lors d'une mise à jour de comptage)
         // On purge d'abord pour que le calcul du théorique suivant soit basé sur le stock "propre"
-        String refJour = inv.getCodeInventaire() + "-" + LocalDate.now().toString();
+        String refJour = (inv.getCodeInventaire() + "-" +(isNew? LocalDate.now().toString():
+                compter.getDateCount().toLocalDate().toString()));
         purgeAjustementLigneVente(refJour, prod.getUid(), compter.getNumlot(), region);
         purgeAjustementRecquisition("#INV-" + inv.getCodeInventaire(), prod.getUid(), compter.getNumlot(), region);
 
@@ -641,8 +660,8 @@ public class CompterService implements CompterStorage {
 
         // 4. Clôturer à nouveau pour mettre à jour l'agrégat daily avec les nouvelles
         // transactions
-        RecquisitionDelegate.cloturerUnProduit(prod, compter.getNumlot(), region, LocalDate.now(), LocalDate.now(),
-                null);
+        LocalDate leo = LocalDate.now();
+        RecquisitionDelegate.rectifyStock(prod, leo, leo, region, compter.getNumlot());
     }
 
     /**
@@ -877,8 +896,8 @@ public class CompterService implements CompterStorage {
         StringBuilder sbS = new StringBuilder();
         sbS.append(
                 "SELECT (SUM(COALESCE(s.quantite,0)*COALESCE(m.quantcontenu, 0))) pieces FROM ligne_vente s, mesure m"
-                        + " WHERE s.product_id = ?1 AND s.mesure_id=m.uid AND s.numlot = ?4 AND s.reference_uid IN "
-                        + "(SELECT v.uid FROM vente v WHERE v.region LIKE ?5 AND v.dateVente BETWEEN ?2 AND ?3)");
+                + " WHERE s.product_id = ?1 AND s.mesure_id=m.uid AND s.numlot = ?4 AND s.reference_uid IN "
+                + "(SELECT v.uid FROM vente v WHERE v.region LIKE ?5 AND v.dateVente BETWEEN ?2 AND ?3)");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 double sorties_exp0 = 0;
@@ -1047,7 +1066,8 @@ public class CompterService implements CompterStorage {
             // Update stock aggregate to maintain coherence after deletion
             Produit p = findProduitById(prodId);
             if (p != null) {
-                RecquisitionDelegate.cloturerUnProduit(p, numlot, region, LocalDate.now(), LocalDate.now(), null);
+                LocalDate leo = LocalDate.now();
+                RecquisitionDelegate.rectifyStock(p, leo, leo, region, numlot);
             }
         } catch (Exception e) {
             System.err.println("purgeAjustementLigneVente: " + e.getMessage());
@@ -1128,7 +1148,8 @@ public class CompterService implements CompterStorage {
             // 3. Update stock aggregate to maintain coherence after deletion
             Produit p = findProduitById(prodId);
             if (p != null) {
-                RecquisitionDelegate.cloturerUnProduit(p, numlot, region, LocalDate.now(), LocalDate.now(), null);
+                LocalDate leo = LocalDate.now();
+                RecquisitionDelegate.rectifyStock(p, leo, leo, region, numlot);
             }
         } catch (Exception e) {
             System.err.println("purgeAjustementRecquisition: " + e.getMessage());
@@ -1275,9 +1296,9 @@ public class CompterService implements CompterStorage {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory
                         .executeRead(em -> (Mesure) em.createNativeQuery(sb.toString(), Mesure.class)
-                                .setParameter(1, uid)
-                                .setParameter(2, quantM)
-                                .setMaxResults(1).getSingleResult());
+                        .setParameter(1, uid)
+                        .setParameter(2, quantM)
+                        .setMaxResults(1).getSingleResult());
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Mesure.class);
             query.setParameter(1, uid);
@@ -1298,10 +1319,10 @@ public class CompterService implements CompterStorage {
                 try {
                     return ManagedSessionFactory
                             .executeRead(em -> (StockAgregate) em.createNativeQuery(sb.toString(), StockAgregate.class)
-                                    .setParameter(1, Timestamp.valueOf(today.atStartOfDay()))
-                                    .setParameter(2, Timestamp.valueOf(today1.atTime(23, 59, 59)))
-                                    .setParameter(3, uid)
-                                    .setMaxResults(1).getSingleResult());
+                            .setParameter(1, Timestamp.valueOf(today.atStartOfDay()))
+                            .setParameter(2, Timestamp.valueOf(today1.atTime(23, 59, 59)))
+                            .setParameter(3, uid)
+                            .setMaxResults(1).getSingleResult());
                 } catch (NoResultException e) {
                     return null;
                 }
@@ -1336,7 +1357,8 @@ public class CompterService implements CompterStorage {
     // return null;
     // }
 
-    //// }
+
+//// }
     ////
     // public List<LigneVente> findByReference(Integer uid, String pro) {
     // try {

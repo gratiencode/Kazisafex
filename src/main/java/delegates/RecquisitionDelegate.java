@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.Collectors;
+import services.ClotureCallback;
 import services.RecquisitionService;
 import tools.ListViewItem;
 import tools.Rupture;
@@ -61,6 +62,10 @@ public class RecquisitionDelegate {
         return getStorage().findRecquisitionByProduit(idprod, lot);
     }
 
+    public static void cloturerUnProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin) {
+        getStorage().cloturerUnProduit(produit, region, datedebut, datefin);
+    }
+
     public static List<Recquisition> findRecquisitions(int s, int m) {
         return getStorage().findRecquisitions(s, m);
     }
@@ -90,6 +95,10 @@ public class RecquisitionDelegate {
         return getStorage().toLifoOrdering(uid);
     }
 
+    public static void fixUndesiredRecqusitionOf(LocalDate d1, LocalDate d2, String region) {
+        getStorage().fixUndesiredRecqusitionOf(d1, d2, region);
+    }
+
     public static List<Recquisition> toFefoOrdering(String uid, String region) {
         return getStorage().toFefoOrdering(uid, region);
     }
@@ -106,12 +115,16 @@ public class RecquisitionDelegate {
         return getStorage().getHeaderRecq(meth, prod);
     }
 
+    public static List<StockAgregate> findAgregateDistinctlyByLot(String prod, String region) {
+        return getStorage().findAgregateDistinctlyByLot(prod, region);
+    }
+
     public static Recquisition getHeaderRecq(String meth, Produit prod, String region) {
         return getStorage().getHeaderRecq(meth, prod, region);
     }
 
-    public static Recquisition getLastEntry(String meth, Produit prod, String region) {
-        return getStorage().getLastEntry(meth, prod, region);
+    public static Recquisition getLastEntry(Produit prod, String region) {
+        return getStorage().getLastEntry(prod, region);
     }
 
     public static List<Recquisition> findRecquisitionByProduit(String uid, String numlot, String region) {
@@ -148,6 +161,14 @@ public class RecquisitionDelegate {
 
     public static StockAgregate saveFromRecqusition(Recquisition e) {
         return getStorage().saveStockFromRecquisition(e);
+    }
+
+    public static StockAgregate findStockAgregate(String prod, String numlot, String region, boolean destroyed) {
+        return getStorage().findStockAgregate(prod, numlot, region, destroyed);
+    }
+
+    public static StockAgregate updateStockAgregate(StockAgregate sa) {
+        return getStorage().updateStockAgregate(sa);
     }
 
     public static StockAgregate findClosedStock(LocalDate today, LocalDate today1, String uid) {
@@ -193,8 +214,6 @@ public class RecquisitionDelegate {
     public static void beginTransaction() {
         getStorage().startTransaction();
     }
-
-  
 
     public static List<Recquisition> findByReference(String ref) {
         return getStorage().findByReference(ref);
@@ -285,6 +304,33 @@ public class RecquisitionDelegate {
                 .toList();
     }
 
+    public static List<StockAgregate> findLatestLotStockAgregates(String productId) {
+        return getStorage().findLatestLotStockAgregates(productId);
+    }
+
+    public static List<StockAgregate> findLatestLotStockAgregates(String productId, String region) {
+        return getStorage().findLatestLotStockAgregates(productId, region);
+    }
+
+    public static double sumLatestLotFinalQuantityFromStockAggregate(String productId) {
+        return getStorage().sumLatestLotFinalQuantityFromStockAggregate(productId);
+    }
+
+    public static double sumLatestLotFinalQuantityFromStockAggregate(String productId, String region) {
+        return getStorage().sumLatestLotFinalQuantityFromStockAggregate(productId, region);
+    }
+
+    public static double sumLatestLotFinalQuantityFromStockAggregate(String productId, String lot, String region) {
+        return getStorage().sumLatestLotFinalQuantityFromStockAggregate(productId, lot, region);
+    }
+
+    public static List<Recquisition> findDistinctLotsForProduitRegion(String productId, String region) {
+        return getStorage().findDistinctLotsForProduitRegion(productId, region);
+    }
+
+//    public static int verifyAndCorrectStockAggregateConsistency(String region) {
+//        return getStorage().verifyAndCorrectStockAggregateConsistency(region);
+//    }
     public static double findRemainedInMagasinByLot(String puid, String numlot, String region) {
         return getStorage().findRemainedInMagasinByLot(puid, numlot, region);
     }
@@ -355,32 +401,48 @@ public class RecquisitionDelegate {
         return getStorage().findUnSyncedRecquisitions(disconnected_at);
     }
 
-    public static double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-        return getStorage().sommeEntreeSurPeriode(uid, datedebut, datefin, region);
+    public static double sommeEntreeSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        return getStorage().sommeEntreeSurPeriode(uid, datedebut, datefin, lot, region);
     }
 
-    public static double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-        return getStorage().sommeSortieSurPeriode(uid, datedebut, datefin, region);
+    public static double sommeSortieSurPeriode(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        return getStorage().sommeSortieSurPeriode(uid, datedebut, datefin, lot, region);
     }
 
-    public static double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String region) {
-        return getStorage().calculerStockInitialEnUnite(uid, datedebut, region);
+    public static double calculerStockInitialEnUnite(String uid, LocalDate datedebut, String lot, String region) {
+        return getStorage().calculerStockInitialEnUnite(uid, datedebut, lot, region);
     }
 
-    public static double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin, String region) {
-        return getStorage().getStockExpiree(uid, datedebut, datefin, region);
+    public static double getStockExpiree(String uid, LocalDate datedebut, LocalDate datefin, String lot, String region) {
+        return getStorage().getStockExpiree(uid, datedebut, datefin, lot, region);
+    }
+
+    public static void setClotureListener(ClotureCallback callbak) {
+        getStorage().setClotureListener(callbak);
     }
 
     public static boolean cloturerStocks(String region, LocalDate datedebut, LocalDate datefin, String context) {
         return getStorage().cloturerStocks(region, datedebut, datefin, context);
     }
 
-    public static Recquisition cloturerUnProduit(Produit produit, String region, LocalDate datedebut, LocalDate datefin, String context) {
-        return getStorage().clotureStockProduit(produit, region, datedebut, datefin, context);
+    public static void cloturerUnProduit(Produit produit, String lot, String region, LocalDate datedebut, LocalDate datefin, String context) {
+        getStorage().clotureStockProduit(produit, lot, region, datedebut, datefin, context);
     }
 
-    public static void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, double coutAch) {
-        getStorage().rectifyStock(produit, datedebut, datefin, region, coutAch);
+    public static Recquisition findRecquisition(String ref, String prodId, String numlot, String region) {
+        return getStorage().findRecquisition(ref, prodId, numlot, region);
+    }
+
+    public static List<Recquisition> findDistinctLotHeads(Produit p, String region) {
+        return getStorage().findDistinctLotHeads(p, region);
+    }
+
+    public static void rectifyStock(Produit produit, LocalDate datedebut, LocalDate datefin, String region, String numlot) {
+        getStorage().rectifyStock(produit, datedebut, datefin, region, numlot);
+    }
+
+    public static StockAgregate findClosedStockByLot(LocalDate today, LocalDate today1, String uid, String region, String numlot, String context) {
+        return getStorage().findClosedStockByLot(today, today1, uid, region, numlot, context);
     }
 
     public static boolean isExists(String uid, LocalDateTime attime) {

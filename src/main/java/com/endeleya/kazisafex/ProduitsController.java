@@ -113,6 +113,7 @@ import data.PermitTo;
 import org.apache.commons.lang3.math.NumberUtils;
 import retrofit2.Call;
 import retrofit2.Response;
+import services.utils.RegionRegistry;
 import tools.Constants;
 import tools.DataId;
 import tools.DataImporter;
@@ -752,7 +753,8 @@ public class ProduitsController implements Initializable {
         // this.database = RepportService.getInstance();
         // mesureLs = mesures.findAll();
         catList.addAll(CategoryDelegate.findCategories());
-        produitsList.addAll(ProduitDelegate.findProduits());
+        List<Produit> lp=ProduitDelegate.findProduits();
+        produitsList.addAll(lp==null?List.of():lp);
         table.setItems(produitsList);
         cbx_choose_category.setItems(catList);
         cbx_catwrap.setItems(catList);
@@ -784,30 +786,8 @@ public class ProduitsController implements Initializable {
                     }
                 });
 
-        kazisafe.getRegions().enqueue(new retrofit2.Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.addAll(lreg);
-                    int i = 0;
-                    for (String reg : lreg) {
-                        pref.put("region" + (++i), reg);
-                    }
-                    System.err.println("Agent regions " + lreg.size());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
-                for (String key : regKeys()) {
-                    String r = pref.get(key, "...");
-                    if (!regions.contains(r)) {
-                        regions.add(r);
-                    }
-                }
-            }
-        });
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
         // sync mez
         // refreshFromCloud();
         instance = this;
@@ -1100,23 +1080,9 @@ public class ProduitsController implements Initializable {
                 || PermissionDelegate.hasPermission(permit);
     }
 
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
-    }
-
     private void fillSites() {
         cbx_regions.setItems(regions);
-        cbx_regions.getSelectionModel().selectFirst();
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
     }
 
     @FXML
@@ -1473,8 +1439,11 @@ public class ProduitsController implements Initializable {
                                     s.setMesureId(msv);
                                     d.setMesureId(msv);
                                 }
-                                StockerDelegate.saveStocker(s);// database.insertAndSync(s);
-                                DestockerDelegate.saveDestocker(d);// database.insertAndSync(d);
+                                Stocker savedS = StockerDelegate.saveStocker(s);
+                                StockerDelegate.rectifyStockDepotByLot(savedS.getProductId(), savedS.getNumlot(), savedS.getRegion(), savedS.getCoutAchat(), savedS.getDateExpir());
+
+                                Destocker savedD = DestockerDelegate.saveDestocker(d);
+                                StockerDelegate.rectifyStockDepotByLot(savedD.getProductId(), savedD.getNumlot(), savedD.getRegion(), savedD.getCoutAchat(), null);
                             }
                             r.setMesureId(mex);
                             Recquisition rq;

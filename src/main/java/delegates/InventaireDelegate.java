@@ -35,7 +35,7 @@ public class InventaireDelegate {
         return getStorage().findInventaire(uid);
     }
 
-     public static Inventaire findInventaireByCode(String code) {
+    public static Inventaire findInventaireByCode(String code) {
         return getStorage().findInventaireByCode(code);
     }
 

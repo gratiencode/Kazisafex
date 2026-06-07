@@ -54,7 +54,6 @@ import com.endeleya.kazisafex.GoodstorageController;
 import com.endeleya.kazisafex.Kazisafex;
 import com.endeleya.kazisafex.MezureController;
 import com.endeleya.kazisafex.ImmobilisationController;
-import com.endeleya.kazisafex.IassistantController;
 import com.endeleya.kazisafex.PanierappenderController;
 import com.endeleya.kazisafex.ParametreController;
 import com.endeleya.kazisafex.PaymentController;
@@ -338,37 +337,7 @@ public class MainUI {
         return path;
     }
 
-    public static void showAssistantIa(String res, int w, int h, Object... objs) {
-        FXMLLoader fxmlLoader = new FXMLLoader(MainuiController.class.getResource("/guis/" + res),
-                Kazisafex.getInstance().getLangageBundle());
-        try {
-            Parent load = fxmlLoader.load();
-            if (res.equals(tools.Constants.ASSISTANT_DLG)) {
-                IassistantController controller = fxmlLoader.<IassistantController>getController();
-                Scene scene = new Scene(load, w, h);
-                Kazisafex.applyTheme(scene);
-                Stage stage = new Stage();
-                stage.initModality(Modality.APPLICATION_MODAL);
-                stage.initStyle(StageStyle.UNDECORATED);
-                stage.setScene(scene);
-                load.setOnMousePressed((javafx.scene.input.MouseEvent event) -> {
-                    xOffset = event.getSceneX();
-                    yOffset = event.getSceneY();
-                });
-
-                load.setOnMouseDragged((javafx.scene.input.MouseEvent event) -> {
-                    stage.setX(event.getScreenX() - xOffset);
-                    stage.setY(event.getScreenY() - yOffset);
-                });
-                stage.showAndWait();
-                controller.setup(String.valueOf(objs[0]), String.valueOf(objs[1]));
-            }
-
-        } catch (IOException ex) {
-            Logger.getLogger(MainUI.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-
+ 
     public static void floatDialog(String res, int w, int h, String token, Kazisafe ksf, Object... objs) {
         FXMLLoader fxmlLoader = new FXMLLoader(MainuiController.class.getResource("/guis/" + res),
                 Kazisafex.getInstance().getLangageBundle());

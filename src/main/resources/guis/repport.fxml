@@ -5,6 +5,7 @@
 <?import javafx.scene.chart.LineChart?>
 <?import javafx.scene.chart.NumberAxis?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
@@ -31,7 +32,7 @@
                <content>
                   <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="477.0" prefWidth="1200.0" style="-fx-background-color: #ffffff;">
                      <children>
-                        <Pane layoutX="23.0" layoutY="17.0" prefHeight="105.0" prefWidth="260.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="23.0" AnchorPane.topAnchor="17.0">
+                        <Pane layoutX="10.0" layoutY="17.0" prefHeight="105.0" prefWidth="230.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="10.0" AnchorPane.topAnchor="17.0">
                            <effect>
                               <DropShadow />
                            </effect>
@@ -55,6 +56,107 @@
                               </ImageView>
                            </children>
                         </Pane>
+                        <AnchorPane layoutX="250.0" layoutY="14.0" prefHeight="110.0" prefWidth="230.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="250.0" AnchorPane.topAnchor="14.0">
+                           <children>
+                              <Label fx:id="txt_depense_report" layoutX="61.0" layoutY="37.0" prefHeight="31.0" prefWidth="150.0" text="....." AnchorPane.leftAnchor="61.0" AnchorPane.topAnchor="37.0">
+                                 <font>
+                                    <Font name="System Bold" size="15.0" />
+                                 </font>
+                              </Label>
+                              <ImageView fitHeight="31.0" fitWidth="29.0" layoutX="19.0" layoutY="38.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="19.0" AnchorPane.topAnchor="38.0">
+                                 <image>
+                                    <Image url="@../icons/expensex.png" />
+                                 </image>
+                              </ImageView>
+                              <Label layoutX="18.0" layoutY="11.0" text="Expenses" AnchorPane.leftAnchor="18.0" AnchorPane.topAnchor="11.0" />
+                              <Label fx:id="lbl_comment_CV" layoutX="55.0" layoutY="81.0" prefHeight="16.0" prefWidth="170.0" text="Analyse en cours..." AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="55.0">
+                                 <font>
+                                    <Font size="11.0" />
+                                 </font>
+                              </Label>
+                              <ImageView fx:id="img_indic_CV" fitHeight="20.0" fitWidth="29.0" layoutX="21.0" layoutY="78.0" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="21.0">
+                                 <image>
+                                    <Image url="@../icons/chart-down.png" />
+                                 </image>
+                              </ImageView>
+                           </children>
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                        </AnchorPane>
+                        <AnchorPane layoutX="490.0" layoutY="14.0" prefHeight="110.0" prefWidth="230.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="490.0" AnchorPane.topAnchor="14.0">
+                           <children>
+                              <Label fx:id="txt_amort_report" layoutX="61.0" layoutY="37.0" prefHeight="31.0" prefWidth="150.0" text="....." AnchorPane.leftAnchor="61.0" AnchorPane.topAnchor="37.0">
+                                 <font>
+                                    <Font name="System Bold" size="15.0" />
+                                 </font>
+                              </Label>
+                              <ImageView fitHeight="31.0" fitWidth="29.0" layoutX="19.0" layoutY="38.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="19.0" AnchorPane.topAnchor="38.0">
+                                 <image>
+                                    <Image url="@../icons/history32.png" />
+                                 </image>
+                              </ImageView>
+                              <Label layoutX="18.0" layoutY="11.0" text="Amortissements" AnchorPane.leftAnchor="18.0" AnchorPane.topAnchor="11.0" />
+                              <Label layoutX="55.0" layoutY="81.0" prefHeight="16.0" prefWidth="170.0" text="Valeur cumulée" AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="55.0">
+                                 <font>
+                                    <Font size="11.0" />
+                                 </font>
+                              </Label>
+                           </children>
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                        </AnchorPane>
+                        <Pane layoutX="730.0" layoutY="19.0" prefHeight="105.0" prefWidth="230.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="730.0" AnchorPane.topAnchor="17.0">
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                           <children>
+                              <Label fx:id="txt_result_report" layoutX="56.0" layoutY="38.0" prefHeight="31.0" prefWidth="160.0" text=".....">
+                                 <font>
+                                    <Font name="System Bold" size="15.0" />
+                                 </font>
+                              </Label>
+                              <ImageView fitHeight="31.0" fitWidth="29.0" layoutX="15.0" layoutY="41.0" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/target1.png" />
+                                 </image>
+                              </ImageView>
+                              <Label layoutX="14.0" layoutY="12.0" text="Result" />
+                              <Label fx:id="lbl_comment_MARGE" layoutX="55.0" layoutY="82.0" prefHeight="16.0" prefWidth="170.0" text="Analyse en cours..." />
+                              <ImageView fx:id="img_indic_MARGE" fitHeight="18.0" fitWidth="18.0" layoutX="22.0" layoutY="81.0" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/equal.png" />
+                                 </image>
+                              </ImageView>
+                           </children>
+                        </Pane>
+                        <Pane layoutX="970.0" layoutY="16.0" prefHeight="105.0" prefWidth="220.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.rightAnchor="21.0" AnchorPane.topAnchor="16.0">
+                           <effect>
+                              <DropShadow />
+                           </effect>
+                           <children>
+                              <Label layoutX="6.0" layoutY="7.0" text="Créances" />
+                              <Label fx:id="txt_creance_report" layoutX="57.0" layoutY="46.0" prefHeight="31.0" prefWidth="150.0" text=".....">
+                                 <font>
+                                    <Font name="System Bold" size="15.0" />
+                                 </font>
+                              </Label>
+                              <ImageView fitHeight="29.0" fitWidth="29.0" layoutX="16.0" layoutY="45.0" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/debt.png" />
+                                 </image>
+                              </ImageView>
+                              <ImageView fitHeight="18.0" fitWidth="18.0" layoutX="190.0" layoutY="79.0" onMouseClicked="#exportPdfReport" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../icons/download-pdf.png" />
+                                 </image>
+                                 <cursor>
+                                    <Cursor fx:constant="HAND" />
+                                 </cursor>
+                              </ImageView>
+                           </children>
+                        </Pane>
                         <AnchorPane layoutX="23.0" layoutY="139.0" prefHeight="383.0" prefWidth="836.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.bottomAnchor="11.0" AnchorPane.leftAnchor="23.0" AnchorPane.rightAnchor="350.0" AnchorPane.topAnchor="139.0">
                            <children>
                               <LineChart fx:id="lnchart_data_report" layoutX="14.0" layoutY="46.0" prefHeight="331.0" prefWidth="808.0" style="-fx-background-color: #ffffff;" title="Metriques (USD)" AnchorPane.bottomAnchor="6.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="14.0" AnchorPane.topAnchor="46.0">
@@ -72,84 +174,6 @@
                               <DropShadow />
                            </effect>
                         </AnchorPane>
-                        <AnchorPane layoutX="297.0" layoutY="14.0" prefHeight="110.0" prefWidth="312.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.leftAnchor="297.0" AnchorPane.rightAnchor="600.0" AnchorPane.topAnchor="14.0">
-                           <children>
-                              <Label fx:id="txt_depense_report" layoutX="61.0" layoutY="37.0" prefHeight="31.0" prefWidth="150.0" text="....." AnchorPane.leftAnchor="61.0" AnchorPane.topAnchor="37.0">
-                                 <font>
-                                    <Font name="System Bold" size="15.0" />
-                                 </font>
-                              </Label>
-                              <ImageView fitHeight="31.0" fitWidth="29.0" layoutX="19.0" layoutY="38.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="19.0" AnchorPane.topAnchor="38.0">
-                                 <image>
-                                    <Image url="@../icons/expensex.png" />
-                                 </image>
-                              </ImageView>
-                              <Label layoutX="18.0" layoutY="11.0" text="Expenses" AnchorPane.leftAnchor="18.0" AnchorPane.topAnchor="11.0" />
-                              <Label fx:id="lbl_comment_CV" layoutX="55.0" layoutY="81.0" prefHeight="16.0" prefWidth="179.0" text="Analyse en cours..." AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="55.0">
-                                 <font>
-                                    <Font size="12.0" />
-                                 </font>
-                              </Label>
-                              <ImageView fx:id="img_indic_CV" fitHeight="20.0" fitWidth="29.0" layoutX="21.0" layoutY="78.0" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="21.0">
-                                 <image>
-                                    <Image url="@../icons/chart-down.png" />
-                                 </image>
-                              </ImageView>
-                           </children>
-                           <effect>
-                              <DropShadow />
-                           </effect>
-                        </AnchorPane>
-                        <Pane layoutX="945.0" layoutY="16.0" prefHeight="105.0" prefWidth="254.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.rightAnchor="20.0" AnchorPane.topAnchor="16.0">
-                           <effect>
-                              <DropShadow />
-                           </effect>
-                           <children>
-                              <Label layoutX="6.0" layoutY="7.0" text="Créances" />
-                              <Label fx:id="txt_creance_report" layoutX="57.0" layoutY="46.0" prefHeight="31.0" prefWidth="150.0" text=".....">
-                                 <font>
-                                    <Font name="System Bold" size="15.0" />
-                                 </font>
-                              </Label>
-                              <ImageView fitHeight="29.0" fitWidth="29.0" layoutX="16.0" layoutY="45.0" pickOnBounds="true" preserveRatio="true">
-                                 <image>
-                                    <Image url="@../icons/debt.png" />
-                                 </image>
-                              </ImageView>
-                              <ImageView fitHeight="18.0" fitWidth="18.0" layoutX="221.0" layoutY="79.0" onMouseClicked="#exportPdfReport" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                 <image>
-                                    <Image url="@../icons/download-pdf.png" />
-                                 </image>
-                                 <cursor>
-                                    <Cursor fx:constant="HAND" />
-                                 </cursor>
-                              </ImageView>
-                           </children>
-                        </Pane>
-                        <Pane layoutX="655.0" layoutY="19.0" prefHeight="105.0" prefWidth="298.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.rightAnchor="287.0" AnchorPane.topAnchor="17.0">
-                           <effect>
-                              <DropShadow />
-                           </effect>
-                           <children>
-                              <Label fx:id="txt_result_report" layoutX="56.0" layoutY="38.0" prefHeight="31.0" prefWidth="214.0" text=".....">
-                                 <font>
-                                    <Font name="System Bold" size="15.0" />
-                                 </font>
-                              </Label>
-                              <ImageView fitHeight="31.0" fitWidth="29.0" layoutX="15.0" layoutY="41.0" pickOnBounds="true" preserveRatio="true">
-                                 <image>
-                                    <Image url="@../icons/target1.png" />
-                                 </image>
-                              </ImageView>
-                              <Label layoutX="14.0" layoutY="12.0" text="Result" />
-                              <Label fx:id="lbl_comment_MARGE" layoutX="55.0" layoutY="82.0" text="Analyse en cours..." />
-                              <ImageView fx:id="img_indic_MARGE" fitHeight="18.0" fitWidth="18.0" layoutX="22.0" layoutY="81.0" pickOnBounds="true" preserveRatio="true">
-                                 <image>
-                                    <Image url="@../icons/equal.png" />
-                                 </image>
-                              </ImageView>
-                           </children>
-                        </Pane>
                         <AnchorPane layoutX="876.0" layoutY="138.0" prefHeight="382.0" prefWidth="315.0" style="-fx-background-color: white; -fx-background-radius: 12;" AnchorPane.bottomAnchor="13.0" AnchorPane.rightAnchor="18.0" AnchorPane.topAnchor="138.0">
                            <effect>
                               <DropShadow />
@@ -178,7 +202,7 @@
                   </AnchorPane>
                </content>
             </Tab>
-            <Tab fx:id="sales" closable="false" text="Sales reports">
+            <Tab fx:id="sales" closable="false" text="Rapport de vente">
               <content>
                 <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
                      <children>
@@ -337,7 +361,7 @@
             </Tab>
             <Tab fx:id="tab_immobilisation" closable="false" text="Immobilisations">
                <content>
-                  <AnchorPane fx:id="pane_financial_states" minHeight="0.0" minWidth="0.0" prefHeight="540.0" prefWidth="1200.0" style="-fx-background-color: #ffffff;">
+                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="540.0" prefWidth="1200.0" style="-fx-background-color: #ffffff;">
                      <children>
                         <Label layoutX="17.0" layoutY="13.0" text="Fiche d'amortissement des immobilisations">
                            <font>
@@ -392,13 +416,16 @@
             </Tab>
             <Tab closable="false" text="Etats financiers">
                <content>
-                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="540.0" prefWidth="1200.0" style="-fx-background-color: #ffffff;">
+                  <AnchorPane fx:id="pane_financial_states" minHeight="0.0" minWidth="0.0" prefHeight="540.0" prefWidth="1200.0" style="-fx-background-color: #ffffff;">
                      <children>
-                        <Label layoutX="15.0" layoutY="14.0" text="Bilan (Actif / Passif)">
+                        <Label layoutX="15.0" layoutY="14.0" text="Etats financiers OHADA" AnchorPane.leftAnchor="15.0" AnchorPane.topAnchor="14.0">
                            <font>
                               <Font name="System Bold" size="20.0" />
                            </font>
                         </Label>
+                        <Label layoutX="16.0" layoutY="43.0" text="Les rubriques sont alignées sur le classeur OHADA et alimentées par les agrégats financiers." AnchorPane.leftAnchor="16.0" AnchorPane.topAnchor="43.0" />
+                        <CheckBox fx:id="chk_filter_zeros" layoutX="700.0" layoutY="20.0" text="Masquer valeurs à zéro" AnchorPane.rightAnchor="333.0" AnchorPane.topAnchor="20.0" />
+                        <ComboBox fx:id="cbx_financial_history_span" layoutX="894.0" layoutY="16.0" prefWidth="140.0" promptText="Historique" AnchorPane.rightAnchor="175.0" AnchorPane.topAnchor="16.0" />
                         <ImageView fitHeight="26.0" fitWidth="24.0" layoutX="1164.0" layoutY="15.0" onMouseClicked="#refreshFinancialStates" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
                            <image>
                               <Image url="@../icons/reverse32.png" />
@@ -407,218 +434,121 @@
                               <Cursor fx:constant="HAND" />
                            </cursor>
                         </ImageView>
-                        <ImageView fitHeight="26.0" fitWidth="24.0" layoutX="1132.0" layoutY="15.0" onMouseClicked="#printFinancialStates" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                           <image>
-                              <Image url="@../icons/printer.png" />
-                           </image>
-                           <cursor>
-                              <Cursor fx:constant="HAND" />
-                           </cursor>
-                        </ImageView>
-                        <ImageView fitHeight="26.0" fitWidth="24.0" layoutX="1098.0" layoutY="15.0" onMouseClicked="#exportFinancialStates" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                           <image>
-                              <Image url="@../icons/excel32.png" />
-                           </image>
-                           <cursor>
-                              <Cursor fx:constant="HAND" />
-                           </cursor>
-                        </ImageView>
-                        <Pane layoutX="14.0" layoutY="48.0" prefHeight="192.0" prefWidth="585.0" style="-fx-background-color: white; -fx-border-color: #44cef5; -fx-border-radius: 10; -fx-background-radius: 10;">
-                           <children>
-                              <Label layoutX="16.0" layoutY="14.0" text="Actif - Valeurs immobilisees" />
-                              <Label fx:id="lbl_bilan_immobilise" layoutX="356.0" layoutY="14.0" text="USD 0.0" />
-                              <Label layoutX="16.0" layoutY="49.0" text="Actif - Valeurs circulantes" />
-                              <Label fx:id="lbl_bilan_circulant" layoutX="356.0" layoutY="49.0" text="USD 0.0" />
-                              <Label layoutX="16.0" layoutY="84.0" text="Actif - Valeurs disponibles" />
-                              <Label fx:id="lbl_bilan_dispo" layoutX="356.0" layoutY="84.0" text="USD 0.0" />
-                              <Label layoutX="16.0" layoutY="130.0" text="Total Actif">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                              <Label fx:id="lbl_bilan_total_actif" layoutX="356.0" layoutY="130.0" text="USD 0.0">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                           </children>
-                        </Pane>
-                        <Pane layoutX="606.0" layoutY="48.0" prefHeight="192.0" prefWidth="585.0" style="-fx-background-color: white; -fx-border-color: #44cef5; -fx-border-radius: 10; -fx-background-radius: 10;">
-                           <children>
-                              <Label layoutX="17.0" layoutY="16.0" text="Passif - Capitaux propres" />
-                              <Label fx:id="lbl_bilan_capitaux" layoutX="352.0" layoutY="16.0" text="USD 0.0" />
-                              <Label layoutX="17.0" layoutY="51.0" text="Passif - Dettes" />
-                              <Label fx:id="lbl_bilan_dettes" layoutX="352.0" layoutY="51.0" text="USD 0.0" />
-                              <Label layoutX="17.0" layoutY="130.0" text="Total Passif">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                              <Label fx:id="lbl_bilan_total_passif" layoutX="352.0" layoutY="130.0" text="USD 0.0">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                           </children>
-                        </Pane>
-                        <Label layoutX="15.0" layoutY="265.0" text="Compte de resultat">
-                           <font>
-                              <Font name="System Bold" size="20.0" />
-                           </font>
-                        </Label>
-                        <Pane layoutX="14.0" layoutY="300.0" prefHeight="220.0" prefWidth="1177.0" style="-fx-background-color: white; -fx-border-color: #44cef5; -fx-border-radius: 10; -fx-background-radius: 10;">
-                           <children>
-                              <Label layoutX="18.0" layoutY="14.0" text="Chiffre d'affaires" />
-                              <Label fx:id="lbl_cr_ca" layoutX="392.0" layoutY="14.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="37.0" text="Cout des ventes" />
-                              <Label fx:id="lbl_cr_cout_vente" layoutX="392.0" layoutY="37.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="60.0" text="Marge brute" />
-                              <Label fx:id="lbl_cr_marge" layoutX="392.0" layoutY="60.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="83.0" text="Depenses operationnelles" />
-                              <Label fx:id="lbl_cr_dep_ops" layoutX="392.0" layoutY="83.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="106.0" text="Charges industrielles" />
-                              <Label fx:id="lbl_cr_industriel" layoutX="392.0" layoutY="106.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="129.0" text="Amortissements" />
-                              <Label fx:id="lbl_cr_amort" layoutX="392.0" layoutY="129.0" text="USD 0.0" />
-                              <Label layoutX="18.0" layoutY="152.0" text="Variation de stock" />
-                              <Label fx:id="lbl_cr_var_stock" layoutX="392.0" layoutY="152.0" text="USD 0.0" />
-                              <Label layoutX="615.0" layoutY="14.0" text="Resultat d'exploitation" />
-                              <Label fx:id="lbl_cr_result_expl" layoutX="912.0" layoutY="14.0" text="USD 0.0" />
-                              <Label layoutX="615.0" layoutY="37.0" text="Impots estimes" />
-                              <Label fx:id="lbl_cr_impot" layoutX="912.0" layoutY="37.0" text="USD 0.0" />
-                              <Label layoutX="615.0" layoutY="60.0" text="Resultat net">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                              <Label fx:id="lbl_cr_result_net" layoutX="912.0" layoutY="60.0" text="USD 0.0">
-                                 <font>
-                                    <Font name="System Bold" size="14.0" />
-                                 </font>
-                              </Label>
-                              <Label layoutX="18.0" layoutY="184.0" text="Flux de tresorerie (synthese)">
-                                 <font>
-                                    <Font name="System Bold" size="13.0" />
-                                 </font>
-                              </Label>
-                              <Label layoutX="233.0" layoutY="184.0" text="Encaissements" />
-                              <Label fx:id="lbl_flux_encaiss" layoutX="334.0" layoutY="184.0" text="USD 0.0" />
-                              <Label layoutX="552.0" layoutY="184.0" text="Decaissements" />
-                              <Label fx:id="lbl_flux_decaiss" layoutX="658.0" layoutY="184.0" text="USD 0.0" />
-                              <Label layoutX="877.0" layoutY="184.0" text="Flux net">
-                                 <font>
-                                    <Font name="System Bold" size="13.0" />
-                                 </font>
-                              </Label>
-                              <Label fx:id="lbl_flux_net" layoutX="936.0" layoutY="184.0" text="USD 0.0">
-                                 <font>
-                                    <Font name="System Bold" size="13.0" />
-                                 </font>
-                              </Label>
-                           </children>
-                        </Pane>
-                     </children>
-                  </AnchorPane>
-               </content>
-            </Tab>
-            <Tab closable="false" disable="true" text="Expenses">
-              <content>
-                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                     <children>
-                        <TabPane layoutX="7.0" layoutY="-1.0" prefHeight="535.0" prefWidth="1200.0" tabClosingPolicy="UNAVAILABLE">
-                          <tabs>
-                            <Tab text="General">
-                              <content>
-                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                        <TabPane layoutX="14.0" layoutY="73.0" prefHeight="450.0" prefWidth="1177.0" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="10.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="18.0" AnchorPane.topAnchor="73.0">
+                           <tabs>
+                              <Tab text="Bilan">
+                                 <content>
+                                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="406.0" prefWidth="1163.0">
                                        <children>
-                                          <ImageView fitHeight="24.0" fitWidth="18.0" layoutX="1125.0" layoutY="26.0" onMouseClicked="#exportReport" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                          <ImageView fitHeight="28.0" fitWidth="28.0" layoutX="1122.0" layoutY="12.0" onMouseClicked="#exportBilanPdf" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="27.0" AnchorPane.topAnchor="12.0">
                                              <image>
-                                                <Image url="@../icons/excel.png" />
+                                                <Image url="@../icons/download-pdf.png" />
                                              </image>
                                              <cursor>
                                                 <Cursor fx:constant="HAND" />
                                              </cursor>
                                           </ImageView>
-                                       </children></AnchorPane>
-                              </content>
-                            </Tab>
-                            <Tab text="Par region">
-                              <content>
-                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                                       <children>
-                                          <ImageView fitHeight="24.0" fitWidth="18.0" layoutX="1148.0" layoutY="20.0" onMouseClicked="#exportReport" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../icons/excel.png" />
-                                             </image>
-                                             <cursor>
-                                                <Cursor fx:constant="HAND" />
-                                             </cursor>
-                                          </ImageView>
-                                       </children></AnchorPane>
-                              </content>
-                            </Tab>
-                          </tabs>
-                        </TabPane>
-                     </children>
-                  </AnchorPane>
-              </content>
-            </Tab>
-            <Tab closable="false" disable="true" text="Result">
-              <content>
-                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                     <children>
-                        <TabPane layoutX="-3.0" layoutY="-1.0" prefHeight="532.0" prefWidth="1200.0" tabClosingPolicy="UNAVAILABLE">
-                          <tabs>
-                            <Tab text="General">
-                              <content>
-                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                                       <children>
-                                          <TableView layoutX="22.0" layoutY="65.0" prefHeight="394.0" prefWidth="1163.0" tableMenuButtonVisible="true">
-                                            <columns>
-                                              <TableColumn prefWidth="75.0" text="Periode" />
-                                              <TableColumn prefWidth="75.0" text="Descritpion" />
-                                                <TableColumn prefWidth="75.0" text="Revenue" />
-                                                <TableColumn prefWidth="75.0" text="Cost" />
-                                                <TableColumn prefWidth="75.0" text="Result" />
-                                            </columns>
+                                          <Label layoutX="16.0" layoutY="18.0" text="Bilan comptable financier (USD)" AnchorPane.leftAnchor="16.0" AnchorPane.topAnchor="18.0">
+                                             <font>
+                                                <Font name="System Bold" size="15.0" />
+                                             </font>
+                                          </Label>
+                                          <TableView fx:id="tb_fin_bilan" layoutX="16.0" layoutY="52.0" prefHeight="334.0" prefWidth="1136.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="33.0" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="25.0" AnchorPane.topAnchor="52.0">
+                                             <columns>
+                                                <TableColumn fx:id="col_fin_bilan_code" prefWidth="70.0" text="Code" />
+                                                <TableColumn fx:id="col_fin_bilan_rubrique" prefWidth="250.0" text="Rubrique" />
+                                                <TableColumn fx:id="col_fin_bilan_nature" prefWidth="250.0" text="Formule / Nature" />
+                                                <TableColumn fx:id="col_fin_bilan_n" prefWidth="90.0" text="Année N" />
+                                                <TableColumn fx:id="col_fin_bilan_n1" prefWidth="90.0" text="Année N-1" />
+                                                <TableColumn fx:id="col_fin_bilan_n2" prefWidth="90.0" text="Année N-2" />
+                                                <TableColumn fx:id="col_fin_bilan_n3" prefWidth="90.0" text="Année N-3" />
+                                                <TableColumn fx:id="col_fin_bilan_n4" prefWidth="90.0" text="Année N-4" />
+                                             </columns>
                                              <columnResizePolicy>
                                                 <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
                                              </columnResizePolicy>
                                           </TableView>
-                                          <Label layoutX="22.0" layoutY="19.0" text="Result statement" textFill="#2c2020">
+                                       </children>
+                                    </AnchorPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="Compte de résultat">
+                                 <content>
+                                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="406.0" prefWidth="1163.0">
+                                       <children>
+                                          <ImageView fitHeight="28.0" fitWidth="28.0" layoutX="1122.0" layoutY="12.0" onMouseClicked="#exportCompteResultatPdf" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="27.0" AnchorPane.topAnchor="12.0">
+                                             <image>
+                                                <Image url="@../icons/download-pdf.png" />
+                                             </image>
+                                             <cursor>
+                                                <Cursor fx:constant="HAND" />
+                                             </cursor>
+                                          </ImageView>
+                                          <Label layoutX="16.0" layoutY="18.0" text="Compte de résultat standard (USD)" AnchorPane.leftAnchor="16.0" AnchorPane.topAnchor="18.0">
                                              <font>
-                                                <Font name="System Bold" size="19.0" />
+                                                <Font name="System Bold" size="15.0" />
                                              </font>
                                           </Label>
-                                          <ImageView fitHeight="35.0" fitWidth="29.0" layoutX="1138.0" layoutY="23.0" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                          <TableView fx:id="tb_fin_cr" layoutX="16.0" layoutY="52.0" prefHeight="334.0" prefWidth="1136.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="33.0" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="25.0" AnchorPane.topAnchor="52.0">
+                                             <columns>
+                                                <TableColumn fx:id="col_fin_cr_code" prefWidth="70.0" text="Code" />
+                                                <TableColumn fx:id="col_fin_cr_rubrique" prefWidth="250.0" text="Rubrique" />
+                                                <TableColumn fx:id="col_fin_cr_nature" prefWidth="250.0" text="Formule / Nature" />
+                                                <TableColumn fx:id="col_fin_cr_n" prefWidth="90.0" text="Année N" />
+                                                <TableColumn fx:id="col_fin_cr_n1" prefWidth="90.0" text="Année N-1" />
+                                                <TableColumn fx:id="col_fin_cr_n2" prefWidth="90.0" text="Année N-2" />
+                                                <TableColumn fx:id="col_fin_cr_n3" prefWidth="90.0" text="Année N-3" />
+                                                <TableColumn fx:id="col_fin_cr_n4" prefWidth="90.0" text="Année N-4" />
+                                             </columns>
+                                             <columnResizePolicy>
+                                                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                             </columnResizePolicy>
+                                          </TableView>
+                                       </children>
+                                    </AnchorPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="Flux de trésorerie">
+                                 <content>
+                                    <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="406.0" prefWidth="1163.0">
+                                       <children>
+                                          <ImageView fitHeight="28.0" fitWidth="28.0" layoutX="1122.0" layoutY="12.0" onMouseClicked="#exportFluxPdf" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="27.0" AnchorPane.topAnchor="12.0">
                                              <image>
-                                                <Image url="@../icons/excel.png" />
+                                                <Image url="@../icons/download-pdf.png" />
                                              </image>
                                              <cursor>
                                                 <Cursor fx:constant="HAND" />
                                              </cursor>
                                           </ImageView>
-                                          <ImageView fitHeight="24.0" fitWidth="18.0" layoutX="1048.0" layoutY="22.0" onMouseClicked="#exportReport" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../icons/excel.png" />
-                                             </image>
-                                             <cursor>
-                                                <Cursor fx:constant="HAND" />
-                                             </cursor>
-                                          </ImageView>
-                                       </children></AnchorPane>
-                              </content>
-                            </Tab>
-                            <Tab text="Region">
-                              <content>
-                                <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" />
-                              </content>
-                            </Tab>
-                          </tabs>
+                                          <Label layoutX="16.0" layoutY="18.0" text="Tableau de flux de trésorerie (USD)" AnchorPane.leftAnchor="16.0" AnchorPane.topAnchor="18.0">
+                                             <font>
+                                                <Font name="System Bold" size="15.0" />
+                                             </font>
+                                          </Label>
+                                          <TableView fx:id="tb_fin_flux" layoutX="16.0" layoutY="52.0" prefHeight="334.0" prefWidth="1136.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="33.0" AnchorPane.leftAnchor="16.0" AnchorPane.rightAnchor="25.0" AnchorPane.topAnchor="52.0">
+                                             <columns>
+                                                <TableColumn fx:id="col_fin_flux_code" prefWidth="70.0" text="Code" />
+                                                <TableColumn fx:id="col_fin_flux_rubrique" prefWidth="250.0" text="Rubrique" />
+                                                <TableColumn fx:id="col_fin_flux_nature" prefWidth="250.0" text="Formule / Nature" />
+                                                <TableColumn fx:id="col_fin_flux_n" prefWidth="90.0" text="Année N" />
+                                                <TableColumn fx:id="col_fin_flux_n1" prefWidth="90.0" text="Année N-1" />
+                                                <TableColumn fx:id="col_fin_flux_n2" prefWidth="90.0" text="Année N-2" />
+                                                <TableColumn fx:id="col_fin_flux_n3" prefWidth="90.0" text="Année N-3" />
+                                                <TableColumn fx:id="col_fin_flux_n4" prefWidth="90.0" text="Année N-4" />
+                                             </columns>
+                                             <columnResizePolicy>
+                                                <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                             </columnResizePolicy>
+                                          </TableView>
+                                       </children>
+                                    </AnchorPane>
+                                 </content>
+                              </Tab>
+                           </tabs>
                         </TabPane>
                      </children>
                   </AnchorPane>
-              </content>
+               </content>
             </Tab>
          </tabs>
       </TabPane>

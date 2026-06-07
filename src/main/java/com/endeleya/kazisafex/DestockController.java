@@ -672,6 +672,7 @@ public class DestockController implements Initializable {
                     alert.showAndWait().ifPresent(response -> {
                         if (response == ButtonType.YES) {
                             DestockerDelegate.deleteDestocker(selected);
+                            StockerDelegate.rectifyStockDepotByLot(selected.getProductId(), selected.getNumlot(), selected.getRegion(), selected.getCoutAchat(), null);
 
                             lisdestocker.remove(selected);
                             Util.sync(selected, Constants.ACTION_DELETE, Tables.DESTOCKER);
@@ -798,6 +799,7 @@ public class DestockController implements Initializable {
 
                 // Synchronize via HTTP directly
                 saveDestockerWithRetry(saved);
+                StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), null);
 
                 // Update UI Sum
                 double total = 0;
@@ -829,6 +831,7 @@ public class DestockController implements Initializable {
             Destocker updated = DestockerDelegate.updateDestocker(choosenDestocker);
             if (updated != null) {
                 saveDestockerWithRetry(updated);
+                StockerDelegate.rectifyStockDepotByLot(updated.getProductId(), updated.getNumlot(), updated.getRegion(), updated.getCoutAchat(), null);
 
                 int index = lsdin.indexOf(choosenDestocker);
                 if (index != -1) {
@@ -863,6 +866,7 @@ public class DestockController implements Initializable {
             Destocker saved = DestockerDelegate.saveDestocker(s);
             if (saved != null) {
                 saveDestockerWithRetry(saved);
+                StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), null);
                 Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
                 lisdestocker.add(0, saved);
             }

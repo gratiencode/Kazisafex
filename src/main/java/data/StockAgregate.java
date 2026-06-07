@@ -20,6 +20,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -63,14 +64,21 @@ public class StockAgregate implements Serializable {
     private Double expiree;
     @Column(name = "cout_achat")
     private Double coutAchat;
+    @Column(name = "destroyed")
+    private Boolean destroyed=false;
     @Size(max = 100)
     @Column(name = "region")
     private String region;
     @Size(max = 200)
     @Column(name = "context")
     private String context;
-    @Column(name = "date", columnDefinition = "DATETIME")
-    private LocalDateTime date;
+    @Size(max = 100)
+    @Column(name = "num_lot")
+    private String numlot;
+    @Column(name = "date_expiration")
+    private LocalDate dateExpiration;
+    @Column(name = "date", columnDefinition = "DATE")
+    private LocalDate date;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne
     private Mesure mesureId;
@@ -153,11 +161,11 @@ public class StockAgregate implements Serializable {
         this.region = region;
     }
 
-    public LocalDateTime getDate() {
+    public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(LocalDate date) {
         this.date = date;
     }
 
@@ -209,5 +217,30 @@ public class StockAgregate implements Serializable {
     public void setContext(String clotureType) {
         this.context = clotureType;
     }
+
+    public String getNumlot() {
+        return numlot;
+    }
+
+    public void setNumlot(String numlot) {
+        this.numlot = numlot;
+    }
+
+    public LocalDate getDateExpiration() {
+        return dateExpiration;
+    }
+
+    public void setDateExpiration(LocalDate dateExpiration) {
+        this.dateExpiration = dateExpiration;
+    }
+
+    public Boolean isDestroyed() {
+        return destroyed;
+    }
+
+    public void setDestroyed(Boolean destroyed) {
+        this.destroyed = destroyed;
+    }
+    
     
 }

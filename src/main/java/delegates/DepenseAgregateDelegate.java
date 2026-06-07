@@ -8,6 +8,7 @@ package delegates;
 import IServices.DepenseAgregateStorage;
 import java.util.List;
 import data.DepenseAgregate;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import tools.ServiceLocator;
 import tools.Tables;
@@ -17,7 +18,7 @@ import tools.Tables;
  * @author eroot
  */
 public class DepenseAgregateDelegate {
-    
+
     public static DepenseAgregate saveDepenseAgregate(DepenseAgregate cat) {
         return getDepenseAgregateStorage().createDepenseAgregate(cat);
     }
@@ -33,23 +34,28 @@ public class DepenseAgregateDelegate {
     public static DepenseAgregate findDepenseAgregate(String objId) {
         return getDepenseAgregateStorage().findDepenseAgregate(objId);
     }
-    
-    public static List<DepenseAgregate> findDepenseAgregates(){
-       return getDepenseAgregateStorage().findDepenseAgregates();
+
+    public static List<DepenseAgregate> findDepenseAgregates() {
+        return getDepenseAgregateStorage().findDepenseAgregates();
     }
-    
-     public static List<DepenseAgregate> findDepenseAgregates(String region){
-       return getDepenseAgregateStorage().findDepenseAgregates(region);
+
+    public static List<DepenseAgregate> findDepenseAgregates(String region) {
+        return getDepenseAgregateStorage().findDepenseAgregates(region);
     }
-    
-    public static List<DepenseAgregate> findDepenseAgregates(int s,int m){
-       return getDepenseAgregateStorage().findDepenseAgregates(s,m);
+
+    public static List<DepenseAgregate> findDepenseAgregates(LocalDate date1, LocalDate date2, String region) {
+        String reg = region == null ? "%" : region;
+        return getDepenseAgregateStorage().findDepenseAgregates(date1, date2, reg);
     }
-    
-    public static List<DepenseAgregate> findDepenseAgregates(LocalDateTime date, String imputation){
-       return getDepenseAgregateStorage().findDepenseAgregates(date, imputation);
+
+    public static List<DepenseAgregate> findDepenseAgregates(int s, int m) {
+        return getDepenseAgregateStorage().findDepenseAgregates(s, m);
     }
-    
+
+    public static List<DepenseAgregate> findDepenseAgregates(LocalDateTime date, String imputation) {
+        return getDepenseAgregateStorage().findDepenseAgregates(date, imputation);
+    }
+
     public static DepenseAgregate aggregateDepense(LocalDateTime date, String imputation, Double usd, Double cdf, data.Depense depense) {
         List<DepenseAgregate> existingList = findDepenseAgregates(date, imputation);
         if (existingList != null && !existingList.isEmpty()) {
@@ -73,13 +79,13 @@ public class DepenseAgregateDelegate {
             return saveDepenseAgregate(newData);
         }
     }
-    
-   public static DepenseAgregateStorage getDepenseAgregateStorage(){
+
+    public static DepenseAgregateStorage getDepenseAgregateStorage() {
         // Note: Assuming ServiceLocator is updated with Tables.DEPENSE_AGREGATE or we instantiate directly.
         // For simplicity and to avoid modifying tools.Tables if it's an enum we shouldn't touch, 
         // we will directly instantiate it or assume it's added. Let's use a workaround if Tables is enum.
         return new services.DepenseAgregateService();
-    } 
+    }
 
     public static Long getCount() {
         return getDepenseAgregateStorage().getCount();
@@ -88,8 +94,8 @@ public class DepenseAgregateDelegate {
     public static List<DepenseAgregate> findUnSyncedDepenseAgregates(long disconnected_at) {
         return getDepenseAgregateStorage().findUnSyncedDepenseAgregates(disconnected_at);
     }
-    
-     public static boolean isExists(String uid, LocalDateTime attime) {
+
+    public static boolean isExists(String uid, LocalDateTime attime) {
         return getDepenseAgregateStorage().isExists(uid, attime);
     }
 

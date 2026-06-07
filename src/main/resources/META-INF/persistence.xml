@@ -49,6 +49,12 @@
         <class>data.Periode</class>
         <class>data.Presence</class>
         <class>data.FingerprintMapping</class>
+        <class>data.Immobilisation</class>
+        <class>data.ImmobilisationAgregate</class>
+        <class>data.FinancialStatementAgregate</class>
+        <class>data.CreanceAgregate</class>
+        <class>data.DetteFournisseurAgregate</class>
+        <class>data.TresorerieAgregate</class>
         <properties>
             <property name="jakarta.persistence.schema-generation.create-database-schemas" value="true"/>
             <property name="jakarta.persistence.jdbc.driver" value="com.mysql.cj.jdbc.Driver"/>
@@ -101,15 +107,23 @@
         <class>data.Inventaire</class>
         <class>data.Periode</class>
         <class>data.StockAgregate</class>
+        <class>data.StockDepotAgregate</class>
         <class>data.SaleAgregate</class>
         <class>data.DepenseAgregate</class>
         <class>data.Presence</class>
         <class>data.FingerprintMapping</class>
+        <class>data.Immobilisation</class>
+        <class>data.ImmobilisationAgregate</class>
+        <class>data.FinancialStatementAgregate</class>
+        <class>data.CreanceAgregate</class>
+        <class>data.DetteFournisseurAgregate</class>
+        <class>data.TresorerieAgregate</class>
         <properties>
             <property name="jakarta.persistence.schema-generation.create-database-schemas" value="true"/>
             <property name="hibernate.connection.driver_class" value="org.sqlite.JDBC"/>
             <property name="hibernate.dialect" value="services.dialect.KSQLiteDialect"/>
-<!--            <property name="hibernate.show_sql" value="true"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+            <!--            <property name="hibernate.show_sql" value="true"/>
             <property name="hibernate.format_sql" value="true"/>-->
             <property name="hibernate.connection.pool_size" value="5"/>
             <property name="hibernate.hikari.maximumPoolSize" value="5"/>

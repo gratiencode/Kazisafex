@@ -44,7 +44,15 @@ public class IaResponseHandler implements EventHandler {
 
     @Override
     public void onError(Throwable thrwbl) {
-        System.out.println("Erreur IA "+thrwbl.getMessage());
+        System.out.println("Erreur IA " + throwableMessage(thrwbl));
+    }
+
+    private String throwableMessage(Throwable error) {
+        if (error == null) {
+            return "erreur inconnue retournée par le flux IA.";
+        }
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
     }
 
     public void setOnAiMessageListener(OnAiMessageListener OnAiMessageListener) {

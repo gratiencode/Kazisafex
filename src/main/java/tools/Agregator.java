@@ -21,6 +21,7 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import data.LigneVente;
 import data.Mesure;
+import data.Recquisition;
 import data.Vente;
 import delegates.ClientDelegate;
 import delegates.LigneVenteDelegate;
@@ -29,6 +30,7 @@ import static delegates.VenteDelegate.saveVente;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import services.ClotureCallback;
 import utilities.Peremption;
 
 /**
@@ -45,6 +47,8 @@ public class Agregator {
 
     private LocalTaskStateListener localTaskStateListener;
     private OnReportSavedListener onReportSavedListener;
+    private ScheduledExecutorService lotStockScheduler;
+    private volatile boolean lotStockSchedulerStarted = false;
 
     private Agregator() {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
@@ -59,6 +63,8 @@ public class Agregator {
     }
 
     public void agregate() {
+        // Maintient la coherence stock_agregate (par lot) en background.
+
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
                     try {
@@ -68,10 +74,11 @@ public class Agregator {
                         LocalDate today = LocalDate.now();
                         ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
                         ScheduledFuture<Boolean> futur = ses.schedule(() -> {
+                            System.out.println("la tache de cloture lancee...");
                             return RecquisitionDelegate.cloturerStocks(region, today, today, "Journalier du " + today.toString());
-                        }, 3, TimeUnit.SECONDS);
+                        }, 3, TimeUnit.MINUTES);
                         finish = futur.get();
-                        notifyFinish(finish,"stock-cloture");
+                        notifyFinish(finish, "stock-cloture");
                     } catch (InterruptedException ex) {
                         Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
                     } catch (ExecutionException ex) {
@@ -80,24 +87,24 @@ public class Agregator {
                 });
     }
 
-    public void inventorier(Produit produit) {
+    public void inventorier(Produit produit, String lot) {
         if (region == null) {
             return;
         }
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
                     LocalDate today = LocalDate.now();
-                    RecquisitionDelegate.cloturerUnProduit(produit, region, today, today, "Journalier du " + today.toString());
+                    RecquisitionDelegate.cloturerUnProduit(produit, lot, region, today, today, "Journalier du " + today.toString());
                 });
     }
 
-    public void inventorier(Produit produit, LocalDate debut, LocalDate fin, String context) {
+    public void inventorier(Produit produit, String lot, LocalDate debut, LocalDate fin, String context) {
         if (region == null) {
             return;
         }
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    RecquisitionDelegate.cloturerUnProduit(produit, region, debut, fin, context);
+                    RecquisitionDelegate.cloturerUnProduit(produit, lot, region, debut, fin, context);
                 });
     }
 
@@ -105,17 +112,37 @@ public class Agregator {
         if (region == null) {
             return;
         }
+        List<LigneVente> lvx = new ArrayList<>(lvs);
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
                     LocalDate today = LocalDate.now();
-                    for (LigneVente lv : lvs) {
+                    for (LigneVente lv : lvx) {
                         Produit produit = lv.getProductId();
-                        RecquisitionDelegate.cloturerUnProduit(produit, region, today, today, "Journalier du " + today.toString());
+                        RecquisitionDelegate.cloturerUnProduit(produit, lv.getNumlot(), region, today, today, "Journalier du " + today.toString());
                     }
                 });
     }
 
     public void agregate(LocalDate date1, LocalDate date2, String context) {
+        // Maintient aussi la coherence lot quand une agregation manuelle est lancee.
+        ensureLotStockAggregationTask();
+//        if (region == null) {
+//            return;
+//        }
+//        RecquisitionDelegate.setClotureListener(new ClotureCallback() {
+//            @Override
+//            public void onClosure(int index, int size, Produit produit) {
+//                notifyProgress(index, size, "Stock " + produit.getNomProduit() + " cloturé");
+//            }
+//
+//            @Override
+//            public void onFinish(int count) {
+//                finish = true;
+//                notifyFinish(finish, "stock-cloture");
+//            }
+//        });
+//        RecquisitionDelegate.cloturerStocks(region, date1, date2, "Journalier du " + date2.toString());
+//        
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
                     try {
@@ -123,10 +150,13 @@ public class Agregator {
                             return;
                         }
                         List<Produit> produits = ProduitDelegate.findProduits();
-                        int size = produits.size();
+                        int size = produits == null ? 0 : produits.size();
                         for (int i = 0; i < size; i++) {
                             Produit produit = produits.get(i);
-                            RecquisitionDelegate.cloturerUnProduit(produit, region, date1, date2, context);
+                            List<Recquisition> lrs = RecquisitionDelegate.findDistinctLotHeads(produit, region);
+                            for (Recquisition r : lrs) {
+                                RecquisitionDelegate.cloturerUnProduit(produit, r.getNumlot(), region, date1, date2, context);
+                            }
                             notifyProgress(i, size, "Stock " + produit.getNomProduit() + " cloturé");
                         }
                         finish = true;
@@ -139,13 +169,31 @@ public class Agregator {
                 });
     }
 
+    public synchronized void ensureLotStockAggregationTask() {
+        if (lotStockSchedulerStarted) {
+            return;
+        }
+//        lotStockScheduler = Executors.newSingleThreadScheduledExecutor();
+//        lotStockScheduler.scheduleAtFixedRate(() -> {
+//            try {
+        ////                String reg = region == null ? "%" : region;
+//              //  int updated = RecquisitionDelegate.verifyAndCorrectStockAggregateConsistency(reg);
+////                System.out.println("Lot stock aggregates verified/corrected: " + updated + " produit(s)");
+//            } catch (Exception ex) {
+//                Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE,
+//                        "Erreur pendant la mise a jour periodique du stock par lot", ex);
+//            }
+//        }, 3, 3, TimeUnit.MINUTES);
+        lotStockSchedulerStarted = true;
+    }
+
     public void setLocalTaskStateListener(LocalTaskStateListener onFinishListener) {
         this.localTaskStateListener = onFinishListener;
     }
 
-    private void notifyFinish(boolean ok,String name) {
+    private void notifyFinish(boolean ok, String name) {
         if (this.localTaskStateListener != null) {
-            this.localTaskStateListener.onFinish(ok,name);
+            this.localTaskStateListener.onFinish(ok, name);
         }
     }
 
@@ -166,13 +214,15 @@ public class Agregator {
         ses.scheduleAtFixedRate(() -> {
 //            boolean finish = RepportDelegate.repportInBackground(today, today, region == null ? "%" : region);
 //            if (finish) {
-                System.out.println("Raport fait");
-                double ca = RepportDelegate.turnOverOf(today, today, region == null ? "%" : region);
-                        //RepportDelegate.chiffreDaffaire(today, today, region == null ? "%" : region);
-                double cv = RepportDelegate.expenseOf(today, today, region == null ? "%" : region);
-                        //RepportDelegate.chargeVariable(today, today, region == null ? "%" : region);
-                notifyReports(ca, cv);
-//            }
+            double ca = RepportDelegate.turnOverOf(today, today, region == null ? "%" : region);
+            //RepportDelegate.chiffreDaffaire(today, today, region == null ? "%" : region);
+            double cv = RepportDelegate.expenseOf(today, today, region == null ? "%" : region);
+            //RepportDelegate.chargeVariable(today, today, region == null ? "%" : region);
+            notifyReports(ca, cv);
+            
+            if (delegates.ImmobilisationDelegate.shouldAgregate()) {
+                delegates.ImmobilisationDelegate.agregate();
+            }
         }, 3, 10, TimeUnit.SECONDS);
     }
 
@@ -187,7 +237,7 @@ public class Agregator {
     }
 
     public Future<List<Peremption>> deStockerLesExpiree(LocalDate per, List<Peremption> listAdeClasser, String region) {
-        ExecutorService ex=Executors.newSingleThreadExecutor();
+        ExecutorService ex = Executors.newSingleThreadExecutor();
         Future<List<Peremption>> result = ex.submit(() -> {
             int r = DataId.generateInt();
             Vente v = new Vente(r);
@@ -227,12 +277,10 @@ public class Agregator {
                 lv.setClientId("RABBISH");
                 LigneVenteDelegate.saveLigneVente(lv);
                 toRemove.add(perimee);
-                Mesure m = lv.getMesureId();
-                double cau = lv.getCoutAchat() / m.getQuantContenu();
-                RecquisitionDelegate.rectifyStock(lv.getProductId(), LocalDate.now(), LocalDate.now(), region, cau);
+                RecquisitionDelegate.rectifyStock(lv.getProductId(), LocalDate.now(), LocalDate.now(), region, lv.getNumlot());
                 notifyProgress(listAdeClasser.indexOf(perimee), listAdeClasser.size(), "Stock expiré de " + p.getNomProduit() + " déclassé");
             }
-            notifyFinish(true,"declass");
+            notifyFinish(true, "declass");
             return toRemove;
         });
         return result;

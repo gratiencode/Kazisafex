@@ -251,7 +251,7 @@ public class LivraisonService implements LivraisonStorage {
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Livraison.class);
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (jakarta.persistence.EntityNotFoundException e) {
             return null;
         }
     }

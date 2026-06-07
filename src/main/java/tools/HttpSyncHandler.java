@@ -259,10 +259,8 @@ public class HttpSyncHandler
                         } else {
                             RecquisitionDelegate.updateRecquisition(recquisition);
                         }
-                        Mesure m = MesureDelegate.findMesure(recquisition.getMesureId().getUid());
                         Produit p = ProduitDelegate.findProduit(recquisition.getProductId().getUid());
-                        double cau = recquisition.getCoutAchat() / m.getQuantContenu();
-                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), cau, recquisition.getNumlot());
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), recquisition.getNumlot());
                     }
 
                 }
@@ -334,11 +332,9 @@ public class HttpSyncHandler
                         } else {
                             LigneVenteDelegate.updateLigneVente(saleitem);
                         }
-                        Mesure m = MesureDelegate.findMesure(saleitem.getMesureId().getUid());
                         Produit p = ProduitDelegate.findProduit(saleitem.getProductId().getUid());
                         Vente vr = VenteDelegate.findVente(saleitem.getReference().getUid());
-                        double cau = saleitem.getCoutAchat() / m.getQuantContenu();
-                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), cau, saleitem.getNumlot());
+                        RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), saleitem.getNumlot());
                     }
                 }
             }

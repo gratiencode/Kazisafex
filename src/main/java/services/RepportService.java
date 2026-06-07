@@ -7,16 +7,13 @@ package services;
 
 import IServices.RapportStorage;
 import java.text.ParseException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import tools.SaleReport;
 import jakarta.persistence.NoResultException;
-import jakarta.persistence.Query;
 import data.SaleAgregate;
 import data.Category;
 import data.Client;
@@ -36,16 +33,11 @@ import data.Aretirer;
 import data.helpers.Role;
 import delegates.CategoryDelegate;
 import delegates.ClientDelegate;
-import delegates.LigneVenteDelegate;
 import delegates.MesureDelegate;
 import delegates.VenteDelegate;
 import jakarta.persistence.EntityTransaction;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.Month;
-import java.time.Year;
 import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
 import java.util.Locale;
@@ -66,7 +58,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -250,6 +241,52 @@ public class RepportService implements RapportStorage {
     }
 
     @Override
+    public List<StockAgregate> findLatestStockAgregates(String region) {
+        return findLatestStockAgregates(region, null);
+    }
+
+    @Override
+    public List<StockAgregate> findLatestStockAgregates(String region, LocalDate atDate) {
+        String sql = """
+                SELECT s.* FROM stock_agregate s
+                WHERE s.region LIKE ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                """;
+        if (atDate != null) {
+            sql += " AND s2.date <= ? ";
+        }
+        sql += " ) ORDER BY s.product_id, s.num_lot ";
+
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                final String finalSql = sql;
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(finalSql, StockAgregate.class);
+                    query.setParameter(1, region == null ? "%" : region);
+                    if (atDate != null) {
+                        query.setParameter(2, atDate);
+                    }
+                    return query.getResultList();
+                });
+            }
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql, StockAgregate.class);
+            query.setParameter(1, region == null ? "%" : region);
+            if (atDate != null) {
+                query.setParameter(2, atDate);
+            }
+            return query.getResultList();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
     public List<StockAgregate> findSaleAgregate() {
         try {
             if (ManagedSessionFactory.isEmbedded()) {
@@ -269,7 +306,7 @@ public class RepportService implements RapportStorage {
     public List<StockAgregate> findByContext(String context) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stock_agregate s WHERE s.context = ? ");
+            sb.append("SELECT * FROM stock_agregate s WHERE s.context = ? AND (s.num_lot IS NULL OR s.num_lot = '') ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
@@ -332,9 +369,9 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT v.dateVente,l.reference_uid,p.codebar,CONCAT(p.nomproduit,' ',p.marque,' ',p.modele,' ',p.taille) as prods,"
-                        + "SUM(IFNULL((l.quantite*l.prixunit),0)) as c, SUM(l.quantite*m.quantcontenu) as qvpc, l.mesure_id FROM produit p,ligne_vente l,vente v,"
-                        + " mesure m WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND m.uid = l.mesure_id AND v.datevente BETWEEN ? AND ? "
-                        + "GROUP BY l.product_id order by c desc ");
+                + "SUM(IFNULL((l.quantite*l.prixunit),0)) as c, SUM(l.quantite*m.quantcontenu) as qvpc, l.mesure_id FROM produit p,ligne_vente l,vente v,"
+                + " mesure m WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' AND m.uid = l.mesure_id AND v.datevente BETWEEN ? AND ? "
+                + "GROUP BY l.product_id order by c desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -390,9 +427,9 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT v.dateVente,l.reference_uid,p.codebar,CONCAT(p.nomproduit,' ',p.marque,' ',p.modele,' ',p.taille) as prods,"
-                        + "SUM(IFNULL((l.quantite*l.prixunit),0)) as c, SUM(l.quantite*m.quantcontenu) as qvpc, l.mesure_id FROM produit p,ligne_vente l,vente v,"
-                        + " mesure m WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND m.uid = l.mesure_id AND v.datevente BETWEEN ? AND ? AND v.region = ? "
-                        + "GROUP BY l.product_id order by c desc ");
+                + "SUM(IFNULL((l.quantite*l.prixunit),0)) as c, SUM(l.quantite*m.quantcontenu) as qvpc, l.mesure_id FROM produit p,ligne_vente l,vente v,"
+                + " mesure m WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' AND m.uid = l.mesure_id AND v.datevente BETWEEN ? AND ? AND v.region = ? "
+                + "GROUP BY l.product_id order by c desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -452,7 +489,7 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT v.dateVente,l.reference_uid,p.categoryid_uid,c.descritption,"
                 + "SUM(IFNULL(l.montantusd,0)) as som FROM produit p,ligne_vente l,vente v,"
-                + " category c WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND c.uid = p.categoryid_uid AND v.datevente BETWEEN ? AND ? "
+                + " category c WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' AND c.uid = p.categoryid_uid AND v.datevente BETWEEN ? AND ? "
                 + "GROUP BY c.uid order by som desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
@@ -495,7 +532,7 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT v.dateVente,l.reference_uid,p.categoryid_uid,c.descritption,"
                 + "SUM(IFNULL(l.montantusd,0)) as som FROM produit p,ligne_vente l,vente v,"
-                + " category c WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND c.uid = p.categoryid_uid AND v.datevente BETWEEN ? AND ? AND v.region = ? "
+                + " category c WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' AND c.uid = p.categoryid_uid AND v.datevente BETWEEN ? AND ? AND v.region = ? "
                 + "GROUP BY c.uid order by som desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
@@ -540,11 +577,11 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT v.dateVente,v.clientid_uid, CASE ")
                 .append(taux).append(" "
-                        + "WHEN 'CDF' THEN "
-                        + "WHEN 'USD' THEN "
-                        + "END AS (SUM(COALESCE(v.montantusd,0))+(SUM(COALESCE(v.montantcdf,0))/)) as som FROM vente v, client c "
-                        + "WHERE c.uid=v.clientid_uid AND v.datevente BETWEEN ? AND ? AND v.region = ? "
-                        + "GROUP BY c.uid order by som desc ");
+                + "WHEN 'CDF' THEN "
+                + "WHEN 'USD' THEN "
+                + "END AS (SUM(COALESCE(v.montantusd,0))+(SUM(COALESCE(v.montantcdf,0))/)) as som FROM vente v, client c "
+                + "WHERE c.uid=v.clientid_uid AND v.datevente BETWEEN ? AND ? AND v.region = ? "
+                + "GROUP BY c.uid order by som desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -588,10 +625,10 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT v.dateVente,l.reference_uid,p.codebar,CONCAT(p.nomproduit,' ',p.marque,' ',p.modele,' ',p.taille) as prods,"
-                        + "SUM(IFNULL(l.montantusd,0)) as c,(r.coutachat*l.quantite) as CA ,(SUM(IFNULL(l.montantusd,0))-r.coutachat*l.quantite) as marge, "
-                        + "SUM(l.quantite) as qv FROM produit p,ligne_vente l,vente v,recquisition r "
-                        + " WHERE p.uid=l.product_id AND v.uid=l.reference_uid and r.numlot=l.numlot and r.product_id=l.product_id "
-                        + "AND v.datevente BETWEEN ? AND ? GROUP BY l.product_id order by c desc ");
+                + "SUM(IFNULL(l.montantusd,0)) as c,(r.coutachat*l.quantite) as CA ,(SUM(IFNULL(l.montantusd,0))-r.coutachat*l.quantite) as marge, "
+                + "SUM(l.quantite) as qv FROM produit p,ligne_vente l,vente v,recquisition r "
+                + " WHERE p.uid=l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' and r.numlot=l.numlot and r.product_id=l.product_id "
+                + "AND v.datevente BETWEEN ? AND ? GROUP BY l.product_id order by c desc ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -602,8 +639,8 @@ public class RepportService implements RapportStorage {
                     for (Object[] obj : objects) {
                         ResultStatementItem ris = new ResultStatementItem();
                         if (!Objects.isNull(obj[0])) {
-                            ris.setPeriode(Constants.USER_READABLE_FORMAT.format(d1) + " - "
-                                    + Constants.USER_READABLE_FORMAT.format(d2));
+                            ris.setPeriode(d1.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " - "
+                                    + d2.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
                         }
                         ris.setDescription(String.valueOf(obj[3]));
                         ris.setMontantRevenu(Double.valueOf(String.valueOf(obj[4])));
@@ -621,8 +658,8 @@ public class RepportService implements RapportStorage {
             for (Object[] obj : objects) {
                 ResultStatementItem ris = new ResultStatementItem();
                 if (!Objects.isNull(obj[0])) {
-                    ris.setPeriode(Constants.USER_READABLE_FORMAT.format(d1) + " - "
-                            + Constants.USER_READABLE_FORMAT.format(d2));
+                    ris.setPeriode(d1.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " - "
+                            + d2.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
                 }
                 ris.setDescription(String.valueOf(obj[3]));
                 ris.setMontantRevenu(Double.valueOf(String.valueOf(obj[4])));
@@ -705,7 +742,7 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT count(l.product_id) cp, CONCAT(p.nomproduit,' ',p.marque,' ',p.modele) val FROM ligne_vente l, vente v, produit p "
-                        + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid GROUP BY l.product_id ORDER by count(l.product_id) DESC LIMIT 10");
+                + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' GROUP BY l.product_id ORDER by count(l.product_id) DESC LIMIT 10");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString());
@@ -736,7 +773,7 @@ public class RepportService implements RapportStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT count(l.product_id) cp, CONCAT(p.nomproduit,' ',p.marque,' ',p.modele) val FROM ligne_vente l,vente v, produit p "
-                            + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid AND v.region = ? GROUP BY l.product_id ORDER by count(l.product_id) DESC LIMIT 10");
+                    + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid AND l.clientid != 'RABBISH' AND v.region = ? GROUP BY l.product_id ORDER by count(l.product_id) DESC LIMIT 10");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString());
@@ -1052,9 +1089,9 @@ public class RepportService implements RapportStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT v.dateVente,v.libelle,c.nom_client,p.nomproduit,k.nom_client,l.quantite,l.prixunit,(l.quantite*l.prixunit) as tot, c.parent_id,v.observation, m.uid "
-                        + " FROM vente v,client c,ligne_vente l,client k,client_appartenir a,client_organisation o,produit p, mesure m"
-                        + " WHERE v.clientid_uid=c.uid AND c.parent_id=k.uid AND c.parent_id=a.client_id AND l.product_id=p.uid AND l.mesure_id=m.uid"
-                        + " AND a.client_organisation_id=o.uid AND l.reference_uid=v.uid AND o.uid = ? AND v.datevente BETWEEN ? AND ?");
+                + " FROM vente v,client c,ligne_vente l,client k,client_appartenir a,client_organisation o,produit p, mesure m"
+                + " WHERE v.clientid_uid=c.uid AND c.parent_id=k.uid AND c.parent_id=a.client_id AND l.product_id=p.uid AND l.mesure_id=m.uid"
+                + " AND a.client_organisation_id=o.uid AND l.reference_uid=v.uid AND o.uid = ? AND v.datevente BETWEEN ? AND ?");
 
         try {
             if (ManagedSessionFactory.isEmbedded()) {
@@ -1683,7 +1720,36 @@ public class RepportService implements RapportStorage {
         }
     }
 
+    @Override
+    public Double aggregatedAmortizationOf(LocalDate d1, LocalDate d2, String region) {
+        try {
+            String sql = "SELECT SUM(a.ammortissement) FROM immobilisation_agregate a "
+                    + "WHERE a.region LIKE ? AND a.date <= ? "
+                    + "AND a.date = (SELECT MAX(a2.date) FROM immobilisation_agregate a2 "
+                    + "WHERE a2.immobilisation_id_uid = a.immobilisation_id_uid AND a2.region = a.region AND a2.date <= ?)";
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Object val = em.createNativeQuery(sql)
+                            .setParameter(1, region == null ? "%" : region)
+                            .setParameter(2, d2.atTime(23, 59, 59))
+                            .setParameter(3, d2.atTime(23, 59, 59))
+                            .getSingleResult();
+                    return val == null ? 0d : ((Number) val).doubleValue();
+                });
+            }
+            Object val = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                    .setParameter(1, region == null ? "%" : region)
+                    .setParameter(2, d2.atTime(23, 59, 59))
+                    .setParameter(3, d2.atTime(23, 59, 59))
+                    .getSingleResult();
+            return val == null ? 0d : ((Number) val).doubleValue();
+        } catch (Exception e) {
+            return 0d;
+        }
+    }
+
     private void ensureDepenseAggregate(LocalDate d1, LocalDate d2, String region) {
+        taux = pref.getDouble("taux2change", 2000);
         String sql = """
                 SELECT
                     o.depense_id,
@@ -2113,14 +2179,14 @@ public class RepportService implements RapportStorage {
      * business sur une soit annee
      *
      * @param venteChart UI xy-chart
-     * @param serie1     serie de vente
-     * @param serie2     serie de cout-acquisition
-     * @param serie3     serie de marge
-     * @param d1         date debut periode
-     * @param d2         date fin periode
-     * @param role       role utilisateur
-     * @param taux       taux de change
-     * @param region     region ou site
+     * @param serie1 serie de vente
+     * @param serie2 serie de cout-acquisition
+     * @param serie3 serie de marge
+     * @param d1 date debut periode
+     * @param d2 date fin periode
+     * @param role role utilisateur
+     * @param taux taux de change
+     * @param region region ou site
      */
     @Override
     public void metrify(XYChart<String, Number> venteChart, String serie1, String serie2, String serie3, LocalDate d1,
@@ -2200,12 +2266,12 @@ public class RepportService implements RapportStorage {
     public Double findStockValue(LocalDate date1, LocalDate date2, String region, String context) {
         StringBuilder sb = new StringBuilder();
         sb.append(
-                "SELECT SUM(((COALESCE(s.cout_achat,0)*COALESCE(s.final_quantity,0)))) valeur FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.context = ?");
+                "SELECT SUM(((COALESCE(s.cout_achat,0)*COALESCE(s.final_quantity,0)))) valeur FROM stock_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.context = ? AND (s.num_lot IS NULL OR s.num_lot = '')");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), Double.class);
-                query.setParameter(1, date1.atStartOfDay());
-                query.setParameter(2, date2.atTime(23, 59, 59));
+                query.setParameter(1, date1);
+                query.setParameter(2, date2.plusDays(1));
                 query.setParameter(3, region);
                 query.setParameter(4, context);
                 Object obj = query.getSingleResult();
@@ -2213,8 +2279,8 @@ public class RepportService implements RapportStorage {
             });
         }
         Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
-        query.setParameter(1, date1.atStartOfDay());
-        query.setParameter(2, date2.atTime(23, 59, 59));
+        query.setParameter(1, date1);
+        query.setParameter(2, date2.plusDays(1));
         query.setParameter(3, region);
         query.setParameter(4, context);
         Object obj = query.getSingleResult();
@@ -2305,8 +2371,10 @@ public class RepportService implements RapportStorage {
         }
     }
 
-    @Override
-    public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate today1) {
+    public StockAgregate findStockFor(Produit prod, String lot, LocalDate today, LocalDate otherDay, String region) {
+        if (prod == null) {
+            return null;
+        }
         String sql = """
                 SELECT
                     SUM(COALESCE(s.initial_quantity,0)),
@@ -2319,25 +2387,98 @@ public class RepportService implements RapportStorage {
                     END,
                     MAX(s.date)
                 FROM stock_agregate s
-                WHERE s.date BETWEEN ? AND ? AND s.product_id = ?
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date BETWEEN ? AND ?
+                  AND s.num_lot = ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ? AND s.num_lot = ?
+                  )
                 """;
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> mapStockAggregate(em.createNativeQuery(sql)
-                    .setParameter(1, today.atStartOfDay())
-                    .setParameter(2, today1.atTime(LocalTime.of(23, 59, 59)))
-                    .setParameter(3, prod.getUid())
+                    .setParameter(1, prod.getUid())
+                    .setParameter(2, region)
+                    .setParameter(3, today)
+                    .setParameter(4, otherDay.plusDays(1))
+                    .setParameter(5, lot)
+                    .setParameter(6, today)
+                    .setParameter(7, otherDay.plusDays(1))
+                    .setParameter(8, lot)
+                    .getSingleResult(), prod, region));
+        }
+        Object row = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+                .setParameter(1, prod.getUid())
+                .setParameter(2, region)
+                .setParameter(3, today)
+                .setParameter(4, otherDay.plusDays(1))
+                .setParameter(5, lot)
+                .setParameter(6, today)
+                .setParameter(7, otherDay.plusDays(1))
+                .setParameter(8, lot)
+                .getSingleResult();
+        return mapStockAggregate(row, prod, region);
+    }
+
+    @Override
+    public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate today1) {
+        if (prod == null) {
+            return null;
+        }
+        String sql = """
+                SELECT
+                    SUM(COALESCE(s.initial_quantity,0)),
+                    SUM(COALESCE(s.entrees,0)),
+                    SUM(COALESCE(s.sorties,0)),
+                    SUM(COALESCE(s.final_quantity,0)),
+                    SUM(COALESCE(s.expiree,0)),
+                    CASE WHEN SUM(COALESCE(s.final_quantity,0)) = 0 THEN 0
+                         ELSE SUM(COALESCE(s.cout_achat,0) * COALESCE(s.final_quantity,0)) / SUM(COALESCE(s.final_quantity,0))
+                    END,
+                    MAX(s.date)
+                FROM stock_agregate s
+                WHERE s.product_id = ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date BETWEEN ? AND ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND COALESCE(s2.region, '') = COALESCE(s.region, '')
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ?
+                  )
+                """;
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> mapStockAggregate(em.createNativeQuery(sql)
+                    .setParameter(1, prod.getUid())
+                    .setParameter(2, today)
+                    .setParameter(3, today1.plusDays(1))
+                    .setParameter(4, today)
+                    .setParameter(5, today1.plusDays(1))
                     .getSingleResult(), prod, null));
         }
         Object row = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                .setParameter(1, today.atStartOfDay())
-                .setParameter(2, today1.atTime(LocalTime.of(23, 59, 59)))
-                .setParameter(3, prod.getUid())
+                .setParameter(1, prod.getUid())
+                .setParameter(2, today)
+                .setParameter(3, today1.plusDays(1))
+                .setParameter(4, today)
+                .setParameter(5, today1.plusDays(1))
                 .getSingleResult();
         return mapStockAggregate(row, prod, null);
     }
 
     @Override
     public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate otherDay, String region) {
+        if (prod == null) {
+            return null;
+        }
         String sql = """
                 SELECT
                     SUM(COALESCE(s.initial_quantity,0)),
@@ -2350,21 +2491,36 @@ public class RepportService implements RapportStorage {
                     END,
                     MAX(s.date)
                 FROM stock_agregate s
-                WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? AND s.product_id = ?
+                WHERE s.product_id = ?
+                  AND s.region LIKE ?
+                  AND s.num_lot IS NOT NULL
+                  AND s.date BETWEEN ? AND ?
+                  AND s.date = (
+                      SELECT MAX(s2.date)
+                      FROM stock_agregate s2
+                      WHERE s2.product_id = s.product_id
+                        AND s2.region = s.region
+                        AND s2.num_lot = s.num_lot
+                        AND s2.date BETWEEN ? AND ?
+                  )
                 """;
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> mapStockAggregate(em.createNativeQuery(sql)
-                    .setParameter(1, today.atStartOfDay())
-                    .setParameter(2, otherDay.atTime(LocalTime.of(23, 59, 59)))
-                    .setParameter(3, region)
-                    .setParameter(4, prod.getUid())
+                    .setParameter(1, prod.getUid())
+                    .setParameter(2, region)
+                    .setParameter(3, today)
+                    .setParameter(4, otherDay.plusDays(1))
+                    .setParameter(5, today)
+                    .setParameter(6, otherDay.plusDays(1))
                     .getSingleResult(), prod, region));
         }
         Object row = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                .setParameter(1, today.atStartOfDay())
-                .setParameter(2, otherDay.atTime(LocalTime.of(23, 59, 59)))
-                .setParameter(3, region)
-                .setParameter(4, prod.getUid())
+                .setParameter(1, prod.getUid())
+                .setParameter(2, region)
+                .setParameter(3, today)
+                .setParameter(4, otherDay.plusDays(1))
+                .setParameter(5, today)
+                .setParameter(6, otherDay.plusDays(1))
                 .getSingleResult();
         return mapStockAggregate(row, prod, region);
     }
@@ -2383,7 +2539,7 @@ public class RepportService implements RapportStorage {
         aggregate.setExpiree(((Number) row[4]).doubleValue());
         aggregate.setCoutAchat(((Number) row[5]).doubleValue());
         if (row[6] instanceof Timestamp ts) {
-            aggregate.setDate(ts.toLocalDateTime());
+            aggregate.setDate(ts.toLocalDateTime().toLocalDate());
         }
         return aggregate;
     }
@@ -2552,13 +2708,18 @@ public class RepportService implements RapportStorage {
 
             case "mensuel" ->
                 embedded
-                        ? "strftime('%m', s.date/1000, 'unixepoch')"
-                        : "MONTH(s.date)";
+                ? "strftime('%m', s.date/1000, 'unixepoch')"
+                : "MONTH(s.date)";
 
             case "annuel" ->
                 embedded
-                        ? "strftime('%Y', s.date/1000, 'unixepoch')"
-                        : "YEAR(s.date)";
+                ? "strftime('%Y', s.date/1000, 'unixepoch')"
+                : "YEAR(s.date)";
+
+            case "trimestriel" ->
+                embedded
+                ? "((cast(strftime('%m', s.date/1000, 'unixepoch') as integer) + 2) / 3)"
+                : "QUARTER(s.date)";
 
             default ->
                 "s.date";
@@ -2585,6 +2746,20 @@ public class RepportService implements RapportStorage {
         return metrics;
     }
 
+    /**
+     * SQLite renvoie souvent des colonnes strftime comme String ; MySQL comme
+     * Number.
+     */
+    private static int intFromNativeRow(Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        return Integer.parseInt(value.toString().trim());
+    }
+
     private Metric mapRowToMetric(Object[] r,
             String groupBy,
             LocalDate referenceDate,
@@ -2599,14 +2774,21 @@ public class RepportService implements RapportStorage {
         switch (groupBy.toLowerCase()) {
 
             case "mensuel" -> {
-                int month = ((Number) r[3]).intValue();
+                int month = intFromNativeRow(r[3]);
                 YearMonth ym = YearMonth.of(referenceDate.getYear(), month);
                 periode = ym.atEndOfMonth(); // ✅ bissextile OK
             }
 
             case "annuel" -> {
-                int year = ((Number) r[3]).intValue();
+                int year = intFromNativeRow(r[3]);
                 periode = LocalDate.of(year, 12, 31);
+            }
+
+            case "trimestriel" -> {
+                int quarter = intFromNativeRow(r[3]);
+                int endMonth = quarter * 3;
+                YearMonth ym = YearMonth.of(referenceDate.getYear(), endMonth);
+                periode = ym.atEndOfMonth();
             }
 
             default ->
@@ -2640,6 +2822,7 @@ public class RepportService implements RapportStorage {
         }
     }
 
+    @Override
     public void purgerToutMetric(LocalDate date1, LocalDate date2, String region) {
         List<SaleAgregate> ags = findSaleAgs(date1, date2, region);
         for (SaleAgregate ag : ags) {

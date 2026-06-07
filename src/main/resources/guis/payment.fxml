@@ -7,12 +7,12 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
-<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
@@ -246,5 +246,6 @@
             <Font size="15.0" />
          </font>
       </Label>
+      <DatePicker fx:id="dpk_date_vente" layoutX="781.0" layoutY="20.0" prefHeight="33.0" prefWidth="210.0" promptText="Date de l'operation" AnchorPane.rightAnchor="99.0" AnchorPane.topAnchor="20.0" />
    </children>
 </AnchorPane>

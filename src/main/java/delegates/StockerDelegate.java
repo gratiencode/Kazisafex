@@ -166,4 +166,32 @@ public class StockerDelegate {
     public static void rectifyStockDepot(data.Produit produit, LocalDate dte, String region, double coutAch) {
         getStorage().rectifyStockDepot(produit, dte, region, coutAch);
     }
+
+    /**
+     * Rectifie stock_depot_agregate pour un lot précis. À appeler après chaque
+     * Stocker ou Destocker create/update/delete.
+     */
+    public static void rectifyStockDepotByLot(data.Produit produit, String numlot, String region, double coutAch, java.time.LocalDate dateExpir) {
+        getStorage().rectifyStockDepotByLot(produit, numlot, region, coutAch, dateExpir);
+    }
+
+    public static void backfillDepotAggregates(String region) {
+        getStorage().backfillDepotAggregates(region);
+    }
+
+    /**
+     * Retourne le stock final (en pièces) enregistré dans stock_depot_agregate
+     * pour un produit/lot/region.
+     */
+    public static double findLatestDepotStockByLot(String productId, String numlot, String region) {
+        return getStorage().findLatestDepotStockByLot(productId, numlot, region);
+    }
+
+    /**
+     * Retourne la liste des agrégats lot-par-lot les plus récents dans
+     * stock_depot_agregate pour un produit/region — pour affichage inventaire global.
+     */
+    public static List<data.StockDepotAgregate> findLatestLotDepotStockAggregates(String productId, String region) {
+        return getStorage().findLatestLotDepotStockAggregates(productId, region);
+    }
 }

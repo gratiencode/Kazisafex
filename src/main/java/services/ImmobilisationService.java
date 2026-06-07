@@ -29,8 +29,7 @@ public class ImmobilisationService implements ImmobilisationStorage {
                 + "FROM Immobilisation c WHERE c.uid = :id";
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
-                    .setParameter("id", uid)
-                    .getSingleResult());
+                    .setParameter("id", uid).getSingleResult());
         }
         return ManagedSessionFactory.getEntityManager()
                 .createQuery(jpql, Boolean.class)

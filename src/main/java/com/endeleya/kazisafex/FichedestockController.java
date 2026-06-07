@@ -41,6 +41,7 @@ import data.Entreprise;
 import data.Mesure;
 import data.Produit;
 import data.Stocker;
+import services.utils.RegionRegistry;
 import tools.FicheItem;
 import services.RepportService;
 import tools.MainUI;
@@ -129,12 +130,8 @@ public class FichedestockController implements Initializable {
         ficheItems = FXCollections.observableArrayList();
         regions = FXCollections.observableArrayList();
         cbx_regions.setItems(regions); 
-        for (String key : regKeys()) {
-            String r = pref.get(key, "...");
-            if (!regions.contains(r)) {
-                regions.add(r);
-            }
-        }
+        RegionRegistry.loadAndSync(pref, kazisafe, regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_regions);
         List<FicheItem> fiche;
         if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
           
@@ -158,20 +155,6 @@ public class FichedestockController implements Initializable {
                 }
             }
         });
-    }
-
-    private List<String> regKeys() {
-        List<String> result = new ArrayList<>();
-        try {
-            for (String key : pref.keys()) {
-                if (key.startsWith("region")) {
-                    result.add(key);
-                }
-            }
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
     }
 
     /**

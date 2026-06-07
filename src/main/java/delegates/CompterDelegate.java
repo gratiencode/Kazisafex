@@ -11,6 +11,7 @@ import IServices.CompterStorage;
 import data.Compter;
 import data.Inventaire;
 import java.time.LocalDateTime;
+import tools.ComptageItem;
 
 /**
  *
@@ -22,23 +23,23 @@ public class CompterDelegate {
         CompterStorage cats = (CompterStorage) ServiceLocator.getInstance().getService(Tables.COMPTER);
         return cats;
     }
-    
+
     public static Compter createCompter(Compter c) {
         return getStorage().createCompter(c);
     }
-    
+
     public static Compter updateCompter(Compter c) {
         return getStorage().updateCompter(c);
     }
-    
+
     public static void deleteCompter(Compter c) {
         getStorage().deleteCompter(c);
     }
-    
-    public static void closeInventoryByFixingNoCounts(Inventaire inv){
+
+    public static void closeInventoryByFixingNoCounts(Inventaire inv) {
         getStorage().removeNoCountedProducts(inv);
     }
-    
+
     public static Compter findCompter(String uid) {
         return getStorage().findCompter(uid);
     }
@@ -54,20 +55,28 @@ public class CompterDelegate {
     public static List<Compter> findUnSyncedCounts(long lastSession) {
         return getStorage().findUnSyncedCompter(lastSession);
     }
-    
-    public static boolean isExists(String uid,LocalDateTime time){
+
+    public static boolean isExists(String uid, LocalDateTime time) {
         return getStorage().isExists(uid, time);
     }
-    
-    public static boolean isExists(String uid){
+
+    public static boolean isExists(String uid) {
         return getStorage().isExists(uid);
     }
-    
-    public static List<Compter> findCompterForProduct(String puid,String iuid){
-         return getStorage().findComptageForProduit(puid, iuid);
+
+    public static List<Compter> findCompterForProduct(String puid, String iuid) {
+        return getStorage().findComptageForProduit(puid, iuid);
+    }
+
+    public static List<Compter> findComptageForProduit(String puid, String inventaireId, String lot, String region) {
+        return getStorage().findComptageForProduit(puid, inventaireId, lot, region);
     }
 
     public static Compter findCompterByInventaireAndProduit(String iuid, String puid) {
         return getStorage().findComptageByInventaireProduit(iuid, puid);
+    }
+
+    public static void confirmerComptage(ComptageItem comptage) {
+        getStorage().confirmerComptage(comptage);
     }
 }

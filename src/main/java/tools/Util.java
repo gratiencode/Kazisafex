@@ -7,12 +7,10 @@ package tools;
 
 import data.Presence;
 import data.CompteTresor;
-import data.finance.BilanReport;
-import data.finance.CompteResultatReport;
 import com.endeleya.kazisafex.MainuiController;
+import com.endeleya.kazisafex.PaymentController;
 import com.endeleya.kazisafex.ProduitsController;
 import tools.FileUtils;
-import java.time.LocalTime;
 import utilities.PDFUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -23,7 +21,6 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import data.Entreprise;
-import java.awt.Color;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -74,15 +71,8 @@ import data.Destocker;
 import data.Fournisseur;
 import javafx.stage.FileChooser;
 import java.awt.Desktop;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.IndexedColors;
-import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.ss.usermodel.Cell;
-import java.util.UUID;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import data.LigneVente;
 import data.Livraison;
 import data.Mesure;
@@ -124,9 +114,14 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import data.helpers.Mouvment;
 import data.PermitTo;
+import data.core.KazisafeServiceFactory;
 import data.helpers.TypeTraisorerie;
+import delegates.MesureDelegate;
 import delegates.StockerDelegate;
 import delegates.PermissionDelegate;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -447,10 +442,10 @@ public class Util {
 
     /**
      *
-     * @param <X>   type de donnee a filtree
-     * @param lx    liste de donnee a filtrer
+     * @param <X> type de donnee a filtree
+     * @param lx liste de donnee a filtrer
      * @param debut date du debut de filtre
-     * @param fin   date de fin filtre
+     * @param fin date de fin filtre
      * @return
      */
     public static <X> List<X> getDataBetween(List<X> lx, LocalDate debut, LocalDate fin) {
@@ -518,12 +513,12 @@ public class Util {
      * Cette function groupe les vente selon une critere autre que celles de
      * temps et retourne les ventes deja groupee
      *
-     * @param <X>      Type de donee a traiter
+     * @param <X> Type de donee a traiter
      * @param db
-     * @param ldata    liste triee de donnee soit vente, operation ou traisorerie
+     * @param ldata liste triee de donnee soit vente, operation ou traisorerie
      * @param criteria critere de groupement detaille, par categorie ou par
      *
-     * @param taux     taux de change actuel dollars franc
+     * @param taux taux de change actuel dollars franc
      * @return
      */
     // public static <X> List<List<ChartItem>> getGrouped(Kazisafe ksf, Entreprise
@@ -707,12 +702,12 @@ public class Util {
      * Cette fonction calcul le resultat se basant sur le prix de revient total
      * pour une entity
      *
-     * @param <X>    type de donnee
-     * @param db     source de donnee NO2
-     * @param ldep   liste de depense
+     * @param <X> type de donnee
+     * @param db source de donnee NO2
+     * @param ldep liste de depense
      * @param lvente liste de vente
      * @param region region
-     * @param taux   taux de change
+     * @param taux taux de change
      * @return la liste de serie graphique a afficher
      */
     // public static <X, Y> List<List<ChartItem>> getGroupedForResult(Nitrite db,
@@ -1189,7 +1184,7 @@ public class Util {
                 continue;
             }
             LocalDate d = si.getDateDeVente();
-            if (date.toString().contains(d.toString())) {
+            if (date.equals(d)) {
                 if (!ventesDuJour.contains(si)) {
                     montantusd += si.getSaleAmountUsd();
                     montantcdf += si.getSaleAmountCdf();
@@ -1326,7 +1321,8 @@ public class Util {
             Iterator<Row> rowIterator = sheet.iterator();
             StringBuilder sb = new StringBuilder();
             String regIn = null;
-            rowsloop: while (rowIterator.hasNext()) {
+            rowsloop:
+            while (rowIterator.hasNext()) {
                 Row r1 = rowIterator.next();
                 if (isRowEmpty(r1)) {
                     continue;
@@ -1352,7 +1348,7 @@ public class Util {
                                     if (!m.getCellType().equals(CellType.STRING)) {
                                         MainUI.notify(null, "Erreur",
                                                 "La collone codebar doit etre en texte a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1375,7 +1371,7 @@ public class Util {
                                     if (!m.getCellType().equals(CellType.STRING)) {
                                         MainUI.notify(null, "Erreur",
                                                 "La collone marque ou fabriquant doit etre en texte a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1387,7 +1383,7 @@ public class Util {
                                     if (!m.getCellType().equals(CellType.STRING)) {
                                         MainUI.notify(null, "Erreur",
                                                 "La collone modele ou forme doit etre en texte a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1399,7 +1395,7 @@ public class Util {
                                     if (!m.getCellType().equals(CellType.STRING)) {
                                         MainUI.notify(null, "Erreur",
                                                 "La collone taille ou concentration doit etre en texte a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1440,7 +1436,7 @@ public class Util {
                                     } else {
                                         MainUI.notify(null, "Erreur",
                                                 "Le stock physique doit etre en numerique a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1464,7 +1460,7 @@ public class Util {
                                     } else {
                                         MainUI.notify(null, "Erreur",
                                                 "Le cout d'achat doit etre en numerique a la ligne "
-                                                        + (m.getRowIndex() + 1),
+                                                + (m.getRowIndex() + 1),
                                                 8, "error");
                                         return null;
                                     }
@@ -1505,16 +1501,16 @@ public class Util {
                                     } else {
                                         MainUI.notify(null, "Erreur",
                                                 "L'indication de la devise est erronee a la ligne "
-                                                        + (m.getRowIndex() + 1)
-                                                        + " et doit etre en format text USD/CDF ",
+                                                + (m.getRowIndex() + 1)
+                                                + " et doit etre en format text USD/CDF ",
                                                 8, "error");
                                         return null;
                                     }
                                 } else {
                                     MainUI.notify(null, "Erreur",
                                             "L'indication multibatch ne doit pas etre null a la ligne "
-                                                    + (m.getRowIndex() + 1)
-                                                    + " et doit etre en format text de valeur OUI ou NON ",
+                                            + (m.getRowIndex() + 1)
+                                            + " et doit etre en format text de valeur OUI ou NON ",
                                             8, "error");
                                     return null;
                                 }
@@ -1526,16 +1522,16 @@ public class Util {
                                     } else {
                                         MainUI.notify(null, "Erreur",
                                                 "L'indication multibatch ne doit pas etre null a la ligne "
-                                                        + (m.getRowIndex() + 1)
-                                                        + " et doit etre en format text de valeur OUI ou NON ",
+                                                + (m.getRowIndex() + 1)
+                                                + " et doit etre en format text de valeur OUI ou NON ",
                                                 8, "error");
                                         return null;
                                     }
                                 } else {
                                     MainUI.notify(null, "Erreur",
                                             "L'indication multibatch ne doit pas etre null a la ligne "
-                                                    + (m.getRowIndex() + 1)
-                                                    + " et doit etre en format text de valeur OUI ou NON ",
+                                            + (m.getRowIndex() + 1)
+                                            + " et doit etre en format text de valeur OUI ou NON ",
                                             8, "error");
                                     return null;
                                 }
@@ -1575,7 +1571,8 @@ public class Util {
             Iterator<Row> rowIterator = sheet.iterator();
             System.out.println("Importation en cours....");
             boolean doublon = false;
-            rowsloop: while (rowIterator.hasNext()) {
+            rowsloop:
+            while (rowIterator.hasNext()) {
 
                 Row r1 = rowIterator.next();
                 if (isRowEmpty(r1)) {
@@ -1716,7 +1713,8 @@ public class Util {
         LigneImport importer = new LigneImport();
         produit.setDateCreation(LocalDateTime.now());
         Iterator<Cell> cellIterator = row.cellIterator();
-        productloop: while (cellIterator.hasNext()) {
+        productloop:
+        while (cellIterator.hasNext()) {
             Cell cellule = cellIterator.next();
             int index = cellule.getColumnIndex();
 
@@ -1854,7 +1852,7 @@ public class Util {
                     } else {
                         MainUI.notify(null, "Erreur",
                                 "Le mesurage d'unite est toujours obligatoire, il est absent a la ligne "
-                                        + (row.getRowNum() + 1),
+                                + (row.getRowNum() + 1),
                                 7, "error");
                         return null;
                     }
@@ -1920,14 +1918,14 @@ public class Util {
                         if (!priz.startsWith("[")) {
                             MainUI.notify(null, "Erreur",
                                     "La notation du prix incorrecte symbole [ manquant au debut, pour la ligne "
-                                            + (row.getRowNum() + 1),
+                                    + (row.getRowNum() + 1),
                                     7, "error");
                             return null;
                         }
                         if (!priz.endsWith("]")) {
                             MainUI.notify(null, "Erreur",
                                     "La notation du prix incorrecte symbole ] manquant a la fin, pour la ligne "
-                                            + (row.getRowNum() + 1),
+                                    + (row.getRowNum() + 1),
                                     7, "error");
                             return null;
                         }
@@ -1965,7 +1963,7 @@ public class Util {
                                     if (min == max) {
                                         MainUI.notify(null, "Erreur",
                                                 "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale ["
-                                                        + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
+                                                + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
                                                 7, "error");
                                         return null;
                                     }
@@ -1981,7 +1979,7 @@ public class Util {
                             if (!prix.contains(":")) {
                                 MainUI.notify(null, "Erreur",
                                         "La notation du prix incorrecte symbole : manquant entre le prix unitaire et quantités, pour la ligne "
-                                                + (row.getRowNum() + 1),
+                                        + (row.getRowNum() + 1),
                                         7, "error");
                                 return null;
                             }
@@ -1990,7 +1988,7 @@ public class Util {
                             if (!quants.contains("-")) {
                                 MainUI.notify(null, "Erreur",
                                         "La notation du prix incorrecte symbole - manquant entre Qmin et Qmax, pour la ligne "
-                                                + (row.getRowNum() + 1),
+                                        + (row.getRowNum() + 1),
                                         7, "error");
                                 return null;
                             }
@@ -2006,7 +2004,7 @@ public class Util {
                             if (min == max) {
                                 MainUI.notify(null, "Erreur",
                                         "Le prix de vente incorrecte Quantite minimale doit etre inferieure a quantite maximale ["
-                                                + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
+                                        + min + " = " + max + "] a la ligne " + (row.getRowNum() + 1),
                                         7, "error");
                                 return null;
                             }
@@ -2683,27 +2681,25 @@ public class Util {
     public static <T> double sumQuantInPc(List<T> objs) {
         double sum = 0;
         for (Object obj : objs) {
-            if (obj instanceof Recquisition) {
-
-                Recquisition recquisition = (Recquisition) obj;
+            if (obj instanceof Recquisition recquisition) {
                 if (recquisition.getReference().startsWith("RTR")) {
                     continue;
                 }
                 Mesure mez = recquisition.getMesureId();
-                Double qin = mez.getQuantContenu();
+                if (mez == null) {
+                    Produit p = recquisition.getProductId();
+                    mez = MesureDelegate.findByProduitAndQuant(p.getUid(), 1d);
+                }
+                Double qin = mez == null ? 1 : mez.getQuantContenu();
                 sum += (recquisition == null ? 0 : recquisition.getQuantite()) * (qin == null ? 0 : qin);
-                System.out.println("SUm req++  " + sum + " " + recquisition);
-            } else if (obj instanceof LigneVente) {
-                LigneVente ligneVente = (LigneVente) obj;
+            } else if (obj instanceof LigneVente ligneVente) {
                 Mesure m = ligneVente.getMesureId();
                 Double qin = (m == null) ? 1 : m.getQuantContenu();
                 sum += ligneVente.getQuantite() * (qin == null ? 0 : qin);
-            } else if (obj instanceof Stocker) {
-                Stocker stocker = (Stocker) obj;
+            } else if (obj instanceof Stocker stocker) {
                 Mesure m = stocker.getMesureId();
                 sum += stocker.getQuantite() * m.getQuantContenu();
-            } else if (obj instanceof Destocker) {
-                Destocker dest = (Destocker) obj;
+            } else if (obj instanceof Destocker dest) {
                 Mesure m = dest.getMesureId();
                 sum += dest.getQuantite() * m.getQuantContenu();
             }
@@ -3630,7 +3626,7 @@ public class Util {
             for (data.DepenseAgregate dep : depensesRealisees) {
                 row0 = feuil.createRow(rowid++);
                 row0.createCell(0).setCellValue(
-                        Constants.DATE_HEURE_USER_READABLE_FORMAT.format(java.sql.Timestamp.valueOf(dep.getDate())));
+                        dep.getDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
                 row0.createCell(1).setCellValue(dep.getImputation());
                 row0.createCell(2).setCellValue(dep.getDepenseId() != null ? dep.getDepenseId().getNomDepense() : "");
                 row0.createCell(3).setCellValue(dep.getMontantUsd());
@@ -3678,7 +3674,7 @@ public class Util {
                 headerCellStyle.setFont(headerFont);
 
                 Row header = sheet.createRow(0);
-                String[] columns = { "CATEGORIE DE DEPENSE", "TOTAL USD", "TOTAL CDF" };
+                String[] columns = {"CATEGORIE DE DEPENSE", "TOTAL USD", "TOTAL CDF"};
                 for (int i = 0; i < columns.length; i++) {
                     Cell cell = header.createCell(i);
                     cell.setCellValue(columns[i]);
@@ -3691,7 +3687,7 @@ public class Util {
                 List<Map.Entry<String, double[]>> entries = new ArrayList<>(aggregatedData.entrySet());
                 entries.sort(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
                 for (Map.Entry<String, double[]> entry : entries) {
-                    double[] values = entry.getValue() == null ? new double[] { 0d, 0d } : entry.getValue();
+                    double[] values = entry.getValue() == null ? new double[]{0d, 0d} : entry.getValue();
                     Row row = sheet.createRow(rowid++);
                     row.createCell(0).setCellValue(entry.getKey());
                     row.createCell(1).setCellValue(values[0]);
@@ -3783,7 +3779,7 @@ public class Util {
             for (Livraison ii : livraisons) {
                 row0 = feuil.createRow(++rowid);
                 Cell codebar1 = row0.createCell(0);
-                codebar1.setCellValue(Constants.USER_READABLE_FORMAT.format(ii.getDateLivr()));
+                codebar1.setCellValue(ii.getDateLivr() != null ? ii.getDateLivr().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-");
                 Cell fourn = row0.createCell(1);
                 fourn.setCellValue(ii.getFournId().getNomFourn());
                 Cell phone = row0.createCell(2);
@@ -3881,8 +3877,8 @@ public class Util {
                 headerCellStyle.setFont(headerFont);
 
                 Row header = sheet.createRow(0);
-                String[] columns = { "Date", "Factures", "Details/Nombre d'articles", "Cash USD", "Cash CDF", "Dette",
-                        "Echeance", "Client" };
+                String[] columns = {"Date", "Factures", "Details/Nombre d'articles", "Cash USD", "Cash CDF", "Dette",
+                    "Echeance", "Client"};
                 for (int i = 0; i < columns.length; i++) {
                     Cell cell = header.createCell(i);
                     cell.setCellValue(columns[i]);
@@ -3917,9 +3913,14 @@ public class Util {
                         SaleItem sale = saleNode.getValue();
                         Row saleRow = sheet.createRow(r++);
                         saleRow.createCell(0).setCellValue(sale.getDateHeureVente() == null ? ""
-                                : Constants.DATE_HEURE_USER_READABLE_FORMAT.format(sale.getDateHeureVente()));
+                                : sale.getDateHeureVente().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
                         saleRow.createCell(1).setCellValue(sale.getFacture() == null ? "" : sale.getFacture());
-                        saleRow.createCell(2).setCellValue(sale.getProduitName() == null ? "" : sale.getProduitName());
+                        if (sale.getHistoriqueNiveau() == SaleItem.HistoriqueNiveau.FACTURE
+                                && sale.getItems() != null) {
+                            saleRow.createCell(2).setCellValue(sale.getItems().size() + " article(s)");
+                        } else {
+                            saleRow.createCell(2).setCellValue(sale.getProduitName() == null ? "" : sale.getProduitName());
+                        }
                         saleRow.createCell(3).setCellValue(sale.getSaleAmountUsd());
                         saleRow.createCell(4).setCellValue(sale.getSaleAmountCdf());
                         saleRow.createCell(5).setCellValue(sale.getSaleAmountCredit());
@@ -3927,8 +3928,8 @@ public class Util {
                                 .setCellValue(sale.getDatEcheance() == null ? "" : sale.getDatEcheance().toString());
                         saleRow.createCell(7).setCellValue(
                                 (sale.getClient() != null && sale.getClient().getPhone() != null)
-                                        ? sale.getClient().getPhone()
-                                        : "");
+                                ? sale.getClient().getPhone()
+                                : "");
 
                         if (!saleNode.isExpanded()) {
                             continue;
@@ -3941,7 +3942,7 @@ public class Util {
                             Row lineRow = sheet.createRow(r++);
                             lineRow.createCell(2).setCellValue(
                                     line.getQuantite() + " " + (line.getMesure() == null ? "" : line.getMesure()) + " "
-                                            + (line.getProduitName() == null ? "" : line.getProduitName()));
+                                    + (line.getProduitName() == null ? "" : line.getProduitName()));
                             lineRow.createCell(3).setCellValue(line.getSaleAmountUsd());
                             lineRow.createCell(4).setCellValue(line.getSaleAmountCdf());
                             lineRow.createCell(1).setCellValue(line.getFacture() == null ? "" : line.getFacture());
@@ -4023,7 +4024,7 @@ public class Util {
                             row0 = feuil.getRow(rowId);
                         }
                         Cell date1 = row0.createCell(0);
-                        date1.setCellValue(Constants.USER_READABLE_FORMAT.format(item.getDate()));
+                        date1.setCellValue(item.getDate() != null ? new java.text.SimpleDateFormat("dd/MM/yyyy").format(item.getDate()) : "-");
                         Cell ref = row0.createCell(1);
                         ref.setCellValue(absice);
                         Cell amount = row0.createCell(col);
@@ -4263,9 +4264,9 @@ public class Util {
                 produit1.setCellValue(c.getNomClient());
                 String typecli = c.getTypeClient().equals("#0") ? bundle.getString("consumer")
                         : c.getTypeClient().equals("#1") ? bundle.getString("wholesaler")
-                                : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
-                                        : c.getTypeClient().equals("#3") ? bundle.getString("subscriber")
-                                                : bundle.getString("consumer");
+                        : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
+                        : c.getTypeClient().equals("#3") ? bundle.getString("subscriber")
+                        : bundle.getString("consumer");
                 Cell q1 = row0.createCell(2);
                 q1.setCellValue(typecli);
                 Cell montant1 = row0.createCell(3);
@@ -4781,40 +4782,43 @@ public class Util {
             XSSFCell mesure = row0.createCell(6);
             mesure.setCellStyle(headerCellStyle);
             mesure.setCellValue("MESURE");
-            XSSFCell entree = row0.createCell(7);
+            XSSFCell stock_init = row0.createCell(7);
+            stock_init.setCellStyle(headerCellStyle);
+            stock_init.setCellValue("STOCK INITIAL");
+            XSSFCell entree = row0.createCell(8);
             entree.setCellStyle(headerCellStyle);
             entree.setCellValue("ENTREES");
-            XSSFCell sortie = row0.createCell(8);
+            XSSFCell sortie = row0.createCell(9);
             sortie.setCellStyle(headerCellStyle);
             sortie.setCellValue("SORTIES");
-            XSSFCell stock_th = row0.createCell(9);
+            XSSFCell stock_th = row0.createCell(10);
             stock_th.setCellStyle(headerCellStyle);
             stock_th.setCellValue("STOCK THEORIQUE");
-            XSSFCell stock_ph = row0.createCell(10);
+            XSSFCell stock_ph = row0.createCell(11);
             stock_ph.setCellStyle(headerCellStyle);
             stock_ph.setCellValue("STOCK PHYSIQUE");
-            XSSFCell alerte = row0.createCell(11);
+            XSSFCell alerte = row0.createCell(12);
             alerte.setCellStyle(headerCellStyle);
             alerte.setCellValue("ALERTE");
-            XSSFCell pau_usd = row0.createCell(12);
+            XSSFCell pau_usd = row0.createCell(13);
             pau_usd.setCellStyle(headerCellStyle);
             pau_usd.setCellValue("P.A. UNIT");
-            XSSFCell valeur_total = row0.createCell(13);
+            XSSFCell valeur_total = row0.createCell(14);
             valeur_total.setCellStyle(headerCellStyle);
             valeur_total.setCellValue("VALEUR STOCK");
-            XSSFCell local = row0.createCell(14);
+            XSSFCell local = row0.createCell(15);
             local.setCellStyle(headerCellStyle);
             local.setCellValue("LOCALISATION");
-            XSSFCell date_expir = row0.createCell(15);
+            XSSFCell date_expir = row0.createCell(16);
             date_expir.setCellStyle(headerCellStyle);
             date_expir.setCellValue("DATE EXP.");
-            XSSFCell prixdevente = row0.createCell(16);
+            XSSFCell prixdevente = row0.createCell(17);
             prixdevente.setCellStyle(headerCellStyle);
             prixdevente.setCellValue("PRIX-VENTE");
-            XSSFCell devise = row0.createCell(17);
+            XSSFCell devise = row0.createCell(18);
             devise.setCellStyle(headerCellStyle);
             devise.setCellValue("DEVISE");
-            XSSFCell multibatch = row0.createCell(18);
+            XSSFCell multibatch = row0.createCell(19);
             multibatch.setCellStyle(headerCellStyle);
             multibatch.setCellValue("MULTI-LOT");
             for (InventoryMagasin ii : lisinvent) {
@@ -4833,31 +4837,33 @@ public class Util {
                 dlot.setCellValue(ii.getLot());
                 XSSFCell dmesure = row0.createCell(6);
                 dmesure.setCellValue(ii.getMesure().getDescription() + ":" + ii.getMesure().getQuantContenu());
-                XSSFCell entrees = row0.createCell(7);
+                XSSFCell dstock_init = row0.createCell(7);
+                dstock_init.setCellValue(ii.getStockInitial());
+                XSSFCell entrees = row0.createCell(8);
                 entrees.setCellValue(ii.getQuantEntree());
-                XSSFCell quant_out = row0.createCell(8);
+                XSSFCell quant_out = row0.createCell(9);
                 quant_out.setCellValue(ii.getQuantSortie());
-                XSSFCell quant_remain = row0.createCell(9);
+                XSSFCell quant_remain = row0.createCell(10);
                 quant_remain.setCellValue(ii.getQuantStock());
-                XSSFCell stock_phys = row0.createCell(10);
+                XSSFCell stock_phys = row0.createCell(11);
                 stock_phys.setCellValue(0);
-                XSSFCell stock_alerte = row0.createCell(11);
+                XSSFCell stock_alerte = row0.createCell(12);
                 stock_alerte.setCellValue(ii.getAlerte());
-                XSSFCell dpau = row0.createCell(12);
+                XSSFCell dpau = row0.createCell(13);
                 dpau.setCellValue(ii.getCoutAchat());
-                XSSFCell dvaleur = row0.createCell(13);
+                XSSFCell dvaleur = row0.createCell(14);
                 somme += ii.getValeurStock();
                 dvaleur.setCellValue(ii.getValeurStock());
-                XSSFCell loc = row0.createCell(14);
+                XSSFCell loc = row0.createCell(15);
                 loc.setCellValue(ii.getLocalisation());
-                XSSFCell dexpir = row0.createCell(15);
+                XSSFCell dexpir = row0.createCell(16);
                 LocalDate dexp = ii.getExpiry();
                 dexpir.setCellValue(dexp == null ? "" : dexp.toString());
-                XSSFCell vprice = row0.createCell(16);
+                XSSFCell vprice = row0.createCell(17);
                 vprice.setCellValue(ii.getPrixDeVente());
-                XSSFCell devisevalue = row0.createCell(17);
+                XSSFCell devisevalue = row0.createCell(18);
                 devisevalue.setCellValue(ii.getDevise());
-                XSSFCell vmultibatch = row0.createCell(18);
+                XSSFCell vmultibatch = row0.createCell(19);
                 vmultibatch.setCellValue("NON");
             }
             enttvaluen.setCellValue(somme);
@@ -4883,7 +4889,7 @@ public class Util {
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            File file = new File(path + "/ksf-inv_mag_" + LocalDateTime.now() + ".xlsx");
             fos = new FileOutputStream(file);
             XSSFWorkbook workbook = new XSSFWorkbook();
             Font headerFont = workbook.createFont();
@@ -5479,7 +5485,7 @@ public class Util {
                 for (Relevee ii : relevees) {
                     row0 = feuil.createRow(++rowid);
                     Cell codebar1 = row0.createCell(0);
-                    codebar1.setCellValue(Constants.USER_READABLE_FORMAT.format(ii.getDate()));
+                    codebar1.setCellValue(ii.getDate() != null ? new java.text.SimpleDateFormat("dd/MM/yyyy").format(ii.getDate()) : "-");
                     Cell ref = row0.createCell(1);
                     ref.setCellValue(ii.getNumeroBon());
                     Cell nom_prod = row0.createCell(2);
@@ -5761,7 +5767,8 @@ public class Util {
         HashMap<String, List<PermitTo>> hashPerms = new HashMap<>();
         hashPerms.put(Constants.AGENTS, List.of(PermitTo.CREATE_ENGAGEMENT,
                 PermitTo.UPDATE_ENGAGEMENT, PermitTo.DELETE_ENGAGEMENT));
-        b1: for (Map.Entry<String, List<PermitTo>> entry : hashPerms.entrySet()) {
+        b1:
+        for (Map.Entry<String, List<PermitTo>> entry : hashPerms.entrySet()) {
             for (PermitTo permitTo : entry.getValue()) {
                 if (PermissionDelegate.hasPermission(permitTo)) {
                     toActivate.put(entry.getKey(), Boolean.TRUE);
@@ -5779,9 +5786,9 @@ public class Util {
         try (Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Tableau d'amortissement");
 
-            String[] columns = { "UID", "Libellé", "Catégorie", "Date Acquisition", "Valeur Origine (USD)",
-                    "Valeur Résiduelle (USD)", "Durée (Mois)", "Dotation Mensuelle (USD)", "Amortissement Cumulé (USD)",
-                    "Valeur Nette (USD)" };
+            String[] columns = {"UID", "Libellé", "Catégorie", "Date Acquisition", "Valeur Origine (USD)",
+                "Valeur Résiduelle (USD)", "Durée (Mois)", "Dotation Mensuelle (USD)", "Amortissement Cumulé (USD)",
+                "Valeur Nette (USD)"};
             Row headerRow = sheet.createRow(0);
 
             org.apache.poi.ss.usermodel.CellStyle headerCellStyle = workbook.createCellStyle();
@@ -5835,7 +5842,7 @@ public class Util {
     public static void exportXlsSuppliersDebt(List<Fournisseur> list) {
         try (Workbook workbook = new XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Dettes Fournisseurs");
-            String[] columns = { "UID", "Nom Fournisseur", "Adresse", "Téléphone", "Dette Totale (USD)" };
+            String[] columns = {"UID", "Nom Fournisseur", "Adresse", "Téléphone", "Dette Totale (USD)"};
 
             Row headerRow = sheet.createRow(0);
             CellStyle headerCellStyle = workbook.createCellStyle();
@@ -5897,8 +5904,8 @@ public class Util {
             r2.createCell(0).setCellValue("Date du Relevé:");
             r2.createCell(1).setCellValue(LocalDate.now().toString());
 
-            String[] columns = { "Date", "Num Pièce", "Libellé", "Montant Facturé (USD)", "Montant Payé (USD)",
-                    "Reste à Payer (USD)" };
+            String[] columns = {"Date", "Num Pièce", "Libellé", "Montant Facturé (USD)", "Montant Payé (USD)",
+                "Reste à Payer (USD)"};
 
             Row headerRow = sheet.createRow(4);
             CellStyle headerCellStyle = workbook.createCellStyle();
@@ -5956,17 +5963,21 @@ public class Util {
     }
 
     public static void exportXlsExpiredStock(List<utilities.Peremption> list) {
-        try (Workbook workbook = new XSSFWorkbook()) {
+        try {
+            XSSFWorkbook workbook = new XSSFWorkbook();
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Produits Expirés");
-            String[] columns = { "Codebar", "Produit", "Lot", "Localisation", "Région", "Mesure", "Quantité",
-                    "Cout Achat", "Valeur Total", "Date Expiration" };
+            String[] columns = {"Codebar", "Produit", "Lot", "Localisation", "Région", "Mesure", "Quantité",
+                "Cout Achat", "Valeur Total", "Date Expiration"};
 
             Row headerRow = sheet.createRow(0);
-            CellStyle headerCellStyle = workbook.createCellStyle();
-            headerCellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            XSSFCellStyle headerCellStyle = workbook.createCellStyle();
+            // Couleur #44cef5 (Blue)
+            byte[] rgb = new byte[]{(byte) 68, (byte) 206, (byte) 245};
+            headerCellStyle.setFillForegroundColor(new XSSFColor(rgb, null));
             headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
             headerCellStyle.setFont(headerFont);
 
             for (int i = 0; i < columns.length; i++) {
@@ -5976,6 +5987,7 @@ public class Util {
             }
 
             int rowNum = 1;
+            double totalValeur = 0;
             for (utilities.Peremption p : list) {
                 Row row = sheet.createRow(rowNum++);
                 row.createCell(0).setCellValue(p.getCodebar());
@@ -5988,7 +6000,22 @@ public class Util {
                 row.createCell(7).setCellValue(p.getCoutAchat());
                 row.createCell(8).setCellValue(p.getValeur());
                 row.createCell(9).setCellValue(p.getDateExpiry() != null ? p.getDateExpiry().toString() : "");
+                totalValeur += p.getValeur();
             }
+
+            // Ligne de total
+            Row totalRow = sheet.createRow(rowNum);
+            Cell totalLabelCell = totalRow.createCell(7);
+            totalLabelCell.setCellValue("VALEUR TOTALE:");
+            CellStyle totalStyle = workbook.createCellStyle();
+            Font totalFont = workbook.createFont();
+            totalFont.setBold(true);
+            totalStyle.setFont(totalFont);
+            totalLabelCell.setCellStyle(totalStyle);
+
+            Cell totalValueCell = totalRow.createCell(8);
+            totalValueCell.setCellValue(totalValeur);
+            totalValueCell.setCellStyle(totalStyle);
 
             for (int i = 0; i < columns.length; i++) {
                 sheet.autoSizeColumn(i);
@@ -6004,7 +6031,16 @@ public class Util {
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     workbook.write(fos);
                 }
+                // Ouverture asynchrone
+                new Thread(() -> {
+                    try {
+                        Desktop.getDesktop().open(file);
+                    } catch (IOException ex) {
+                        Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }).start();
             }
+            workbook.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -6015,7 +6051,7 @@ public class Util {
         try (Workbook workbook = new XSSFWorkbook()) {
             // Sheet 1: Bilan
             org.apache.poi.ss.usermodel.Sheet sheet1 = workbook.createSheet("Bilan");
-            String[] bilanCols = { "Rubrique", "Montant (USD)" };
+            String[] bilanCols = {"Rubrique", "Montant (USD)"};
             Row header1 = sheet1.createRow(0);
             for (int i = 0; i < bilanCols.length; i++) {
                 header1.createCell(i).setCellValue(bilanCols[i]);
@@ -6038,7 +6074,7 @@ public class Util {
 
             // Sheet 2: Compte de Résultat
             org.apache.poi.ss.usermodel.Sheet sheet2 = workbook.createSheet("Compte de Résultat");
-            String[] crCols = { "Poste", "Valeur (USD)" };
+            String[] crCols = {"Poste", "Valeur (USD)"};
             Row header2 = sheet2.createRow(0);
             for (int i = 0; i < crCols.length; i++) {
                 header2.createCell(i).setCellValue(crCols[i]);
@@ -6066,7 +6102,7 @@ public class Util {
 
             // Sheet 3: Flux de Trésorerie
             org.apache.poi.ss.usermodel.Sheet sheet3 = workbook.createSheet("Flux de Trésorerie");
-            String[] fluxCols = { "Libellé", "Montant (USD)" };
+            String[] fluxCols = {"Libellé", "Montant (USD)"};
             Row header3 = sheet3.createRow(0);
             for (int i = 0; i < fluxCols.length; i++) {
                 header3.createCell(i).setCellValue(fluxCols[i]);
@@ -6113,7 +6149,7 @@ public class Util {
             Workbook workbook = new XSSFWorkbook();
             Sheet sheet = workbook.createSheet("Présences Agent");
 
-            String[] columns = { "Date/Heure", "Agent ID", "Nom", "Prénom", "Type", "Région", "Empreinte (Hash)" };
+            String[] columns = {"Date/Heure", "Agent ID", "Nom", "Prénom", "Type", "Région", "Empreinte (Hash)"};
 
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
@@ -6186,8 +6222,8 @@ public class Util {
             r3.createCell(0).setCellValue("Date du Relevé:");
             r3.createCell(1).setCellValue(LocalDate.now().toString());
 
-            String[] columns = { "Date", "Num Facture", "Libellé", "Net à Payer (USD)", "Déjà Payé (USD)",
-                    "Reste (USD)" };
+            String[] columns = {"Date", "Num Facture", "Libellé", "Net à Payer (USD)", "Déjà Payé (USD)",
+                "Reste (USD)"};
 
             Row headerRow = sheet.createRow(5);
             CellStyle headerCellStyle = workbook.createCellStyle();
@@ -6310,29 +6346,29 @@ public class Util {
 
                     // Business Info
                     pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
-                    pdf.addTextLine(new String[] {
-                            "Adresse : " + entrep.getAdresse(),
-                            "RCCM : " + entrep.getIdentification(),
-                            entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
-                            entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
+                    pdf.addTextLine(new String[]{
+                        "Adresse : " + entrep.getAdresse(),
+                        "RCCM : " + entrep.getIdentification(),
+                        entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                        entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
                     }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
 
                     // Client Info
                     pdf.addTextLine("Client : " + c.getNomClient(), 25, pageH - 240, hbold, 14, java.awt.Color.BLACK);
-                    pdf.addTextLine(new String[] {
-                            "Téléphone : " + c.getPhone(),
-                            "Adresse : " + c.getAdresse()
+                    pdf.addTextLine(new String[]{
+                        "Téléphone : " + c.getPhone(),
+                        "Adresse : " + c.getAdresse()
                     }, 15, 25, pageH - 255, hnormal, 11, java.awt.Color.BLACK);
 
-                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    String dateStr = "Date : " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
                     pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
                             pageH - 240, hnormal, 11, java.awt.Color.BLACK);
 
                     // Table Header
-                    int table[] = { 80, 100, 130, 80, 80, 80 };
+                    int table[] = {80, 100, 130, 80, 80, 80};
                     pdf.addTable(table, 25, 25, pageH - 320);
                     pdf.setFont(hbold, 10, java.awt.Color.WHITE);
-                    pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                    pdf.setRightAlignedColumns(new int[]{3, 4, 5});
 
                     pdf.addCell("Date", endeleya);
                     pdf.addCell("N# Facture", endeleya);
@@ -6365,7 +6401,7 @@ public class Util {
                             }
                         }
 
-                        pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                        pdf.setRightAlignedColumns(new int[]{3, 4, 5});
                         pdf.addCell(v.getDateVente().toLocalDate().toString(), egray);
                         pdf.addCell(v.getReference(), egray);
                         pdf.addCell(v.getLibelle(), egray);
@@ -6462,30 +6498,30 @@ public class Util {
 
                     // Business Info
                     pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
-                    pdf.addTextLine(new String[] {
-                            "Adresse : " + entrep.getAdresse(),
-                            "RCCM : " + entrep.getIdentification(),
-                            entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
-                            entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
+                    pdf.addTextLine(new String[]{
+                        "Adresse : " + entrep.getAdresse(),
+                        "RCCM : " + entrep.getIdentification(),
+                        entrep.getIdNat() == null ? "" : "ID-NAT : " + entrep.getIdNat(),
+                        entrep.getNumeroImpot() == null ? "" : "NIF : " + entrep.getNumeroImpot()
                     }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
 
                     // Supplier Info
                     pdf.addTextLine("Fournisseur : " + f.getNomFourn(), 25, pageH - 240, hbold, 14,
                             java.awt.Color.BLACK);
-                    pdf.addTextLine(new String[] {
-                            "Téléphone : " + f.getPhone(),
-                            "Adresse : " + f.getAdresse()
+                    pdf.addTextLine(new String[]{
+                        "Téléphone : " + f.getPhone(),
+                        "Adresse : " + f.getAdresse()
                     }, 15, 25, pageH - 255, hnormal, 11, java.awt.Color.BLACK);
 
-                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    String dateStr = "Date : " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
                     pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
                             pageH - 240, hnormal, 11, java.awt.Color.BLACK);
 
                     // Table Header
-                    int table[] = { 80, 100, 130, 80, 80, 80 };
+                    int table[] = {80, 100, 130, 80, 80, 80};
                     pdf.addTable(table, 25, 25, pageH - 320);
                     pdf.setFont(hbold, 10, java.awt.Color.WHITE);
-                    pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                    pdf.setRightAlignedColumns(new int[]{3, 4, 5});
 
                     pdf.addCell("Date", endeleya);
                     pdf.addCell("Num Piece", endeleya);
@@ -6519,7 +6555,7 @@ public class Util {
                             }
                         }
 
-                        pdf.setRightAlignedColumns(new int[] { 3, 4, 5 });
+                        pdf.setRightAlignedColumns(new int[]{3, 4, 5});
                         pdf.addCell(l.getDateLivr() != null ? l.getDateLivr().toString() : "", egray);
                         pdf.addCell(l.getNumPiece(), egray);
                         pdf.addCell(l.getLibelle(), egray);
@@ -6606,20 +6642,20 @@ public class Util {
 
                     // Business Info
                     pdf.addTextLine(entrep.getNomEntreprise(), 25, pageH - 150, hnormal, 16, java.awt.Color.BLACK);
-                    pdf.addTextLine(new String[] {
-                            "Adresse : " + entrep.getAdresse(),
-                            "RCCM : " + entrep.getIdentification()
+                    pdf.addTextLine(new String[]{
+                        "Adresse : " + entrep.getAdresse(),
+                        "RCCM : " + entrep.getIdentification()
                     }, 15, 25, pageH - 165, hnormal, 11, java.awt.Color.BLACK);
 
-                    String dateStr = "Date : " + Constants.DATE_HEURE_USER_READABLE_FORMAT.format(new Date());
+                    String dateStr = "Date : " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
                     pdf.addTextLine(dateStr, ((int) (pageW - hnormal.getStringWidth(dateStr) / 1000 * 11 - 32)),
                             pageH - 240, hnormal, 11, java.awt.Color.BLACK);
 
                     // Table Header
-                    int table[] = { 150, 150, 100, 120 };
+                    int table[] = {150, 150, 100, 120};
                     pdf.addTable(table, 25, 25, pageH - 320);
                     pdf.setFont(hbold, 10, java.awt.Color.WHITE);
-                    pdf.setRightAlignedColumns(new int[] { 3 });
+                    pdf.setRightAlignedColumns(new int[]{3});
 
                     pdf.addCell("Nom Fournisseur", endeleya);
                     pdf.addCell("Adresse", endeleya);
@@ -6637,8 +6673,9 @@ public class Util {
                         double totalDebt = f.getLivraisonList() == null ? 0d
                                 : f.getLivraisonList().stream()
                                         .mapToDouble(l -> l.getRemained() != null ? l.getRemained() : 0.0).sum();
-                        if (totalDebt <= 0)
+                        if (totalDebt <= 0) {
                             continue;
+                        }
 
                         i++;
                         ln++;
@@ -6657,7 +6694,7 @@ public class Util {
                             }
                         }
 
-                        pdf.setRightAlignedColumns(new int[] { 3 });
+                        pdf.setRightAlignedColumns(new int[]{3});
                         pdf.addCell(f.getNomFourn(), egray);
                         pdf.addCell(f.getAdresse(), egray);
                         pdf.addCell(f.getPhone(), egray);
@@ -6682,6 +6719,41 @@ public class Util {
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
             return null;
         }
+    }
+
+    public static boolean isInternetAndBaseApiReachable() {
+        if (!NetLoockup.NETWORK_STATUS_ON) {
+            return false;
+        }
+        URL url;
+        try {
+            url = URI.create(KazisafeServiceFactory.BASE_URL).toURL();
+        } catch (Exception ex) {
+            return false;
+        }
+        for (String method : new String[]{"HEAD", "GET"}) {
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod(method);
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setInstanceFollowRedirects(true);
+                conn.setUseCaches(false);
+                int code = conn.getResponseCode();
+                if (code > 0 && code < 600) {
+                    return true;
+                }
+            } catch (Exception ex) {
+                Logger.getLogger(PaymentController.class.getName()).log(Level.FINE,
+                        "BASE_URL (" + method + ") non joignable: " + ex.getMessage());
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        }
+        return false;
     }
 
 }

@@ -136,4 +136,8 @@ public class DestockerDelegate {
     public static boolean isExists(String uid) {
         return getStorage().isExists(uid);
     }
+
+    public static List<Destocker> findDestockers(String region) {
+        return getStorage().findDestockers(region);
+    }
 }

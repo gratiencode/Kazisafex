@@ -75,19 +75,25 @@ public class JpaUtil {
                 String dbUrl = "jdbc:mysql://" + dbHost + ":" + dbPort + "/ksf_" + databaseName
                         + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&"
                         + "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''";
+                String dbUser = resolveDbUser();
+                String dbPassword = resolveDbPassword();
 
                 properties.put(EntityManagerProperties.JDBC_DRIVER, "com.mysql.cj.jdbc.Driver");
                 properties.put(EntityManagerProperties.JDBC_URL, dbUrl);
-                properties.put(EntityManagerProperties.JDBC_USER, resolveDbUser());
-                properties.put(EntityManagerProperties.JDBC_PASSWORD, resolveDbPassword());
+                properties.put(EntityManagerProperties.JDBC_USER, dbUser);
+                properties.put(EntityManagerProperties.JDBC_PASSWORD, dbPassword);
+                properties.put("hibernate.hbm2ddl.auto", "update");
                 emf = Persistence.createEntityManagerFactory("kazisafe-jmx", properties);
+                SchemaAutoUpdater.ensureCoreSchema(false, dbUrl, dbUser, dbPassword);
             } else {
                 String dbPath = ManagedSessionFactory.dbPath("kazi_" + databaseName);
-                String dbUrl = "jdbc:sqlite:" + dbPath + ".db";
+                String dbUrl = "jdbc:sqlite:" + dbPath + ".db?limit_compound_select=0";
                 properties.put("hibernate.connection.driver_class", "org.sqlite.JDBC");
                 properties.put("hibernate.connection.url", dbUrl);
                 properties.put("hibernate.dialect", "services.dialect.KSQLiteDialect");
+                properties.put("hibernate.hbm2ddl.auto", "update");
                 emf = Persistence.createEntityManagerFactory("SQlitePU", properties);
+                SchemaAutoUpdater.ensureCoreSchema(true, dbUrl, null, null);
             }
 
         } catch (Exception ex) {

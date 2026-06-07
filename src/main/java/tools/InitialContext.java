@@ -92,6 +92,7 @@ public class InitialContext {
             case REPPORTING -> new RepportService();
             case PERMISSION -> new PermissionService();
             case IMMOBILISATION -> new ImmobilisationService();
+            case IMMOBILISATION_AGREGATE -> new services.ImmobilisationAgregateService();
             case PRESENCE -> new PresenceService();
             case FINGERPRINTMAPPING -> new FingerprintMappingService();
             default -> null;

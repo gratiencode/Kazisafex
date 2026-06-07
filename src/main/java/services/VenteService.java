@@ -423,12 +423,14 @@ public class VenteService implements VenteStorage {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString());
                     query.setParameter(1, uid);
-                    return (Double) query.getSingleResult();
+                    Object rst = query.getSingleResult();
+                    return rst == null ? 0d : ((Number) rst).doubleValue();
                 });
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, uid);
-            return (Double) query.getSingleResult();
+            Object rst = query.getSingleResult();
+            return rst == null ? 0d : ((Number) rst).doubleValue();
         } catch (NoResultException ex) {
             ex.printStackTrace();
             return null;
@@ -974,8 +976,8 @@ public class VenteService implements VenteStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT SUM(l.quantite) cp, CONCAT(p.nomproduit,' ',p.marque,' ',p.modele) val, m.description FROM ligne_vente l, mesure m, produit p "
-                        + "WHERE p.uid = l.product_id AND l.mesure_id=m.uid AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? "
-                        + "AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? GROUP BY l.product_id ORDER by cp DESC");
+                + "WHERE p.uid = l.product_id AND l.mesure_id=m.uid AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? "
+                + "AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? GROUP BY l.product_id ORDER by cp DESC");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString());
@@ -1015,8 +1017,8 @@ public class VenteService implements VenteStorage {
         StringBuilder sb = new StringBuilder();
         sb.append(
                 "SELECT SUM(l.quantite) cp, CONCAT(p.nomproduit,' ',p.marque,' ',p.modele) val, m.description FROM ligne_vente l, vente v, produit p, mesure m "
-                        + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid AND l.mesure_id=m.uid AND v.region = ? AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? "
-                        + "AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? GROUP BY l.product_id ORDER by cp DESC ");
+                + "WHERE p.uid = l.product_id AND v.uid=l.reference_uid AND l.mesure_id=m.uid AND v.region = ? AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? "
+                + "AND l.clientId NOT LIKE ? AND l.clientId NOT LIKE ? GROUP BY l.product_id ORDER by cp DESC ");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString());

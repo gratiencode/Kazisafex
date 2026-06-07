@@ -192,7 +192,7 @@ public class StockerService implements StockerStorage {
             }
             Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Stocker.findAll");
             return query.getResultList();
-        } catch (NoResultException e) {
+        } catch (jakarta.persistence.EntityNotFoundException e) {
             return null;
         }
     }
@@ -946,20 +946,21 @@ public class StockerService implements StockerStorage {
      * Calcule les entrées (stocker) en pièces pour un lot donné, toutes dates confondues.
      */
     private double sumStockerByLotInPc(String prodId, String numlot, String region) {
+        String safeLot = numlot == null ? "" : numlot;
         String sql = "SELECT SUM(COALESCE(s.quantite,0)*COALESCE(m.quantcontenu,0)) "
                 + "FROM stocker s, mesure m "
-                + "WHERE s.product_id=? AND s.mesure_id=m.uid AND s.numlot=? AND s.region=?";
+                + "WHERE s.product_id=? AND s.mesure_id=m.uid AND IFNULL(s.numlot,'')=? AND s.region=?";
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Double r = (Double) em.createNativeQuery(sql)
-                            .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                            .setParameter(1, prodId).setParameter(2, safeLot).setParameter(3, region)
                             .getSingleResult();
                     return r == null ? 0 : r;
                 });
             }
             Double r = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                    .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                    .setParameter(1, prodId).setParameter(2, safeLot).setParameter(3, region)
                     .getSingleResult();
             return r == null ? 0 : r;
         } catch (Exception e) { return 0; }
@@ -969,20 +970,21 @@ public class StockerService implements StockerStorage {
      * Calcule les sorties (destocker) en pièces pour un lot donné, toutes dates confondues.
      */
     private double sumDestockerByLotInPc(String prodId, String numlot, String region) {
+        String safeLot = numlot == null ? "" : numlot;
         String sql = "SELECT SUM(COALESCE(d.quantite,0)*COALESCE(m.quantcontenu,0)) "
                 + "FROM destocker d, mesure m "
-                + "WHERE d.product_id=? AND d.mesure_id=m.uid AND d.numlot=? AND d.region=?";
+                + "WHERE d.product_id=? AND d.mesure_id=m.uid AND IFNULL(d.numlot,'')=? AND d.region=?";
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Double r = (Double) em.createNativeQuery(sql)
-                            .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                            .setParameter(1, prodId).setParameter(2, safeLot).setParameter(3, region)
                             .getSingleResult();
                     return r == null ? 0 : r;
                 });
             }
             Double r = (Double) ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                    .setParameter(1, prodId).setParameter(2, numlot).setParameter(3, region)
+                    .setParameter(1, prodId).setParameter(2, safeLot).setParameter(3, region)
                     .getSingleResult();
             return r == null ? 0 : r;
         } catch (Exception e) { return 0; }
@@ -990,7 +992,7 @@ public class StockerService implements StockerStorage {
 
     @Override
     public void rectifyStockDepotByLot(data.Produit produit, String numlot, String region, double coutAch, LocalDate dateExpir) {
-        if (produit == null || numlot == null || numlot.isBlank() || region == null) return;
+        if (produit == null || region == null) return;
         data.Mesure unite = delegates.MesureDelegate.findByProduitAndQuant(produit.getUid(), 1d);
         double entrees = sumStockerByLotInPc(produit.getUid(), numlot, region);
         double sorties = sumDestockerByLotInPc(produit.getUid(), numlot, region);
@@ -1082,11 +1084,12 @@ public class StockerService implements StockerStorage {
 
     private StockDepotAgregate findDepotAggregateByLot(data.Produit p, String numlot, String region, LocalDate dte) {
         try {
-            String sql = "SELECT * FROM stock_depot_agregate WHERE product_id=? AND num_lot=? AND region=? AND date_record=? LIMIT 1";
+            String safeLot = numlot == null ? "" : numlot;
+            String sql = "SELECT * FROM stock_depot_agregate WHERE product_id=? AND IFNULL(num_lot,'')=? AND region=? AND date_record=? LIMIT 1";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<StockDepotAgregate> r = em.createNativeQuery(sql, StockDepotAgregate.class)
-                            .setParameter(1, p.getUid()).setParameter(2, numlot)
+                            .setParameter(1, p.getUid()).setParameter(2, safeLot)
                             .setParameter(3, region).setParameter(4, dte)
                             .getResultList();
                     return r.isEmpty() ? null : r.get(0);
@@ -1094,7 +1097,7 @@ public class StockerService implements StockerStorage {
             }
             List<StockDepotAgregate> r = ManagedSessionFactory.getEntityManager()
                     .createNativeQuery(sql, StockDepotAgregate.class)
-                    .setParameter(1, p.getUid()).setParameter(2, numlot)
+                    .setParameter(1, p.getUid()).setParameter(2, safeLot)
                     .setParameter(3, region).setParameter(4, dte)
                     .getResultList();
             return r.isEmpty() ? null : r.get(0);
@@ -1104,19 +1107,20 @@ public class StockerService implements StockerStorage {
     @Override
     public double findLatestDepotStockByLot(String productId, String numlot, String region) {
         try {
-            String sql = "SELECT quantite FROM stock_depot_agregate WHERE product_id=? AND num_lot=? AND region=? "
+            String safeLot = numlot == null ? "" : numlot;
+            String sql = "SELECT quantite FROM stock_depot_agregate WHERE product_id=? AND IFNULL(num_lot,'')=? AND region=? "
                     + "ORDER BY date_record DESC LIMIT 1";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     List<?> r = em.createNativeQuery(sql)
-                            .setParameter(1, productId).setParameter(2, numlot).setParameter(3, region)
+                            .setParameter(1, productId).setParameter(2, safeLot).setParameter(3, region)
                             .getResultList();
                     if (r.isEmpty() || r.get(0) == null) return 0.0;
                     return ((Number) r.get(0)).doubleValue();
                 });
             }
             List<?> r = ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                    .setParameter(1, productId).setParameter(2, numlot).setParameter(3, region)
+                    .setParameter(1, productId).setParameter(2, safeLot).setParameter(3, region)
                     .getResultList();
             if (r.isEmpty() || r.get(0) == null) return 0.0;
             return ((Number) r.get(0)).doubleValue();
@@ -1128,9 +1132,9 @@ public class StockerService implements StockerStorage {
         try {
             // Un seul agrégat par lot : le plus récent
             String sql = "SELECT s.* FROM stock_depot_agregate s "
-                    + "INNER JOIN (SELECT num_lot, MAX(date_record) AS maxd FROM stock_depot_agregate "
-                    + "WHERE product_id=? AND region=? GROUP BY num_lot) t "
-                    + "ON s.num_lot=t.num_lot AND s.date_record=t.maxd "
+                    + "INNER JOIN (SELECT IFNULL(num_lot,'') as n_lot, MAX(date_record) AS maxd FROM stock_depot_agregate "
+                    + "WHERE product_id=? AND region=? GROUP BY IFNULL(num_lot,'')) t "
+                    + "ON IFNULL(s.num_lot,'')=t.n_lot AND s.date_record=t.maxd "
                     + "WHERE s.product_id=? AND s.region=? ORDER BY s.date_record DESC";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
@@ -1145,5 +1149,29 @@ public class StockerService implements StockerStorage {
                     .setParameter(3, productId).setParameter(4, region)
                     .getResultList();
         } catch (Exception e) { return List.of(); }
+    }
+
+    @Override
+    public void backfillDepotAggregates(String region) {
+        if (region == null) return;
+        List<data.Produit> produits = delegates.ProduitDelegate.findProduits();
+        for (data.Produit p : produits) {
+            // Rectify the empty lot for each product to ensure we have at least one record if stock exists
+            rectifyStockDepotByLot(p, "", region, 0, null);
+            
+            // Also find all distinct lots and rectify them
+            List<Stocker> stockers = findStockerByProduit(p.getUid(), region);
+            if (stockers != null) {
+                java.util.Set<String> lots = new java.util.HashSet<>();
+                for (Stocker s : stockers) {
+                    if (s.getNumlot() != null && !s.getNumlot().isBlank()) {
+                        lots.add(s.getNumlot());
+                    }
+                }
+                for (String lot : lots) {
+                    rectifyStockDepotByLot(p, lot, region, 0, null);
+                }
+            }
+        }
     }
 }

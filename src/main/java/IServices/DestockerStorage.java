@@ -57,4 +57,6 @@ public interface DestockerStorage {
 
     public void removeOrphans();
 
+    public List<Destocker> findDestockers(String region);
+
 }
