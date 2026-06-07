@@ -62,6 +62,12 @@ public class FinancialStatementAgregateService {
 
     public void ensureQuarterlyStatements(LocalDate anchorDate, int span, String region) {
         int normalizedSpan = span <= 3 ? 3 : 4;
+        if (normalizedSpan == 4) {
+            for (LocalDate quarterStart : quarterStartsOfYear(anchorDate.getYear())) {
+                rebuildStatements(quarterStart, quarterEnd(quarterStart), region);
+            }
+            return;
+        }
         LocalDate current = anchorDate;
         for (int i = 0; i < normalizedSpan; i++) {
             rebuildStatements(quarterStart(current), quarterEnd(current), region);
@@ -108,15 +114,15 @@ public class FinancialStatementAgregateService {
                     line.getLineCode(),
                     line.getRubrique(),
                     line.getNature(),
-                    line.getAmountUsd(),
+                    zero(line.getAmountUsd()),
                     getPriorAmount(previousMaps, line.getLineCode(), 0),
                     getPriorAmount(previousMaps, line.getLineCode(), 1),
                     getPriorAmount(previousMaps, line.getLineCode(), 2),
-                    null,
+                    0d,
                     Boolean.TRUE.equals(line.getSectionHeader()),
                     Boolean.TRUE.equals(line.getTotalLine())));
         }
-        return result;
+        return enrichBilanImmobilisationColumns(statementType, result, end, usedRegion);
     }
 
     public List<FinancialStatementRow> loadStatementRows(String statementType, int anchorYear, int span, String region) {
@@ -142,36 +148,34 @@ public class FinancialStatementAgregateService {
                     line.getLineCode(),
                     line.getRubrique(),
                     line.getNature(),
-                    currentYear == null ? null : currentYear.get(line.getLineCode()),
-                    year1 == null ? null : year1.get(line.getLineCode()),
-                    year2 == null ? null : year2.get(line.getLineCode()),
-                    normalizedSpan == 5 && year3 != null ? year3.get(line.getLineCode()) : null,
-                    normalizedSpan == 5 && year4 != null ? year4.get(line.getLineCode()) : null,
+                    amountOf(currentYear, line.getLineCode()),
+                    amountOf(year1, line.getLineCode()),
+                    amountOf(year2, line.getLineCode()),
+                    normalizedSpan == 5 ? amountOf(year3, line.getLineCode()) : 0d,
+                    normalizedSpan == 5 ? amountOf(year4, line.getLineCode()) : 0d,
                     Boolean.TRUE.equals(line.getSectionHeader()),
                     Boolean.TRUE.equals(line.getTotalLine())));
         }
-        return result;
+        return enrichBilanImmobilisationColumns(statementType, result, yearEnd(anchorYear), usedRegion);
     }
 
     public List<FinancialStatementRow> loadStatementRowsQuarterly(String statementType, LocalDate anchorDate, int span, String region) {
         int normalizedSpan = span <= 3 ? 3 : 4;
         String usedRegion = normalizeRegion(region);
         
-        LocalDate qStart = quarterStart(anchorDate);
-        LocalDate qEnd = quarterEnd(anchorDate);
+        List<PeriodRange> periods = quarterlyPeriods(anchorDate, normalizedSpan);
+        PeriodRange firstPeriod = periods.get(0);
+        LocalDate qEnd = periods.get(periods.size() - 1).end();
         
-        List<FinancialStatementAgregate> current = findRows(statementType, qStart, qEnd, usedRegion);
+        List<FinancialStatementAgregate> current = findRows(statementType, firstPeriod.start(), firstPeriod.end(), usedRegion);
         if (current.isEmpty()) {
             return Collections.emptyList();
         }
         
         Map<Integer, Map<String, Double>> quarterlyMaps = new LinkedHashMap<>();
-        LocalDate loopDate = anchorDate;
-        for (int i = 0; i < normalizedSpan; i++) {
-            LocalDate sqStart = quarterStart(loopDate);
-            LocalDate sqEnd = quarterEnd(loopDate);
-            quarterlyMaps.put(i, toValueMap(findRows(statementType, sqStart, sqEnd, usedRegion), statementType));
-            loopDate = sqStart.minusDays(1);
+        for (int i = 0; i < periods.size(); i++) {
+            PeriodRange period = periods.get(i);
+            quarterlyMaps.put(i, toValueMap(findRows(statementType, period.start(), period.end(), usedRegion), statementType));
         }
         
         List<FinancialStatementRow> result = new ArrayList<>();
@@ -186,22 +190,90 @@ public class FinancialStatementAgregateService {
                     line.getLineCode(),
                     line.getRubrique(),
                     line.getNature(),
-                    currentQ == null ? null : currentQ.get(line.getLineCode()),
-                    q1 == null ? null : q1.get(line.getLineCode()),
-                    q2 == null ? null : q2.get(line.getLineCode()),
-                    normalizedSpan == 4 && q3 != null ? q3.get(line.getLineCode()) : null,
-                    null,
+                    amountOf(currentQ, line.getLineCode()),
+                    amountOf(q1, line.getLineCode()),
+                    amountOf(q2, line.getLineCode()),
+                    normalizedSpan == 4 ? amountOf(q3, line.getLineCode()) : 0d,
+                    0d,
                     Boolean.TRUE.equals(line.getSectionHeader()),
                     Boolean.TRUE.equals(line.getTotalLine())));
         }
-        return result;
+        return enrichBilanImmobilisationColumns(statementType, result, qEnd, usedRegion);
+    }
+
+    private List<PeriodRange> quarterlyPeriods(LocalDate anchorDate, int span) {
+        int normalizedSpan = span <= 3 ? 3 : 4;
+        List<PeriodRange> periods = new ArrayList<>();
+        if (normalizedSpan == 4) {
+            for (LocalDate start : quarterStartsOfYear(anchorDate.getYear())) {
+                periods.add(new PeriodRange(start, quarterEnd(start)));
+            }
+            return periods;
+        }
+        LocalDate current = anchorDate;
+        for (int i = 0; i < normalizedSpan; i++) {
+            LocalDate start = quarterStart(current);
+            periods.add(new PeriodRange(start, quarterEnd(start)));
+            current = start.minusDays(1);
+        }
+        return periods;
+    }
+
+    private List<LocalDate> quarterStartsOfYear(int year) {
+        return List.of(
+                LocalDate.of(year, 1, 1),
+                LocalDate.of(year, 4, 1),
+                LocalDate.of(year, 7, 1),
+                LocalDate.of(year, 10, 1));
+    }
+
+    private List<FinancialStatementRow> enrichBilanImmobilisationColumns(String statementType,
+            List<FinancialStatementRow> rows, LocalDate end, String region) {
+        if (!STATEMENT_BILAN.equals(statementType) || rows.isEmpty()) {
+            return rows;
+        }
+        Map<String, ImmobilisationAmounts> amountsByLine = immobilisationAmountsByBilanLine(end, region);
+        if (amountsByLine.isEmpty()) {
+            return rows;
+        }
+        List<FinancialStatementRow> enriched = new ArrayList<>(rows.size());
+        for (FinancialStatementRow row : rows) {
+            ImmobilisationAmounts amounts = amountsByLine.get(row.getCode());
+            if (amounts == null) {
+                enriched.add(row);
+                continue;
+            }
+            enriched.add(new FinancialStatementRow(
+                    row.getCode(),
+                    row.getRubrique(),
+                    row.getNature(),
+                    row.getAmountN(),
+                    row.getAmountN1(),
+                    row.getAmountN2(),
+                    row.getAmountN3(),
+                    row.getAmountN4(),
+                    scale(amounts.gross()),
+                    scale(amounts.amortization()),
+                    scale(amounts.net()),
+                    row.isSectionHeader(),
+                    row.isTotalLine()));
+        }
+        return enriched;
     }
 
     private Double getPriorAmount(List<Map<String, Double>> previousMaps, String lineCode, int index) {
         if (index >= previousMaps.size()) {
-            return null;
+            return 0d;
         }
-        return previousMaps.get(index).get(lineCode);
+        return amountOf(previousMaps.get(index), lineCode);
+    }
+
+    private double amountOf(Map<String, Double> values, String lineCode) {
+        return values == null ? 0d : zero(values.get(lineCode));
+    }
+
+    private double zero(Double value) {
+        return value == null ? 0d : value;
     }
 
     private Map<String, Double> toValueMap(List<FinancialStatementAgregate> rows, String statementType) {
@@ -581,6 +653,43 @@ public class FinancialStatementAgregateService {
         metrics.immobCorp = scale(metrics.immobCorp);
         metrics.immobFin = scale(metrics.immobFin);
         metrics.immobLandBuildings = scale(metrics.immobLandBuildings);
+    }
+
+    private Map<String, ImmobilisationAmounts> immobilisationAmountsByBilanLine(LocalDate end, String region) {
+        Map<String, ImmobilisationAmounts> byLine = new LinkedHashMap<>();
+        Map<String, ImmobilisationSnapshot> snapshots = latestImmobilisationSnapshots(end, region);
+        if (snapshots.isEmpty()) {
+            for (Immobilisation immobilisation : findImmobilisations(region)) {
+                double gross = safe(immobilisation.getValeurOrigineUsd());
+                double amortization = immobilisation.amortissementCumulUsd(end);
+                double net = immobilisation.valeurNetteUsd(end);
+                addImmobilisationAmount(byLine, immobilisation.getCategorie(), immobilisation.getLibelle(),
+                        gross, amortization, net);
+            }
+        } else {
+            for (ImmobilisationSnapshot snapshot : snapshots.values()) {
+                addImmobilisationAmount(byLine, snapshot.categorie(), snapshot.libelle(),
+                        snapshot.grossUsd(), snapshot.amortizationUsd(), snapshot.netUsd());
+            }
+        }
+        ImmobilisationAmounts total = byLine.values().stream()
+                .reduce(new ImmobilisationAmounts(0d, 0d, 0d), ImmobilisationAmounts::plus);
+        if (total.hasValue()) {
+            byLine.put("ACT", total);
+        }
+        return byLine;
+    }
+
+    private void addImmobilisationAmount(Map<String, ImmobilisationAmounts> byLine, String categorie, String libelle,
+            double gross, double amortization, double net) {
+        String combined = normalize(categorie) + " " + normalize(libelle);
+        mergeImmobilisationAmount(byLine, containsAny(combined, KEYWORDS_IMMO_INCORP) ? "3"
+                : containsAny(combined, KEYWORDS_IMMO_FIN) ? "5" : "4", gross, amortization, net);
+    }
+
+    private void mergeImmobilisationAmount(Map<String, ImmobilisationAmounts> byLine, String lineCode,
+            double gross, double amortization, double net) {
+        byLine.merge(lineCode, new ImmobilisationAmounts(gross, amortization, net), ImmobilisationAmounts::plus);
     }
 
     private void classifyExpenses(LocalDate start, LocalDate end, String region, CoreMetrics metrics) {
@@ -1153,6 +1262,8 @@ public class FinancialStatementAgregateService {
                             row.getImmobilisationId().getUid(),
                             row.getImmobilisationId().getLibelle(),
                             row.getImmobilisationId().getCategorie(),
+                            safe(row.getValeurBrutte()),
+                            safe(row.getAmmortissement()),
                             safe(row.getValeurNette())));
         }
         return snapshots;
@@ -1178,18 +1289,19 @@ public class FinancialStatementAgregateService {
         String usedRegion = normalizeRegion(region);
         String mvt = incoming ? "IN" : "OUT";
         String catRaw = String.join("_", keywords);
-        if (catRaw.length() > 250) {
-            catRaw = catRaw.substring(0, 250);
+        if (catRaw.length() > 220) {
+            catRaw = catRaw.substring(0, 220);
         }
         final String cat = catRaw;
+        String periodCat = start + "|" + end + "|" + cat;
         String jpqlCheck = "SELECT t FROM TresorerieAgregate t WHERE t.date = :endDate AND t.region = :region AND t.mouvement = :mvt AND t.categorie = :cat";
         List<TresorerieAgregate> list = ManagedSessionFactory.isEmbedded()
                 ? ManagedSessionFactory.executeRead(em -> em.createQuery(jpqlCheck, TresorerieAgregate.class)
                         .setParameter("endDate", end).setParameter("region", usedRegion)
-                        .setParameter("mvt", mvt).setParameter("cat", cat).getResultList())
+                        .setParameter("mvt", mvt).setParameter("cat", periodCat).getResultList())
                 : ManagedSessionFactory.getEntityManager().createQuery(jpqlCheck, TresorerieAgregate.class)
                         .setParameter("endDate", end).setParameter("region", usedRegion)
-                        .setParameter("mvt", mvt).setParameter("cat", cat).getResultList();
+                        .setParameter("mvt", mvt).setParameter("cat", periodCat).getResultList();
         if (!list.isEmpty()) {
             return safe(list.get(0).getMontantUsd());
         }
@@ -1213,7 +1325,7 @@ public class FinancialStatementAgregateService {
         agg.setDate(end);
         agg.setRegion(usedRegion);
         agg.setMouvement(mvt);
-        agg.setCategorie(cat);
+        agg.setCategorie(periodCat);
         agg.setMontantUsd(amount);
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> { em.persist(agg); return null; }).join();
@@ -1336,7 +1448,20 @@ public class FinancialStatementAgregateService {
     private record PeriodRange(LocalDate start, LocalDate end) {
     }
 
-    private record ImmobilisationSnapshot(String uid, String libelle, String categorie, double netUsd) {
+    private record ImmobilisationSnapshot(String uid, String libelle, String categorie, double grossUsd,
+            double amortizationUsd, double netUsd) {
+    }
+
+    private record ImmobilisationAmounts(double gross, double amortization, double net) {
+
+        private ImmobilisationAmounts plus(ImmobilisationAmounts other) {
+            return new ImmobilisationAmounts(gross + other.gross, amortization + other.amortization,
+                    net + other.net);
+        }
+
+        private boolean hasValue() {
+            return Math.abs(gross) > 0.001 || Math.abs(amortization) > 0.001 || Math.abs(net) > 0.001;
+        }
     }
 
     private static final class CoreMetrics {

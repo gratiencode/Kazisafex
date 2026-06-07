@@ -284,6 +284,9 @@ public class RepportController implements Initializable {
     private TableColumn<FinancialStatementRow, String> col_fin_bilan_n3;
     @FXML
     private TableColumn<FinancialStatementRow, String> col_fin_bilan_n4;
+    private final TableColumn<FinancialStatementRow, String> col_fin_bilan_gross = new TableColumn<>("Valeur brute immobilisation");
+    private final TableColumn<FinancialStatementRow, String> col_fin_bilan_amortization = new TableColumn<>("Amortissement");
+    private final TableColumn<FinancialStatementRow, String> col_fin_bilan_net = new TableColumn<>("Valeur nette immobilisation");
     @FXML
     private TableView<FinancialStatementRow> tb_fin_cr;
     @FXML
@@ -325,7 +328,8 @@ public class RepportController implements Initializable {
     private final ObservableList<FinancialStatementRow> bilanRows = FXCollections.observableArrayList();
     private final ObservableList<FinancialStatementRow> compteResultatRows = FXCollections.observableArrayList();
     private final ObservableList<FinancialStatementRow> fluxRows = FXCollections.observableArrayList();
-    private int financialHistorySpan = 5;
+    private static final int FINANCIAL_PERIOD_EXACT = 1;
+    private int financialHistorySpan = FINANCIAL_PERIOD_EXACT;
 
     @FXML
     private CheckBox chk_filter_zeros;
@@ -664,8 +668,8 @@ public class RepportController implements Initializable {
                     refreshFinancialColumnHeaders();
                     loadFinancialStatements();
                 });
-        dpk_debut_report.setValue(LocalDate.now().minusMonths(LocalDate.now().getMonthValue() - 1));
-        dpk_fin_report.setValue(LocalDate.now().plusMonths((12 - LocalDate.now().getMonthValue())));
+        dpk_debut_report.setValue(LocalDate.now().withDayOfYear(1));
+        dpk_fin_report.setValue(LocalDate.of(LocalDate.now().getYear(), 12, 31));
         cbx_duration_report.getSelectionModel().selectFirst();
         evaluate();
         ponctuel();
@@ -686,6 +690,7 @@ public class RepportController implements Initializable {
     private void configureFinancialTables() {
         configureFinancialTable(tb_fin_bilan, col_fin_bilan_code, col_fin_bilan_rubrique, col_fin_bilan_nature,
                 col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4);
+        configureBilanImmobilisationColumns();
         configureFinancialTable(tb_fin_cr, col_fin_cr_code, col_fin_cr_rubrique, col_fin_cr_nature, col_fin_cr_n,
                 col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4);
         configureFinancialTable(tb_fin_flux, col_fin_flux_code, col_fin_flux_rubrique, col_fin_flux_nature,
@@ -695,6 +700,21 @@ public class RepportController implements Initializable {
         tb_fin_flux.setItems(fluxRows);
         configureFinancialHistorySelector();
         configureFilterZeros();
+    }
+
+    private void configureBilanImmobilisationColumns() {
+        col_fin_bilan_gross.setPrefWidth(120);
+        col_fin_bilan_amortization.setPrefWidth(120);
+        col_fin_bilan_net.setPrefWidth(120);
+        col_fin_bilan_gross.setCellValueFactory(param ->
+                new SimpleStringProperty(formatFinancialAmount(param.getValue().getGrossAmount())));
+        col_fin_bilan_amortization.setCellValueFactory(param ->
+                new SimpleStringProperty(formatFinancialAmount(param.getValue().getAmortizationAmount())));
+        col_fin_bilan_net.setCellValueFactory(param ->
+                new SimpleStringProperty(formatFinancialAmount(param.getValue().getNetAmount())));
+        if (!tb_fin_bilan.getColumns().contains(col_fin_bilan_gross)) {
+            tb_fin_bilan.getColumns().addAll(col_fin_bilan_gross, col_fin_bilan_amortization, col_fin_bilan_net);
+        }
     }
 
     private void configureFilterZeros() {
@@ -748,13 +768,14 @@ public class RepportController implements Initializable {
         if (cbx_financial_history_span == null) {
             return;
         }
-        cbx_financial_history_span.setItems(FXCollections.observableArrayList("4 trimestres", "3 ans", "5 ans"));
-        cbx_financial_history_span.getSelectionModel().select("5 ans");
+        cbx_financial_history_span.setItems(FXCollections.observableArrayList("Période choisie", "4 trimestres", "3 ans", "5 ans"));
+        cbx_financial_history_span.getSelectionModel().select("Période choisie");
         cbx_financial_history_span.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
             if (newValue == null) {
                 return;
             }
-            financialHistorySpan = newValue.startsWith("4") ? 4 : (newValue.startsWith("3") ? 3 : 5);
+            financialHistorySpan = newValue.startsWith("P") ? FINANCIAL_PERIOD_EXACT
+                    : (newValue.startsWith("4") ? 4 : (newValue.startsWith("3") ? 3 : 5));
             refreshFinancialColumnHeaders();
             loadFinancialStatements();
         });
@@ -762,6 +783,31 @@ public class RepportController implements Initializable {
     }
 
     private void refreshFinancialColumnHeaders() {
+        boolean exactPeriod = financialHistorySpan == FINANCIAL_PERIOD_EXACT;
+        if (exactPeriod) {
+            col_fin_bilan_n.setText("Période");
+            col_fin_bilan_n1.setText("Période précédente 1");
+            col_fin_bilan_n2.setText("Période précédente 2");
+            col_fin_bilan_n3.setText("Période précédente 3");
+            col_fin_bilan_n4.setText("");
+            col_fin_cr_n.setText("Période");
+            col_fin_cr_n1.setText("Période précédente 1");
+            col_fin_cr_n2.setText("Période précédente 2");
+            col_fin_cr_n3.setText("Période précédente 3");
+            col_fin_cr_n4.setText("");
+            col_fin_flux_n.setText("Période");
+            col_fin_flux_n1.setText("Période précédente 1");
+            col_fin_flux_n2.setText("Période précédente 2");
+            col_fin_flux_n3.setText("Période précédente 3");
+            col_fin_flux_n4.setText("");
+            col_fin_bilan_n3.setVisible(true);
+            col_fin_bilan_n4.setVisible(false);
+            col_fin_cr_n3.setVisible(true);
+            col_fin_cr_n4.setVisible(false);
+            col_fin_flux_n3.setVisible(true);
+            col_fin_flux_n4.setVisible(false);
+            return;
+        }
         LocalDate endDate = dpk_fin_report != null && dpk_fin_report.getValue() != null ? dpk_fin_report.getValue() : LocalDate.now();
         if (financialHistorySpan == 4) {
             applyQuarterHeaders(col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4, endDate);
@@ -802,22 +848,11 @@ public class RepportController implements Initializable {
             TableColumn<FinancialStatementRow, String> n3Col,
             TableColumn<FinancialStatementRow, String> n4Col,
             LocalDate endDate) {
-        int quarter = (endDate.getMonthValue() - 1) / 3 + 1;
         int year = endDate.getYear();
-        nCol.setText("T" + quarter + " " + year);
-        
-        quarter--;
-        if (quarter < 1) { quarter = 4; year--; }
-        n1Col.setText("T" + quarter + " " + year);
-        
-        quarter--;
-        if (quarter < 1) { quarter = 4; year--; }
-        n2Col.setText("T" + quarter + " " + year);
-        
-        quarter--;
-        if (quarter < 1) { quarter = 4; year--; }
-        n3Col.setText("T" + quarter + " " + year);
-        
+        nCol.setText("T1 " + year);
+        n1Col.setText("T2 " + year);
+        n2Col.setText("T3 " + year);
+        n3Col.setText("T4 " + year);
         n4Col.setText("");
     }
 
@@ -1108,8 +1143,8 @@ public class RepportController implements Initializable {
         rbtngroup = new ToggleGroup();
         MainUI.setPattern(dpk_fin_report);
         MainUI.setPattern(dpk_debut_report);
-        dpk_debut_report.setValue(LocalDate.now());
-        dpk_fin_report.setValue(LocalDate.now().minusMonths(1));
+        dpk_debut_report.setValue(LocalDate.now().withDayOfYear(1));
+        dpk_fin_report.setValue(LocalDate.of(LocalDate.now().getYear(), 12, 31));
         configureFinancialTables();
         configTableVentePerProd();
         devise = pref.get("mainCur", "USD");
@@ -1335,6 +1370,13 @@ public class RepportController implements Initializable {
         LocalDate d1 = dpk_debut_report.getValue() == null ? LocalDate.now().withDayOfMonth(1)
                 : dpk_debut_report.getValue();
         LocalDate d2 = dpk_fin_report.getValue() == null ? LocalDate.now() : dpk_fin_report.getValue();
+        if (d1.isAfter(d2)) {
+            LocalDate tmp = d1;
+            d1 = d2;
+            d2 = tmp;
+        }
+        final LocalDate statementStart = d1;
+        final LocalDate statementEnd = d2;
         String usedRegion = detectRegion(role);
         int span = financialHistorySpan;
         boolean filterZeros = chk_filter_zeros != null && chk_filter_zeros.isSelected();
@@ -1343,16 +1385,24 @@ public class RepportController implements Initializable {
                 List<FinancialStatementRow> bilan;
                 List<FinancialStatementRow> compte;
                 List<FinancialStatementRow> flux;
-                if (span == 4) {
-                    financialStatementService.ensureQuarterlyStatements(d2, span, usedRegion);
+                if (span == FINANCIAL_PERIOD_EXACT) {
+                    financialStatementService.rebuildStatements(statementStart, statementEnd, usedRegion);
+                    bilan = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_BILAN, statementStart, statementEnd, usedRegion);
+                    compte = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, statementStart, statementEnd, usedRegion);
+                    flux = financialStatementService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, statementStart, statementEnd, usedRegion);
+                } else if (span == 4) {
+                    financialStatementService.ensureQuarterlyStatements(statementEnd, span, usedRegion);
                     bilan = financialStatementService.loadStatementRowsQuarterly(
-                            FinancialStatementAgregateService.STATEMENT_BILAN, d2, span, usedRegion);
+                            FinancialStatementAgregateService.STATEMENT_BILAN, statementEnd, span, usedRegion);
                     compte = financialStatementService.loadStatementRowsQuarterly(
-                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d2, span, usedRegion);
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, statementEnd, span, usedRegion);
                     flux = financialStatementService.loadStatementRowsQuarterly(
-                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d2, span, usedRegion);
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, statementEnd, span, usedRegion);
                 } else {
-                    int anchorYear = d2.getYear();
+                    int anchorYear = statementEnd.getYear();
                     financialStatementService.ensureYearlyStatements(anchorYear, span, usedRegion);
                     bilan = financialStatementService.loadStatementRows(
                             FinancialStatementAgregateService.STATEMENT_BILAN, anchorYear, span, usedRegion);
@@ -1437,6 +1487,11 @@ public class RepportController implements Initializable {
             dataHeaders.add(col_fin_bilan_n3.getText());
             dataHeaders.add(col_fin_bilan_n4.getText());
         } else if (financialHistorySpan == 4) {
+            dataHeaders.add(col_fin_bilan_n.getText());
+            dataHeaders.add(col_fin_bilan_n1.getText());
+            dataHeaders.add(col_fin_bilan_n2.getText());
+            dataHeaders.add(col_fin_bilan_n3.getText());
+        } else if (financialHistorySpan == FINANCIAL_PERIOD_EXACT) {
             dataHeaders.add(col_fin_bilan_n.getText());
             dataHeaders.add(col_fin_bilan_n1.getText());
             dataHeaders.add(col_fin_bilan_n2.getText());

@@ -49,8 +49,14 @@ public final class FinancialStatementPdfExporter {
             drawHeader(document, contentStream, pdf, entreprise, title, subtitle, normal, bold, primary, pageW, pageH);
             
             // Build dynamic table column widths
+            boolean includeImmobilisationColumns = hasImmobilisationColumns(rows);
+            int dataColumnCount = dataHeaders.size() + (includeImmobilisationColumns ? 3 : 0);
             int[] table;
-            if (dataHeaders.size() == 5) {
+            if (includeImmobilisationColumns && dataHeaders.size() == 5) {
+                table = new int[]{32, 130, 110, 48, 48, 48, 48, 48, 55, 55, 55};
+            } else if (includeImmobilisationColumns) {
+                table = new int[]{35, 155, 125, 55, 55, 55, 55, 55, 55, 55};
+            } else if (dataHeaders.size() == 5) {
                 table = new int[]{40, 210, 160, 65, 65, 65, 65, 65};
             } else if (dataHeaders.size() == 4) {
                 table = new int[]{40, 220, 200, 65, 65, 65, 65};
@@ -58,8 +64,8 @@ public final class FinancialStatementPdfExporter {
                 table = new int[]{40, 230, 210, 80, 80, 80};
             }
 
-            int[] rightAligned = new int[dataHeaders.size()];
-            for (int i = 0; i < dataHeaders.size(); i++) {
+            int[] rightAligned = new int[dataColumnCount];
+            for (int i = 0; i < dataColumnCount; i++) {
                 rightAligned[i] = 3 + i;
             }
 
@@ -71,6 +77,11 @@ public final class FinancialStatementPdfExporter {
             pdf.addCell("Nature", primary);
             for (String header : dataHeaders) {
                 pdf.addCell(header, primary);
+            }
+            if (includeImmobilisationColumns) {
+                pdf.addCell("Brut immo", primary);
+                pdf.addCell("Amort.", primary);
+                pdf.addCell("Net immo", primary);
             }
 
             pdf.setFont(normal, 8, Color.BLACK);
@@ -94,6 +105,11 @@ public final class FinancialStatementPdfExporter {
                     for (String header : dataHeaders) {
                         pdf.addCell(header, primary);
                     }
+                    if (includeImmobilisationColumns) {
+                        pdf.addCell("Brut immo", primary);
+                        pdf.addCell("Amort.", primary);
+                        pdf.addCell("Net immo", primary);
+                    }
                     pdf.setFont(normal, 8, Color.BLACK);
                     lines = 0;
                 }
@@ -114,6 +130,11 @@ public final class FinancialStatementPdfExporter {
                 }
                 if (dataHeaders.size() >= 5) {
                     pdf.addCell(formatAmount(row.getAmountN4()), fill);
+                }
+                if (includeImmobilisationColumns) {
+                    pdf.addCell(formatAmount(row.getGrossAmount()), fill);
+                    pdf.addCell(formatAmount(row.getAmortizationAmount()), fill);
+                    pdf.addCell(formatAmount(row.getNetAmount()), fill);
                 }
                 lines++;
             }
@@ -193,6 +214,11 @@ public final class FinancialStatementPdfExporter {
             return "";
         }
         return Util.toPlain(BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+    }
+
+    private static boolean hasImmobilisationColumns(List<FinancialStatementRow> rows) {
+        return rows.stream().anyMatch(row -> row.getGrossAmount() != null
+                || row.getAmortizationAmount() != null || row.getNetAmount() != null);
     }
 
     private static String safe(String value) {

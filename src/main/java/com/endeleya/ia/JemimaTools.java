@@ -2462,10 +2462,16 @@ public class JemimaTools {
             try {
                 LocalDate d1 = LocalDate.parse(start);
                 LocalDate d2 = LocalDate.parse(end);
+                if (d1.isAfter(d2)) {
+                    LocalDate tmp = d1;
+                    d1 = d2;
+                    d2 = tmp;
+                }
                 String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
                 financialService.rebuildStatements(d1, d2, usedRegion);
                 Entreprise entreprise = currentEntreprise();
-                List<String> headers = List.of("Période", "N-1", "N-2");
+                List<String> headers = List.of("Période", "Période précédente 1", "Période précédente 2",
+                        "Période précédente 3");
                 File last = null;
                 last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", d1, d2,
                         financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion), headers);
@@ -2492,16 +2498,23 @@ public class JemimaTools {
             try {
                 LocalDate d1 = LocalDate.parse(start);
                 LocalDate d2 = LocalDate.parse(end);
+                if (d1.isAfter(d2)) {
+                    LocalDate tmp = d1;
+                    d1 = d2;
+                    d2 = tmp;
+                }
                 String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
                 financialService.rebuildStatements(d1, d2, usedRegion);
                 File file = FileUtils.pointFile("financial-statements-" + System.currentTimeMillis() + ".xlsx");
+                List<String> headers = List.of("Période", "Période précédente 1", "Période précédente 2",
+                        "Période précédente 3");
                 try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
                     writeSheet(workbook, "Bilan", financialService.loadStatementRows(
-                            FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion));
+                            FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion), headers);
                     writeSheet(workbook, "Compte Resultat", financialService.loadStatementRows(
-                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d1, d2, usedRegion));
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d1, d2, usedRegion), headers);
                     writeSheet(workbook, "Flux Tresorerie", financialService.loadStatementRows(
-                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d1, d2, usedRegion));
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d1, d2, usedRegion), headers);
                     workbook.write(out);
                 }
                 if (Desktop.isDesktopSupported()) {
@@ -2510,6 +2523,156 @@ public class JemimaTools {
                 return "États financiers Excel générés: " + file.getAbsolutePath();
             } catch (Exception ex) {
                 return "Échec génération Excel: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre les états financiers PDF comparatifs par année, par exemple sur 3 ou 5 ans")
+    public String generateFinancialStatementsYearlyPdf(
+            @P("Année finale de comparaison, ex: 2026") int anchorYear,
+            @P("Nombre d'années à afficher, généralement 3 ou 5") int years,
+            @P("Région optionnelle") String region) {
+        int span = years <= 3 ? 3 : 5;
+        int resolvedAnchorYear = anchorYear <= 0 ? LocalDate.now().getYear() : anchorYear;
+        String key = resolvedAnchorYear + "|" + span + "|" + region;
+        return executeOnce("generateFinancialStatementsYearlyPdf", key, () -> {
+            try {
+                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                financialService.ensureYearlyStatements(resolvedAnchorYear, span, usedRegion);
+                Entreprise entreprise = currentEntreprise();
+                List<String> headers = yearlyHeaders(resolvedAnchorYear, span);
+                LocalDate start = LocalDate.of(resolvedAnchorYear - span + 1, 1, 1);
+                LocalDate end = LocalDate.of(resolvedAnchorYear, 12, 31);
+                File last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", start, end,
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN,
+                                resolvedAnchorYear, span, usedRegion),
+                        headers);
+                FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", start, end,
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
+                                resolvedAnchorYear, span, usedRegion),
+                        headers);
+                FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", start, end,
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
+                                resolvedAnchorYear, span, usedRegion),
+                        headers);
+                if (last != null && Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(last);
+                }
+                return "États financiers PDF générés sur " + span + " ans, de "
+                        + (resolvedAnchorYear - span + 1) + " à " + resolvedAnchorYear + ".";
+            } catch (Exception ex) {
+                return "Échec génération PDF comparatif: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre les états financiers Excel comparatifs par année, par exemple sur 3 ou 5 ans")
+    public String generateFinancialStatementsYearlyExcel(
+            @P("Année finale de comparaison, ex: 2026") int anchorYear,
+            @P("Nombre d'années à afficher, généralement 3 ou 5") int years,
+            @P("Région optionnelle") String region) {
+        int span = years <= 3 ? 3 : 5;
+        int resolvedAnchorYear = anchorYear <= 0 ? LocalDate.now().getYear() : anchorYear;
+        String key = resolvedAnchorYear + "|" + span + "|" + region;
+        return executeOnce("generateFinancialStatementsYearlyExcel", key, () -> {
+            try {
+                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                financialService.ensureYearlyStatements(resolvedAnchorYear, span, usedRegion);
+                File file = FileUtils.pointFile("financial-statements-yearly-" + span + "y-"
+                        + resolvedAnchorYear + "-" + System.currentTimeMillis() + ".xlsx");
+                List<String> headers = yearlyHeaders(resolvedAnchorYear, span);
+                try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
+                    writeSheet(workbook, "Bilan", financialService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_BILAN, resolvedAnchorYear, span, usedRegion),
+                            headers);
+                    writeSheet(workbook, "Compte Resultat", financialService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, resolvedAnchorYear, span, usedRegion),
+                            headers);
+                    writeSheet(workbook, "Flux Tresorerie", financialService.loadStatementRows(
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, resolvedAnchorYear, span, usedRegion),
+                            headers);
+                    workbook.write(out);
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "États financiers Excel générés sur " + span + " ans: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération Excel comparatif: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre les états financiers PDF d'une année séparés par trimestre T1, T2, T3 et T4")
+    public String generateFinancialStatementsQuarterlyPdf(
+            @P("Année à afficher par trimestre, ex: 2026") int year,
+            @P("Région optionnelle") String region) {
+        int resolvedYear = year <= 0 ? LocalDate.now().getYear() : year;
+        String key = resolvedYear + "|" + region;
+        return executeOnce("generateFinancialStatementsQuarterlyPdf", key, () -> {
+            try {
+                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                LocalDate anchorDate = LocalDate.of(resolvedYear, 12, 31);
+                financialService.ensureQuarterlyStatements(anchorDate, 4, usedRegion);
+                Entreprise entreprise = currentEntreprise();
+                List<String> headers = quarterlyHeaders(resolvedYear);
+                LocalDate start = LocalDate.of(resolvedYear, 1, 1);
+                LocalDate end = LocalDate.of(resolvedYear, 12, 31);
+                File last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", start, end,
+                        financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_BILAN,
+                                anchorDate, 4, usedRegion),
+                        headers);
+                FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", start, end,
+                        financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
+                                anchorDate, 4, usedRegion),
+                        headers);
+                FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", start, end,
+                        financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
+                                anchorDate, 4, usedRegion),
+                        headers);
+                if (last != null && Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(last);
+                }
+                return "États financiers PDF générés par trimestre pour l'année " + resolvedYear + ".";
+            } catch (Exception ex) {
+                return "Échec génération PDF trimestriel: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre les états financiers Excel d'une année séparés par trimestre T1, T2, T3 et T4")
+    public String generateFinancialStatementsQuarterlyExcel(
+            @P("Année à afficher par trimestre, ex: 2026") int year,
+            @P("Région optionnelle") String region) {
+        int resolvedYear = year <= 0 ? LocalDate.now().getYear() : year;
+        String key = resolvedYear + "|" + region;
+        return executeOnce("generateFinancialStatementsQuarterlyExcel", key, () -> {
+            try {
+                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                LocalDate anchorDate = LocalDate.of(resolvedYear, 12, 31);
+                financialService.ensureQuarterlyStatements(anchorDate, 4, usedRegion);
+                File file = FileUtils.pointFile("financial-statements-quarterly-"
+                        + resolvedYear + "-" + System.currentTimeMillis() + ".xlsx");
+                List<String> headers = quarterlyHeaders(resolvedYear);
+                try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
+                    writeSheet(workbook, "Bilan", financialService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_BILAN, anchorDate, 4, usedRegion),
+                            headers);
+                    writeSheet(workbook, "Compte Resultat", financialService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, anchorDate, 4, usedRegion),
+                            headers);
+                    writeSheet(workbook, "Flux Tresorerie", financialService.loadStatementRowsQuarterly(
+                            FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, anchorDate, 4, usedRegion),
+                            headers);
+                    workbook.write(out);
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "États financiers Excel générés par trimestre pour l'année " + resolvedYear
+                        + ": " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération Excel trimestriel: " + ex.getMessage();
             }
         });
     }
@@ -3646,28 +3809,65 @@ public class JemimaTools {
         return latestPrices;
     }
 
-    private void writeSheet(XSSFWorkbook workbook, String name, List<FinancialStatementRow> rows) {
+    private void writeSheet(XSSFWorkbook workbook, String name, List<FinancialStatementRow> rows,
+            List<String> periodHeaders) {
         var sheet = workbook.createSheet(name);
+        boolean includeImmobilisationColumns = rows.stream().anyMatch(line -> line.getGrossAmount() != null
+                || line.getAmortizationAmount() != null || line.getNetAmount() != null);
+        List<String> headers = periodHeaders == null || periodHeaders.isEmpty()
+                ? List.of("Période", "Période précédente 1", "Période précédente 2")
+                : periodHeaders;
         Row header = sheet.createRow(0);
         header.createCell(0).setCellValue("Code");
         header.createCell(1).setCellValue("Rubrique");
         header.createCell(2).setCellValue("Nature");
-        header.createCell(3).setCellValue("N");
-        header.createCell(4).setCellValue("N-1");
-        header.createCell(5).setCellValue("N-2");
+        for (int i = 0; i < headers.size(); i++) {
+            header.createCell(3 + i).setCellValue(headers.get(i));
+        }
+        int immobilisationStartColumn = 3 + headers.size();
+        if (includeImmobilisationColumns) {
+            header.createCell(immobilisationStartColumn).setCellValue("Valeur brute immobilisation");
+            header.createCell(immobilisationStartColumn + 1).setCellValue("Amortissement");
+            header.createCell(immobilisationStartColumn + 2).setCellValue("Valeur nette immobilisation");
+        }
         int rowIndex = 1;
         for (FinancialStatementRow line : rows) {
             Row row = sheet.createRow(rowIndex++);
             row.createCell(0).setCellValue(line.getCode());
             row.createCell(1).setCellValue(line.getRubrique());
             row.createCell(2).setCellValue(line.getNature());
-            row.createCell(3).setCellValue(value(line.getAmountN()));
-            row.createCell(4).setCellValue(value(line.getAmountN1()));
-            row.createCell(5).setCellValue(value(line.getAmountN2()));
+            List<Double> values = List.of(
+                    value(line.getAmountN()),
+                    value(line.getAmountN1()),
+                    value(line.getAmountN2()),
+                    value(line.getAmountN3()),
+                    value(line.getAmountN4()));
+            for (int i = 0; i < headers.size() && i < values.size(); i++) {
+                row.createCell(3 + i).setCellValue(values.get(i));
+            }
+            if (includeImmobilisationColumns) {
+                row.createCell(immobilisationStartColumn).setCellValue(value(line.getGrossAmount()));
+                row.createCell(immobilisationStartColumn + 1).setCellValue(value(line.getAmortizationAmount()));
+                row.createCell(immobilisationStartColumn + 2).setCellValue(value(line.getNetAmount()));
+            }
         }
-        for (int i = 0; i < 6; i++) {
+        int columnCount = 3 + headers.size() + (includeImmobilisationColumns ? 3 : 0);
+        for (int i = 0; i < columnCount; i++) {
             sheet.autoSizeColumn(i);
         }
+    }
+
+    private List<String> yearlyHeaders(int anchorYear, int span) {
+        List<String> headers = new ArrayList<>();
+        int normalizedSpan = span <= 3 ? 3 : 5;
+        for (int year = anchorYear; year >= anchorYear - normalizedSpan + 1; year--) {
+            headers.add(String.valueOf(year));
+        }
+        return headers;
+    }
+
+    private List<String> quarterlyHeaders(int year) {
+        return List.of("T1 " + year, "T2 " + year, "T3 " + year, "T4 " + year);
     }
 
     private Entreprise currentEntreprise() {

@@ -131,6 +131,27 @@ public final class JemimaAssistantClient {
                 || value.contains("compte de resultat"))) {
             return null;
         }
+        if (requestsQuarterlyYear(value)) {
+            int anchorYear = requestedAnchorYear(question);
+            if (value.contains("excel") || value.contains("xlsx")) {
+                return aiAgents.getJemimaTools().generateFinancialStatementsQuarterlyExcel(anchorYear, null);
+            }
+            if (value.contains("pdf") || value.contains("télécharge") || value.contains("telecharge")
+                    || value.contains("download")) {
+                return aiAgents.getJemimaTools().generateFinancialStatementsQuarterlyPdf(anchorYear, null);
+            }
+        }
+        int yearlySpan = requestedYearSpan(value);
+        if (yearlySpan > 0) {
+            int anchorYear = requestedAnchorYear(question);
+            if (value.contains("excel") || value.contains("xlsx")) {
+                return aiAgents.getJemimaTools().generateFinancialStatementsYearlyExcel(anchorYear, yearlySpan, null);
+            }
+            if (value.contains("pdf") || value.contains("télécharge") || value.contains("telecharge")
+                    || value.contains("download")) {
+                return aiAgents.getJemimaTools().generateFinancialStatementsYearlyPdf(anchorYear, yearlySpan, null);
+            }
+        }
         LocalDateRange range = LocalDateRange.from(question);
         if (value.contains("excel") || value.contains("xlsx")) {
             return aiAgents.getJemimaTools().generateFinancialStatementsExcel(range.start(), range.end(), null);
@@ -140,6 +161,37 @@ public final class JemimaAssistantClient {
             return aiAgents.getJemimaTools().generateFinancialStatementsPdf(range.start(), range.end(), null);
         }
         return null;
+    }
+
+    private boolean requestsQuarterlyYear(String value) {
+        return value != null && (value.contains("trimestre") || value.contains("trimestriel")
+                || value.contains("trimestrielle") || value.contains("quarter"));
+    }
+
+    private int requestedYearSpan(String value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value.contains("5 ans") || value.contains("cinq ans") || value.contains("5 années")
+                || value.contains("cinq années")) {
+            return 5;
+        }
+        if (value.contains("3 ans") || value.contains("trois ans") || value.contains("3 années")
+                || value.contains("trois années")) {
+            return 3;
+        }
+        return 0;
+    }
+
+    private int requestedAnchorYear(String question) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\b(20\\d{2})\\b")
+                .matcher(question == null ? "" : question);
+        int year = java.time.LocalDate.now().getYear();
+        while (matcher.find()) {
+            year = Integer.parseInt(matcher.group(1));
+        }
+        return year;
     }
 
     private record LocalDateRange(String start, String end) {
@@ -158,12 +210,27 @@ public final class JemimaAssistantClient {
             }
             java.time.LocalDate today = java.time.LocalDate.now();
             if (first == null) {
-                first = today.withDayOfMonth(1).toString();
+                Integer year = findYear(text);
+                first = year == null ? today.withDayOfMonth(1).toString()
+                        : java.time.LocalDate.of(year, 1, 1).toString();
             }
             if (second == null) {
-                second = today.toString();
+                Integer year = findYear(text);
+                second = year == null ? today.toString()
+                        : java.time.LocalDate.of(year, 12, 31).toString();
             }
             return new LocalDateRange(first, second);
+        }
+
+        private static Integer findYear(String text) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("\\b(20\\d{2})\\b")
+                    .matcher(text == null ? "" : text);
+            Integer year = null;
+            while (matcher.find()) {
+                year = Integer.parseInt(matcher.group(1));
+            }
+            return year;
         }
     }
 
