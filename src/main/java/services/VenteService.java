@@ -66,6 +66,7 @@ public class VenteService implements VenteStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyVente(e);
             });
             return cat;
         }
@@ -76,6 +77,7 @@ public class VenteService implements VenteStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
+            AggregateTriggerService.getInstance().notifyVente(cat);
             return cat;
         } catch (Exception e) {
             if (tx != null) {
@@ -94,6 +96,7 @@ public class VenteService implements VenteStorage {
                     return cat;
                 }).thenAccept(e -> {
                     System.out.println("Element " + e.getReference() + " enregistree");
+                    AggregateTriggerService.getInstance().notifyVente(e);
                 });
                 return cat;
             }
@@ -103,6 +106,7 @@ public class VenteService implements VenteStorage {
             }
             ManagedSessionFactory.getEntityManager().merge(cat);
             tx.commit();
+            AggregateTriggerService.getInstance().notifyVente(cat);
             return cat;
         } catch (Exception e) {
         }
@@ -117,6 +121,7 @@ public class VenteService implements VenteStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " supprimee");
+                AggregateTriggerService.getInstance().notifyVente(e);
             });
             return;
         }
@@ -126,6 +131,7 @@ public class VenteService implements VenteStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyVente(cat);
     }
 
     @Override

@@ -34,6 +34,10 @@ public class TresorerieAgregate implements Serializable {
     @Column(name = "montant_usd")
     private Double montantUsd;
 
+    @Column(name = "montant_cdf")
+    private Double montantCdf;
+
+
     public TresorerieAgregate() {
     }
 
@@ -91,4 +95,13 @@ public class TresorerieAgregate implements Serializable {
     public void setMontantUsd(Double montantUsd) {
         this.montantUsd = montantUsd;
     }
+
+    public Double getMontantCdf() {
+        return montantCdf;
+    }
+
+    public void setMontantCdf(Double montantCdf) {
+        this.montantCdf = montantCdf;
+    }
+
 }

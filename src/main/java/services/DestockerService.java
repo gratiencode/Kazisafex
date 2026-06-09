@@ -122,6 +122,7 @@ public class DestockerService implements DestockerStorage {
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
                 rectifyDepotAggregate(snapshotOf(e));
+                AggregateTriggerService.getInstance().notifyDestocker(e);
             });
             return cat;
         }
@@ -135,6 +136,7 @@ public class DestockerService implements DestockerStorage {
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
             rectifyDepotAggregate(snapshotOf(cat));
+            AggregateTriggerService.getInstance().notifyDestocker(cat);
         }
         return cat;
     }
@@ -150,6 +152,7 @@ public class DestockerService implements DestockerStorage {
                 System.out.println("Element " + e.getReference() + " enregistree");
                 rectifyDepotAggregate(before);
                 rectifyDepotAggregate(snapshotOf(e));
+                AggregateTriggerService.getInstance().notifyDestocker(e);
             });
             return cat;
         }
@@ -161,6 +164,7 @@ public class DestockerService implements DestockerStorage {
         tx.commit();
         rectifyDepotAggregate(before);
         rectifyDepotAggregate(snapshotOf(cat));
+        AggregateTriggerService.getInstance().notifyDestocker(cat);
 
         return cat;
     }
@@ -175,6 +179,7 @@ public class DestockerService implements DestockerStorage {
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
                 rectifyDepotAggregate(before == null ? snapshotOf(e) : before);
+                AggregateTriggerService.getInstance().notifyDestocker(e);
             });
             return;
         }
@@ -185,6 +190,7 @@ public class DestockerService implements DestockerStorage {
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
         rectifyDepotAggregate(before == null ? snapshotOf(cat) : before);
+        AggregateTriggerService.getInstance().notifyDestocker(cat);
     }
 
     @Override

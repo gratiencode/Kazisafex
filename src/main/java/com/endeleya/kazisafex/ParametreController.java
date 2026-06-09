@@ -31,6 +31,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.util.StringConverter;
 import tools.MainUI;
+import tools.CurrencyConverter;
 import tools.SyncEngine;
 
 /**
@@ -42,6 +43,8 @@ public class ParametreController implements Initializable {
     private ToggleButton tgbtn_session;
     @FXML
     private TextField tf_taux_de_change;
+    @FXML
+    private TextField tf_taux_imposition_resultat;
     @FXML
     private ToggleButton tgbtn_sync;
     @FXML
@@ -122,11 +125,38 @@ public class ParametreController implements Initializable {
             return;
         }
         try {
-            this.pref.putDouble("taux2change", Double.parseDouble(this.tf_taux_de_change.getText()));
+            String selectedCurrency = CurrencyConverter.normalize(this.cbx_main_cur.getValue());
+            double rate = Double.parseDouble(this.tf_taux_de_change.getText());
+            if (CurrencyConverter.USD.equals(selectedCurrency) || CurrencyConverter.CDF.equals(selectedCurrency)) {
+                CurrencyConverter.saveLegacyCdfRate(rate);
+            } else {
+                CurrencyConverter.saveRateFromUsd(selectedCurrency, rate);
+                this.cbx_main_cur.setItems(CurrencyConverter.fxCurrencies());
+                this.cbx_main_cur.setValue(selectedCurrency);
+            }
             MainUI.notify(null, (String)"Info", (String)this.bundle.getString("ratesaved"), (long)4L, (String)"Info");
         }
         catch (NumberFormatException e) {
             MainUI.notify(null, (String)this.bundle.getString("error"), (String)this.bundle.getString("rateerror"), (long)4L, (String)"error");
+        }
+    }
+
+    @FXML
+    public void configTauxImpositionResultat(Event evt) {
+        if (this.tf_taux_imposition_resultat.getText().isEmpty()) {
+            MainUI.notify(null, (String)this.bundle.getString("error"), (String)"Veuillez entrer le taux d'imposition du resultat.", (long)4L, (String)"error");
+            return;
+        }
+        try {
+            double rate = Double.parseDouble(this.tf_taux_imposition_resultat.getText().replace(",", "."));
+            if (rate < 0d || rate > 100d) {
+                MainUI.notify(null, (String)this.bundle.getString("error"), (String)"Le taux doit etre compris entre 0 et 100%.", (long)4L, (String)"error");
+                return;
+            }
+            this.pref.putDouble("taux_imposition_resultat", rate);
+            MainUI.notify(null, (String)this.bundle.getString("success"), (String)"Taux d'imposition du resultat enregistre.", (long)4L, (String)"info");
+        } catch (NumberFormatException e) {
+            MainUI.notify(null, (String)this.bundle.getString("error"), (String)"Taux d'imposition invalide.", (long)4L, (String)"error");
         }
     }
 
@@ -201,9 +231,12 @@ public class ParametreController implements Initializable {
         boolean sync = this.pref.getBoolean("sync", true);
         boolean print = this.pref.getBoolean("print", true);
         boolean embd = this.pref.getBoolean("embedded_db", true);
-        this.mainCur = this.pref.get("mainCur", "USD");
+        this.mainCur = CurrencyConverter.mainCurrency();
+        this.cbx_main_cur.setItems(CurrencyConverter.fxCurrencies());
+        this.cbx_main_cur.setEditable(true);
         this.cbx_main_cur.setValue(this.mainCur);
-        this.tf_taux_de_change.setText(this.pref.get("taux2change", "2800"));
+        this.tf_taux_de_change.setText(String.valueOf(CurrencyConverter.legacyCdfRate()));
+        this.tf_taux_imposition_resultat.setText(String.valueOf(this.pref.getDouble("taux_imposition_resultat", 2d)));
         int w = this.pref.getInt("print-lines-dashcount", 48);
         switch (w) {
             case 48: {
@@ -234,7 +267,6 @@ public class ParametreController implements Initializable {
         this.cbx_param_font_size_head.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
         this.cbx_param_font_size_body.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
         this.cbx_param_font_size_footer.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.level1"), this.bundle.getString("xlbl.level2"), this.bundle.getString("xlbl.level3")));
-        this.cbx_main_cur.setItems(FXCollections.observableArrayList(new String[]{"USD", "CDF"}));
         this.cbx_counter.setItems(FXCollections.observableArrayList(this.bundle.getString("xlbl.random_counter"), 
                 this.bundle.getString("xlbl.init_counter_bill_day"), this.bundle.getString("xlbl.init_counter_bill_month"), this.bundle.getString("xlbl.init_counter_bill_year"), this.bundle.getString("xlbl.never_init_counter_bill_day")));
         boolean pmark = this.pref.getBoolean("print_mark", true);
@@ -297,7 +329,18 @@ public class ParametreController implements Initializable {
         }
         this.cbx_main_cur.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
-                this.pref.put("mainCur", (String)newValue);
+                String selectedCurrency = CurrencyConverter.normalize((String)newValue);
+                CurrencyConverter.setMainCurrency(selectedCurrency);
+                this.cbx_main_cur.setValue(selectedCurrency);
+                if (CurrencyConverter.USD.equals(selectedCurrency) || CurrencyConverter.CDF.equals(selectedCurrency)) {
+                    this.tf_taux_de_change.setText(String.valueOf(CurrencyConverter.legacyCdfRate()));
+                    return;
+                }
+                try {
+                    this.tf_taux_de_change.setText(String.valueOf(CurrencyConverter.rateFromUsd(selectedCurrency)));
+                } catch (IllegalStateException e) {
+                    this.tf_taux_de_change.clear();
+                }
             }
         });
         this.avertiBill.selectedProperty().addListener((ChangeListener)new ChangeListener<Boolean>(){

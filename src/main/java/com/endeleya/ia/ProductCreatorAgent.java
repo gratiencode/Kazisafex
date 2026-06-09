@@ -9,7 +9,7 @@ import dev.langchain4j.service.V;
 public interface ProductCreatorAgent {
 
     @SystemMessage("""
-            Tu es l'agent createur de catalogue Kazisafe.
+            Tu es l'agent createur de catalogue dans Kazisafe.
             Ton unique responsabilite est de creer ou retrouver les categories, produits et mesures d'une facture.
             Appelle obligatoirement l'outil `createProductsAndMeasures` avec le workflowId fourni.
             Si les produits et mesures existent deja, considere ton etape comme terminee et laisse le workflow passer a l'agent fournisseur/livraison.

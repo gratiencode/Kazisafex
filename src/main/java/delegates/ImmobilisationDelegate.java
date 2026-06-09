@@ -6,10 +6,17 @@
 package delegates;
 
 import IServices.ImmobilisationStorage;
+import data.AmortissementAgregate;
 import data.Immobilisation;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityTransaction;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.prefs.Preferences;
+import services.ManagedSessionFactory;
 import tools.ServiceLocator;
+import tools.SyncEngine;
 import tools.Tables;
 
 /**
@@ -19,11 +26,19 @@ import tools.Tables;
 public class ImmobilisationDelegate {
 
     public static Immobilisation saveImmobilisation(Immobilisation obj) {
-        return getImmobilisationStorage().createImmobilisation(obj);
+        Immobilisation saved = getImmobilisationStorage().createImmobilisation(obj);
+        services.AggregateTriggerService.getInstance().notifyImmobilisation(
+                obj == null ? null : obj.getDateAcquisition(),
+                obj == null ? null : obj.getRegion());
+        return saved;
     }
 
     public static Immobilisation updateImmobilisation(Immobilisation obj) {
-        return getImmobilisationStorage().updateImmobilisation(obj);
+        Immobilisation saved = getImmobilisationStorage().updateImmobilisation(obj);
+        services.AggregateTriggerService.getInstance().notifyImmobilisation(
+                obj == null ? null : obj.getDateAcquisition(),
+                obj == null ? null : obj.getRegion());
+        return saved;
     }
 
     public static void deleteImmobilisation(Immobilisation obj) {
@@ -34,6 +49,9 @@ public class ImmobilisationDelegate {
             }
         }
         getImmobilisationStorage().deleteImmobilisation(obj);
+        services.AggregateTriggerService.getInstance().notifyImmobilisation(
+                obj == null ? null : obj.getDateAcquisition(),
+                obj == null ? null : obj.getRegion());
     }
 
     public static Immobilisation findImmobilisation(String objId) {
@@ -83,21 +101,84 @@ public class ImmobilisationDelegate {
     }
 
     public static void agregate() {
+        agregate(LocalDate.now(), null);
+    }
+
+    public static void agregate(LocalDate referenceDate, String region) {
         List<Immobilisation> lims = findImmobilisations();
         if (lims == null || lims.isEmpty()) {
             return;
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDate targetDate = referenceDate == null ? LocalDate.now() : referenceDate;
+        LocalDateTime now = targetDate.atStartOfDay();
+        clearPeriodAggregates(targetDate, region);
         for (Immobilisation im : lims) {
+            if (region != null && !region.isBlank() && !region.equals(im.getRegion())) {
+                continue;
+            }
             data.ImmobilisationAgregate ag = new data.ImmobilisationAgregate();
             ag.setDate(now);
             ag.setImmobilisationId(im);
             ag.setRegion(im.getRegion());
             ag.setValeurBrutte(im.getValeurOrigineUsd());
-            ag.setAmmortissement(im.amortissementCumulUsd(now.toLocalDate()));
-            ag.setValeurNette(im.valeurNetteUsd(now.toLocalDate()));
+            ag.setAmmortissement(im.amortissementCumulUsd(targetDate));
+            ag.setValeurNette(im.valeurNetteUsd(targetDate));
             getAgregateStorage().createImmobilisationAgregate(ag);
+
+            AmortissementAgregate amort = new AmortissementAgregate();
+            amort.setPeriode(targetDate.withDayOfMonth(1));
+            amort.setImmobilisationId(im);
+            amort.setRegion(im.getRegion());
+            amort.setDotationUsd(im.dotationMensuelleUsd());
+            amort.setCumulUsd(im.amortissementCumulUsd(targetDate));
+            amort.setValeurComptableUsd(im.valeurNetteUsd(targetDate));
+            persistAmortissement(amort);
         }
+    }
+
+    private static void clearPeriodAggregates(LocalDate referenceDate, String region) {
+        if (referenceDate == null) {
+            return;
+        }
+        runInTransaction(em -> {
+            String regionClause = region == null || region.isBlank() ? " AND region IS NULL" : " AND region = :region";
+            jakarta.persistence.Query immo = em.createNativeQuery(
+                    "DELETE FROM immobilisation_agregate WHERE DATE(date) = :date" + regionClause);
+            immo.setParameter("date", referenceDate);
+            if (region != null && !region.isBlank()) {
+                immo.setParameter("region", region);
+            }
+            immo.executeUpdate();
+
+            jakarta.persistence.Query amort = em.createNativeQuery(
+                    "DELETE FROM amortissement_agregate WHERE periode = :periode" + regionClause);
+            amort.setParameter("periode", referenceDate.withDayOfMonth(1));
+            if (region != null && !region.isBlank()) {
+                amort.setParameter("region", region);
+            }
+            amort.executeUpdate();
+        });
+    }
+
+    private static void persistAmortissement(AmortissementAgregate amortissement) {
+        runInTransaction(em -> em.merge(amortissement));
+    }
+
+    private static void runInTransaction(java.util.function.Consumer<EntityManager> action) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                action.accept(em);
+                return null;
+            });
+            return;
+        }
+        EntityManager em = ManagedSessionFactory.getEntityManager();
+        EntityTransaction tx = em.getTransaction();
+        if (!tx.isActive()) {
+            tx.begin();
+        }
+        action.accept(em);
+        tx.commit();
     }
 
     public static boolean shouldAgregate() {

@@ -73,6 +73,7 @@ public class StockDepotAgregate extends BaseModel implements Serializable {
     @ManyToOne
     private Mesure mesureId;
 
+
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
     private LocalDateTime deletedAt;
 

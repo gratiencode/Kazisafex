@@ -8,7 +8,6 @@ import okhttp3.Response;
 import okhttp3.Interceptor.Chain;
 import okhttp3.Request.Builder;
 import data.helpers.Token;
-import data.helpers.TokenRefreshed;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,7 +34,7 @@ public class HttpInterceptor implements Interceptor {
         rq = builder.build();
         Response resp = chain.proceed(rq);
 
-        if ((resp.code() == 401 || resp.code() == 403) && rq.header(RETRY_HEADER) == null) {
+        if (resp.code() == 401 && rq.header(RETRY_HEADER) == null) {
             LOGGER.log(Level.INFO, "Unauthorized HTTP {0} detected, attempting token refresh", resp.code());
             String newToken;
             synchronized (tokenState) {

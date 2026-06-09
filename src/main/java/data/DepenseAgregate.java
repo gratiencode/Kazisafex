@@ -106,4 +106,5 @@ public class DepenseAgregate implements Serializable {
     public void setDepenseId(Depense depenseId) {
         this.depenseId = depenseId;
     }
+
 }

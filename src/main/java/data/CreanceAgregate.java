@@ -28,6 +28,7 @@ public class CreanceAgregate implements Serializable {
     @Column(name = "montant_usd")
     private Double montantUsd;
 
+
     public CreanceAgregate() {
     }
 
@@ -69,4 +70,5 @@ public class CreanceAgregate implements Serializable {
     public void setMontantUsd(Double montantUsd) {
         this.montantUsd = montantUsd;
     }
+
 }

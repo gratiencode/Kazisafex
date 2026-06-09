@@ -21,7 +21,7 @@
       </AnchorPane>
       <AnchorPane layoutX="56.0" layoutY="594.0" prefHeight="48.0" prefWidth="576.0" style="-fx-background-color: white; -fx-background-radius: 20; -fx-border-radius: 20; -fx-border-color: rgba(68,206,245,0.35); -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.10), 16, 0.18, 0, 6);" AnchorPane.bottomAnchor="21.0" AnchorPane.leftAnchor="56.0" AnchorPane.rightAnchor="54.0">
          <children>
-            <TextArea fx:id="tf_input_msg_ia" prefHeight="46.0" prefWidth="619.0" promptText="Demandez à Jemima..." style="-fx-background-color: transparent; -fx-background-radius: 18; -fx-border-radius: 18; -fx-text-fill: #12203a; -fx-prompt-text-fill: #8da2b2;" wrapText="true" AnchorPane.bottomAnchor="1.0" AnchorPane.leftAnchor="8.0" AnchorPane.rightAnchor="8.0" AnchorPane.topAnchor="1.0" />
+            <TextArea fx:id="tf_input_msg_ia" prefHeight="46.0" prefWidth="619.0" promptText="%xjemima.prompt" style="-fx-background-color: transparent; -fx-background-radius: 18; -fx-border-radius: 18; -fx-text-fill: #12203a; -fx-prompt-text-fill: #8da2b2;" wrapText="true" AnchorPane.bottomAnchor="1.0" AnchorPane.leftAnchor="8.0" AnchorPane.rightAnchor="8.0" AnchorPane.topAnchor="1.0" />
          </children>
       </AnchorPane>
       <ImageView fitHeight="38.0" fitWidth="34.0" layoutX="641.0" layoutY="599.0" onMouseClicked="#sendMessage" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="27.0" AnchorPane.rightAnchor="10.0">
@@ -50,8 +50,8 @@
          <font>
             <Font name="System Bold" size="22.0" />
          </font></Label>
-      <Label layoutX="11.0" layoutY="640.0" style="-fx-text-fill: #72819c; -fx-font-size: 11px;" text="L'assistant peut donner des réponses inexactes, vérifiez toujours ses réponses." AnchorPane.bottomAnchor="7.0" AnchorPane.leftAnchor="11.0" />
-      <Label layoutX="66.0" layoutY="41.0" style="-fx-text-fill: #1fa8cf; -fx-font-weight: bold;" text="Assistant Kazisafe" />
+      <Label layoutX="11.0" layoutY="640.0" style="-fx-text-fill: #72819c; -fx-font-size: 11px;" text="%xjemima.disclaimer" AnchorPane.bottomAnchor="7.0" AnchorPane.leftAnchor="11.0" />
+      <Label layoutX="66.0" layoutY="41.0" style="-fx-text-fill: #1fa8cf; -fx-font-weight: bold;" text="%xjemima.subtitle" />
       <Button layoutX="8.0" layoutY="601.0" mnemonicParsing="false" onAction="#addAttachemnts" prefHeight="36.0" prefWidth="32.0" style="-fx-background-color: linear-gradient(to right, #44cef5, #1fa8cf); -fx-background-radius: 18; -fx-effect: dropshadow(gaussian, rgba(68,206,245,0.28), 12, 0.25, 0, 4);" text="+" textFill="WHITE" AnchorPane.bottomAnchor="26.0" AnchorPane.leftAnchor="10.0">
          <font>
             <Font name="System Bold" size="17.0" />

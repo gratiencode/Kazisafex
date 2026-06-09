@@ -582,7 +582,7 @@ public class MainuiController implements Initializable {
             sync_txt_message.setVisible(true);
             sync_pg_bar.setVisible(true);
             MainUI.notify(null, "", "Veuillez patientez que la cloture de stock se termine", 15, "warning");
-            sync_txt_message.setText("Cloture des stocks en cours....");
+            setSyncMessage("Cloture des stocks en cours....");
             ag = Agregator.getInstance();
             ag.setLocalTaskStateListener(new LocalTaskStateListener() {
                 @Override
@@ -599,7 +599,7 @@ public class MainuiController implements Initializable {
                 @Override
                 public void onProgress(double progress, String message) {
                     Platform.runLater(() -> {
-                        sync_txt_message.setText(message);
+                        setSyncMessage(message);
                         sync_pg_bar.setProgress(progress);
                     });
                 }
@@ -615,6 +615,16 @@ public class MainuiController implements Initializable {
             ag.reportInBackground();
         } catch (java.lang.RuntimeException e) {
         }
+    }
+
+    private void setSyncMessage(String message) {
+        if (sync_txt_message == null) {
+            return;
+        }
+        if (sync_txt_message.textProperty().isBound()) {
+            sync_txt_message.textProperty().unbind();
+        }
+        sync_txt_message.setText(message == null ? "" : message);
     }
 
     public void sync(Kazisafe ksf) {

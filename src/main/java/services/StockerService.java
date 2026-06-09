@@ -110,6 +110,7 @@ public class StockerService implements StockerStorage {
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getNumlot() + " enregistree");
                 rectifyDepotAggregate(snapshotOf(e));
+                AggregateTriggerService.getInstance().notifyStocker(e);
             });
             return cat;
         }
@@ -122,6 +123,7 @@ public class StockerService implements StockerStorage {
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
             rectifyDepotAggregate(snapshotOf(cat));
+            AggregateTriggerService.getInstance().notifyStocker(cat);
         }
         return cat;
     }
@@ -137,6 +139,7 @@ public class StockerService implements StockerStorage {
                 System.out.println("Element " + e.getNumlot() + " enregistree");
                 rectifyDepotAggregate(before);
                 rectifyDepotAggregate(snapshotOf(e));
+                AggregateTriggerService.getInstance().notifyStocker(e);
             });
             return cat;
         }
@@ -148,6 +151,7 @@ public class StockerService implements StockerStorage {
         tx.commit();
         rectifyDepotAggregate(before);
         rectifyDepotAggregate(snapshotOf(cat));
+        AggregateTriggerService.getInstance().notifyStocker(cat);
         return cat;
     }
 
@@ -161,6 +165,7 @@ public class StockerService implements StockerStorage {
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getNumlot() + " supprimee");
                 rectifyDepotAggregate(before == null ? snapshotOf(e) : before);
+                AggregateTriggerService.getInstance().notifyStocker(e);
             });
             return;
         }
@@ -171,6 +176,7 @@ public class StockerService implements StockerStorage {
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
         rectifyDepotAggregate(before == null ? snapshotOf(cat) : before);
+        AggregateTriggerService.getInstance().notifyStocker(cat);
     }
 
     @Override

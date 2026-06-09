@@ -63,6 +63,7 @@ public class ManagedSessionFactory {
             properties.put(EntityManagerProperties.JDBC_PASSWORD, dbPassword);
             emf = Persistence.createEntityManagerFactory("kazisafe-jmx", properties);
             SchemaAutoUpdater.ensureCoreSchema(false, dbUrl, dbUser, dbPassword);
+            AggregateTriggerService.getInstance().rebuildAtStartup();
             threadLocal = new ThreadLocal<>();
         } else {
 
@@ -86,6 +87,7 @@ public class ManagedSessionFactory {
             emf = Persistence.createEntityManagerFactory("SQlitePU", properties);
             SchemaAutoUpdater.ensureCoreSchema(true, dbUrl, null, null);
             writeQueue = new WriteQueueManager(emf);
+            AggregateTriggerService.getInstance().rebuildAtStartup();
             threadLocal = null; // inutile pour sqlite
             System.out.println("-SQLite-");
         }

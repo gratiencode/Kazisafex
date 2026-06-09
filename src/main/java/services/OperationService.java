@@ -57,6 +57,7 @@ public class OperationService implements OperationStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element ops " + e.getLibelle() + " enregistree");
+                AggregateTriggerService.getInstance().notifyOperation(e);
             });
             return cat;
         }
@@ -66,6 +67,7 @@ public class OperationService implements OperationStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         etr.commit();
+        AggregateTriggerService.getInstance().notifyOperation(cat);
         return cat;
     }
 
@@ -77,6 +79,7 @@ public class OperationService implements OperationStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element ops " + e.getLibelle() + " supprrimee");
+                AggregateTriggerService.getInstance().notifyOperation(e);
             });
             return cat;
         }
@@ -87,6 +90,7 @@ public class OperationService implements OperationStorage {
 
         ManagedSessionFactory.getEntityManager().merge(cat);
         etr.commit();
+        AggregateTriggerService.getInstance().notifyOperation(cat);
         return cat;
     }
 
@@ -98,6 +102,7 @@ public class OperationService implements OperationStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element ops " + e.getLibelle() + " enregistree");
+                AggregateTriggerService.getInstance().notifyOperation(e);
             });
             return;
         }
@@ -107,6 +112,7 @@ public class OperationService implements OperationStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyOperation(cat);
     }
 
     @Override

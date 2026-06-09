@@ -9,9 +9,11 @@ import dev.langchain4j.service.AiServices;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -74,6 +76,7 @@ public final class AiAgents {
     private final WorkflowCancellationAgent workflowCancellationAgent;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private volatile String sessionId = "anonymous";
+    private volatile PendingInvoiceIntent pendingInvoiceIntent;
 
     private AiAgents() {
         // JemimaTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
@@ -134,6 +137,82 @@ public final class AiAgents {
         }
     }
 
+    public boolean hasPendingInvoiceIntentClarification() {
+        startForCurrentSession();
+        PendingInvoiceIntent pending = pendingInvoiceIntent;
+        return pending != null && sessionId.equals(pending.sessionId());
+    }
+
+    public boolean shouldClarifyInvoiceIntent(String question, List<File> attachments) {
+        startForCurrentSession();
+        if (!hasImageAttachment(attachments)) {
+            return false;
+        }
+        String value = normalize(question);
+        if (isSupplyIntent(value) || isSaleIntent(value) || isExpenseIntent(value)) {
+            return false;
+        }
+        return value.isBlank()
+                || value.contains("facture")
+                || value.contains("recu")
+                || value.contains("reçu")
+                || value.contains("document")
+                || value.contains("piece jointe")
+                || value.contains("pièce jointe");
+    }
+
+    public String askInvoiceIntentClarification(String question, List<File> attachments) {
+        startForCurrentSession();
+        List<File> storedAttachments = attachments == null ? List.of() : new ArrayList<>(attachments);
+        pendingInvoiceIntent = new PendingInvoiceIntent(sessionId, safe(question, ""), storedAttachments);
+        String prompt = """
+                Avant de traiter ce document, précisez la nature de la tâche:
+
+                1. `approvisionnement` ou `entrées` pour une entrée en stock
+                2. `vente` ou `sortie` pour une sortie de stock
+                3. `dépense` pour enregistrer une dépense
+
+                Répondez avec l'un de ces mots pour que Jemima lance le bon workflow.
+                """;
+        appendMemory("user", safe(question, "[document joint sans intention précisée]"));
+        appendMemory("assistant", prompt);
+        return prompt;
+    }
+
+    public String resolveInvoiceIntentClarification(String answer) {
+        startForCurrentSession();
+        PendingInvoiceIntent pending = pendingInvoiceIntent;
+        if (pending == null || !sessionId.equals(pending.sessionId())) {
+            return "Je n'ai pas de document en attente de clarification. Joignez à nouveau la facture ou le reçu.";
+        }
+        String value = normalize(answer);
+        if (value.contains("annule") || value.contains("annuler") || value.equals("non")) {
+            pendingInvoiceIntent = null;
+            appendMemory("user", safe(answer, ""));
+            appendMemory("assistant", "Traitement du document annulé avant workflow.");
+            return "D'accord, je ne traite pas ce document.";
+        }
+        String originalQuestion = pending.question().isBlank()
+                ? "Document joint confirmé par l'utilisateur: " + safe(answer, "")
+                : pending.question() + "\n\nPrécision utilisateur: " + safe(answer, "");
+        List<File> attachments = pending.attachments();
+        pendingInvoiceIntent = null;
+        if (isSupplyIntent(value)) {
+            return orchestrateInvoice(originalQuestion + "\nTâche: approvisionnement / entrée en stock.", attachments);
+        }
+        if (isSaleIntent(value)) {
+            return orchestrateSale(originalQuestion + "\nTâche: vente / sortie de stock.", attachments);
+        }
+        if (isExpenseIntent(value)) {
+            return orchestrateExpense(originalQuestion + "\nTâche: dépense.", attachments);
+        }
+        pendingInvoiceIntent = pending;
+        return """
+                Je dois d'abord savoir quel workflow lancer.
+                Répondez simplement par `approvisionnement`/`entrées`, `vente`/`sortie`, ou `dépense`.
+                """;
+    }
+
     public boolean shouldHandleInvoice(String question, List<File> attachments) {
         return invoiceWorkflow.shouldHandle(question, attachments);
     }
@@ -144,6 +223,53 @@ public final class AiAgents {
 
     public boolean shouldHandleExpense(String question, List<File> attachments) {
         return expenseWorkflow.shouldHandle(question, attachments);
+    }
+
+    private boolean hasImageAttachment(List<File> attachments) {
+        return attachments != null && attachments.stream().anyMatch(this::isImageAttachment);
+    }
+
+    private boolean isImageAttachment(File file) {
+        if (file == null) {
+            return false;
+        }
+        String name = file.getName() == null ? "" : file.getName().toLowerCase(Locale.ROOT);
+        return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg")
+                || name.endsWith(".webp") || name.endsWith(".bmp");
+    }
+
+    private boolean isSupplyIntent(String value) {
+        return value.contains("approvisionnement")
+                || value.contains("approvisionner")
+                || value.contains("entree")
+                || value.contains("entrees")
+                || value.contains("entrée")
+                || value.contains("entrées")
+                || value.contains("stock entrant")
+                || value.contains("achat fournisseur")
+                || value.contains("fournisseur")
+                || value.contains("livraison")
+                || value.contains("requisition")
+                || value.contains("réquisition");
+    }
+
+    private boolean isSaleIntent(String value) {
+        return value.contains("vente")
+                || value.contains("sortie")
+                || value.contains("vendre")
+                || value.contains("client")
+                || value.contains("sortir du stock");
+    }
+
+    private boolean isExpenseIntent(String value) {
+        return value.contains("depense")
+                || value.contains("dépense")
+                || value.contains("frais")
+                || value.contains("note de frais")
+                || value.contains("charge")
+                || value.contains("recu")
+                || value.contains("reçu")
+                || value.contains("ticket");
     }
 
     public boolean shouldHandleWorkflowCancellation(String question) {
@@ -334,7 +460,8 @@ public final class AiAgents {
             Consumer<String> onProcess, Runnable onComplete, Consumer<Throwable> onError) {
         startForCurrentSession();
         appendMemory("user", safe(question, ""));
-        TokenStream stream = assistant.chat(sessionId, entreprise == null ? "" : entreprise, safe(question, ""));
+        String date=LocalDateTime.now().toString();
+        TokenStream stream = assistant.chat(sessionId,date,entreprise == null ? "" : entreprise, safe(question, ""));
         Set<String> toolsStarted = ConcurrentHashMap.newKeySet();
         Set<String> toolsFinished = ConcurrentHashMap.newKeySet();
         AtomicBoolean toolWasStarted = new AtomicBoolean(false);
@@ -378,8 +505,7 @@ public final class AiAgents {
             if (toolsFinished.add(toolKey)) {
                 onProcess.accept(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
             }
-        })
-                .onCompleteResponse(response -> {
+        }).onCompleteResponse(response -> {
                     if (toolWasExecuted.get()) {
                         String finalAnswer = toolFinalAnswer(lastToolName.get(), lastToolResult.get());
                         appendMemory("assistant", finalAnswer);
@@ -404,6 +530,10 @@ public final class AiAgents {
 
     private String safe(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT).trim();
     }
 
     private ChatMemoryProvider memoryProvider(RedisMemoryStore store) {
@@ -627,6 +757,9 @@ public final class AiAgents {
                 running ? "La tâche demandée est en cours..."
                 : "La tâche demandée est terminée.";
         };
+    }
+
+    private record PendingInvoiceIntent(String sessionId, String question, List<File> attachments) {
     }
 
     public static class ServiceAgentState extends AgentState {

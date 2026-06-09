@@ -17,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
@@ -35,7 +36,6 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.chart.LineChart;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
@@ -43,6 +43,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.ImageView;
@@ -80,6 +81,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Executors;
 import javafx.scene.image.Image;
 import services.FinancialStatementAgregateService;
+import services.FinancialStatementSyncService;
+import tools.FinancialRowModel;
+import tools.FinancialTableBinder;
 import tools.SaleReport;
 
 /**
@@ -147,6 +151,7 @@ public class RepportController implements Initializable {
     Label totalSaleperCat;
 
     private final FinancialStatementAgregateService financialStatementService = new FinancialStatementAgregateService();
+    private final FinancialStatementSyncService financialSyncService = new FinancialStatementSyncService();
 
     private static RepportController instance;
     Entreprise entreprise;
@@ -267,6 +272,8 @@ public class RepportController implements Initializable {
     @FXML
     private AnchorPane pane_financial_states;
     @FXML
+    private TabPane tab_financial_statements;
+    @FXML
     private TableView<FinancialStatementRow> tb_fin_bilan;
     @FXML
     private TableColumn<FinancialStatementRow, String> col_fin_bilan_code;
@@ -323,6 +330,12 @@ public class RepportController implements Initializable {
     private TableColumn<FinancialStatementRow, String> col_fin_flux_n3;
     @FXML
     private TableColumn<FinancialStatementRow, String> col_fin_flux_n4;
+    @FXML
+    private TableView<FinancialRowModel> tb_fin_pivot_bilan;
+    @FXML
+    private TableView<FinancialRowModel> tb_fin_pivot_cr;
+    @FXML
+    private TableView<FinancialRowModel> tb_fin_pivot_flux;
 
     private ObservableList<Immobilisation> immobilisations;
     private final ObservableList<FinancialStatementRow> bilanRows = FXCollections.observableArrayList();
@@ -330,9 +343,6 @@ public class RepportController implements Initializable {
     private final ObservableList<FinancialStatementRow> fluxRows = FXCollections.observableArrayList();
     private static final int FINANCIAL_PERIOD_EXACT = 1;
     private int financialHistorySpan = FINANCIAL_PERIOD_EXACT;
-
-    @FXML
-    private CheckBox chk_filter_zeros;
 
     public RepportController() {
         instance = this;
@@ -688,21 +698,38 @@ public class RepportController implements Initializable {
     }
 
     private void configureFinancialTables() {
-        configureFinancialTable(tb_fin_bilan, col_fin_bilan_code, col_fin_bilan_rubrique, col_fin_bilan_nature,
-                col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4);
-        configureBilanImmobilisationColumns();
-        configureFinancialTable(tb_fin_cr, col_fin_cr_code, col_fin_cr_rubrique, col_fin_cr_nature, col_fin_cr_n,
-                col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4);
-        configureFinancialTable(tb_fin_flux, col_fin_flux_code, col_fin_flux_rubrique, col_fin_flux_nature,
-                col_fin_flux_n, col_fin_flux_n1, col_fin_flux_n2, col_fin_flux_n3, col_fin_flux_n4);
-        tb_fin_bilan.setItems(bilanRows);
-        tb_fin_cr.setItems(compteResultatRows);
-        tb_fin_flux.setItems(fluxRows);
+        if (tb_fin_bilan != null) {
+            configureFinancialTable(tb_fin_bilan, col_fin_bilan_code, col_fin_bilan_rubrique, col_fin_bilan_nature,
+                    col_fin_bilan_n, col_fin_bilan_n1, col_fin_bilan_n2, col_fin_bilan_n3, col_fin_bilan_n4);
+            configureBilanImmobilisationColumns();
+            tb_fin_bilan.setItems(bilanRows);
+        }
+        if (tb_fin_cr != null) {
+            configureFinancialTable(tb_fin_cr, col_fin_cr_code, col_fin_cr_rubrique, col_fin_cr_nature, col_fin_cr_n,
+                    col_fin_cr_n1, col_fin_cr_n2, col_fin_cr_n3, col_fin_cr_n4);
+            tb_fin_cr.setItems(compteResultatRows);
+        }
+        if (tb_fin_flux != null) {
+            configureFinancialTable(tb_fin_flux, col_fin_flux_code, col_fin_flux_rubrique, col_fin_flux_nature,
+                    col_fin_flux_n, col_fin_flux_n1, col_fin_flux_n2, col_fin_flux_n3, col_fin_flux_n4);
+            tb_fin_flux.setItems(fluxRows);
+        }
+        if (tb_fin_pivot_bilan != null) {
+            FinancialTableBinder.bind(tb_fin_pivot_bilan, List.of(), List.of());
+        }
+        if (tb_fin_pivot_cr != null) {
+            FinancialTableBinder.bind(tb_fin_pivot_cr, List.of(), List.of());
+        }
+        if (tb_fin_pivot_flux != null) {
+            FinancialTableBinder.bind(tb_fin_pivot_flux, List.of(), List.of());
+        }
         configureFinancialHistorySelector();
-        configureFilterZeros();
     }
 
     private void configureBilanImmobilisationColumns() {
+        if (tb_fin_bilan == null) {
+            return;
+        }
         col_fin_bilan_gross.setPrefWidth(120);
         col_fin_bilan_amortization.setPrefWidth(120);
         col_fin_bilan_net.setPrefWidth(120);
@@ -714,14 +741,6 @@ public class RepportController implements Initializable {
                 new SimpleStringProperty(formatFinancialAmount(param.getValue().getNetAmount())));
         if (!tb_fin_bilan.getColumns().contains(col_fin_bilan_gross)) {
             tb_fin_bilan.getColumns().addAll(col_fin_bilan_gross, col_fin_bilan_amortization, col_fin_bilan_net);
-        }
-    }
-
-    private void configureFilterZeros() {
-        if (chk_filter_zeros != null) {
-            chk_filter_zeros.selectedProperty().addListener((obs, oldVal, newVal) -> {
-                loadFinancialStatements(); // Reload/re-filter when toggled
-            });
         }
     }
 
@@ -783,6 +802,9 @@ public class RepportController implements Initializable {
     }
 
     private void refreshFinancialColumnHeaders() {
+        if (col_fin_bilan_n == null || col_fin_cr_n == null || col_fin_flux_n == null) {
+            return;
+        }
         boolean exactPeriod = financialHistorySpan == FINANCIAL_PERIOD_EXACT;
         if (exactPeriod) {
             col_fin_bilan_n.setText("Période");
@@ -1026,6 +1048,18 @@ public class RepportController implements Initializable {
             return region;
         }
         return role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? "%" : region;
+    }
+
+    private String selectedFinancialRegion() {
+        boolean globalAccess = role != null && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()));
+        String selected = cbx_regions == null ? null : cbx_regions.getSelectionModel().getSelectedItem();
+        if (globalAccess && selected != null && !selected.isBlank()) {
+            return selected.trim();
+        }
+        if (globalAccess) {
+            return "%";
+        }
+        return region == null || region.isBlank() ? pref.get("region", "%") : region;
     }
 
     private void ponctuel() {
@@ -1342,6 +1376,15 @@ public class RepportController implements Initializable {
     }
 
     @FXML
+    private void recalculateFinancialStates(ActionEvent event) {
+        String usedRegion = selectedFinancialRegion();
+        MainUI.notify(null, "Etats financiers",
+                "Recalcul des agrégats financiers lancé pour "
+                + ("%".equals(usedRegion) ? "toutes les régions autorisées" : usedRegion) + ".", 3, "info");
+        loadFinancialStatements();
+    }
+
+    @FXML
     private void printFinancialStates(MouseEvent event) {
         if (pane_financial_states == null) {
             return;
@@ -1377,14 +1420,14 @@ public class RepportController implements Initializable {
         }
         final LocalDate statementStart = d1;
         final LocalDate statementEnd = d2;
-        String usedRegion = detectRegion(role);
+        String usedRegion = selectedFinancialRegion();
         int span = financialHistorySpan;
-        boolean filterZeros = chk_filter_zeros != null && chk_filter_zeros.isSelected();
         Executors.newSingleThreadExecutor().submit(() -> {
             try {
                 List<FinancialStatementRow> bilan;
                 List<FinancialStatementRow> compte;
                 List<FinancialStatementRow> flux;
+                List<String> pivotHeaders = financialDynamicHeaders(statementEnd, span);
                 if (span == FINANCIAL_PERIOD_EXACT) {
                     financialStatementService.rebuildStatements(statementStart, statementEnd, usedRegion);
                     bilan = financialStatementService.loadStatementRows(
@@ -1412,20 +1455,30 @@ public class RepportController implements Initializable {
                             FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, anchorYear, span, usedRegion);
                 }
 
-                if (filterZeros) {
-                    bilan = filterZeroRows(bilan);
-                    compte = filterZeroRows(compte);
-                    flux = filterZeroRows(flux);
-                }
-
                 List<FinancialStatementRow> finalBilan = bilan;
                 List<FinancialStatementRow> finalCompte = compte;
                 List<FinancialStatementRow> finalFlux = flux;
+                List<FinancialRowModel> pivotBilanRows = buildDynamicFinancialRows("Bilan", finalBilan, pivotHeaders.size());
+                List<FinancialRowModel> pivotCompteRows = buildDynamicFinancialRows("Compte de résultat", finalCompte, pivotHeaders.size());
+                List<FinancialRowModel> pivotFluxRows = buildDynamicFinancialRows("Flux de trésorerie", finalFlux, pivotHeaders.size());
+                final List<String> finalPivotHeaders = pivotHeaders;
+                final List<FinancialRowModel> finalPivotBilanRows = pivotBilanRows;
+                final List<FinancialRowModel> finalPivotCompteRows = pivotCompteRows;
+                final List<FinancialRowModel> finalPivotFluxRows = pivotFluxRows;
 
                 Platform.runLater(() -> {
                     bilanRows.setAll(finalBilan);
                     compteResultatRows.setAll(finalCompte);
                     fluxRows.setAll(finalFlux);
+                    if (tb_fin_pivot_bilan != null) {
+                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_bilan, finalPivotHeaders, finalPivotBilanRows);
+                    }
+                    if (tb_fin_pivot_cr != null) {
+                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_cr, finalPivotHeaders, finalPivotCompteRows);
+                    }
+                    if (tb_fin_pivot_flux != null) {
+                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_flux, finalPivotHeaders, finalPivotFluxRows);
+                    }
                 });
             } catch (Exception ex) {
                 Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE,
@@ -1436,35 +1489,126 @@ public class RepportController implements Initializable {
         });
     }
 
-    private boolean isZeroAmount(Double amount) {
-        return amount == null || Math.abs(amount) < 0.001;
+    private List<Integer> financialPivotYears(LocalDate statementEnd, int span) {
+        if (span != 3 && span != 5) {
+            return List.of();
+        }
+        int anchorYear = statementEnd == null ? LocalDate.now().getYear() : statementEnd.getYear();
+        List<Integer> years = new ArrayList<>();
+        for (int year = anchorYear - span + 1; year <= anchorYear; year++) {
+            years.add(year);
+        }
+        return years;
     }
 
-    private List<FinancialStatementRow> filterZeroRows(List<FinancialStatementRow> rows) {
-        return rows.stream().filter(row -> {
-            if (row.isSectionHeader()) return true;
-            boolean allZeros = isZeroAmount(row.getAmountN()) &&
-                               isZeroAmount(row.getAmountN1()) &&
-                               isZeroAmount(row.getAmountN2()) &&
-                               isZeroAmount(row.getAmountN3()) &&
-                               isZeroAmount(row.getAmountN4());
-            return !allZeros;
-        }).collect(Collectors.toList());
+    private List<String> financialDynamicHeaders(LocalDate statementEnd, int span) {
+        int anchorYear = statementEnd == null ? LocalDate.now().getYear() : statementEnd.getYear();
+        if (span == 4) {
+            return List.of("T1-" + anchorYear, "T2-" + anchorYear, "T3-" + anchorYear, "T4-" + anchorYear);
+        }
+        if (span == 3 || span == 5) {
+            List<String> headers = new ArrayList<>();
+            for (int year = anchorYear; year >= anchorYear - span + 1; year--) {
+                headers.add(String.valueOf(year));
+            }
+            return headers;
+        }
+        return List.of("Période", "Période précédente 1", "Période précédente 2", "Période précédente 3");
+    }
+
+    private List<FinancialRowModel> buildDynamicFinancialRows(String statementType,
+            List<FinancialStatementRow> source, int valueCount) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        return java.util.stream.IntStream.range(0, source.size())
+                .mapToObj(index -> toFinancialRowModel(statementType, index + 1, source.get(index), valueCount))
+                .collect(Collectors.toList());
+    }
+
+    private List<FinancialRowModel> filterDynamicRowsByType(List<FinancialRowModel> rows, String statementType) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        List<FinancialRowModel> filtered = new ArrayList<>();
+        for (FinancialRowModel row : rows) {
+            if (statementType.equals(row.getStatementType())) {
+                filtered.add(row);
+            }
+        }
+        return filtered;
+    }
+
+    private void appendDynamicFinancialRows(List<FinancialRowModel> target, String statementType,
+            List<FinancialStatementRow> source, int valueCount) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        int order = target.size() + 1;
+        for (FinancialStatementRow sourceRow : source) {
+            FinancialRowModel row = new FinancialRowModel();
+            row.setSortOrder(order++);
+            row.setStatementType(statementType);
+            row.setLineCode(sourceRow.getCode());
+            row.setRubrique(sourceRow.getRubrique());
+            row.setNature(sourceRow.getNature());
+            row.setTotal(sourceRow.isTotalLine());
+            row.setSectionHeader(sourceRow.isSectionHeader());
+            setDynamicValue(row, 0, sourceRow.getAmountN(), valueCount);
+            setDynamicValue(row, 1, sourceRow.getAmountN1(), valueCount);
+            setDynamicValue(row, 2, sourceRow.getAmountN2(), valueCount);
+            setDynamicValue(row, 3, sourceRow.getAmountN3(), valueCount);
+            setDynamicValue(row, 4, sourceRow.getAmountN4(), valueCount);
+            target.add(row);
+        }
+    }
+
+    private FinancialRowModel toFinancialRowModel(String statementType, int order, FinancialStatementRow sourceRow,
+            int valueCount) {
+        FinancialRowModel row = new FinancialRowModel();
+        row.setSortOrder(order);
+        row.setStatementType(statementType);
+        row.setLineCode(sourceRow.getCode());
+        row.setRubrique(sourceRow.getRubrique());
+        row.setNature(sourceRow.getNature());
+        row.setTotal(sourceRow.isTotalLine());
+        row.setSectionHeader(sourceRow.isSectionHeader());
+        List<Double> values = new ArrayList<>();
+        values.add(sourceRow.getAmountN());
+        values.add(sourceRow.getAmountN1());
+        values.add(sourceRow.getAmountN2());
+        values.add(sourceRow.getAmountN3());
+        values.add(sourceRow.getAmountN4());
+        Map<Integer, Double> valuesByColumn = java.util.stream.IntStream.range(0, Math.min(valueCount, values.size()))
+                .boxed()
+                .collect(Collectors.toMap(
+                        index -> index,
+                        index -> values.get(index) == null ? 0d : values.get(index),
+                        (first, ignored) -> first,
+                        java.util.LinkedHashMap::new));
+        valuesByColumn.forEach(row::setValueForYear);
+        return row;
+    }
+
+    private void setDynamicValue(FinancialRowModel row, int index, Double value, int valueCount) {
+        if (index < valueCount) {
+            row.setValueForYear(index, value == null ? 0d : value);
+        }
     }
 
     @FXML
     private void exportBilanPdf(MouseEvent event) {
-        exportFinancialPdf("Bilan Comptable Financier", tb_fin_bilan.getItems());
+        exportFinancialPdf("Bilan Comptable Financier", bilanRows);
     }
 
     @FXML
     private void exportCompteResultatPdf(MouseEvent event) {
-        exportFinancialPdf("Compte de Résultat Standard", tb_fin_cr.getItems());
+        exportFinancialPdf("Compte de Résultat Standard", compteResultatRows);
     }
 
     @FXML
     private void exportFluxPdf(MouseEvent event) {
-        exportFinancialPdf("Tableau de Flux de Trésorerie", tb_fin_flux.getItems());
+        exportFinancialPdf("Tableau de Flux de Trésorerie", fluxRows);
     }
 
     private String formatMonnaie(double amount) {
@@ -1479,34 +1623,17 @@ public class RepportController implements Initializable {
         LocalDate start = dpk_debut_report.getValue() == null ? LocalDate.now() : dpk_debut_report.getValue();
         LocalDate end = dpk_fin_report.getValue() == null ? LocalDate.now() : dpk_fin_report.getValue();
         
-        List<String> dataHeaders = new java.util.ArrayList<>();
-        if (financialHistorySpan == 5) {
-            dataHeaders.add(col_fin_bilan_n.getText());
-            dataHeaders.add(col_fin_bilan_n1.getText());
-            dataHeaders.add(col_fin_bilan_n2.getText());
-            dataHeaders.add(col_fin_bilan_n3.getText());
-            dataHeaders.add(col_fin_bilan_n4.getText());
-        } else if (financialHistorySpan == 4) {
-            dataHeaders.add(col_fin_bilan_n.getText());
-            dataHeaders.add(col_fin_bilan_n1.getText());
-            dataHeaders.add(col_fin_bilan_n2.getText());
-            dataHeaders.add(col_fin_bilan_n3.getText());
-        } else if (financialHistorySpan == FINANCIAL_PERIOD_EXACT) {
-            dataHeaders.add(col_fin_bilan_n.getText());
-            dataHeaders.add(col_fin_bilan_n1.getText());
-            dataHeaders.add(col_fin_bilan_n2.getText());
-            dataHeaders.add(col_fin_bilan_n3.getText());
-        } else {
-            dataHeaders.add(col_fin_bilan_n.getText());
-            dataHeaders.add(col_fin_bilan_n1.getText());
-            dataHeaders.add(col_fin_bilan_n2.getText());
-        }
+        List<String> dataHeaders = financialDynamicHeaders(end, financialHistorySpan);
 
         new Thread(() -> {
             try {
                 File file = FinancialStatementPdfExporter.export(entreprise, title, start, end, rows, dataHeaders);
-                Desktop.getDesktop().open(file);
-            } catch (IOException ex) {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                Platform.runLater(() -> MainUI.notify(null, "PDF",
+                        "Rapport financier généré : " + file.getName(), 4, "info"));
+            } catch (Exception ex) {
                 Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 Platform.runLater(() -> MainUI.notify(null, "Erreur", "Echec de génération du PDF demandé", 4,
                         "error"));

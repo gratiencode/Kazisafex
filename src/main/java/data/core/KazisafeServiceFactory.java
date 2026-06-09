@@ -25,7 +25,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.Objects;
+import java.util.prefs.Preferences;
 import retrofit2.converter.jackson.JacksonConverterFactory;
+import tools.SyncEngine;
 
 public class KazisafeServiceFactory {
 
@@ -44,6 +46,8 @@ public class KazisafeServiceFactory {
     public static final String HOTSPOT_TEST_URL = "http://192.168.43.120:8020/erp/v1/";
     private static Retrofit retrofitRefresh = null;
     private static Retrofit retrofit = null;
+    private static final Preferences PREFS = Preferences.userNodeForPackage(SyncEngine.class);
+    private static volatile String currentAccessToken;
 
 //    private static HttpAuthenticator auth = null;
     private static OnTokenRefreshedListener onTokenRefreshedListener;
@@ -52,6 +56,10 @@ public class KazisafeServiceFactory {
     }
 
     private static void notifytoken(Token token) {
+        if (token != null && token.getToken() != null && !token.getToken().isBlank()) {
+            currentAccessToken = normalizeToken(token.getToken());
+            PREFS.put("token", currentAccessToken);
+        }
         if (onTokenRefreshedListener != null) {
             onTokenRefreshedListener.onTokenRefreshed(token);
         }
@@ -63,6 +71,7 @@ public class KazisafeServiceFactory {
     }
 
     private static Retrofit getRetrofitInstance(String token) {
+        String effectiveToken = effectiveToken(token);
         Builder builder = new Builder();
         builder.connectTimeout(300L, TimeUnit.SECONDS)
                 .writeTimeout(5L, TimeUnit.MINUTES)
@@ -74,9 +83,9 @@ public class KazisafeServiceFactory {
 //            System.out.println(">>> Réponse brute: " + rawBody);
 //            return response;
 //        });
-        if (token != null && !token.isBlank()) {
+        if (effectiveToken != null && !effectiveToken.isBlank()) {
             try {
-                AuthTokenState tokenState = new AuthTokenState(token);
+                AuthTokenState tokenState = new AuthTokenState(effectiveToken);
                 TokenRefreshClient tokenRefreshClient = new TokenRefreshClient();
                 HttpInterceptor intercep = new HttpInterceptor(tokenState, tokenRefreshClient);
                 HttpAuthenticator authenticator = new HttpAuthenticator(tokenState, tokenRefreshClient);
@@ -127,7 +136,11 @@ public class KazisafeServiceFactory {
     }
 
     public static Kazisafe createService(String token) {
-        return (Kazisafe) getRetrofitInstance(token).create(Kazisafe.class);
+        if ((currentAccessToken == null || currentAccessToken.isBlank()) && token != null && !token.isBlank()) {
+            currentAccessToken = normalizeToken(token);
+            PREFS.put("token", currentAccessToken);
+        }
+        return (Kazisafe) getRetrofitInstance(effectiveToken(token)).create(Kazisafe.class);
     }
 
     public static Retrofit getInstanceRefresh() {
@@ -156,5 +169,32 @@ public class KazisafeServiceFactory {
             }
             return retrofitRefresh;
         }
+    }
+
+    private static String effectiveToken(String token) {
+        String normalized = normalizeToken(token);
+        if (currentAccessToken != null && !currentAccessToken.isBlank()) {
+            return currentAccessToken;
+        }
+        if (normalized != null && !normalized.isBlank()) {
+            currentAccessToken = normalized;
+            return normalized;
+        }
+        String stored = normalizeToken(PREFS.get("token", null));
+        if (stored != null && !stored.isBlank()) {
+            currentAccessToken = stored;
+        }
+        return currentAccessToken;
+    }
+
+    private static String normalizeToken(String token) {
+        if (token == null) {
+            return null;
+        }
+        String normalized = token.trim();
+        if (normalized.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            normalized = normalized.substring(7).trim();
+        }
+        return normalized.isBlank() ? null : normalized;
     }
 }

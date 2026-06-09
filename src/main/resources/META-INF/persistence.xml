@@ -12,6 +12,7 @@
         <class>data.Vente</class>
         <class>data.Stocker</class>
         <class>data.StockAgregate</class>
+        <class>data.StockDepotAgregate</class>
         <class>data.SaleAgregate</class>
         <class>data.DepenseAgregate</class>
         <class>data.Production</class>
@@ -51,7 +52,10 @@
         <class>data.FingerprintMapping</class>
         <class>data.Immobilisation</class>
         <class>data.ImmobilisationAgregate</class>
-        <class>data.FinancialStatementAgregate</class>
+        <class>data.AmortissementAgregate</class>
+        <class>data.BilanAgregate</class>
+        <class>data.CompteResultatAgregate</class>
+        <class>data.FluxTresorerieAgregate</class>
         <class>data.CreanceAgregate</class>
         <class>data.DetteFournisseurAgregate</class>
         <class>data.TresorerieAgregate</class>
@@ -114,7 +118,10 @@
         <class>data.FingerprintMapping</class>
         <class>data.Immobilisation</class>
         <class>data.ImmobilisationAgregate</class>
-        <class>data.FinancialStatementAgregate</class>
+        <class>data.AmortissementAgregate</class>
+        <class>data.BilanAgregate</class>
+        <class>data.CompteResultatAgregate</class>
+        <class>data.FluxTresorerieAgregate</class>
         <class>data.CreanceAgregate</class>
         <class>data.DetteFournisseurAgregate</class>
         <class>data.TresorerieAgregate</class>

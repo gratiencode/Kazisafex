@@ -76,6 +76,10 @@ public class JemimaInvoiceWorkflow {
                 && (question == null || question.isBlank()
                 || question.toLowerCase(Locale.ROOT).contains("facture")
                 || question.toLowerCase(Locale.ROOT).contains("approvisionnement")
+                || question.toLowerCase(Locale.ROOT).contains("entree")
+                || question.toLowerCase(Locale.ROOT).contains("entrees")
+                || question.toLowerCase(Locale.ROOT).contains("entrée")
+                || question.toLowerCase(Locale.ROOT).contains("entrées")
                 || question.toLowerCase(Locale.ROOT).contains("réquisition")
                 || question.toLowerCase(Locale.ROOT).contains("requisition"));
     }

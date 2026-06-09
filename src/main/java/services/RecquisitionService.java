@@ -119,6 +119,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyRecquisition(e);
             });
             return cat;
         }
@@ -128,6 +129,7 @@ public class RecquisitionService implements RecquisitionStorage {
         }
         ManagedSessionFactory.getEntityManager().persist(cat);
         tx.commit();
+        AggregateTriggerService.getInstance().notifyRecquisition(cat);
         return cat;
     }
 
@@ -161,6 +163,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyVente(e);
             });
             return cat;
         }
@@ -171,6 +174,7 @@ public class RecquisitionService implements RecquisitionStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             etr.commit();
+            AggregateTriggerService.getInstance().notifyVente(cat);
             return cat;
         } catch (Exception e) {
             return cat;
@@ -185,6 +189,7 @@ public class RecquisitionService implements RecquisitionStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element LV " + e.getNumlot() + " enregistree");
+                AggregateTriggerService.getInstance().notifyLigneVente(e);
             });
             return cat;
         }
@@ -195,6 +200,7 @@ public class RecquisitionService implements RecquisitionStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             etr.commit();
+            AggregateTriggerService.getInstance().notifyLigneVente(cat);
             return cat;
         } catch (Exception e) {
             return cat;
@@ -210,6 +216,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     return cat;
                 }).thenAccept(e -> {
                     System.out.println("Element req " + e.getReference() + " enregistree");
+                    AggregateTriggerService.getInstance().notifyRecquisition(e);
                 });
                 return cat;
             }
@@ -219,6 +226,7 @@ public class RecquisitionService implements RecquisitionStorage {
             }
             ManagedSessionFactory.getEntityManager().merge(cat);
             tx.commit();
+            AggregateTriggerService.getInstance().notifyRecquisition(cat);
             return cat;
         } catch (Exception e) {
         }
@@ -231,7 +239,7 @@ public class RecquisitionService implements RecquisitionStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(cat));
                 return cat;
-            });
+            }).thenAccept(e -> AggregateTriggerService.getInstance().notifyRecquisition(e));
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -240,6 +248,7 @@ public class RecquisitionService implements RecquisitionStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyRecquisition(cat);
     }
 
     @Override

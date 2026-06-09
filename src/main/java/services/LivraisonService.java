@@ -58,6 +58,7 @@ public class LivraisonService implements LivraisonStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyLivraison(e);
             });
             return cat;
         }
@@ -69,6 +70,7 @@ public class LivraisonService implements LivraisonStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
+            AggregateTriggerService.getInstance().notifyLivraison(cat);
         }
         return cat;
     }
@@ -81,6 +83,7 @@ public class LivraisonService implements LivraisonStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyLivraison(e);
             });
             return cat;
         }
@@ -90,6 +93,7 @@ public class LivraisonService implements LivraisonStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
+        AggregateTriggerService.getInstance().notifyLivraison(cat);
         return cat;
     }
 
@@ -101,6 +105,7 @@ public class LivraisonService implements LivraisonStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getReference() + " deleted");
+                AggregateTriggerService.getInstance().notifyLivraison(e);
             });
             return;
         }
@@ -110,6 +115,7 @@ public class LivraisonService implements LivraisonStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyLivraison(cat);
     }
 
     @Override

@@ -29,6 +29,7 @@ public final class FinancialStatementPdfExporter {
 
     public static File export(Entreprise entreprise, String title, LocalDate start, LocalDate end,
             List<FinancialStatementRow> rows, List<String> dataHeaders) throws IOException {
+        dataHeaders = dataHeaders == null ? List.of() : dataHeaders;
         File output;
         try (PDDocument document = new PDDocument()) {
             PDFont normal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
@@ -48,45 +49,26 @@ public final class FinancialStatementPdfExporter {
 
             drawHeader(document, contentStream, pdf, entreprise, title, subtitle, normal, bold, primary, pageW, pageH);
             
-            // Build dynamic table column widths
             boolean includeImmobilisationColumns = hasImmobilisationColumns(rows);
             int dataColumnCount = dataHeaders.size() + (includeImmobilisationColumns ? 3 : 0);
-            int[] table;
-            if (includeImmobilisationColumns && dataHeaders.size() == 5) {
-                table = new int[]{32, 130, 110, 48, 48, 48, 48, 48, 55, 55, 55};
-            } else if (includeImmobilisationColumns) {
-                table = new int[]{35, 155, 125, 55, 55, 55, 55, 55, 55, 55};
-            } else if (dataHeaders.size() == 5) {
-                table = new int[]{40, 210, 160, 65, 65, 65, 65, 65};
-            } else if (dataHeaders.size() == 4) {
-                table = new int[]{40, 220, 200, 65, 65, 65, 65};
-            } else {
-                table = new int[]{40, 230, 210, 80, 80, 80};
-            }
+            int[] table = tableWidths(dataHeaders.size(), includeImmobilisationColumns);
+            float bodyFontSize = fittingBodyFontSize(normal, table, rows, dataHeaders.size(),
+                    includeImmobilisationColumns);
+            float headerFontSize = bodyFontSize;
 
             int[] rightAligned = new int[dataColumnCount];
             for (int i = 0; i < dataColumnCount; i++) {
-                rightAligned[i] = 3 + i;
+                rightAligned[i] = 2 + i;
             }
 
-            pdf.addTable(table, 24, 25, pageH - 240);
-            pdf.setFont(normal, 9, Color.WHITE);
+            pdf.addTable(table, 30, 25, pageH - 240);
+            pdf.setFont(normal, headerFontSize, Color.WHITE);
             pdf.setRightAlignedColumns(rightAligned);
-            pdf.addCell("Code", primary);
-            pdf.addCell("Rubrique", primary);
-            pdf.addCell("Nature", primary);
-            for (String header : dataHeaders) {
-                pdf.addCell(header, primary);
-            }
-            if (includeImmobilisationColumns) {
-                pdf.addCell("Brut immo", primary);
-                pdf.addCell("Amort.", primary);
-                pdf.addCell("Net immo", primary);
-            }
+            addHeader(pdf, primary, dataHeaders, includeImmobilisationColumns);
 
-            pdf.setFont(normal, 8, Color.BLACK);
+            pdf.setFont(normal, bodyFontSize, Color.BLACK);
             int lines = 0;
-            int linePerPage = 18;
+            int linePerPage = 10;
             for (FinancialStatementRow row : rows) {
                 if (lines == linePerPage) {
                     contentStream.close();
@@ -96,21 +78,11 @@ public final class FinancialStatementPdfExporter {
                     pdf = new PDFUtils(document, contentStream);
                     drawHeader(document, contentStream, pdf, entreprise, title, subtitle, normal, bold, primary, pageW,
                             pageH);
-                    pdf.addTable(table, 24, 25, pageH - 240);
-                    pdf.setFont(normal, 9, Color.WHITE);
+                    pdf.addTable(table, 30, 25, pageH - 240);
+                    pdf.setFont(normal, headerFontSize, Color.WHITE);
                     pdf.setRightAlignedColumns(rightAligned);
-                    pdf.addCell("Code", primary);
-                    pdf.addCell("Rubrique", primary);
-                    pdf.addCell("Nature", primary);
-                    for (String header : dataHeaders) {
-                        pdf.addCell(header, primary);
-                    }
-                    if (includeImmobilisationColumns) {
-                        pdf.addCell("Brut immo", primary);
-                        pdf.addCell("Amort.", primary);
-                        pdf.addCell("Net immo", primary);
-                    }
-                    pdf.setFont(normal, 8, Color.BLACK);
+                    addHeader(pdf, primary, dataHeaders, includeImmobilisationColumns);
+                    pdf.setFont(normal, bodyFontSize, Color.BLACK);
                     lines = 0;
                 }
 
@@ -119,9 +91,9 @@ public final class FinancialStatementPdfExporter {
                     fill = new Color(210, 232, 240);
                 }
                 pdf.setRightAlignedColumns(rightAligned);
-                pdf.addCell(fit(row.getCode(), bold, 8, 30), fill);
-                pdf.addCell(fit(row.getRubrique(), row.isTotalLine() || row.isSectionHeader() ? bold : normal, 8, 210), fill);
-                pdf.addCell(fit(row.getNature(), normal, 8, 200), fill);
+                pdf.addCell(fit(row.getCode(), bold, bodyFontSize, table[0] - 10), fill);
+                pdf.addCell(wrapText(row.getRubrique(), row.isTotalLine() || row.isSectionHeader() ? bold : normal,
+                        bodyFontSize, table[1] - 20, 2), fill);
                 pdf.addCell(formatAmount(row.getAmountN()), fill);
                 pdf.addCell(formatAmount(row.getAmountN1()), fill);
                 pdf.addCell(formatAmount(row.getAmountN2()), fill);
@@ -145,6 +117,79 @@ public final class FinancialStatementPdfExporter {
             document.save(output);
         }
         return output;
+    }
+
+    private static void addHeader(PDFUtils pdf, Color primary, List<String> dataHeaders,
+            boolean includeImmobilisationColumns) {
+        pdf.addCell("Code", primary);
+        pdf.addCell("Rubrique", primary);
+        for (String header : dataHeaders) {
+            pdf.addCell(header, primary);
+        }
+        if (includeImmobilisationColumns) {
+            pdf.addCell("Brut immo", primary);
+            pdf.addCell("Amort.", primary);
+            pdf.addCell("Net immo", primary);
+        }
+    }
+
+    private static int[] tableWidths(int headerCount, boolean includeImmobilisationColumns) {
+        int dataColumnCount = headerCount + (includeImmobilisationColumns ? 3 : 0);
+        int codeWidth = 50;
+        int rubriqueWidth = includeImmobilisationColumns
+                ? (headerCount >= 5 ? 250 : 285)
+                : (headerCount >= 5 ? 360 : 390);
+        int availableWidth = 792 - codeWidth - rubriqueWidth;
+        int amountWidth = dataColumnCount == 0 ? availableWidth : Math.max(52, availableWidth / dataColumnCount);
+        int[] table = new int[2 + dataColumnCount];
+        table[0] = codeWidth;
+        table[1] = rubriqueWidth;
+        for (int i = 2; i < table.length; i++) {
+            table[i] = amountWidth;
+        }
+        return table;
+    }
+
+    private static float fittingBodyFontSize(PDFont font, int[] table, List<FinancialStatementRow> rows,
+            int headerCount, boolean includeImmobilisationColumns) throws IOException {
+        float size = 10f;
+        float minSize = 10f;
+        for (FinancialStatementRow row : rows) {
+            List<String> amounts = amountTexts(row, headerCount, includeImmobilisationColumns);
+            for (int i = 0; i < amounts.size(); i++) {
+                int columnIndex = 2 + i;
+                if (columnIndex >= table.length) {
+                    break;
+                }
+                float available = Math.max(20, table[columnIndex] - 24);
+                float width = font.getStringWidth(amounts.get(i)) / 1000 * size;
+                while (width > available && size > minSize) {
+                    size -= 0.25f;
+                    width = font.getStringWidth(amounts.get(i)) / 1000 * size;
+                }
+            }
+        }
+        return Math.max(minSize, size);
+    }
+
+    private static List<String> amountTexts(FinancialStatementRow row, int headerCount,
+            boolean includeImmobilisationColumns) {
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        java.util.ArrayList<Double> periodAmounts = new java.util.ArrayList<>();
+        periodAmounts.add(row.getAmountN());
+        periodAmounts.add(row.getAmountN1());
+        periodAmounts.add(row.getAmountN2());
+        periodAmounts.add(row.getAmountN3());
+        periodAmounts.add(row.getAmountN4());
+        for (int i = 0; i < headerCount && i < periodAmounts.size(); i++) {
+            values.add(formatAmount(periodAmounts.get(i)));
+        }
+        if (includeImmobilisationColumns) {
+            values.add(formatAmount(row.getGrossAmount()));
+            values.add(formatAmount(row.getAmortizationAmount()));
+            values.add(formatAmount(row.getNetAmount()));
+        }
+        return values;
     }
 
     private static void drawHeader(PDDocument document, PDPageContentStream contentStream, PDFUtils pdf,
@@ -207,6 +252,48 @@ public final class FinancialStatementPdfExporter {
             builder.append(c);
         }
         return builder + "...";
+    }
+
+    private static String wrapText(String text, PDFont font, float fontSize, int maxWidth, int maxLines)
+            throws IOException {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String[] words = text.replace('\n', ' ').trim().split("\\s+");
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : words) {
+            String candidate = current.length() == 0 ? word : current + " " + word;
+            if (font.getStringWidth(candidate) / 1000 * fontSize <= maxWidth) {
+                current.setLength(0);
+                current.append(candidate);
+                continue;
+            }
+            if (current.length() > 0) {
+                lines.add(current.toString());
+                current.setLength(0);
+                current.append(word);
+            } else {
+                lines.add(fit(word, font, fontSize, maxWidth));
+            }
+            if (lines.size() == maxLines) {
+                break;
+            }
+        }
+        if (current.length() > 0 && lines.size() < maxLines) {
+            lines.add(current.toString());
+        }
+        if (lines.size() > maxLines) {
+            lines = new java.util.ArrayList<>(lines.subList(0, maxLines));
+        }
+        if (lines.isEmpty()) {
+            return "";
+        }
+        if (lines.size() == maxLines && words.length > String.join(" ", lines).split("\\s+").length) {
+            int last = lines.size() - 1;
+            lines.set(last, fit(lines.get(last) + "...", font, fontSize, maxWidth));
+        }
+        return String.join("\n", lines);
     }
 
     private static String formatAmount(Double amount) {

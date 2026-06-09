@@ -82,6 +82,10 @@
                         <RadioButton fx:id="ppps" layoutX="18.0" layoutY="34.0" mnemonicParsing="false" text="%xlbl.ppps" AnchorPane.leftAnchor="18.0" AnchorPane.rightAnchor="623.0" />
                         <Label layoutX="34.0" layoutY="105.0" text="Periodicite de calcul :" />
                         <ComboBox layoutX="193.0" layoutY="102.0" prefHeight="24.0" prefWidth="508.0" promptText="choisir la periode" />
+                        <Separator layoutX="5.0" layoutY="145.0" prefHeight="3.0" prefWidth="742.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" />
+                        <Label layoutX="34.0" layoutY="165.0" text="Taux d'imposition du resultat (%) :" />
+                        <TextField fx:id="tf_taux_imposition_resultat" layoutX="293.0" layoutY="160.0" onAction="#configTauxImpositionResultat" prefHeight="26.0" prefWidth="160.0" promptText="2" />
+                        <Button layoutX="470.0" layoutY="160.0" mnemonicParsing="false" onAction="#configTauxImpositionResultat" text="OK" />
                      </children>
                   </AnchorPane>
                   <Separator layoutX="1.0" layoutY="595.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="-1.0" />

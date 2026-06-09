@@ -94,6 +94,7 @@ public class PDFUtils {
 
     public void addCell(String text, Color fillColor) {
         try {
+            String safeText = text == null ? "" : text;
             contentStream.setStrokingColor(1f);
             if (fillColor != null) {
                 contentStream.setNonStrokingColor(fillColor);
@@ -108,12 +109,24 @@ public class PDFUtils {
             contentStream.beginText();
             contentStream.setNonStrokingColor(color);
             if (isRightAligned(colPos)) {
-                float fwidth = font.getStringWidth(text) / 1000 * fontSize;
+                float fwidth = font.getStringWidth(safeText) / 1000 * fontSize;
                 contentStream.newLineAtOffset(xPos + colWidths[colPos] - 20 - fwidth, yPos + 10);
+                contentStream.showText(safeText);
             } else {
-                contentStream.newLineAtOffset(xPos + 20, yPos + 10);
+                String[] lines = safeText.split("\\R", -1);
+                float leading = fontSize + 2;
+                float firstLineY = lines.length > 1
+                        ? yPos + cellHeight - fontSize - 5
+                        : yPos + Math.max(6, (cellHeight - fontSize) / 2);
+                contentStream.setLeading(leading);
+                contentStream.newLineAtOffset(xPos + 10, firstLineY);
+                for (int i = 0; i < lines.length; i++) {
+                    if (i > 0) {
+                        contentStream.newLine();
+                    }
+                    contentStream.showText(lines[i]);
+                }
             }
-            contentStream.showText(text);
             contentStream.endText();
             xPos = xPos + colWidths[colPos];
             colPos++;
@@ -138,6 +151,9 @@ public class PDFUtils {
     }
 
     private boolean isRightAligned(int colPos) {
+        if (rightAlignedCols == null) {
+            return false;
+        }
         for (int rightAlignedCol : rightAlignedCols) {
             if (rightAlignedCol == colPos) {
                 return true;

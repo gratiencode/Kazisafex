@@ -62,6 +62,7 @@ public class LigneVenteService implements LigneVenteStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getProductId().getNomProduit() + " vendu");
+                AggregateTriggerService.getInstance().notifyLigneVente(e);
             });
             return cat;
         }
@@ -72,6 +73,7 @@ public class LigneVenteService implements LigneVenteStorage {
             }
             ManagedSessionFactory.getEntityManager().persist(cat);
             tx.commit();
+            AggregateTriggerService.getInstance().notifyLigneVente(cat);
             return cat;
         } catch (Exception e) {
             if (tx != null) {
@@ -89,6 +91,7 @@ public class LigneVenteService implements LigneVenteStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getProductId().getNomProduit() + " vendu modifiee");
+                AggregateTriggerService.getInstance().notifyLigneVente(e);
             });
             return cat;
         }
@@ -98,6 +101,7 @@ public class LigneVenteService implements LigneVenteStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         tx.commit();
+        AggregateTriggerService.getInstance().notifyLigneVente(cat);
         return cat;
     }
 
@@ -109,6 +113,7 @@ public class LigneVenteService implements LigneVenteStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element " + e.getProductId().getNomProduit() + " vendu supprimree");
+                AggregateTriggerService.getInstance().notifyLigneVente(e);
             });
             return;
         }
@@ -118,6 +123,7 @@ public class LigneVenteService implements LigneVenteStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyLigneVente(cat);
     }
 
     @Override

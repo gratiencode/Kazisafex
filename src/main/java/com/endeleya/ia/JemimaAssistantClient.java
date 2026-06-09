@@ -69,6 +69,18 @@ public final class JemimaAssistantClient {
             callback.onComplete();
             return;
         }
+        if (aiAgents.hasPendingInvoiceIntentClarification()) {
+            // Une facture/recu a ete joint sans intention claire; la reponse utilisateur choisit le workflow.
+            callback.onToken(aiAgents.resolveInvoiceIntentClarification(question));
+            callback.onComplete();
+            return;
+        }
+        if (aiAgents.shouldClarifyInvoiceIntent(question, attachments)) {
+            // Avant toute lecture de facture ambigue, Jemima demande si c'est une entree, une sortie ou une depense.
+            callback.onToken(aiAgents.askInvoiceIntentClarification(question, attachments));
+            callback.onComplete();
+            return;
+        }
         if (aiAgents.shouldHandleExpense(question, attachments)) {
             // Les depenses lues depuis reçu/facture passent par leur workflow specialise.
             callback.onToken(aiAgents.orchestrateExpense(question, attachments));

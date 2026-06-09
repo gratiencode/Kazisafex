@@ -52,6 +52,7 @@ public class TraisorerieService implements TraisorerieStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element TX " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyTraisorerie(e);
             });
             return cat;
         }
@@ -61,6 +62,7 @@ public class TraisorerieService implements TraisorerieStorage {
         }
         ManagedSessionFactory.getEntityManager().persist(cat);
         etr.commit();
+        AggregateTriggerService.getInstance().notifyTraisorerie(cat);
         // ManagedSessionFactory.getEntityManager().clear();
         return cat;
     }
@@ -73,6 +75,7 @@ public class TraisorerieService implements TraisorerieStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element TX " + e.getReference() + " enregistree");
+                AggregateTriggerService.getInstance().notifyTraisorerie(e);
             });
             return cat;
         }
@@ -82,6 +85,7 @@ public class TraisorerieService implements TraisorerieStorage {
         }
         ManagedSessionFactory.getEntityManager().merge(cat);
         etr.commit();
+        AggregateTriggerService.getInstance().notifyTraisorerie(cat);
         return cat;
     }
 
@@ -93,6 +97,7 @@ public class TraisorerieService implements TraisorerieStorage {
                 return cat;
             }).thenAccept(e -> {
                 System.out.println("Element TX " + e.getReference() + " supprimee");
+                AggregateTriggerService.getInstance().notifyTraisorerie(e);
             });
             return;
         }
@@ -102,6 +107,7 @@ public class TraisorerieService implements TraisorerieStorage {
         }
         ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
         etr.commit();
+        AggregateTriggerService.getInstance().notifyTraisorerie(cat);
     }
 
     @Override

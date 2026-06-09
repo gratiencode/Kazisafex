@@ -27,7 +27,7 @@ public class PriceMaker {
     }
 
     public void setMainCurrency(String mainCurrency) {
-        this.mainCurrency = mainCurrency;
+        this.mainCurrency = CurrencyConverter.normalize(mainCurrency);
     }
 
     public double getPrix() {
@@ -44,6 +44,9 @@ public class PriceMaker {
 
     public void setTaux(double taux) {
         this.taux = taux;
+        if (taux > 0) {
+            CurrencyConverter.saveLegacyCdfRate(taux);
+        }
     }
 
     public double toCdf() {
@@ -85,7 +88,7 @@ public class PriceMaker {
     }
 
     public double usdToCdf(double prixUsdField) {
-        return BigDecimal.valueOf(prixUsdField * taux).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+        return CurrencyConverter.convert(prixUsdField, CurrencyConverter.USD, CurrencyConverter.CDF);
     }
 
     public boolean isUsd() {
@@ -97,7 +100,7 @@ public class PriceMaker {
     }
 
     public double cdfToUsd(double prixCdfField) {
-        return BigDecimal.valueOf((prixCdfField / taux)).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+        return CurrencyConverter.convert(prixCdfField, CurrencyConverter.CDF, CurrencyConverter.USD);
     }
 
     public double toUsd() {
@@ -106,6 +109,10 @@ public class PriceMaker {
         } else {
             return BigDecimal.valueOf((prix / taux)).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
         }
+    }
+
+    public double convert(double amount, String fromCurrency, String toCurrency) {
+        return CurrencyConverter.convert(amount, fromCurrency, toCurrency);
     }
 
     public String getInverseCurrencyCode() {

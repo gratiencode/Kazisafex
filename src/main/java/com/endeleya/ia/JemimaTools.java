@@ -98,6 +98,7 @@ import javax.print.PrintServiceLookup;
 import javax.imageio.ImageIO;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import retrofit2.Response;
 import services.FinancialStatementAgregateService;
 import services.ManagedSessionFactory;
@@ -121,6 +122,7 @@ public class JemimaTools {
     private static final Map<String, ExpenseWorkflowContext> EXPENSE_WORKFLOWS = new ConcurrentHashMap<>();
     private static final Map<String, ProductCodePrintBatch> PRODUCT_CODE_PRINT_BATCHES = new ConcurrentHashMap<>();
     private static final Map<String, DuplicateProductBatch> DUPLICATE_PRODUCT_BATCHES = new ConcurrentHashMap<>();
+    private static final Map<String, ProductVisibilityRepairRequest> PRODUCT_VISIBILITY_REPAIR_REQUESTS = new ConcurrentHashMap<>();
     private static final Map<String, MysqlReplicationPlan> MYSQL_REPLICATION_PLANS = new ConcurrentHashMap<>();
     private static final Map<String, String> MYSQL_ROOT_PASSWORD_TOKENS = new ConcurrentHashMap<>();
     private static final Map<String, WorkflowCancellationRequest> WORKFLOW_CANCELLATION_REQUESTS = new ConcurrentHashMap<>();
@@ -285,6 +287,136 @@ public class JemimaTools {
                     .filter(product -> productMatches(product, criteria))
                     .toList();
             return formatProducts(filtered);
+        });
+    }
+
+    @Tool("Diagnostique pourquoi un produit n'est pas visible dans le POS/ListItemView: produit, mesures, mesure unitaire, dernière réquisition, livraison et prix de vente")
+    public String diagnoseInvisibleProductInPos(
+            @P("Nom, code-barres ou uid du produit invisible dans le POS") String productQuery) {
+        return executeOnce("diagnoseInvisibleProductInPos", productQuery, () -> {
+            String query = safe(productQuery, "").trim();
+            if (query.isBlank()) {
+                return "Indiquez le nom, le code-barres ou le uid du produit invisible dans le POS.";
+            }
+            String region = pref.get("region", "Goma");
+            Produit product = findProductByUidCodebarOrName(query);
+            if (product == null) {
+                String batchId = registerProductVisibilityRepair(query, null, "PRODUIT_ABSENT");
+                return "Diagnostic POS: le produit `" + query + "` n'existe pas dans la liste des produits.\n\n"
+                        + "Cause probable: le ListItemView ne peut pas l'afficher parce que le catalogue ne contient pas ce produit.\n"
+                        + productVisibilityRepairInstructions(batchId, query, "Créer le produit, sa mesure unitaire, une réquisition générique et son prix de vente.");
+            }
+
+            boolean existsInProductList = productExistsInCatalogList(product);
+            List<Mesure> measures = safeList(MesureDelegate.findMesureByProduit(product.getUid()));
+            Mesure unit = MesureDelegate.findByProduitAndQuant(product.getUid(), 1d);
+            List<Recquisition> recquisitions = sortedProductRecquisitions(product, region);
+            Recquisition latest = recquisitions.isEmpty() ? null : recquisitions.get(0);
+            Livraison delivery = latest == null ? null : findDeliveryForRecquisition(latest);
+            List<PrixDeVente> prices = latest == null ? List.of() : safeList(PrixDeVenteDelegate.findPricesForRecq(latest.getUid()));
+
+            StringBuilder report = new StringBuilder();
+            report.append("Diagnostic POS pour: ").append(productLine(product)).append("\n\n")
+                    .append("- Produit dans la liste catalogue: ").append(existsInProductList ? "oui" : "non").append("\n")
+                    .append("- Mesure(s): ").append(measures.size()).append(formatMeasuresForDiagnostic(measures)).append("\n")
+                    .append("- Mesure unitaire quantContenu=1: ").append(unit == null ? "non" : "oui, " + unit.getDescription()).append("\n")
+                    .append("- Dernier approvisionnement/réquisition: ").append(formatRecquisitionForDiagnostic(latest)).append("\n")
+                    .append("- Livraison liée: ").append(formatDeliveryForDiagnostic(delivery)).append("\n")
+                    .append("- Prix de vente sur cette réquisition: ").append(prices.isEmpty() ? "aucun" : prices.size() + " prix").append("\n");
+
+            if (latest != null && prices.isEmpty()) {
+                List<PrixDeVente> previousPrices = previousSalePrices(product, latest.getUid());
+                if (!previousPrices.isEmpty()) {
+                    List<PrixDeVente> copied = copySalePricesToRecquisition(previousPrices, latest, unit);
+                    report.append("\nRéparation appliquée: aucun prix sur la dernière réquisition, mais Jemima a trouvé ")
+                            .append(previousPrices.size())
+                            .append(" prix sur une réquisition précédente et l'a copié vers la dernière réquisition.\n")
+                            .append("Prix copié(s): ").append(copied.size()).append("\n")
+                            .append("Demandez à l'utilisateur de rafraîchir le POS.");
+                    return report.toString();
+                }
+                String batchId = registerProductVisibilityRepair(query, product.getUid(), "PRIX_ABSENT");
+                report.append("\nCause probable: le produit existe et a une réquisition, mais aucun prix de vente exploitable n'a été trouvé.\n")
+                        .append(productVisibilityPriceInstructions(batchId, product));
+                return report.toString();
+            }
+
+            if (!existsInProductList || measures.isEmpty() || unit == null || latest == null || delivery == null) {
+                String reason = !existsInProductList ? "PRODUIT_HORS_LISTE"
+                        : measures.isEmpty() ? "MESURE_ABSENTE"
+                        : unit == null ? "MESURE_UNITAIRE_ABSENTE"
+                        : latest == null ? "RECQUISITION_ABSENTE"
+                        : "LIVRAISON_ABSENTE";
+                String batchId = registerProductVisibilityRepair(query, product.getUid(), reason);
+                report.append("\nCause probable: ").append(productVisibilityReasonLabel(reason)).append(".\n")
+                        .append(productVisibilityRepairInstructions(batchId, product.getNomProduit(),
+                                "Compléter la mesure unitaire et/ou créer un approvisionnement générique avec prix de vente."));
+                return report.toString();
+            }
+
+            report.append("\nAucun blocage structurel détecté dans le flow catalogue -> mesure -> réquisition -> livraison -> prix.")
+                    .append("\nSi le produit reste invisible, rafraîchissez le POS ou vérifiez les filtres de région/stock courant dans l'écran POS.");
+            return report.toString();
+        });
+    }
+
+    @Tool("Applique la correction proposée par diagnoseInvisibleProductInPos pour créer un approvisionnement générique ou configurer un prix de vente")
+    public String repairInvisibleProductInPos(
+            @P("batchId retourné par diagnoseInvisibleProductInPos") String batchId,
+            @P("Détails JSON: productName, quantity, purchaseUnitPrice, measureName, lotNumber, expiryDate, salePrice, qmin, qmax, currency") String repairJson) {
+        return executeOnce("repairInvisibleProductInPos", safe(batchId, "") + "|" + safe(repairJson, ""), () -> {
+            ProductVisibilityRepairRequest request = PRODUCT_VISIBILITY_REPAIR_REQUESTS.get(safe(batchId, "").trim());
+            if (request == null) {
+                return "Demande de réparation introuvable. Relancez d'abord le diagnostic du produit invisible.";
+            }
+            Map<String, Object> values = parseJsonMap(repairJson);
+            Produit product = request.productUid() == null || request.productUid().isBlank()
+                    ? null
+                    : ProduitDelegate.findProduit(request.productUid());
+            String productName = safe(firstValue(values, "productName", "nomProduit", "produit"), product == null ? request.query() : product.getNomProduit());
+            double salePrice = parseDouble(firstValue(values, "salePrice", "prixVente", "prix"), 0d);
+
+            if ("PRIX_ABSENT".equals(request.reason())) {
+                if (product == null) {
+                    return "Produit introuvable pour configurer le prix. Relancez le diagnostic.";
+                }
+                Recquisition latest = latestProductRecquisition(product, pref.get("region", "Goma"));
+                if (latest == null) {
+                    return "Aucune réquisition n'existe plus pour ce produit. Relancez la réparation en approvisionnement générique.";
+                }
+                if (salePrice <= 0) {
+                    return "Le prix de vente manque. Répondez avec un JSON contenant au moins `salePrice`, par exemple: {\"salePrice\":25,\"qmin\":1,\"qmax\":999999,\"currency\":\"USD\"}.";
+                }
+                Mesure unit = MesureDelegate.findByProduitAndQuant(product.getUid(), 1d);
+                if (unit == null) {
+                    unit = ensureUnitMeasure(product, safe(firstValue(values, "measureName", "mesure"), "Pièce"));
+                }
+                PrixDeVente saved = createSalePriceFromRepair(values, latest, unit, salePrice);
+                PRODUCT_VISIBILITY_REPAIR_REQUESTS.remove(request.batchId());
+                return "Prix de vente configuré pour rendre le produit visible au POS: "
+                        + product.getNomProduit() + ", prix=" + saved.getPrixUnitaire() + " " + saved.getDevise()
+                        + ". Demandez à l'utilisateur de rafraîchir le POS.";
+            }
+
+            InvoiceDraft draft = buildGenericSupplyDraftForVisibilityRepair(values, productName);
+            if (salePrice <= 0 && findExistingProduct(productName) == null) {
+                return "Le prix de vente est nécessaire pour créer l'approvisionnement générique du produit `" + productName + "`.\n"
+                        + "Répondez avec un JSON contenant `salePrice`, `quantity`, `purchaseUnitPrice`, `lotNumber` et `expiryDate`.";
+            }
+            String workflowId = registerInvoiceWorkflow(draft);
+            createProductsAndMeasures(workflowId);
+            InvoiceWorkflowContext context = workflow(workflowId);
+            if (context == null) {
+                return "Impossible d'ouvrir le workflow de réparation.";
+            }
+            context.supplier = genericCompanySupplier();
+            context.delivery = findOrCreateGenericPosRecoveryDelivery(pref.get("region", "Goma"));
+            context.deliveryCreated = true;
+            String result = createRequisitionsAndSalePrices(workflowId);
+            PRODUCT_VISIBILITY_REPAIR_REQUESTS.remove(request.batchId());
+            return result + "\n\nRéparation POS terminée avec livraison générique "
+                    + context.delivery.getReference()
+                    + ". Demandez à l'utilisateur de vérifier maintenant le ListItemView du POS.";
         });
     }
 
@@ -2230,6 +2362,11 @@ public class JemimaTools {
     private record ToolExecutionResult(String result, long createdAtMs) {
     }
 
+    private record FinancialReportPayload(List<String> headers, List<FinancialStatementRow> bilan,
+            List<FinancialStatementRow> compteResultat, List<FinancialStatementRow> fluxTresorerie,
+            String regionLabel, String periodLabel) {
+    }
+
     private record ProductCodePrintItem(String productName, String brand, String model, String code, String formatLabel, String imageMarkdown) {
     }
 
@@ -2453,7 +2590,70 @@ public class JemimaTools {
         });
     }
 
-    @Tool("Génère et ouvre les états financiers PDF sur une période donnée")
+    @Tool("Recalcule à la demande les états financiers et affiche le rapport demandé en tableaux Markdown avant export")
+    public String previewFinancialStatementsMarkdown(
+            @P("Mode: periode, annuel ou trimestriel") String mode,
+            @P("Type: bilan, resultat, flux ou tous") String statement,
+            @P("Date début yyyy-MM-dd pour mode periode") String start,
+            @P("Date fin yyyy-MM-dd pour mode periode") String end,
+            @P("Année d'ancrage pour mode annuel ou trimestriel, ex: 2026") int anchorYear,
+            @P("Nombre d'années pour mode annuel: 3 ou 5") int years,
+            @P("Région optionnelle. Une autre région est acceptée seulement avec un rôle ALL_ACCESS") String region) {
+        String key = safe(mode, "") + "|" + safe(statement, "") + "|" + safe(start, "") + "|" + safe(end, "")
+                + "|" + anchorYear + "|" + years + "|" + safe(region, "");
+        return executeOnce("previewFinancialStatementsMarkdown", key, () -> {
+            try {
+                FinancialReportPayload payload = loadFinancialPayload(mode, statement, start, end, anchorYear, years, region);
+                StringBuilder builder = new StringBuilder();
+                builder.append("Rapport financier recalculé pour ")
+                        .append(payload.regionLabel())
+                        .append(" sur ")
+                        .append(payload.periodLabel())
+                        .append(".\n\n");
+                appendMarkdownTable(builder, "Bilan", payload.headers(), payload.bilan());
+                appendMarkdownTable(builder, "Compte de résultat", payload.headers(), payload.compteResultat());
+                appendMarkdownTable(builder, "Flux de trésorerie", payload.headers(), payload.fluxTresorerie());
+                builder.append("\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ");
+                builder.append("Après votre confirmation, Jemima générera un seul fichier final pour cette demande.");
+                return builder.toString();
+            } catch (Exception ex) {
+                return "Impossible d'afficher le rapport financier: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Rectifie les agrégats des états financiers pour une période ou une année donnée")
+    public String rectifyFinancialStatements(
+            @P("Mode: periode ou annee") String mode,
+            @P("Date début yyyy-MM-dd si mode periode") String start,
+            @P("Date fin yyyy-MM-dd si mode periode") String end,
+            @P("Année à rectifier si mode annee, ex: 2026") int year,
+            @P("Région optionnelle. Une autre région est acceptée seulement avec Trader ou ALL_ACCESS") String region) {
+        String key = safe(mode, "") + "|" + safe(start, "") + "|" + safe(end, "") + "|" + year + "|" + safe(region, "");
+        return executeOnce("rectifyFinancialStatements", key, () -> {
+            try {
+                String usedRegion = resolveFinancialRegion(region);
+                if (safe(mode, "periode").toLowerCase(Locale.ROOT).contains("ann")) {
+                    int resolvedYear = year <= 0 ? LocalDate.now().getYear() : year;
+                    financialService.rectifyFinancialStatementsForYear(resolvedYear, usedRegion);
+                    return "Rectification des états financiers terminée pour l'année " + resolvedYear + ".";
+                }
+                LocalDate d1 = start == null || start.isBlank() ? LocalDate.now().withDayOfMonth(1) : LocalDate.parse(start);
+                LocalDate d2 = end == null || end.isBlank() ? LocalDate.now() : LocalDate.parse(end);
+                if (d1.isAfter(d2)) {
+                    LocalDate tmp = d1;
+                    d1 = d2;
+                    d2 = tmp;
+                }
+                financialService.rectifyFinancialStatements(d1, d2, usedRegion);
+                return "Rectification des états financiers terminée pour la période " + d1 + " au " + d2 + ".";
+            } catch (Exception ex) {
+                return "Échec de rectification des états financiers: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre les états financiers PDF sur une période donnée après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsPdf(
             @P("Date début au format yyyy-MM-dd") String start,
             @P("Date fin au format yyyy-MM-dd") String end,
@@ -2467,29 +2667,27 @@ public class JemimaTools {
                     d1 = d2;
                     d2 = tmp;
                 }
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 financialService.rebuildStatements(d1, d2, usedRegion);
                 Entreprise entreprise = currentEntreprise();
                 List<String> headers = List.of("Période", "Période précédente 1", "Période précédente 2",
                         "Période précédente 3");
-                File last = null;
-                last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", d1, d2,
-                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion), headers);
-                FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", d1, d2,
-                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d1, d2, usedRegion), headers);
-                FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", d1, d2,
-                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d1, d2, usedRegion), headers);
-                if (last != null && Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(last);
+                File file = exportCombinedFinancialPdf(entreprise, d1, d2, headers,
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion),
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d1, d2, usedRegion),
+                        financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d1, d2, usedRegion),
+                        "periode-" + d1 + "-" + d2 + "-" + usedRegion);
+                if (file != null && Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
                 }
-                return "États financiers PDF générés pour la période " + start + " au " + end + ".";
+                return "États financiers PDF générés dans un seul fichier: " + file.getAbsolutePath();
             } catch (Exception ex) {
                 return "Échec génération PDF: " + ex.getMessage();
             }
         });
     }
 
-    @Tool("Génère et ouvre les états financiers Excel sur une période donnée")
+    @Tool("Génère et ouvre les états financiers Excel sur une période donnée après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsExcel(
             @P("Date début au format yyyy-MM-dd") String start,
             @P("Date fin au format yyyy-MM-dd") String end,
@@ -2503,9 +2701,9 @@ public class JemimaTools {
                     d1 = d2;
                     d2 = tmp;
                 }
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 financialService.rebuildStatements(d1, d2, usedRegion);
-                File file = FileUtils.pointFile("financial-statements-" + System.currentTimeMillis() + ".xlsx");
+                File file = FileUtils.pointFile("financial-statements-periode-" + safeFilePart(d1 + "-" + d2 + "-" + usedRegion) + ".xlsx");
                 List<String> headers = List.of("Période", "Période précédente 1", "Période précédente 2",
                         "Période précédente 3");
                 try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
@@ -2527,7 +2725,7 @@ public class JemimaTools {
         });
     }
 
-    @Tool("Génère et ouvre les états financiers PDF comparatifs par année, par exemple sur 3 ou 5 ans")
+    @Tool("Génère et ouvre les états financiers PDF comparatifs par année après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsYearlyPdf(
             @P("Année finale de comparaison, ex: 2026") int anchorYear,
             @P("Nombre d'années à afficher, généralement 3 ou 5") int years,
@@ -2537,36 +2735,31 @@ public class JemimaTools {
         String key = resolvedAnchorYear + "|" + span + "|" + region;
         return executeOnce("generateFinancialStatementsYearlyPdf", key, () -> {
             try {
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 financialService.ensureYearlyStatements(resolvedAnchorYear, span, usedRegion);
                 Entreprise entreprise = currentEntreprise();
                 List<String> headers = yearlyHeaders(resolvedAnchorYear, span);
                 LocalDate start = LocalDate.of(resolvedAnchorYear - span + 1, 1, 1);
                 LocalDate end = LocalDate.of(resolvedAnchorYear, 12, 31);
-                File last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", start, end,
+                File file = exportCombinedFinancialPdf(entreprise, start, end, headers,
                         financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN,
                                 resolvedAnchorYear, span, usedRegion),
-                        headers);
-                FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", start, end,
                         financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
                                 resolvedAnchorYear, span, usedRegion),
-                        headers);
-                FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", start, end,
                         financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
                                 resolvedAnchorYear, span, usedRegion),
-                        headers);
-                if (last != null && Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(last);
+                        "annuel-" + resolvedAnchorYear + "-" + span + "-" + usedRegion);
+                if (file != null && Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
                 }
-                return "États financiers PDF générés sur " + span + " ans, de "
-                        + (resolvedAnchorYear - span + 1) + " à " + resolvedAnchorYear + ".";
+                return "États financiers PDF générés dans un seul fichier: " + file.getAbsolutePath();
             } catch (Exception ex) {
                 return "Échec génération PDF comparatif: " + ex.getMessage();
             }
         });
     }
 
-    @Tool("Génère et ouvre les états financiers Excel comparatifs par année, par exemple sur 3 ou 5 ans")
+    @Tool("Génère et ouvre les états financiers Excel comparatifs par année après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsYearlyExcel(
             @P("Année finale de comparaison, ex: 2026") int anchorYear,
             @P("Nombre d'années à afficher, généralement 3 ou 5") int years,
@@ -2576,10 +2769,10 @@ public class JemimaTools {
         String key = resolvedAnchorYear + "|" + span + "|" + region;
         return executeOnce("generateFinancialStatementsYearlyExcel", key, () -> {
             try {
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 financialService.ensureYearlyStatements(resolvedAnchorYear, span, usedRegion);
-                File file = FileUtils.pointFile("financial-statements-yearly-" + span + "y-"
-                        + resolvedAnchorYear + "-" + System.currentTimeMillis() + ".xlsx");
+                File file = FileUtils.pointFile("financial-statements-yearly-" + safeFilePart(span + "y-"
+                        + resolvedAnchorYear + "-" + usedRegion) + ".xlsx");
                 List<String> headers = yearlyHeaders(resolvedAnchorYear, span);
                 try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
                     writeSheet(workbook, "Bilan", financialService.loadStatementRows(
@@ -2603,7 +2796,7 @@ public class JemimaTools {
         });
     }
 
-    @Tool("Génère et ouvre les états financiers PDF d'une année séparés par trimestre T1, T2, T3 et T4")
+    @Tool("Génère et ouvre les états financiers PDF d'une année séparés par trimestre après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsQuarterlyPdf(
             @P("Année à afficher par trimestre, ex: 2026") int year,
             @P("Région optionnelle") String region) {
@@ -2611,36 +2804,32 @@ public class JemimaTools {
         String key = resolvedYear + "|" + region;
         return executeOnce("generateFinancialStatementsQuarterlyPdf", key, () -> {
             try {
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 LocalDate anchorDate = LocalDate.of(resolvedYear, 12, 31);
                 financialService.ensureQuarterlyStatements(anchorDate, 4, usedRegion);
                 Entreprise entreprise = currentEntreprise();
                 List<String> headers = quarterlyHeaders(resolvedYear);
                 LocalDate start = LocalDate.of(resolvedYear, 1, 1);
                 LocalDate end = LocalDate.of(resolvedYear, 12, 31);
-                File last = FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", start, end,
+                File file = exportCombinedFinancialPdf(entreprise, start, end, headers,
                         financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_BILAN,
                                 anchorDate, 4, usedRegion),
-                        headers);
-                FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", start, end,
                         financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
                                 anchorDate, 4, usedRegion),
-                        headers);
-                FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", start, end,
                         financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
                                 anchorDate, 4, usedRegion),
-                        headers);
-                if (last != null && Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(last);
+                        "trimestriel-" + resolvedYear + "-" + usedRegion);
+                if (file != null && Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
                 }
-                return "États financiers PDF générés par trimestre pour l'année " + resolvedYear + ".";
+                return "États financiers PDF générés dans un seul fichier: " + file.getAbsolutePath();
             } catch (Exception ex) {
                 return "Échec génération PDF trimestriel: " + ex.getMessage();
             }
         });
     }
 
-    @Tool("Génère et ouvre les états financiers Excel d'une année séparés par trimestre T1, T2, T3 et T4")
+    @Tool("Génère et ouvre les états financiers Excel d'une année séparés par trimestre après confirmation de l'aperçu Markdown")
     public String generateFinancialStatementsQuarterlyExcel(
             @P("Année à afficher par trimestre, ex: 2026") int year,
             @P("Région optionnelle") String region) {
@@ -2648,11 +2837,11 @@ public class JemimaTools {
         String key = resolvedYear + "|" + region;
         return executeOnce("generateFinancialStatementsQuarterlyExcel", key, () -> {
             try {
-                String usedRegion = region == null || region.isBlank() ? pref.get("region", null) : region;
+                String usedRegion = resolveFinancialRegion(region);
                 LocalDate anchorDate = LocalDate.of(resolvedYear, 12, 31);
                 financialService.ensureQuarterlyStatements(anchorDate, 4, usedRegion);
                 File file = FileUtils.pointFile("financial-statements-quarterly-"
-                        + resolvedYear + "-" + System.currentTimeMillis() + ".xlsx");
+                        + safeFilePart(resolvedYear + "-" + usedRegion) + ".xlsx");
                 List<String> headers = quarterlyHeaders(resolvedYear);
                 try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
                     writeSheet(workbook, "Bilan", financialService.loadStatementRowsQuarterly(
@@ -2732,6 +2921,318 @@ public class JemimaTools {
                `dateExpiry` doit être au format `yyyy-MM-dd`. Si le produit n'expire pas, mettez `none`.
                """);
         return builder.toString();
+    }
+
+    private Produit findProductByUidCodebarOrName(String query) {
+        String value = safe(query, "").trim();
+        if (value.isBlank()) {
+            return null;
+        }
+        Produit byUid = ProduitDelegate.findProduit(value);
+        if (byUid != null) {
+            return byUid;
+        }
+        Produit byCodebar = ProduitDelegate.findByCodebar(value);
+        if (byCodebar != null) {
+            return byCodebar;
+        }
+        return findExistingProduct(value);
+    }
+
+    private boolean productExistsInCatalogList(Produit product) {
+        if (product == null || product.getUid() == null) {
+            return false;
+        }
+        List<Produit> products = ProduitDelegate.findProduits();
+        if (products == null) {
+            return false;
+        }
+        for (Produit item : products) {
+            if (item != null && Objects.equals(item.getUid(), product.getUid())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Recquisition> sortedProductRecquisitions(Produit product, String region) {
+        if (product == null || product.getUid() == null) {
+            return List.of();
+        }
+        List<Recquisition> recquisitions = safeList(RecquisitionDelegate.findDescSortedByDateForProduit(product.getUid()));
+        if (recquisitions.isEmpty()) {
+            recquisitions = safeList(RecquisitionDelegate.findRecquisitionByProduitRegion(product.getUid(), region));
+        }
+        recquisitions.sort((left, right) -> {
+            LocalDateTime dl = left == null || left.getDate() == null ? LocalDateTime.MIN : left.getDate();
+            LocalDateTime dr = right == null || right.getDate() == null ? LocalDateTime.MIN : right.getDate();
+            return dr.compareTo(dl);
+        });
+        return recquisitions;
+    }
+
+    private Recquisition latestProductRecquisition(Produit product, String region) {
+        List<Recquisition> recquisitions = sortedProductRecquisitions(product, region);
+        return recquisitions.isEmpty() ? null : recquisitions.get(0);
+    }
+
+    private Livraison findDeliveryForRecquisition(Recquisition recquisition) {
+        if (recquisition == null || recquisition.getReference() == null || recquisition.getReference().isBlank()) {
+            return null;
+        }
+        List<Livraison> deliveries = LivraisonDelegate.findByRef(recquisition.getReference());
+        return deliveries == null || deliveries.isEmpty() ? null : deliveries.get(0);
+    }
+
+    private String formatMeasuresForDiagnostic(List<Mesure> measures) {
+        if (measures == null || measures.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder(" (");
+        for (int i = 0; i < measures.size(); i++) {
+            Mesure measure = measures.get(i);
+            if (i > 0) {
+                builder.append("; ");
+            }
+            builder.append(safe(measure.getDescription(), "-"))
+                    .append(", quantContenu=")
+                    .append(measure.getQuantContenu());
+        }
+        return builder.append(")").toString();
+    }
+
+    private String formatRecquisitionForDiagnostic(Recquisition recquisition) {
+        if (recquisition == null) {
+            return "aucune";
+        }
+        return recquisition.getUid()
+                + ", ref=" + safe(recquisition.getReference(), "-")
+                + ", date=" + recquisition.getDate()
+                + ", lot=" + safe(recquisition.getNumlot(), "-")
+                + ", quantite=" + recquisition.getQuantite()
+                + ", coutAchat=" + recquisition.getCoutAchat();
+    }
+
+    private String formatDeliveryForDiagnostic(Livraison delivery) {
+        if (delivery == null) {
+            return "aucune";
+        }
+        String supplier = delivery.getFournId() == null ? "-" : safe(delivery.getFournId().getNomFourn(), "-");
+        return delivery.getReference()
+                + ", numPiece=" + safe(delivery.getNumPiece(), "-")
+                + ", date=" + delivery.getDateLivr()
+                + ", fournisseur=" + supplier;
+    }
+
+    private String registerProductVisibilityRepair(String query, String productUid, String reason) {
+        String batchId = "pos-visible-" + DataId.generate();
+        PRODUCT_VISIBILITY_REPAIR_REQUESTS.put(batchId,
+                new ProductVisibilityRepairRequest(batchId, query, productUid, reason, LocalDateTime.now()));
+        return batchId;
+    }
+
+    private String productVisibilityReasonLabel(String reason) {
+        return switch (safe(reason, "")) {
+            case "PRODUIT_HORS_LISTE" ->
+                "le produit n'apparait pas dans la liste catalogue chargée par le POS";
+            case "MESURE_ABSENTE" ->
+                "aucune mesure n'est liée au produit";
+            case "MESURE_UNITAIRE_ABSENTE" ->
+                "aucune mesure unitaire avec quantContenu=1 n'est liée au produit";
+            case "RECQUISITION_ABSENTE" ->
+                "aucun approvisionnement/réquisition n'est lié au produit";
+            case "LIVRAISON_ABSENTE" ->
+                "la réquisition existe mais sa livraison de référence est introuvable";
+            default ->
+                "une donnée du flow POS est absente";
+        };
+    }
+
+    private String productVisibilityRepairInstructions(String batchId, String productName, String action) {
+        return "\nAction proposée: " + action + "\n"
+                + "Lot de correction: " + batchId + "\n\n"
+                + "Pour confirmer, demandez à Jemima d'appliquer la correction avec ce JSON:\n"
+                + "{\n"
+                + "  \"productName\":\"" + tableCell(productName) + "\",\n"
+                + "  \"quantity\":1,\n"
+                + "  \"purchaseUnitPrice\":0,\n"
+                + "  \"measureName\":\"Pièce\",\n"
+                + "  \"lotNumber\":\"AUTO-POS\",\n"
+                + "  \"expiryDate\":\"none\",\n"
+                + "  \"salePrice\":0,\n"
+                + "  \"qmin\":1,\n"
+                + "  \"qmax\":999999,\n"
+                + "  \"currency\":\"USD\"\n"
+                + "}\n"
+                + "Remplacez `salePrice` et `purchaseUnitPrice` par les valeurs réelles avant validation.";
+    }
+
+    private String productVisibilityPriceInstructions(String batchId, Produit product) {
+        return "Lot de correction: " + batchId + "\n\n"
+                + "Pour configurer le prix, confirmez avec un JSON du genre:\n"
+                + "{\n"
+                + "  \"productName\":\"" + tableCell(product == null ? "Produit" : product.getNomProduit()) + "\",\n"
+                + "  \"salePrice\":25,\n"
+                + "  \"qmin\":1,\n"
+                + "  \"qmax\":999999,\n"
+                + "  \"currency\":\"USD\",\n"
+                + "  \"measureName\":\"Pièce\"\n"
+                + "}";
+    }
+
+    private List<PrixDeVente> previousSalePrices(Produit product, String excludedRecquisitionUid) {
+        if (product == null || product.getUid() == null) {
+            return List.of();
+        }
+        List<Recquisition> recquisitions = sortedProductRecquisitions(product, pref.get("region", "Goma"));
+        for (Recquisition recquisition : recquisitions) {
+            if (recquisition == null || recquisition.getUid() == null
+                    || Objects.equals(recquisition.getUid(), excludedRecquisitionUid)) {
+                continue;
+            }
+            List<PrixDeVente> prices = safeList(PrixDeVenteDelegate.findPricesForRecq(recquisition.getUid()));
+            if (!prices.isEmpty()) {
+                return prices;
+            }
+        }
+        return List.of();
+    }
+
+    private List<PrixDeVente> copySalePricesToRecquisition(List<PrixDeVente> sourcePrices, Recquisition target, Mesure fallbackMeasure) {
+        List<PrixDeVente> copied = new ArrayList<>();
+        if (target == null || sourcePrices == null) {
+            return copied;
+        }
+        for (PrixDeVente source : sourcePrices) {
+            if (source == null) {
+                continue;
+            }
+            Mesure measure = source.getMesureId() == null ? fallbackMeasure : source.getMesureId();
+            PrixDeVente existing = findExistingSalePrice(target, measure, source.getQmin(), source.getQmax());
+            boolean isNew = existing == null;
+            PrixDeVente copy = isNew ? new PrixDeVente(DataId.generate()) : existing;
+            copy.setRecquisitionId(target);
+            copy.setMesureId(measure);
+            copy.setDevise(safe(source.getDevise(), "USD"));
+            copy.setPrixUnitaire(source.getPrixUnitaire());
+            copy.setQmin(source.getQmin());
+            copy.setQmax(source.getQmax());
+            copy.setPourcentParCunit(source.getPourcentParCunit());
+            copied.add(saveSalePrice(copy, isNew));
+        }
+        return copied;
+    }
+
+    private Mesure ensureUnitMeasure(Produit product, String description) {
+        Mesure unit = MesureDelegate.findByProduitAndQuant(product.getUid(), 1d);
+        if (unit != null) {
+            return unit;
+        }
+        Mesure measure = new Mesure(DataId.generate());
+        measure.setProduitId(product);
+        measure.setDescription(safe(description, "Pièce"));
+        measure.setQuantContenu(1d);
+        Mesure saved = MesureDelegate.saveMesure(measure);
+        syncCreate(saved, Tables.MESURE);
+        return saved;
+    }
+
+    private PrixDeVente createSalePriceFromRepair(Map<String, Object> values, Recquisition recquisition, Mesure measure, double salePrice) {
+        double qmin = parseDouble(firstValue(values, "qmin", "salePriceQmin", "quantiteMin"), 1d);
+        double qmax = parseDouble(firstValue(values, "qmax", "salePriceQmax", "quantiteMax"), 999999d);
+        PrixDeVente price = findExistingSalePrice(recquisition, measure, qmin, qmax);
+        boolean isNew = price == null;
+        if (isNew) {
+            price = new PrixDeVente(DataId.generate());
+        }
+        price.setRecquisitionId(recquisition);
+        price.setMesureId(measure);
+        price.setPrixUnitaire(salePrice);
+        price.setQmin(qmin);
+        price.setQmax(qmax);
+        price.setDevise(safe(firstValue(values, "currency", "devise", "saleCurrency"), "USD"));
+        price.setPourcentParCunit(recquisition.getCoutAchat() <= 0 || salePrice <= 0 ? 0d : (salePrice - recquisition.getCoutAchat()) / salePrice);
+        return saveSalePrice(price, isNew);
+    }
+
+    private InvoiceDraft buildGenericSupplyDraftForVisibilityRepair(Map<String, Object> values, String productName) {
+        String region = pref.get("region", "Goma");
+        InvoiceDraft draft = new InvoiceDraft();
+        Entreprise entreprise = currentEntreprise();
+        draft.setSupplier(safe(entreprise.getNomEntreprise(), "Entreprise connectee"));
+        draft.setSupplierAddress(safe(entreprise.getAdresse(), ""));
+        draft.setSupplierPhone(safe(entreprise.getPhones(), ""));
+        draft.setSupplierIdNat(safe(entreprise.getIdNat(), ""));
+        draft.setSupplierTaxNumber(safe(entreprise.getNumeroImpot(), ""));
+        draft.setReference(genericPosRecoveryReference(region));
+        draft.setInvoiceDate(LocalDate.now().toString());
+        draft.setCurrency(safe(firstValue(values, "currency", "devise", "saleCurrency"), "USD"));
+        draft.setPayed(0d);
+        draft.setReduction(0d);
+        InvoiceLine line = new InvoiceLine();
+        line.setProductName(productName);
+        line.setCategory(safe(firstValue(values, "category", "categorie"), inferProductCategory(productName)));
+        line.setQuantity(parseDouble(firstValue(values, "quantity", "quantite"), 1d));
+        line.setPurchaseUnitPrice(parseDouble(firstValue(values, "purchaseUnitPrice", "coutAchat", "prixAchat"), 0d));
+        line.setTotal(parseDouble(firstValue(values, "total"), line.getQuantity() * line.getPurchaseUnitPrice()));
+        line.setMeasureName(safe(firstValue(values, "measureName", "mesure"), "Pièce"));
+        line.setLotNumber(safe(firstValue(values, "lotNumber", "numlot", "lot"), "AUTO-POS"));
+        line.setExpiryDate(safe(firstValue(values, "expiryDate", "dateExpiry"), "none"));
+        line.setSalePrice(parseDouble(firstValue(values, "salePrice", "prixVente", "prix"), 0d));
+        line.setSalePriceQmin(parseDouble(firstValue(values, "qmin", "salePriceQmin", "quantiteMin"), 1d));
+        line.setSalePriceQmax(parseDouble(firstValue(values, "qmax", "salePriceQmax", "quantiteMax"), 999999d));
+        line.setSaleCurrency(draft.getCurrency());
+        draft.setLines(List.of(line));
+        return draft;
+    }
+
+    private Fournisseur genericCompanySupplier() {
+        Entreprise entreprise = currentEntreprise();
+        Fournisseur supplier = FournisseurDelegate.findOrCreate(entreprise);
+        if (supplier != null) {
+            return supplier;
+        }
+        supplier = new Fournisseur(DataId.generate());
+        supplier.setNomFourn(safe(entreprise.getNomEntreprise(), "Entreprise connectee"));
+        supplier.setAdresse(safe(entreprise.getAdresse(), ""));
+        supplier.setIdentification(safe(entreprise.getIdentification(), ""));
+        supplier.setPhone(safe(entreprise.getPhones(), "N/A-" + supplier.getUid().substring(0, 8)));
+        Fournisseur saved = FournisseurDelegate.saveFournisseur(supplier);
+        syncCreate(saved, Tables.FOURNISSEUR);
+        return saved;
+    }
+
+    private Livraison findOrCreateGenericPosRecoveryDelivery(String region) {
+        String reference = genericPosRecoveryReference(region);
+        Fournisseur supplier = genericCompanySupplier();
+        List<Livraison> deliveries = LivraisonDelegate.findByRef(reference);
+        if (deliveries != null) {
+            for (Livraison delivery : deliveries) {
+                if (delivery != null && sameSupplier(delivery.getFournId(), supplier)) {
+                    return delivery;
+                }
+            }
+        }
+        Livraison delivery = new Livraison(DataId.generate());
+        delivery.setDateLivr(LocalDate.now());
+        delivery.setFournId(supplier);
+        delivery.setLibelle("Approvisionnement générique pour visibilité POS");
+        delivery.setNumPiece(reference);
+        delivery.setObservation("Livraison générique réutilisée par Jemima pour les produits absents du POS");
+        delivery.setReference(reference);
+        delivery.setRegion(region);
+        delivery.setReduction(0d);
+        delivery.setTopay(0d);
+        delivery.setPayed(0d);
+        delivery.setRemained(0d);
+        delivery.setToreceive(0d);
+        Livraison saved = LivraisonDelegate.saveLivraison(delivery);
+        syncCreate(saved, Tables.LIVRAISON);
+        return saved;
+    }
+
+    private String genericPosRecoveryReference(String region) {
+        return "APPRO-GENERIQUE-POS-" + safe(region, "Goma").trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "-");
     }
 
     private Produit findOrCreateProduct(InvoiceLine line) {
@@ -3857,6 +4358,170 @@ public class JemimaTools {
         }
     }
 
+    private FinancialReportPayload loadFinancialPayload(String mode, String statement, String start, String end,
+            int anchorYear, int years, String region) {
+        String usedMode = safe(mode, "periode").trim().toLowerCase(Locale.ROOT);
+        String usedRegion = resolveFinancialRegion(region);
+        int span = years <= 3 ? 3 : 5;
+        int resolvedYear = anchorYear <= 0 ? LocalDate.now().getYear() : anchorYear;
+        String wanted = safe(statement, "tous").trim().toLowerCase(Locale.ROOT);
+        List<FinancialStatementRow> bilan = List.of();
+        List<FinancialStatementRow> compte = List.of();
+        List<FinancialStatementRow> flux = List.of();
+        List<String> headers;
+        String periodLabel;
+
+        if (usedMode.contains("ann")) {
+            financialService.ensureYearlyStatements(resolvedYear, span, usedRegion);
+            headers = yearlyHeaders(resolvedYear, span);
+            periodLabel = (resolvedYear - span + 1) + " à " + resolvedYear;
+            if (wantsStatement(wanted, "bilan")) {
+                bilan = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN,
+                        resolvedYear, span, usedRegion);
+            }
+            if (wantsStatement(wanted, "resultat")) {
+                compte = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
+                        resolvedYear, span, usedRegion);
+            }
+            if (wantsStatement(wanted, "flux")) {
+                flux = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
+                        resolvedYear, span, usedRegion);
+            }
+            return new FinancialReportPayload(headers, bilan, compte, flux, usedRegion, periodLabel);
+        }
+
+        if (usedMode.contains("trim")) {
+            LocalDate anchorDate = LocalDate.of(resolvedYear, 12, 31);
+            financialService.ensureQuarterlyStatements(anchorDate, 4, usedRegion);
+            headers = quarterlyHeaders(resolvedYear);
+            periodLabel = "T1 à T4 " + resolvedYear;
+            if (wantsStatement(wanted, "bilan")) {
+                bilan = financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_BILAN,
+                        anchorDate, 4, usedRegion);
+            }
+            if (wantsStatement(wanted, "resultat")) {
+                compte = financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT,
+                        anchorDate, 4, usedRegion);
+            }
+            if (wantsStatement(wanted, "flux")) {
+                flux = financialService.loadStatementRowsQuarterly(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE,
+                        anchorDate, 4, usedRegion);
+            }
+            return new FinancialReportPayload(headers, bilan, compte, flux, usedRegion, periodLabel);
+        }
+
+        LocalDate d1 = start == null || start.isBlank() ? LocalDate.now().withDayOfMonth(1) : LocalDate.parse(start);
+        LocalDate d2 = end == null || end.isBlank() ? LocalDate.now() : LocalDate.parse(end);
+        if (d1.isAfter(d2)) {
+            LocalDate tmp = d1;
+            d1 = d2;
+            d2 = tmp;
+        }
+        financialService.rebuildStatements(d1, d2, usedRegion);
+        headers = List.of("Période", "Période précédente 1", "Période précédente 2", "Période précédente 3");
+        periodLabel = d1 + " au " + d2;
+        if (wantsStatement(wanted, "bilan")) {
+            bilan = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_BILAN, d1, d2, usedRegion);
+        }
+        if (wantsStatement(wanted, "resultat")) {
+            compte = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_COMPTE_RESULTAT, d1, d2, usedRegion);
+        }
+        if (wantsStatement(wanted, "flux")) {
+            flux = financialService.loadStatementRows(FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, d1, d2, usedRegion);
+        }
+        return new FinancialReportPayload(headers, bilan, compte, flux, usedRegion, periodLabel);
+    }
+
+    private boolean wantsStatement(String requested, String statement) {
+        String value = safe(requested, "tous").toLowerCase(Locale.ROOT);
+        if (value.contains("tous") || value.contains("tout") || value.contains("all")) {
+            return true;
+        }
+        return switch (statement) {
+            case "bilan" -> value.contains("bilan");
+            case "resultat" -> value.contains("result") || value.contains("résultat") || value.contains("cr");
+            case "flux" -> value.contains("flux") || value.contains("tresor") || value.contains("trésor");
+            default -> false;
+        };
+    }
+
+    private void appendMarkdownTable(StringBuilder builder, String title, List<String> headers,
+            List<FinancialStatementRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        List<String> usedHeaders = headers == null || headers.isEmpty() ? List.of("Période") : headers;
+        builder.append("### ").append(title).append("\n\n");
+        builder.append("| Code | Rubrique |");
+        for (String header : usedHeaders) {
+            builder.append(' ').append(header).append(" |");
+        }
+        builder.append("\n|---|---|");
+        for (int i = 0; i < usedHeaders.size(); i++) {
+            builder.append("---:|");
+        }
+        builder.append('\n');
+        for (FinancialStatementRow row : rows) {
+            builder.append("| ").append(markdownCell(row.getCode()))
+                    .append(" | ").append(markdownCell(row.getRubrique())).append(" |");
+            List<Double> values = List.of(value(row.getAmountN()), value(row.getAmountN1()), value(row.getAmountN2()),
+                    value(row.getAmountN3()), value(row.getAmountN4()));
+            for (int i = 0; i < usedHeaders.size() && i < values.size(); i++) {
+                builder.append(' ').append(Util.toPlain(values.get(i))).append(" |");
+            }
+            builder.append('\n');
+        }
+        builder.append('\n');
+    }
+
+    private String markdownCell(String value) {
+        return safe(value, "-").replace("|", "/").replace('\n', ' ').trim();
+    }
+
+    private File exportCombinedFinancialPdf(Entreprise entreprise, LocalDate start, LocalDate end, List<String> headers,
+            List<FinancialStatementRow> bilan, List<FinancialStatementRow> compte, List<FinancialStatementRow> flux,
+            String businessKey) throws IOException {
+        File output = FileUtils.pointFile("financial-statements-" + safeFilePart(businessKey) + ".pdf");
+        if (output.exists() && !output.delete()) {
+            throw new IOException("Impossible de remplacer le fichier PDF existant: " + output.getAbsolutePath());
+        }
+        List<File> sources = new ArrayList<>();
+        sources.add(FinancialStatementPdfExporter.export(entreprise, "Bilan Comptable Financier", start, end, bilan, headers));
+        sources.add(FinancialStatementPdfExporter.export(entreprise, "Compte de Résultat Standard", start, end, compte, headers));
+        sources.add(FinancialStatementPdfExporter.export(entreprise, "Tableau de Flux de Trésorerie", start, end, flux, headers));
+        PDFMergerUtility merger = new PDFMergerUtility();
+        merger.setDestinationFileName(output.getAbsolutePath());
+        for (File source : sources) {
+            merger.addSource(source);
+        }
+        merger.mergeDocuments(null);
+        for (File source : sources) {
+            if (source != null && source.exists() && !source.equals(output)) {
+                source.delete();
+            }
+        }
+        return output;
+    }
+
+    private String resolveFinancialRegion(String requestedRegion) {
+        String currentRegion = pref.get("region", null);
+        String requested = requestedRegion == null || requestedRegion.isBlank() ? currentRegion : requestedRegion.trim();
+        if (requested == null || requested.isBlank()) {
+            return "%";
+        }
+        String role = pref.get("priv", "");
+        boolean globalAccess = role != null && (role.equals("Trader") || role.contains("ALL_ACCESS"));
+        if (!globalAccess && currentRegion != null && !currentRegion.isBlank()
+                && !requested.equalsIgnoreCase(currentRegion)) {
+            throw new IllegalArgumentException("Votre rôle ne permet pas d'accéder au rapport de la région " + requested + ".");
+        }
+        return requested;
+    }
+
+    private String safeFilePart(String value) {
+        return safe(value, "rapport").replaceAll("[^a-zA-Z0-9._-]+", "-").replaceAll("-+", "-");
+    }
+
     private List<String> yearlyHeaders(int anchorYear, int span) {
         List<String> headers = new ArrayList<>();
         int normalizedSpan = span <= 3 ? 3 : 5;
@@ -3924,6 +4589,10 @@ public class JemimaTools {
 
     private String safe(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? new ArrayList<>() : new ArrayList<>(values);
     }
 
     private InvoiceWorkflowContext workflow(String workflowId) {
@@ -4109,6 +4778,9 @@ public class JemimaTools {
             return first;
         }
         return Math.max(first, second);
+    }
+
+    private record ProductVisibilityRepairRequest(String batchId, String query, String productUid, String reason, LocalDateTime createdAt) {
     }
 
     private static class InvoiceWorkflowContext {

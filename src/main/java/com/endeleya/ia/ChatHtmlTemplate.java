@@ -1,5 +1,11 @@
 package com.endeleya.ia;
 
+import java.util.Locale;
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
+import java.util.prefs.Preferences;
+import tools.SyncEngine;
+
 public final class ChatHtmlTemplate {
 
     private ChatHtmlTemplate() {
@@ -16,7 +22,9 @@ public final class ChatHtmlTemplate {
     }
 
     public static String content() {
-        return """
+        String lang = Preferences.userNodeForPackage(SyncEngine.class).get("lang", "fr");
+        boolean dark = Preferences.userNodeForPackage(SyncEngine.class).getBoolean("dark_theme_enabled", false);
+        String html = """
    <html>
    <head>
        <style>
@@ -38,9 +46,15 @@ public final class ChatHtmlTemplate {
                margin: 0;
                min-height: 100vh;
            }
+           body.dark {
+               background:
+                   radial-gradient(circle at 12% 8%, rgba(68, 206, 245, .16), transparent 32%),
+                   linear-gradient(180deg, #0f172a 0%, #111827 100%);
+               color: #e5e7eb;
+           }
            #chat { display: flex; flex-direction: column; gap: 13px; }
            #chat:empty::before {
-               content: "Jemima est prête";
+               content: "__READY_TEXT__";
                display: block;
                width: fit-content;
                margin: 26px auto 8px;
@@ -53,6 +67,11 @@ public final class ChatHtmlTemplate {
                font-size: 12px;
                font-weight: 700;
                letter-spacing: .3px;
+           }
+           body.dark #chat:empty::before {
+               color: #d1d5db;
+               background: rgba(15, 23, 42, .78);
+               border-color: rgba(68, 206, 245, .22);
            }
            .message { display: flex; width: 100%; }
            .message.user { justify-content: flex-end; }
@@ -80,11 +99,21 @@ public final class ChatHtmlTemplate {
                border-bottom-left-radius: 6px;
                backdrop-filter: blur(10px);
            }
+           body.dark .assistant .text {
+               background: rgba(15, 23, 42, .86);
+               color: #e5e7eb;
+               border-color: rgba(68, 206, 245, .28);
+           }
            .assistant .text.process {
                color: #7a8494;
                font-style: italic;
                background: rgba(255, 255, 255, .70);
                border-color: rgba(122, 132, 148, .28);
+           }
+           body.dark .assistant .text.process {
+               color: #9ca3af;
+               background: rgba(17, 24, 39, .82);
+               border-color: rgba(156, 163, 175, .24);
            }
            .assistant .text::before {
                content: "J";
@@ -121,6 +150,11 @@ public final class ChatHtmlTemplate {
                font-size: 11px;
                font-weight: 700;
                cursor: pointer;
+           }
+           body.dark .bubble-action {
+               background: rgba(17, 24, 39, .94);
+               color: #d1d5db;
+               border-color: rgba(68, 206, 245, .28);
            }
            .assistant .text:hover .bubble-actions {
                opacity: 1;
@@ -163,10 +197,18 @@ public final class ChatHtmlTemplate {
                font-size: 12px;
                box-shadow: 0 8px 20px rgba(18, 32, 58, .06);
            }
+           body.dark table {
+               background: #111827;
+               color: #e5e7eb;
+           }
            th {
                background: rgba(68, 206, 245, 0.18);
                color: #123247;
                font-weight: 800;
+           }
+           body.dark th {
+               background: rgba(68, 206, 245, 0.14);
+               color: #f9fafb;
            }
            th, td {
                border: 1px solid rgba(18, 32, 58, 0.10);
@@ -206,7 +248,7 @@ public final class ChatHtmlTemplate {
            }
        </style>
    </head>
-   <body>
+   <body class="__BODY_CLASS__">
        <div id="chat"></div>
        <div id="toast"></div>
        <span id="cursor">|</span>
@@ -288,7 +330,7 @@ public final class ChatHtmlTemplate {
                const button = document.createElement('button');
                button.className = 'bubble-action reply-button';
                button.type = 'button';
-               button.textContent = 'Répondre';
+               button.textContent = '__REPLY_TEXT__';
                button.onclick = function(event) {
                    event.preventDefault();
                    event.stopPropagation();
@@ -302,7 +344,7 @@ public final class ChatHtmlTemplate {
                const button = document.createElement('button');
                button.className = 'bubble-action copy-button';
                button.type = 'button';
-               button.textContent = 'Copier';
+               button.textContent = '__COPY_TEXT__';
                button.onclick = function(event) {
                    event.preventDefault();
                    event.stopPropagation();
@@ -344,7 +386,7 @@ public final class ChatHtmlTemplate {
                const done = function() {
                    const previous = button.textContent;
                    button.textContent = 'Copié';
-                   showToast('Texte copié');
+                   showToast('__COPIED_TEXT__');
                    setTimeout(function() { button.textContent = previous; }, 1200);
                };
                if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -359,7 +401,7 @@ public final class ChatHtmlTemplate {
            function showToast(message) {
                const toast = document.getElementById('toast');
                if (!toast) return;
-               toast.textContent = message || 'Texte copié';
+               toast.textContent = message || '__COPIED_TEXT__';
                toast.classList.add('show');
                clearTimeout(window.__kazisafeToastTimer);
                window.__kazisafeToastTimer = setTimeout(function() {
@@ -487,6 +529,35 @@ public final class ChatHtmlTemplate {
        </script>
    </body>
    </html>
-""";
+        """;
+        return html
+                .replace("__BODY_CLASS__", dark ? "dark" : "light")
+                .replace("__READY_TEXT__", cssText(label(lang, "xjemima.ready", "Jemima est prête")))
+                .replace("__REPLY_TEXT__", jsLiteralContent(label(lang, "xjemima.reply", "Répondre")))
+                .replace("__COPY_TEXT__", jsLiteralContent(label(lang, "xjemima.copy", "Copier")))
+                .replace("__COPIED_TEXT__", jsLiteralContent(label(lang, "xjemima.copied", "Texte copié")));
+    }
+
+    private static String label(String lang, String key, String fallback) {
+        try {
+            ResourceBundle bundle = ResourceBundle.getBundle("bundles." + lang, new Locale.Builder().setLanguage(lang).build());
+            return bundle.containsKey(key) ? bundle.getString(key) : fallback;
+        } catch (MissingResourceException | IllegalArgumentException ex) {
+            return fallback;
+        }
+    }
+
+    private static String cssText(String text) {
+        return (text == null ? "" : text)
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", " ");
+    }
+
+    private static String jsLiteralContent(String text) {
+        return (text == null ? "" : text)
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", " ");
     }
 }

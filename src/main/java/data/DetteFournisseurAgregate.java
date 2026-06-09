@@ -3,6 +3,8 @@ package data;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.io.Serializable;
@@ -27,6 +29,10 @@ public class DetteFournisseurAgregate implements Serializable {
 
     @Column(name = "montant_usd")
     private Double montantUsd;
+
+    @JoinColumn(name = "fournisseur_id", referencedColumnName = "uid")
+    @ManyToOne
+    private Fournisseur fournisseurId;
 
     public DetteFournisseurAgregate() {
     }
@@ -68,5 +74,13 @@ public class DetteFournisseurAgregate implements Serializable {
 
     public void setMontantUsd(Double montantUsd) {
         this.montantUsd = montantUsd;
+    }
+
+    public Fournisseur getFournisseurId() {
+        return fournisseurId;
+    }
+
+    public void setFournisseurId(Fournisseur fournisseurId) {
+        this.fournisseurId = fournisseurId;
     }
 }

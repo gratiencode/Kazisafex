@@ -1,20 +1,18 @@
 package data;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
-@Entity
-@Table(name = "financial_statement_agregate")
-public class FinancialStatementAgregate implements Serializable {
+@MappedSuperclass
+public abstract class FinancialStatementAgregate implements Serializable {
 
     @Id
     @Column(name = "uid", nullable = false, updatable = false)
@@ -40,6 +38,12 @@ public class FinancialStatementAgregate implements Serializable {
 
     @Column(name = "period_end", columnDefinition = "DATE")
     private LocalDate periodEnd;
+
+    @Column(name = "fiscal_year")
+    private Integer fiscalYear;
+
+    @Column(name = "period_code")
+    private String periodCode;
 
     @Column(name = "region")
     private String region;
@@ -127,6 +131,22 @@ public class FinancialStatementAgregate implements Serializable {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public Integer getFiscalYear() {
+        return fiscalYear;
+    }
+
+    public void setFiscalYear(Integer fiscalYear) {
+        this.fiscalYear = fiscalYear;
+    }
+
+    public String getPeriodCode() {
+        return periodCode;
+    }
+
+    public void setPeriodCode(String periodCode) {
+        this.periodCode = periodCode;
     }
 
     public String getRegion() {

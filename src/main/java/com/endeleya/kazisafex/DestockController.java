@@ -89,6 +89,7 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
+import tools.CurrencyConverter;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -298,8 +299,8 @@ public class DestockController implements Initializable {
         col_region.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(
                 cellData.getValue().getRegion()));
         cbx_stock_lots.setItems(lisstocker);
-        cbx_devise_req1.setItems(FXCollections.observableArrayList("USD", "CDF"));
-        cbx_devise_req1.getSelectionModel().selectFirst();
+        cbx_devise_req1.setItems(CurrencyConverter.fxCurrencies());
+        cbx_devise_req1.getSelectionModel().select(CurrencyConverter.mainCurrency());
         prices = new ArrayList<>();
         cbx_choose_mesure_vente.setConverter(new StringConverter<Mesure>() {
             @Override
@@ -340,17 +341,8 @@ public class DestockController implements Initializable {
                         return;
                     }
                     try {
-                        if (cbx_devise_req1.getValue().equals("USD")) {
-                            double data = Double.parseDouble(newValue);
-                            double enCdf = BigDecimal.valueOf(data * taux).setScale(2, RoundingMode.HALF_EVEN)
-                                    .doubleValue();
-                            txt_equivalentCdf.setText(enCdf + " Fc");
-                        } else {
-                            double data = Double.parseDouble(newValue);
-                            double enCdf = BigDecimal.valueOf(data / taux).setScale(2, RoundingMode.HALF_EVEN)
-                                    .doubleValue();
-                            txt_equivalentCdf.setText(enCdf + " Usd");
-                        }
+                        double data = Double.parseDouble(newValue);
+                        txt_equivalentCdf.setText(CurrencyConverter.equivalentLabel(data, cbx_devise_req1.getValue()));
                     } catch (NumberFormatException e) {
                         MainUI.notify(null, "Erreur", "Entrer les chiffres uniquement", 3, "error");
                     }
@@ -704,7 +696,7 @@ public class DestockController implements Initializable {
         region = pref.get("region", "...");
         role = pref.get("priv", null);
         meth = pref.get("meth", "fifo");
-        taux = pref.getDouble("taux2change", 2000);
+        taux = CurrencyConverter.legacyCdfRate();
         txt_date_expiry.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 2;");
         methode.setText(bundle.getString("inventory") + " : " + meth);
         methode.setTooltip(new Tooltip(bundle.getString("go2param4choice")));

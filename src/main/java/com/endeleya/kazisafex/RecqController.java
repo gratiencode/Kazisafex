@@ -60,6 +60,7 @@ import data.Recquisition;
 import data.Stocker;
 import data.core.KazisafeServiceFactory;
 import tools.ComboBoxAutoCompletion;
+import tools.CurrencyConverter;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -417,8 +418,8 @@ public class RecqController implements Initializable {
             }
         });
 
-        cbx_devise_price.setItems(FXCollections.observableArrayList("USD", "CDF"));
-        cbx_devise_price.getSelectionModel().selectFirst();
+        cbx_devise_price.setItems(CurrencyConverter.fxCurrencies());
+        cbx_devise_price.getSelectionModel().select(CurrencyConverter.mainCurrency());
         cbx_ref_req.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Destocker> observable, Destocker oldValue, Destocker newValue) -> {
             destocker = newValue;
             if (this.action.equals(Constants.ACTION_UPDATE)) {
@@ -533,12 +534,11 @@ public class RecqController implements Initializable {
                 if (newValue.isEmpty()) {
                     return;
                 }
-                if (cbx_devise_price.getValue().equals("USD")) {
-                    //eq en fc
-                    txt_equivalent_req.setText(BigDecimal.valueOf((taux2change * Double.parseDouble(tf_prix_de_vente.getText()))).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " Fc");
-                } else {
-                    txt_equivalent_req.setText(BigDecimal.valueOf(Double.parseDouble(tf_prix_de_vente.getText()) / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " $ us");
-                    //eq en usd
+                try {
+                    double amount = Double.parseDouble(tf_prix_de_vente.getText());
+                    txt_equivalent_req.setText(CurrencyConverter.equivalentLabel(amount, cbx_devise_price.getValue()));
+                } catch (NumberFormatException | IllegalStateException e) {
+                    txt_equivalent_req.setText("");
                 }
             }
         });
@@ -706,7 +706,7 @@ public class RecqController implements Initializable {
         dpk_date_req.setValue(LocalDate.now());
         MainUI.setPattern(dpk_date_expiry_req);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux2change = pref.getDouble("taux2change", 2000);
+        taux2change = CurrencyConverter.legacyCdfRate();
         role = pref.get("priv", null);
         region = pref.get("region", "...");
         pricepane.setVisible(false);

@@ -6,6 +6,7 @@
 package com.endeleya.kazisafex;
 
 //
+import com.fasterxml.jackson.databind.ObjectMapper;
 import data.core.KazisafeServiceFactory;
 import java.awt.Desktop;
 import java.io.File;
@@ -17,6 +18,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ResourceBundle;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -309,8 +311,9 @@ public class EntryPointController implements Initializable {
                                 }
                             }
                         } else {
+                            String message = readableLoginError(reponse);
                             MainUI.notify(null, bundle.getString("error"),
-                                    "Erreur interne, HTTP: [" + reponse.code() + "]", 15, "error");
+                                    message, 15, "error");
                         }
                         Platform.runLater(() -> {
                             pane_progress.setVisible(false);
@@ -361,6 +364,62 @@ public class EntryPointController implements Initializable {
                         }
                     }
                 });
+    }
+
+    private String readableLoginError(Response<?> response) {
+        String message = null;
+        try {
+            if (response.errorBody() != null) {
+                String raw = response.errorBody().string();
+                message = extractMessageFromErrorBody(raw);
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(EntryPointController.class.getName()).log(Level.WARNING,
+                    "Lecture du message d'erreur login impossible", ex);
+        }
+        if (message == null || message.isBlank()) {
+            message = "Erreur interne, HTTP: [" + response.code() + "]";
+        }
+        return normalizeLoginFailureMessage(message);
+    }
+
+    private String extractMessageFromErrorBody(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (!trimmed.startsWith("{")) {
+            return trimmed;
+        }
+        try {
+            ObjectMapper mapper = KazisafeServiceFactory.mapper();
+            Map<?, ?> payload = mapper.readValue(trimmed, Map.class);
+            Object message = payload.get("message");
+            if (message == null) {
+                message = payload.get("error_description");
+            }
+            if (message == null) {
+                message = payload.get("error");
+            }
+            return message == null ? trimmed : String.valueOf(message);
+        } catch (IOException ex) {
+            return trimmed;
+        }
+    }
+
+    private String normalizeLoginFailureMessage(String message) {
+        String lower = message == null ? "" : message.toLowerCase();
+        if (lower.contains("entreprise") && lower.contains("introuvable")) {
+            return "L'entreprise ayant cette identite est introuvable";
+        }
+        if (lower.contains("affectation") || lower.contains("enregistré comme employé")
+                || lower.contains("enregistre comme employe")) {
+            return "Vous n'avez pas d'affectation liee a cette entreprise, nous avons notifie son manager que vous essayez de vous y connecter";
+        }
+        if (lower.contains("mot de passe") || lower.contains("credentials") || lower.contains("credential")) {
+            return "Utilisateur ou mot de passe incorrect";
+        }
+        return message == null || message.isBlank() ? bundle.getString("networkerror") : message;
     }
 
     @FXML

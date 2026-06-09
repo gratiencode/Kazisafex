@@ -1726,7 +1726,7 @@ public class RepportService implements RapportStorage {
             String sql = "SELECT SUM(a.ammortissement) FROM immobilisation_agregate a "
                     + "WHERE a.region LIKE ? AND a.date <= ? "
                     + "AND a.date = (SELECT MAX(a2.date) FROM immobilisation_agregate a2 "
-                    + "WHERE a2.immobilisation_id_uid = a.immobilisation_id_uid AND a2.region = a.region AND a2.date <= ?)";
+                    + "WHERE a2.immobilisation_id = a.immobilisation_id AND a2.region = a.region AND a2.date <= ?)";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Object val = em.createNativeQuery(sql)
