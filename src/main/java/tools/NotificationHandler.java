@@ -7,30 +7,49 @@ package tools;
 
 import com.launchdarkly.eventsource.EventHandler;
 import com.launchdarkly.eventsource.MessageEvent;
+import data.*;
+import data.helpers.Role;
+import delegates.*;
 import java.awt.Toolkit;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
-import data.*;
-import delegates.*;
-import data.helpers.Role;
-import java.time.LocalDate;
-import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import services.ManagedSessionFactory;
 
 /**
  *
  * @author eroot
  */
-public class NotificationHandler
-        implements EventHandler {
+public class NotificationHandler implements EventHandler {
 
     Preferences pref;
-    private static OnDataSyncListener onDataSyncListener;
+    /**
+     * Strong refs required: controllers register lambdas/method refs that are not
+     * stored elsewhere. WeakReference let the GC drop them while the cached
+     * controller stayed alive — UI then stopped updating after the first load.
+     */
+    private static final CopyOnWriteArrayList<OnDataSyncListener> onDataSyncListeners =
+        new CopyOnWriteArrayList<>();
+    private static final java.util.concurrent.ExecutorService sseExecutor =
+        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Kazisafe-SSE-Downsync-Worker");
+            t.setDaemon(true);
+            return t;
+        });
 
     @Override
     public void onOpen() throws Exception {
-        System.out.println("Encours d'ecoute sur " + System.getProperty("os.name") + " u= "
-                + System.getProperty("user.name") + "...");
+        System.out.println(
+            "Encours d'ecoute sur " +
+                System.getProperty("os.name") +
+                " u= " +
+                System.getProperty("user.name") +
+                "..."
+        );
         pref = Preferences.userNodeForPackage(SyncEngine.class);
     }
 
@@ -41,318 +60,606 @@ public class NotificationHandler
 
     @Override
     public void onMessage(String string, MessageEvent me) throws Exception {
-        String json = me.getData();
-        String id = me.getLastEventId();
-        String region = me.getEventName();
-        String eid = pref.get("eUid", "");
-        String reg = pref.get("region", "");
-        String role = pref.get("priv", null);
+        final String json = me.getData();
+        final String id = me.getLastEventId();
+        final String region = me.getEventName();
+        final String eid = pref.get("eUid", "");
+        final String reg = pref.get("region", "");
+        final String role = pref.get("priv", null);
         System.out.println("Reception : Ping Connected (v):" + string);
-        if (!json.equals("Connected!") && !json.equals("ping")) {
-            if (id.equals(eid)) {
-                boolean ok = false;
-                if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
-                    ok = true;
-                } else {
-                    if (reg.equals(region) || region.equals("*")) {
-                        ok = true;
+        if (
+            json != null && !json.equals("Connected!") && !json.equals("ping")
+        ) {
+            sseExecutor.submit(() -> {
+                try {
+                    if (id != null && id.equals(eid)) {
+                        boolean ok = false;
+                        if (
+                            Role.Trader.name().equals(role) ||
+                            (role != null &&
+                                role.contains(Role.ALL_ACCESS.name()))
+                        ) {
+                            ok = true;
+                        } else {
+                            if (reg.equals(region) || region.equals("*")) {
+                                ok = true;
+                            }
+                        }
+                        if (ok) {
+                            javafx.application.Platform.runLater(() -> {
+                                MainUI.notifySync(
+                                    "Sync",
+                                    "Un element a ete synchronise",
+                                    region
+                                );
+                            });
+                        }
+                        BaseModel obj = JsonUtil.toBaseModelObject(json);
+                        if (obj == null) {
+                            System.out.println(
+                                "Object is null or unsupported table type in JsonUtil.toBaseModelObject"
+                            );
+                            return;
+                        }
+                        Tables t;
+                        try {
+                            t = Tables.valueOf(obj.getType());
+                        } catch (IllegalArgumentException e) {
+                            System.out.println(
+                                "Unknown table type received: " + obj.getType()
+                            );
+                            return;
+                        }
+                        executeDownsyncMutation(() -> {
+                            switch (t) {
+                                case Tables.PRODUIT -> {
+                                    Produit product = (Produit) obj;
+                                    boolean exist = CategoryDelegate.isExists(
+                                        product.getCategoryId().getUid()
+                                    );
+                                    if (exist) {
+                                        boolean isSynced =
+                                            ProduitDelegate.isExists(
+                                                product.getUid()
+                                            );
+                                        Produit result;
+                                        if (!isSynced) {
+                                            result =
+                                                ProduitDelegate.saveProduit(
+                                                    product
+                                                );
+                                        } else {
+                                            result =
+                                                ProduitDelegate.updateProduit(
+                                                    product
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.CATEGORY -> {
+                                    Category c = (Category) obj;
+                                    boolean isSynced =
+                                        CategoryDelegate.isExists(c.getUid());
+                                    Category result;
+                                    if (!isSynced) {
+                                        result = CategoryDelegate.saveCategory(
+                                            c
+                                        );
+                                    } else {
+                                        Category cat =
+                                            CategoryDelegate.findCategory(
+                                                c.getUid()
+                                            );
+                                        cat.setDescritption(
+                                            c.getDescritption()
+                                        );
+                                        cat.setUpdatedAt(c.getUpdatedAt());
+                                        cat.setDeletedAt(c.getDeletedAt());
+                                        result =
+                                            CategoryDelegate.updateCategory(
+                                                cat
+                                            );
+                                    }
+                                    notifySynced(result);
+                                }
+                                case Tables.MESURE -> {
+                                    Mesure measure = (Mesure) obj;
+                                    boolean exists = ProduitDelegate.isExists(
+                                        measure.getProduitId().getUid()
+                                    );
+                                    if (exists) {
+                                        boolean isSynced =
+                                            MesureDelegate.isExists(
+                                                measure.getUid()
+                                            );
+                                        Mesure result;
+                                        if (!isSynced) {
+                                            result = MesureDelegate.saveMesure(
+                                                measure
+                                            );
+                                        } else {
+                                            result =
+                                                MesureDelegate.updateMesure(
+                                                    measure
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.FOURNISSEUR -> {
+                                    Fournisseur supplier = (Fournisseur) obj;
+                                    Fournisseur result =
+                                        FournisseurDelegate.syncFournisseurSafe(
+                                            supplier
+                                        );
+                                    notifySynced(result);
+                                }
+                                case Tables.LIVRAISON -> {
+                                    Livraison delivery = (Livraison) obj;
+                                    boolean exists =
+                                        FournisseurDelegate.isExists(
+                                            delivery.getFournId().getUid()
+                                        );
+                                    if (exists) {
+                                        boolean isSynced =
+                                            LivraisonDelegate.isExists(
+                                                delivery.getUid()
+                                            );
+                                        System.out.println(
+                                            "after livraison exist- "
+                                        );
+                                        Livraison result;
+                                        if (!isSynced) {
+                                            result =
+                                                LivraisonDelegate.saveLivraison(
+                                                    delivery
+                                                );
+                                        } else {
+                                            result =
+                                                LivraisonDelegate.updateLivraison(
+                                                    delivery
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.STOCKER -> {
+                                    Stocker stocker = (Stocker) obj;
+                                    boolean exists = LivraisonDelegate.isExists(
+                                        stocker.getLivraisId().getUid()
+                                    );
+                                    boolean exist1 = MesureDelegate.isExists(
+                                        stocker.getMesureId().getUid()
+                                    );
+                                    boolean exist2 = ProduitDelegate.isExists(
+                                        stocker.getProductId().getUid()
+                                    );
+                                    if (exists && exist1 && exist2) {
+                                        boolean isSynced =
+                                            StockerDelegate.isExists(
+                                                stocker.getUid()
+                                            );
+                                        Stocker result;
+                                        if (!isSynced) {
+                                            result =
+                                                StockerDelegate.saveStocker(
+                                                    stocker
+                                                );
+                                        } else {
+                                            result =
+                                                StockerDelegate.updateStocker(
+                                                    stocker
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.DESTOCKER -> {
+                                    Destocker destocker = (Destocker) obj;
+                                    boolean exists = MesureDelegate.isExists(
+                                        destocker.getMesureId().getUid()
+                                    );
+                                    boolean exist2 = ProduitDelegate.isExists(
+                                        destocker.getProductId().getUid()
+                                    );
+                                    if (exists && exist2) {
+                                        boolean isSynced =
+                                            DestockerDelegate.isExists(
+                                                destocker.getUid()
+                                            );
+                                        Destocker result;
+                                        if (!isSynced) {
+                                            result =
+                                                DestockerDelegate.saveDestocker(
+                                                    destocker
+                                                );
+                                        } else {
+                                            result =
+                                                DestockerDelegate.updateDestocker(
+                                                    destocker
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.RECQUISITION -> {
+                                    Recquisition recquisition =
+                                        (Recquisition) obj;
+                                    boolean exists = ProduitDelegate.isExists(
+                                        recquisition.getProductId().getUid()
+                                    );
+                                    boolean exist1 = MesureDelegate.isExists(
+                                        recquisition.getMesureId().getUid()
+                                    );
+                                    if (exists && exist1) {
+                                        boolean isSynced =
+                                            RecquisitionDelegate.isExists(
+                                                recquisition.getUid()
+                                            );
+
+                                        Recquisition result;
+                                        if (!isSynced) {
+                                            result =
+                                                RecquisitionDelegate.saveRecquisition(
+                                                    recquisition
+                                                );
+                                        } else {
+                                            result =
+                                                RecquisitionDelegate.updateRecquisition(
+                                                    recquisition
+                                                );
+                                        }
+                                        Produit p = ProduitDelegate.findProduit(
+                                            recquisition.getProductId().getUid()
+                                        );
+                                        RecquisitionDelegate.rectifyStock(
+                                            p,
+                                            LocalDate.now(),
+                                            LocalDate.now(),
+                                            recquisition.getRegion(),
+                                            recquisition.getNumlot()
+                                        );
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.PRIXDEVENTE -> {
+                                    PrixDeVente price = (PrixDeVente) obj;
+                                    boolean exists =
+                                        RecquisitionDelegate.isExists(
+                                            price.getRecquisitionId().getUid()
+                                        );
+                                    boolean exist1 = MesureDelegate.isExists(
+                                        price.getMesureId().getUid()
+                                    );
+                                    if (exists && exist1) {
+                                        boolean isSynced =
+                                            PrixDeVenteDelegate.isExists(
+                                                price.getUid()
+                                            );
+
+                                        PrixDeVente result;
+                                        if (!isSynced) {
+                                            price.setRecquisitionId(
+                                                RecquisitionDelegate.findRecquisition(
+                                                    price
+                                                        .getRecquisitionId()
+                                                        .getUid()
+                                                )
+                                            );
+                                            result =
+                                                PrixDeVenteDelegate.savePrixDeVente(
+                                                    price
+                                                );
+                                        } else {
+                                            result =
+                                                PrixDeVenteDelegate.updatePrixDeVente(
+                                                    price
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.CLIENT -> {
+                                    Client client = (Client) obj;
+                                    Client result =
+                                        ClientDelegate.syncClientSafe(client);
+                                    notifySynced(result);
+                                }
+                                case Tables.COMPTETRESOR -> {
+                                    CompteTresor account = (CompteTresor) obj;
+                                    boolean isSynced =
+                                        CompteTresorDelegate.isExists(
+                                            account.getUid()
+                                        );
+
+                                    CompteTresor result;
+                                    if (!isSynced) {
+                                        result =
+                                            CompteTresorDelegate.saveCompteTresor(
+                                                account
+                                            );
+                                    } else {
+                                        result =
+                                            CompteTresorDelegate.updateCompteTresor(
+                                                account
+                                            );
+                                    }
+                                    notifySynced(result);
+                                }
+                                case Tables.VENTE -> {
+                                    Vente vente = (Vente) obj;
+                                    boolean exists = ClientDelegate.isExists(
+                                        vente.getClientId().getUid()
+                                    );
+                                    if (exists) {
+                                        boolean isSynced =
+                                            VenteDelegate.isExists(
+                                                vente.getUid()
+                                            );
+                                        Vente result;
+                                        if (!isSynced) {
+                                            result = VenteDelegate.saveVente(
+                                                vente
+                                            );
+                                        } else {
+                                            result = VenteDelegate.updateVente(
+                                                vente
+                                            );
+                                            removeOldLigneVente(vente);
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.LIGNEVENTE -> {
+                                    LigneVente saleitem = (LigneVente) obj;
+                                    boolean exists = ProduitDelegate.isExists(
+                                        saleitem.getProductId().getUid()
+                                    );
+                                    boolean exist1 = MesureDelegate.isExists(
+                                        saleitem.getMesureId().getUid()
+                                    );
+                                    boolean exist2 = VenteDelegate.isExists(
+                                        saleitem.getReference().getUid()
+                                    );
+                                    if (exists && exist1 && exist2) {
+                                        boolean isSynced =
+                                            LigneVenteDelegate.isExists(
+                                                saleitem.getUid()
+                                            );
+                                        LigneVente result;
+                                        if (!isSynced) {
+                                            result =
+                                                LigneVenteDelegate.saveLigneVente(
+                                                    saleitem
+                                                );
+                                        } else {
+                                            result =
+                                                LigneVenteDelegate.updateLigneVente(
+                                                    saleitem
+                                                );
+                                        }
+                                        Produit p = ProduitDelegate.findProduit(
+                                            saleitem.getProductId().getUid()
+                                        );
+                                        Vente vr = VenteDelegate.findVente(
+                                            saleitem.getReference().getUid()
+                                        );
+                                        RecquisitionDelegate.rectifyStock(
+                                            p,
+                                            LocalDate.now(),
+                                            LocalDate.now(),
+                                            vr.getRegion(),
+                                            saleitem.getNumlot()
+                                        );
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.TRAISORERIE -> {
+                                    Traisorerie trans = (Traisorerie) obj;
+                                    boolean exists =
+                                        CompteTresorDelegate.isExists(
+                                            trans.getTresorId().getUid()
+                                        );
+                                    if (exists) {
+                                        boolean isSynced =
+                                            TraisorerieDelegate.isExists(
+                                                trans.getUid()
+                                            );
+                                        Traisorerie result;
+                                        if (!isSynced) {
+                                            result =
+                                                TraisorerieDelegate.saveTraisorerie(
+                                                    trans
+                                                );
+                                        } else {
+                                            result =
+                                                TraisorerieDelegate.updateTraisorerie(
+                                                    trans
+                                                );
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.DEPENSE -> {
+                                    Depense depense = (Depense) obj;
+                                    boolean isSynced = DepenseDelegate.isExists(
+                                        depense.getUid()
+                                    );
+                                    Depense result;
+                                    if (!isSynced) {
+                                        result = DepenseDelegate.saveDepense(
+                                            depense
+                                        );
+                                    } else {
+                                        result = DepenseDelegate.updateDepense(
+                                            depense
+                                        );
+                                    }
+                                    notifySynced(result);
+                                }
+                                case Tables.OPERATION -> {
+                                    Operation operation = (Operation) obj;
+                                    boolean exists =
+                                        CompteTresorDelegate.isExists(
+                                            operation.getTresorId().getUid()
+                                        );
+                                    boolean exist2 =
+                                        TraisorerieDelegate.isExists(
+                                            operation.getCaisseOpId().getUid()
+                                        );
+                                    boolean exist3 = DepenseDelegate.isExists(
+                                        operation.getDepenseId().getUid()
+                                    );
+                                    if (exists && exist2 && exist3) {
+                                        boolean isSynced =
+                                            OperationDelegate.isExists(
+                                                operation.getUid()
+                                            );
+                                        Operation result;
+                                        if (!isSynced) {
+                                            result =
+                                                OperationDelegate.saveOperation(
+                                                    operation
+                                                );
+                                        } else {
+                                            result =
+                                                OperationDelegate.updateOperation(
+                                                    operation
+                                                );
+                                        }
+                                        Depense dep =
+                                            DepenseDelegate.findDepense(
+                                                operation
+                                                    .getDepenseId()
+                                                    .getUid()
+                                            );
+                                        DepenseAgregateDelegate.aggregateDepense(
+                                            operation.getDate(),
+                                            operation.getImputation(),
+                                            operation.getMontantUsd(),
+                                            operation.getMontantCdf(),
+                                            dep
+                                        );
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.COMPTER -> {
+                                    Compter compter = (Compter) obj;
+                                    boolean exists =
+                                        InventaireDelegate.isExists(
+                                            compter.getInventaireId().getUid()
+                                        );
+                                    boolean exist1 = MesureDelegate.isExists(
+                                        compter.getMesureId().getUid()
+                                    );
+                                    boolean exist2 = ProduitDelegate.isExists(
+                                        compter.getProductId().getUid()
+                                    );
+                                    if (exists && exist1 && exist2) {
+                                        boolean isSynced =
+                                            CompterDelegate.isExists(
+                                                compter.getUid()
+                                            );
+                                        Compter result;
+                                        if (compter.getDeletedAt() != null) {
+                                            if (isSynced) {
+                                                CompterDelegate.deleteCompter(
+                                                    compter
+                                                );
+                                            }
+                                            result = compter;
+                                        } else if (!isSynced) {
+                                            System.out.println("new compter");
+                                            result =
+                                                CompterDelegate.createCompter(
+                                                    compter
+                                                );
+                                        } else {
+                                            result =
+                                                CompterDelegate.updateCompter(
+                                                    compter
+                                                );
+                                            System.out.println("edit compter");
+                                        }
+                                        notifySynced(result);
+                                    }
+                                }
+                                case Tables.INVENTORY -> {
+                                    Inventaire inventory = (Inventaire) obj;
+                                    boolean isSynced =
+                                        InventaireDelegate.isExists(
+                                            inventory.getUid()
+                                        );
+                                    Inventaire result;
+                                    if (!isSynced) {
+                                        result =
+                                            InventaireDelegate.createInventaire(
+                                                inventory
+                                            );
+                                    } else {
+                                        result =
+                                            InventaireDelegate.updateInventaire(
+                                                inventory
+                                            );
+                                    }
+                                    notifySynced(result);
+                                }
+                                case Tables.PRESENCE -> {
+                                    Presence presence = (Presence) obj;
+                                    boolean isSynced =
+                                        PresenceDelegate.isExists(
+                                            presence.getUid()
+                                        );
+                                    Presence result;
+                                    if (!isSynced) {
+                                        result = PresenceDelegate.savePresence(
+                                            presence
+                                        );
+                                    } else {
+                                        result =
+                                            PresenceDelegate.updatePresence(
+                                                presence
+                                            );
+                                    }
+                                    notifySynced(result);
+                                }
+                                default -> {
+                                }
+                            }
+                        });
                     }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
                 }
-                if (ok) {
-                    MainUI.notifySync("Sync", "Un element a ete synchronise", region);
-                    BaseModel obj = JsonUtil.toBaseModelObject(json);
-                    Tables t = Tables.valueOf(obj.getType());
-                    switch (t) {
-
-                        case Tables.PRODUIT -> {
-                            Produit product = (Produit) obj;
-                            boolean exist = CategoryDelegate.isExists(product.getCategoryId().getUid());
-                            if (exist) {
-                                boolean isSynced = ProduitDelegate.isExists(product.getUid());
-                                Produit result;
-                                if (!isSynced) {
-                                    result = ProduitDelegate.saveProduit(product);
-                                } else {
-                                    result = ProduitDelegate.updateProduit(product);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.CATEGORY -> {
-                            Category c = (Category) obj;
-                            boolean isSynced = CategoryDelegate.isExists(c.getUid());
-                            Category result;
-                            if (!isSynced) {
-                                result = CategoryDelegate.saveCategory(c);
-                            } else {
-                                Category cat = CategoryDelegate.findCategory(c.getUid());
-                                cat.setDescritption(c.getDescritption());
-                                cat.setUpdatedAt(c.getUpdatedAt());
-                                cat.setDeletedAt(c.getDeletedAt());
-                                result = CategoryDelegate.updateCategory(cat);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.MESURE -> {
-                            Mesure measure = (Mesure) obj;
-                            boolean exists = ProduitDelegate.isExists(measure.getProduitId().getUid());
-                            if (exists) {
-                                boolean isSynced = MesureDelegate.isExists(measure.getUid());
-                                Mesure result;
-                                if (!isSynced) {
-                                    result = MesureDelegate.saveMesure(measure);
-                                } else {
-                                    result = MesureDelegate.updateMesure(measure);
-                                }
-                                notifySynced(result);
-                            }
-
-                        }
-                        case Tables.FOURNISSEUR -> {
-                            Fournisseur supplier = (Fournisseur) obj;
-                            boolean isSynced = FournisseurDelegate.isExists(supplier.getUid());
-                            Fournisseur result;
-                            if (!isSynced) {
-                                result = FournisseurDelegate.saveFournisseur(supplier);
-                            } else {
-                                result = FournisseurDelegate.updateFournisseur(supplier);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.LIVRAISON -> {
-                            Livraison delivery = (Livraison) obj;
-                            boolean exists = FournisseurDelegate.isExists(delivery.getFournId().getUid());
-                            if (exists) {
-                                boolean isSynced = LivraisonDelegate.isExists(delivery.getUid());
-                                System.out.println("after livraison exist- ");
-                                Livraison result;
-                                if (!isSynced) {
-                                    result = LivraisonDelegate.saveLivraison(delivery);
-                                } else {
-                                    result = LivraisonDelegate.updateLivraison(delivery);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.STOCKER -> {
-                            Stocker stocker = (Stocker) obj;
-                            boolean exists = LivraisonDelegate.isExists(stocker.getLivraisId().getUid());
-                            boolean exist1 = MesureDelegate.isExists(stocker.getMesureId().getUid());
-                            boolean exist2 = ProduitDelegate.isExists(stocker.getProductId().getUid());
-                            if (exists && exist1 && exist2) {
-                                boolean isSynced = StockerDelegate.isExists(stocker.getUid());
-                                Stocker result;
-                                if (!isSynced) {
-                                    result = StockerDelegate.saveStocker(stocker);
-                                } else {
-                                    result = StockerDelegate.updateStocker(stocker);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.DESTOCKER -> {
-                            Destocker destocker = (Destocker) obj;
-                            boolean exists = MesureDelegate.isExists(destocker.getMesureId().getUid());
-                            boolean exist2 = ProduitDelegate.isExists(destocker.getProductId().getUid());
-                            if (exists && exist2) {
-                                boolean isSynced = DestockerDelegate.isExists(destocker.getUid());
-                                Destocker result;
-                                if (!isSynced) {
-                                    result = DestockerDelegate.saveDestocker(destocker);
-                                } else {
-                                    result = DestockerDelegate.updateDestocker(destocker);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.RECQUISITION -> {
-                            Recquisition recquisition = (Recquisition) obj;
-                            boolean exists = ProduitDelegate.isExists(recquisition.getProductId().getUid());
-                            boolean exist1 = MesureDelegate.isExists(recquisition.getMesureId().getUid());
-                            if (exists && exist1) {
-                                boolean isSynced = RecquisitionDelegate.isExists(recquisition.getUid());
-
-                                Recquisition result;
-                                if (!isSynced) {
-                                    result = RecquisitionDelegate.saveRecquisition(recquisition);
-                                } else {
-                                    result = RecquisitionDelegate.updateRecquisition(recquisition);
-                                }
-                                Produit p = ProduitDelegate.findProduit(recquisition.getProductId().getUid());
-                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), recquisition.getRegion(), recquisition.getNumlot());
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.PRIXDEVENTE -> {
-                            PrixDeVente price = (PrixDeVente) obj;
-                            boolean exists = RecquisitionDelegate.isExists(price.getRecquisitionId().getUid());
-                            boolean exist1 = MesureDelegate.isExists(price.getMesureId().getUid());
-                            if (exists && exist1) {
-                                boolean isSynced = PrixDeVenteDelegate.isExists(price.getUid());
-
-                                PrixDeVente result;
-                                if (!isSynced) {
-                                    price.setRecquisitionId(
-                                            RecquisitionDelegate.findRecquisition(price.getRecquisitionId().getUid()));
-                                    result = PrixDeVenteDelegate.savePrixDeVente(price);
-                                } else {
-                                    result = PrixDeVenteDelegate.updatePrixDeVente(price);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.CLIENT -> {
-                            Client client = (Client) obj;
-                            boolean isSynced = ClientDelegate.isExists(client.getUid());
-
-                            Client result;
-                            if (!isSynced) {
-                                result = ClientDelegate.saveClient(client);
-                            } else {
-                                result = ClientDelegate.updateClient(client);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.COMPTETRESOR -> {
-                            CompteTresor account = (CompteTresor) obj;
-                            boolean isSynced = CompteTresorDelegate.isExists(account.getUid());
-
-                            CompteTresor result;
-                            if (!isSynced) {
-                                result = CompteTresorDelegate.saveCompteTresor(account);
-                            } else {
-                                result = CompteTresorDelegate.updateCompteTresor(account);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.VENTE -> {
-                            Vente vente = (Vente) obj;
-                            boolean exists = ClientDelegate.isExists(vente.getClientId().getUid());
-                            if (exists) {
-                                boolean isSynced = VenteDelegate.isExists(vente.getUid());
-                                Vente result;
-                                if (!isSynced) {
-                                    result = VenteDelegate.saveVente(vente);
-                                } else {
-                                    result = VenteDelegate.updateVente(vente);
-                                    removeOldLigneVente(vente);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.LIGNEVENTE -> {
-                            LigneVente saleitem = (LigneVente) obj;
-                            boolean exists = ProduitDelegate.isExists(saleitem.getProductId().getUid());
-                            boolean exist1 = MesureDelegate.isExists(saleitem.getMesureId().getUid());
-                            boolean exist2 = VenteDelegate.isExists(saleitem.getReference().getUid());
-                            if (exists && exist1 && exist2) {
-                                boolean isSynced = LigneVenteDelegate.isExists(saleitem.getUid());
-                                LigneVente result;
-                                if (!isSynced) {
-                                    result = LigneVenteDelegate.saveLigneVente(saleitem);
-                                } else {
-                                    result = LigneVenteDelegate.updateLigneVente(saleitem);
-                                }
-                                Produit p = ProduitDelegate.findProduit(saleitem.getProductId().getUid());
-                                Vente vr = VenteDelegate.findVente(saleitem.getReference().getUid());
-                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), vr.getRegion(), saleitem.getNumlot());
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.TRAISORERIE -> {
-                            Traisorerie trans = (Traisorerie) obj;
-                            boolean exists = CompteTresorDelegate.isExists(trans.getTresorId().getUid());
-                            if (exists) {
-                                boolean isSynced = TraisorerieDelegate.isExists(trans.getUid());
-                                Traisorerie result;
-                                if (!isSynced) {
-                                    result = TraisorerieDelegate.saveTraisorerie(trans);
-                                } else {
-                                    result = TraisorerieDelegate.updateTraisorerie(trans);
-                                }
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.DEPENSE -> {
-                            Depense depense = (Depense) obj;
-                            boolean isSynced = DepenseDelegate.isExists(depense.getUid());
-                            Depense result;
-                            if (!isSynced) {
-                                result = DepenseDelegate.saveDepense(depense);
-                            } else {
-                                result = DepenseDelegate.updateDepense(depense);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.OPERATION -> {
-                            Operation operation = (Operation) obj;
-                            boolean exists = CompteTresorDelegate.isExists(operation.getTresorId().getUid());
-                            boolean exist2 = TraisorerieDelegate.isExists(operation.getCaisseOpId().getUid());
-                            boolean exist3 = DepenseDelegate.isExists(operation.getDepenseId().getUid());
-                            if (exists && exist2 && exist3) {
-                                boolean isSynced = OperationDelegate.isExists(operation.getUid());
-                                Operation result;
-                                if (!isSynced) {
-                                    result = OperationDelegate.saveOperation(operation);
-                                } else {
-                                    result = OperationDelegate.updateOperation(operation);
-                                }
-                                Depense dep = DepenseDelegate.findDepense(operation.getDepenseId().getUid());
-                                DepenseAgregateDelegate.aggregateDepense(operation.getDate(), operation.getImputation(), operation.getMontantUsd(), operation.getMontantCdf(), dep);
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.COMPTER -> {
-                            Compter compter = (Compter) obj;
-                            boolean exists = InventaireDelegate.isExists(compter.getInventaireId().getUid());
-                            boolean exist1 = MesureDelegate.isExists(compter.getMesureId().getUid());
-                            boolean exist2 = ProduitDelegate.isExists(compter.getProductId().getUid());
-                            if (exists && exist1 && exist2) {
-                                boolean isSynced = CompterDelegate.isExists(compter.getUid());
-                                Compter result;
-                                if (!isSynced) {
-                                    System.out.println("new compter");
-                                    result = CompterDelegate.createCompter(compter);
-                                } else {
-                                    result = CompterDelegate.updateCompter(compter);
-                                    System.out.println("edit compter");
-                                }
-//                                Mesure m = MesureDelegate.findMesure(compter.getMesureId().getUid());
-//                                Produit p = ProduitDelegate.findProduit(compter.getProductId().getUid());
-//                                double cau = compter.getCoutAchat() / m.getQuantContenu();
-//                                RecquisitionDelegate.rectifyStock(p, LocalDate.now(), LocalDate.now(), compter.getRegion(), cau);
-                                notifySynced(result);
-                            }
-                        }
-                        case Tables.INVENTORY -> {
-                            Inventaire inventory = (Inventaire) obj;
-                            boolean isSynced = InventaireDelegate.isExists(inventory.getUid());
-                            Inventaire result;
-                            if (!isSynced) {
-                                result = InventaireDelegate.createInventaire(inventory);
-                            } else {
-                                result = InventaireDelegate.updateInventaire(inventory);
-                            }
-                            notifySynced(result);
-                        }
-                        case Tables.PRESENCE -> {
-                            Presence presence = (Presence) obj;
-                            boolean isSynced = PresenceDelegate.isExists(presence.getUid());
-                            Presence result;
-                            if (!isSynced) {
-                                result = PresenceDelegate.savePresence(presence);
-                            } else {
-                                result = PresenceDelegate.updatePresence(presence);
-                            }
-                            notifySynced(result);
-                        }
-                        default -> {
-                        }
-                    }
-
-                }
-            }
+            });
         }
+    }
+
+    private void executeDownsyncMutation(Runnable action) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            action.run();
+            return;
+        }
+
+        ManagedSessionFactory.runInSession(em -> {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            boolean started = !tx.isActive();
+            if (started) {
+                tx.begin();
+            }
+            try {
+                action.run();
+                if (started && tx.isActive()) {
+                    tx.commit();
+                }
+            } catch (RuntimeException ex) {
+                if (started && tx.isActive()) {
+                    tx.rollback();
+                }
+                throw ex;
+            }
+        });
     }
 
     @Override
@@ -362,15 +669,21 @@ public class NotificationHandler
 
     private com.launchdarkly.eventsource.EventSource eventSource;
 
-    public void setEventSource(com.launchdarkly.eventsource.EventSource eventSource) {
+    public void setEventSource(
+        com.launchdarkly.eventsource.EventSource eventSource
+    ) {
         this.eventSource = eventSource;
     }
 
     @Override
     public void onError(Throwable thrwbl) {
         System.out.println("SSE Error " + thrwbl.getMessage());
-        if (thrwbl.getMessage() != null && thrwbl.getMessage().contains("401")) {
-            System.err.println("Closing SSE Stream due to persistent 401 error.");
+        if (
+            thrwbl.getMessage() != null && thrwbl.getMessage().contains("401")
+        ) {
+            System.err.println(
+                "Closing SSE Stream due to persistent 401 error."
+            );
             if (this.eventSource != null) {
                 this.eventSource.close();
             }
@@ -378,7 +691,9 @@ public class NotificationHandler
     }
 
     private void removeOldLigneVente(Vente vente) {
-        List<LigneVente> ls = LigneVenteDelegate.findByReference(vente.getUid());
+        List<LigneVente> ls = LigneVenteDelegate.findByReference(
+            vente.getUid()
+        );
         for (LigneVente l : ls) {
             LigneVenteDelegate.deleteLigneVente(l);
         }
@@ -393,19 +708,64 @@ public class NotificationHandler
                 }
                 Thread.sleep(2000);
             } catch (InterruptedException ex) {
-                Logger.getLogger(NotificationHandler.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(NotificationHandler.class.getName()).log(
+                    Level.SEVERE,
+                    null,
+                    ex
+                );
             }
         }
     }
 
     public static void setOnDataSyncListener(OnDataSyncListener listener) {
-        onDataSyncListener = listener;
+        registerOnDataSyncListener(listener);
     }
 
-    private void notifySynced(BaseModel uid) {
-        if (onDataSyncListener != null) {
-            onDataSyncListener.onDataSynced(uid);
+    public static void registerOnDataSyncListener(OnDataSyncListener listener) {
+        if (listener == null) {
+            return;
+        }
+        // Avoid duplicate registration if initialize() is ever called twice
+        onDataSyncListeners.removeIf(existing -> existing == listener);
+        onDataSyncListeners.add(listener);
+    }
+
+    public static void unregisterOnDataSyncListener(OnDataSyncListener listener) {
+        if (listener == null) {
+            return;
+        }
+        onDataSyncListeners.removeIf(existing -> existing == listener);
+    }
+
+    /**
+     * Pushes a local or remote entity change to every registered UI listener.
+     * Safe to call from any thread.
+     */
+    public static void broadcastDataSynced(BaseModel model) {
+        if (model == null) {
+            return;
+        }
+        for (OnDataSyncListener listener : onDataSyncListeners) {
+            Runnable dispatch = () -> {
+                try {
+                    listener.onDataSynced(model);
+                } catch (Exception ex) {
+                    Logger.getLogger(NotificationHandler.class.getName()).log(
+                        Level.WARNING,
+                        "UI sync listener failure",
+                        ex
+                    );
+                }
+            };
+            if (javafx.application.Platform.isFxApplicationThread()) {
+                dispatch.run();
+            } else {
+                javafx.application.Platform.runLater(dispatch);
+            }
         }
     }
 
+    private void notifySynced(BaseModel uid) {
+        broadcastDataSynced(uid);
+    }
 }

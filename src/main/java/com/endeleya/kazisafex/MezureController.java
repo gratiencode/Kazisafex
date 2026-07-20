@@ -175,12 +175,7 @@ public class MezureController implements Initializable {
                 if (empty || item == null) {
                     setText(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getDescription() + " : " + item.getQuantContenu());
-                        }
-                    });
+                    setText(item.getDescription() + " : " + item.getQuantContenu());
                 }
             }
 

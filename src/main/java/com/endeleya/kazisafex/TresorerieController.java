@@ -90,13 +90,17 @@ import data.LigneVente;
 import data.Vente;
 import data.VenteHelper;
 import data.helpers.Mouvment;
+import data.BaseModel;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import tools.CurrencyConverter;
+import tools.RecoveryPaymentCalculator;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
+import tools.NotificationHandler;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Transaction;
@@ -118,6 +122,28 @@ public class TresorerieController implements Initializable {
             instance = new TresorerieController();
         }
         return instance;
+    }
+
+    /**
+     * Rebind tables/lists after the cached page is reattached to the scene.
+     */
+    public void onCachedPageShown() {
+        if (tresors != null && comptes != null) {
+            tresors.setItems(comptes);
+            tresors.refresh();
+        }
+        if (ls_depense != null && depenses != null) {
+            ls_depense.setItems(depenses);
+            ls_depense.refresh();
+        }
+        if (tbl_transaction != null && lstransaction != null) {
+            tbl_transaction.setItems(lstransaction);
+            tbl_transaction.refresh();
+        }
+        if (tbl_depenses_realisees != null && depensesRealisees != null) {
+            tbl_depenses_realisees.setItems(depensesRealisees);
+            tbl_depenses_realisees.refresh();
+        }
     }
 
     @FXML
@@ -317,6 +343,12 @@ public class TresorerieController implements Initializable {
     static double soldecdf, soldeusd;
     String math;
     Kazisafe kazisafe;
+    private final java.util.concurrent.ExecutorService syncExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "Kazisafe-Treasury-SSE");
+                t.setDaemon(true);
+                return t;
+            });
     // SMSNotification choosen;
     String token, region, role, entr;
     Entreprise entreprise;
@@ -326,6 +358,7 @@ public class TresorerieController implements Initializable {
     Depense d;
 
     private static TresorerieController instance;
+    private boolean initialDataLoaded = false;
     private ResourceBundle bundle;
     @FXML
     private ComboBox<?> cbx_frequence_depense;
@@ -698,6 +731,10 @@ public class TresorerieController implements Initializable {
     }
 
     public void setUp(Entreprise eze, Vente v, Facture f) {
+        if (initialDataLoaded) {
+            return;
+        }
+        initialDataLoaded = true;
         token = pref.get("token", null);
         kazisafe = KazisafeServiceFactory.createService(token);
         this.entreprise = eze;
@@ -768,448 +805,34 @@ public class TresorerieController implements Initializable {
         txt_sum_arecov_recov.setText("A recouvrer : " + calculDette());
         txt_recoved_sum_recov
                 .setText("Déjà récouvré : " + Util.sumAllCurency(Util.collectPaidDebt(lstrz), taux2change));
+        refreshCurrencyContext();
         if (f != null) {
             tab_pn_tresor.getSelectionModel().select(tab_recov_trans);
             Double pd = TraisorerieDelegate.sumByReference(f.getNumero(), taux2change);
-
             somme = f.getTotalamount() - (pd == null ? 0 : pd);
-            cdf = somme * taux2change;
-            usd = somme;
-            revertUsd = usd;
-            revertCdf = cdf;
             tf_reference_recov.setText(String.valueOf(math));
             trx = new Traisorerie(DataId.generate());
             trx.setReference(f.getNumero());
             fact = f;
             ClientOrganisation clt = f.getOrganisId();
-            System.out.println("Client recov " + clt);
             txt_client_recov.setText("Client : " + clt.getPhoneOrganisation() + " (" + f.getNumero() + ")");
-            txt_eval_usd_recov.setText(String.valueOf(somme));
-            txt_eval_cdf_recov
-                    .setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
-            tf_montant_usd_recov.textProperty().addListener(new ChangeListener<String>() {
-                @Override
-                public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                    double in_usd = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
-                    if (newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
-                        dt = usd;
-                        ff = 0;
-                        fd = 0;
-                        txt_eval_usd_recov.setText(
-                                String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_eval_cdf_recov.setText(
-                                String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_arembourser_usd_recov.setText("0");
-                        txt_arembourser_cdf_recov.setText("0");
-                    } else if (!newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
-                        double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = 0;
-                            txt_arembourser_cdf_recov.setText("0");
-                            txt_arembourser_usd_recov.setText("0");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = in_usd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-
-                        trx.setMontantUsd(fd);
-                    } else if (newValue.isEmpty() && !tf_montant_cdf_recov.getText().isEmpty()) {
-                        double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double restCdf = new BigDecimal(cdf - inCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = inCdf;
-                            txt_arembourser_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("0.0");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = inCdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    } else {
-                        double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        double nwInUsd = (in_usd + converted);
-                        double restUsd = new BigDecimal(usd - nwInUsd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = inCdf;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = nwInUsd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantUsd(fd);
-                    }
-                    dpk_date_ech_recov.setDisable(true);
-                }
-            });
-            tf_montant_cdf_recov.textProperty().addListener(new ChangeListener<String>() {
-                @Override
-                public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                    double in_cdf = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
-                    if (newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        txt_eval_cdf_recov.setText(
-                                String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        txt_eval_usd_recov.setText(
-                                String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        dt = usd;
-                        ff = 0;
-                        fd = 0;
-                        txt_arembourser_usd_recov.setText("0.0");
-                        txt_arembourser_cdf_recov.setText("0.0");
-                    } else if (!newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        // double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" :
-                        // editable.toString()));
-                        double restCdf = new BigDecimal(cdf - in_cdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = 0;
-                            ff = in_cdf;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = in_cdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    } else if (newValue.isEmpty() && !tf_montant_usd_recov.getText().isEmpty()) {
-                        double in_usd = Double.parseDouble(tf_montant_usd_recov.getText());
-                        double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = 0;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = in_usd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantUsd(fd);
-                    } else {
-                        double inUsd = Double.parseDouble(tf_montant_usd_recov.getText().toString());
-                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        double nwInCdf = (in_cdf + converted);
-                        double restCdf = new BigDecimal(cdf - nwInCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            ff = in_cdf;
-                            fd = inUsd;
-                            txt_arembourser_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("0.0");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = nwInCdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    }
-                    dpk_date_ech_recov.setDisable(true);
-                }
-            });
-        }
-
-        if (v != null) {
+            initRecoveryDebt(somme, tools.CurrencyConverter.USD);
+            attachRecoveryPaymentListeners(trx);
+        } else if (v != null) {
             tab_pn_tresor.getSelectionModel().select(tab_recov_trans);
             TraisorerieDelegate.sumByReference("F-" + v.getReference(), taux2change);
-            somme = v.getMontantDette();
-            cdf = devise.equalsIgnoreCase("USD") ? (somme * taux2change) : somme;
-            usd = devise.equalsIgnoreCase("USD") ? somme : (somme / taux2change);
-            revertUsd = usd;
-            revertCdf = cdf;
+            somme = v.getMontantDette() == null ? 0 : v.getMontantDette();
+            String debtCur = v.getDeviseDette() != null ? v.getDeviseDette() : tools.CurrencyConverter.USD;
             tf_reference_recov.setText(String.valueOf(math));
             trx = new Traisorerie(DataId.generate());
             trx.setReference("F-" + v.getReference());
             venteACredit = v;
             Client clt = v.getClientId();
-            System.out.println("Client recov " + clt);
             txt_client_recov.setText("Client : " + clt.getPhone() + " " + clt.getNomClient() + " (" + v.getReference() + ")");
-            txt_eval_usd_recov.setText(String.valueOf((somme)));
-            txt_eval_cdf_recov
-                    .setText(String.valueOf(BigDecimal.valueOf(cdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
-            tf_montant_usd_recov.textProperty().addListener(new ChangeListener<String>() {
-                @Override
-                public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                    double in_usd = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
-                    if (newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
-                        dt = usd;
-                        ff = 0;
-                        fd = 0;
-                        txt_eval_usd_recov.setText(
-                                String.valueOf((new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_eval_cdf_recov.setText(
-                                String.valueOf((new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue())));
-                        txt_arembourser_usd_recov.setText("0");
-                        txt_arembourser_cdf_recov.setText("0");
-                    } else if (!newValue.isEmpty() && tf_montant_cdf_recov.getText().isEmpty()) {
-                        double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = 0;
-                            txt_arembourser_cdf_recov.setText("0");
-                            txt_arembourser_usd_recov.setText("0");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = in_usd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-
-                        trx.setMontantUsd(fd);
-                    } else if (newValue.isEmpty() && !tf_montant_cdf_recov.getText().isEmpty()) {
-                        double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double restCdf = new BigDecimal(cdf - inCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = inCdf;
-                            txt_arembourser_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("0.0");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = inCdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    } else {
-                        double inCdf = Double.parseDouble(tf_montant_cdf_recov.getText().toString());
-                        double converted = new BigDecimal(inCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        double nwInUsd = (in_usd + converted);
-                        double restUsd = new BigDecimal(usd - nwInUsd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = inCdf;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = nwInUsd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-
-                        trx.setMontantUsd(fd);
-                    }
-                    double debt = Double.parseDouble(txt_eval_usd_recov.getText());
-                    if (debt > 0) {
-                        if (!tf_montant_usd_recov.getText().isEmpty()) {
-                            dpk_date_ech_recov.setDisable(false);
-                        }
-                    } else {
-                        dpk_date_ech_recov.setDisable(true);
-                    }
-                }
-            });
-            tf_montant_cdf_recov.textProperty().addListener(new ChangeListener<String>() {
-                @Override
-                public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                    double in_cdf = Double.parseDouble((newValue.isEmpty() ? "0" : newValue));
-                    if (newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        txt_eval_cdf_recov.setText(
-                                String.valueOf(new BigDecimal(cdf).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        txt_eval_usd_recov.setText(
-                                String.valueOf(new BigDecimal(usd).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        dt = usd;
-                        ff = 0;
-                        fd = 0;
-                        txt_arembourser_usd_recov.setText("0.0");
-                        txt_arembourser_cdf_recov.setText("0.0");
-                    } else if (!newValue.isEmpty() && tf_montant_usd_recov.getText().isEmpty()) {
-                        // double in_usd = Double.parseDouble((editable.toString().isEmpty() ? "0" :
-                        // editable.toString()));
-                        double restCdf = new BigDecimal(cdf - in_cdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = 0;
-                            ff = in_cdf;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = in_cdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    } else if (newValue.isEmpty() && !tf_montant_usd_recov.getText().toString().isEmpty()) {
-                        double in_usd = Double.parseDouble(tf_montant_usd_recov.getText().toString());
-                        double restUsd = new BigDecimal(usd - in_usd).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restCdf = new BigDecimal(restUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restUsd >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            fd = in_usd;
-                            ff = 0;
-                            txt_arembourser_cdf_recov.setText("");
-                            txt_arembourser_usd_recov.setText("");
-                        } else {
-                            double retour = Math.abs(restUsd);
-                            fd = in_usd - retour;
-                            dt = 0;
-                            ff = 0;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("" + retour);
-                            txt_arembourser_cdf_recov.setText("" + new BigDecimal(retour * taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantUsd(fd);
-                    } else {
-                        double inUsd = Double.parseDouble(tf_montant_usd_recov.getText());
-                        double converted = new BigDecimal(inUsd * taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        double nwInCdf = (in_cdf + converted);
-                        double restCdf = new BigDecimal(cdf - nwInCdf).setScale(2, RoundingMode.HALF_UP).doubleValue();
-                        double restUsd = new BigDecimal(restCdf / taux2change).setScale(2, RoundingMode.HALF_UP)
-                                .doubleValue();
-                        if (restCdf >= 0) {
-                            txt_eval_usd_recov.setText(String.valueOf(restUsd));
-                            txt_eval_cdf_recov.setText(String.valueOf(restCdf));
-                            dt = restUsd;
-                            ff = in_cdf;
-                            fd = inUsd;
-                            txt_arembourser_cdf_recov.setText("0.0");
-                            txt_arembourser_usd_recov.setText("0.0");
-                        } else {
-                            double retour = Math.abs(restCdf);
-                            fd = 0;
-                            dt = 0;
-                            ff = nwInCdf - retour;
-                            txt_eval_usd_recov.setText("0.0");
-                            txt_eval_cdf_recov.setText("0.0");
-                            txt_arembourser_cdf_recov.setText("" + retour);
-                            txt_arembourser_usd_recov.setText("" + new BigDecimal(retour / taux2change)
-                                    .setScale(2, RoundingMode.HALF_UP).doubleValue());
-                        }
-                        trx.setMontantCdf(ff);
-                    }
-                    double debt = Double.parseDouble(txt_eval_usd_recov.getText());
-                    if (debt > 0) {
-                        if (!tf_montant_cdf_recov.getText().isEmpty()) {
-                            dpk_date_ech_recov.setDisable(false);
-                        }
-                    } else {
-                        dpk_date_ech_recov.setDisable(true);
-                    }
-                }
-            });
-
+            initRecoveryDebt(somme, debtCur);
+            attachRecoveryPaymentListeners(trx);
         }
+
         tbl_transaction.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Transaction>() {
             @Override
             public void changed(ObservableValue<? extends Transaction> observable, Transaction oldValue,
@@ -1563,13 +1186,12 @@ public class TresorerieController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux2change = pref.getDouble("taux2change", 2000);
+        refreshCurrencyContext();
         bundle = rb;
         token = pref.get("token", null);
         role = pref.get("priv", null);
         region = pref.get("region", "...");
         entr = pref.get("eUid", "unknown");
-        devise = pref.get("mainCur", "USD");
         configtab();
         configCbx();
         MainUI.setPattern(dpk_date_dep);
@@ -1591,6 +1213,7 @@ public class TresorerieController implements Initializable {
         ComboBoxAutoCompletion<Depense> comboBoxAutoCompletion2 = new ComboBoxAutoCompletion<>(cbx_depenses);
         Util.installTooltip(imgbtn_clean, "Supprimer toute les notifications");
         Tooltip.install(pane_delete, new Tooltip("Supprimer l'une de mes transactions"));
+        NotificationHandler.setOnDataSyncListener(this::handleSyncFromServer);
         ContextMenu cmenu = new ContextMenu();
         MenuItem deleteCpt = new MenuItem("Supprimer");
         cmenu.getItems().add(deleteCpt);
@@ -1623,6 +1246,35 @@ public class TresorerieController implements Initializable {
                     }
                 }
             }
+        });
+    }
+
+    private void handleSyncFromServer(BaseModel baseModel) {
+        if (baseModel == null) {
+            return;
+        }
+        if (!(baseModel instanceof Traisorerie)
+                && !(baseModel instanceof Operation)
+                && !(baseModel instanceof CompteTresor)
+                && !(baseModel instanceof Facture)
+                && !(baseModel instanceof Vente)
+                && !(baseModel instanceof Depense)) {
+            return;
+        }
+        syncExecutor.submit(() -> {
+            refreshCurrencyContext();
+            List<Traisorerie> fresh;
+            if (role != null && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()))) {
+                fresh = TraisorerieDelegate.findTraisoreries();
+            } else {
+                fresh = TraisorerieDelegate.findTraisoreries(region);
+            }
+            Platform.runLater(() -> {
+                if (fresh != null) {
+                    lstrz = fresh;
+                    fillTransactions(fresh);
+                }
+            });
         });
     }
 
@@ -1819,13 +1471,17 @@ public class TresorerieController implements Initializable {
                     venteACredit.setEcheance(dpk_date_ech_recov.getValue());
                     double oldP_usd = venteACredit.getMontantUsd();
                     double oldP_cdf = venteACredit.getMontantCdf();
-                    double newDette = devise.equals("USD") ? (venteACredit.getMontantDette() - (trx.getMontantUsd() + (trx.getMontantCdf() / taux2change)))
-                            : (venteACredit.getMontantDette() - ((trx.getMontantUsd() * taux2change) + trx.getMontantCdf()));
-                    double newP_usd = trx.getMontantUsd() + oldP_usd;
-                    double newP_cdf = trx.getMontantCdf() + oldP_cdf;
-                    venteACredit.setMontantCdf(newP_cdf);
-                    venteACredit.setMontantDette(newDette);
-                    venteACredit.setMontantUsd(newP_usd);
+                    String debtCurrency = venteACredit.getDeviseDette() != null
+                            ? venteACredit.getDeviseDette() : CurrencyConverter.USD;
+                    BigDecimal paidInDebtCurrency = BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(
+                            trx.getMontantUsd(), trx.getMontantCdf(), debtCurrency));
+                    BigDecimal newDette = CurrencyConverter.roundMoney(
+                            BigDecimal.valueOf(venteACredit.getMontantDette()).subtract(paidInDebtCurrency));
+                    BigDecimal newP_usd = BigDecimal.valueOf(trx.getMontantUsd()).add(BigDecimal.valueOf(oldP_usd));
+                    BigDecimal newP_cdf = BigDecimal.valueOf(trx.getMontantCdf()).add(BigDecimal.valueOf(oldP_cdf));
+                    venteACredit.setMontantCdf(newP_cdf.doubleValue());
+                    venteACredit.setMontantDette(newDette.doubleValue());
+                    venteACredit.setMontantUsd(newP_usd.doubleValue());
                     Vente updrst = VenteDelegate.updateVente(venteACredit);
                     Executors.newSingleThreadExecutor()
                             .submit(() -> {
@@ -1839,13 +1495,15 @@ public class TresorerieController implements Initializable {
 
                 }
                 if (fact != null) {
-                    double past = fact.getPayedamount();
-                    double payed = trz.getMontantUsd() + (trz.getMontantCdf() / taux2change);
-                    double am = past + payed;
-                    double rest = (fact.getTotalamount() - am);
-                    fact.setPayedamount(rest < 0 ? fact.getTotalamount() : am);
-                    fact.setStatus(rest <= 0 ? Constants.BILL_STATUS_PAID
-                            : rest > 0 ? Constants.BILL_STATUS_INPAYMENT : Constants.BILL_STATUS_UNPAID);
+                    BigDecimal past = BigDecimal.valueOf(fact.getPayedamount());
+                    BigDecimal payed = BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(
+                            trz.getMontantUsd(), trz.getMontantCdf(), CurrencyConverter.USD));
+                    BigDecimal am = past.add(payed);
+                    BigDecimal rest = BigDecimal.valueOf(fact.getTotalamount()).subtract(am);
+                    fact.setPayedamount(rest.compareTo(BigDecimal.ZERO) < 0
+                            ? fact.getTotalamount() : am.doubleValue());
+                    fact.setStatus(rest.compareTo(BigDecimal.ZERO) <= 0 ? Constants.BILL_STATUS_PAID
+                            : rest.compareTo(BigDecimal.ZERO) > 0 ? Constants.BILL_STATUS_INPAYMENT : Constants.BILL_STATUS_UNPAID);
                     Facture ff = FactureDelegate.updateFacture(fact);// database.update(fact);
                     if (ff != null) {
                         Executors.newCachedThreadPool()
@@ -1934,7 +1592,7 @@ public class TresorerieController implements Initializable {
         for (Vente vs : lvente) {
             if (vs.getMontantDette() != null) {
                 if (vs.getMontantDette() > 0) {
-                    sdette += vs.getMontantDette();
+                    sdette += CurrencyConverter.debtInMainCurrency(vs.getMontantDette(), vs.getDeviseDette());
                     countF++;
                 }
             }
@@ -2241,6 +1899,55 @@ public class TresorerieController implements Initializable {
                 }
             }
         }).start();
+    }
+
+    private void refreshCurrencyContext() {
+        taux2change = CurrencyConverter.activeRate();
+        devise = CurrencyConverter.mainCurrency();
+    }
+
+    private void initRecoveryDebt(double amount, String currency) {
+        BigDecimal[] amounts = RecoveryPaymentCalculator.initialDebtAmounts(
+                BigDecimal.valueOf(amount), currency, BigDecimal.valueOf(taux2change));
+        usd = amounts[0].doubleValue();
+        cdf = amounts[1].doubleValue();
+        revertUsd = usd;
+        revertCdf = cdf;
+        txt_eval_usd_recov.setText(CurrencyConverter.formatAmount(amounts[0], CurrencyConverter.USD));
+        txt_eval_cdf_recov.setText(CurrencyConverter.formatAmount(amounts[1], CurrencyConverter.CDF));
+    }
+
+    private void attachRecoveryPaymentListeners(Traisorerie trxLocal) {
+        Runnable recalc = () -> recalculateRecoveryPayment(trxLocal);
+        tf_montant_usd_recov.textProperty().addListener((o, ov, nv) -> recalc.run());
+        tf_montant_cdf_recov.textProperty().addListener((o, ov, nv) -> recalc.run());
+    }
+
+    private void recalculateRecoveryPayment(Traisorerie trxLocal) {
+        BigDecimal inUsd = BigDecimal.valueOf(RecoveryPaymentCalculator.parseInput(tf_montant_usd_recov.getText()));
+        BigDecimal inCdf = BigDecimal.valueOf(RecoveryPaymentCalculator.parseInput(tf_montant_cdf_recov.getText()));
+        RecoveryPaymentCalculator.Result result = RecoveryPaymentCalculator.compute(
+                BigDecimal.valueOf(revertUsd), BigDecimal.valueOf(revertCdf),
+                inUsd, inCdf, BigDecimal.valueOf(taux2change));
+        txt_eval_usd_recov.setText(CurrencyConverter.formatAmount(result.getRemainingUsdBd(), CurrencyConverter.USD));
+        txt_eval_cdf_recov.setText(CurrencyConverter.formatAmount(result.getRemainingCdfBd(), CurrencyConverter.CDF));
+        if (result.getChangeUsdBd().compareTo(BigDecimal.ZERO) > 0 || result.getChangeCdfBd().compareTo(BigDecimal.ZERO) > 0) {
+            txt_arembourser_usd_recov.setText(CurrencyConverter.formatAmount(result.getChangeUsdBd(), CurrencyConverter.USD));
+            txt_arembourser_cdf_recov.setText(CurrencyConverter.formatAmount(result.getChangeCdfBd(), CurrencyConverter.CDF));
+        } else {
+            txt_arembourser_usd_recov.setText("0");
+            txt_arembourser_cdf_recov.setText("0");
+        }
+        dt = result.getDebtUsd();
+        fd = result.getStoredUsd();
+        ff = result.getStoredCdf();
+        trxLocal.setMontantUsd(fd);
+        trxLocal.setMontantCdf(ff);
+        if (result.getRemainingUsdBd().compareTo(BigDecimal.ZERO) > 0 && !tf_montant_cdf_recov.getText().isEmpty()) {
+            dpk_date_ech_recov.setDisable(false);
+        } else {
+            dpk_date_ech_recov.setDisable(result.getRemainingUsdBd().compareTo(BigDecimal.ZERO) <= 0);
+        }
     }
 
 }

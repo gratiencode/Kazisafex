@@ -161,6 +161,19 @@ public class ProduitsController implements Initializable {
         return instance;
     }
 
+    /**
+     * Rebind product table after the cached page is reattached to the scene.
+     */
+    public void onCachedPageShown() {
+        if (table != null && produitsList != null) {
+            table.setItems(produitsList);
+            table.refresh();
+            if (count != null) {
+                count.setText(table.getItems().size() + " éléments");
+            }
+        }
+    }
+
     @FXML
     private Pagination pagination;
     @FXML
@@ -235,6 +248,7 @@ public class ProduitsController implements Initializable {
     String choosenregion;
     String localPath;
     boolean downloaded = false;
+    private boolean initialDataLoaded = false;
     private ResourceBundle bundle;
 
     public ProduitsController() {
@@ -306,7 +320,11 @@ public class ProduitsController implements Initializable {
         });
         ContextMenu cm = new ContextMenu();
         MenuItem mi = new MenuItem(bundle.getString("gorup_incateogey"));
+        MenuItem warehouseStockCardItem = new MenuItem("Fiche de stock entrepot");
+        MenuItem posStockCardItem = new MenuItem("Fiche de stock Point de vente");
         cm.getItems().add(mi);
+        cm.getItems().add(warehouseStockCardItem);
+        cm.getItems().add(posStockCardItem);
         table.setContextMenu(cm);
         mi.setOnAction(new EventHandler<ActionEvent>() {
             @Override
@@ -314,6 +332,33 @@ public class ProduitsController implements Initializable {
                 if (!selectedproduct.isEmpty()) {
                     wrapInCatPane.setVisible(true);
                 }
+            }
+        });
+        warehouseStockCardItem.setOnAction(event -> {
+            Produit selectedProduct = table.getSelectionModel().getSelectedItem();
+            if (selectedProduct != null) {
+                MainUI.floatDialog(
+                        tools.Constants.FICHESTOCK_DLG,
+                        1165,
+                        665,
+                        null,
+                        kazisafe,
+                        selectedProduct,
+                        entreprise);
+            }
+        });
+        posStockCardItem.setOnAction(event -> {
+            Produit selectedProduct = table.getSelectionModel().getSelectedItem();
+            if (selectedProduct != null) {
+                MainUI.floatDialog(
+                        tools.Constants.FICHESTOCK_DLG,
+                        1165,
+                        665,
+                        null,
+                        kazisafe,
+                        selectedProduct,
+                        entreprise,
+                        "POS");
             }
         });
         NotificationHandler.setOnDataSyncListener((basemodel) -> {
@@ -748,6 +793,10 @@ public class ProduitsController implements Initializable {
     }
 
     public void setToken(String token) {
+        if (initialDataLoaded) {
+            return;
+        }
+        initialDataLoaded = true;
         this.token = token;
         kazisafe = KazisafeServiceFactory.createService(token);
         // this.database = RepportService.getInstance();
@@ -1291,6 +1340,18 @@ public class ProduitsController implements Initializable {
                                 price.setQmax(qteStock > 0 ? qteStock : 9999.0);
                                 price.setPourcentParCunit(0.0);
                                 PrixDeVenteDelegate.savePrixDeVente(price);
+                                kazisafe.savePrice(price).enqueue(new retrofit2.Callback<PrixDeVente>() {
+                                    @Override
+                                    public void onResponse(Call<PrixDeVente> call, retrofit2.Response<PrixDeVente> rspns) {
+                                        if (rspns.isSuccessful()) {
+                                            System.out.println("Price saved to server");
+                                        }
+                                    }
+                                    @Override
+                                    public void onFailure(Call<PrixDeVente> call, Throwable thrwbl) {
+                                        thrwbl.printStackTrace();
+                                    }
+                                });
 
                                 final Produit finalP = p;
                                 Platform.runLater(() -> {
@@ -1461,8 +1522,19 @@ public class ProduitsController implements Initializable {
                             for (PrixDeVente lpv : lpvs) {
                                 lpv.setRecquisitionId(rq);
                                 lpv.setMesureId(mex);
-                                // PrixDeVenteDelegate.appendToTransaction(lpv);
-                                PrixDeVenteDelegate.savePrixDeVente(lpv);// database.insertAndSync(lpv);
+                                PrixDeVenteDelegate.savePrixDeVente(lpv);
+                                kazisafe.savePrice(lpv).enqueue(new retrofit2.Callback<PrixDeVente>() {
+                                    @Override
+                                    public void onResponse(Call<PrixDeVente> call, retrofit2.Response<PrixDeVente> rspns) {
+                                        if (rspns.isSuccessful()) {
+                                            System.out.println("Price saved to server");
+                                        }
+                                    }
+                                    @Override
+                                    public void onFailure(Call<PrixDeVente> call, Throwable thrwbl) {
+                                        thrwbl.printStackTrace();
+                                    }
+                                });
                             }
                         }
                         // RecquisitionDelegate.endTransaction();

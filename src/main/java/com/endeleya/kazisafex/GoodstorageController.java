@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import services.ManagedSessionFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
@@ -104,7 +105,9 @@ import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
 import tools.NotificationHandler;
+import tools.CurrencyConverter;
 import tools.Constants;
+import tools.SyncRetryHandler;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import delegates.CategoryDelegate;
@@ -128,6 +131,42 @@ public class GoodstorageController implements Initializable {
             instance = new GoodstorageController();
         }
         return instance;
+    }
+
+    /**
+     * Rebind lists/tables to master ObservableLists after cached page reattach.
+     * Does not reload from the database.
+     */
+    public void onCachedPageShown() {
+        if (list_livraison != null && listlivr != null) {
+            list_livraison.setItems(listlivr);
+            list_livraison.refresh();
+            if (count_livraizon != null && bundle != null) {
+                count_livraizon.setText(
+                    String.format(bundle.getString("xitems"), listlivr.size())
+                );
+            }
+        }
+        if (list_supplier != null && listfourn != null) {
+            list_supplier.setItems(listfourn);
+            list_supplier.refresh();
+            if (count_fournisseur != null && bundle != null) {
+                count_fournisseur.setText(
+                    String.format(bundle.getString("xitems"), listfourn.size())
+                );
+            }
+        }
+        if (table_stockage != null && list_stockers != null) {
+            table_stockage.setItems(list_stockers);
+            table_stockage.refresh();
+            if (count != null) {
+                count.setText(table_stockage.getItems().size() + " éléments");
+            }
+        }
+        if (table1 != null && lisdestocker != null) {
+            table1.setItems(lisdestocker);
+            table1.refresh();
+        }
     }
 
     @FXML
@@ -304,6 +343,7 @@ public class GoodstorageController implements Initializable {
     List<Stocker> stox;
     List<Destocker> destox;
     Entreprise entreprise;
+    private boolean initialDataLoaded = false;
     private int starting = 0;
     private int rowsDataCount = 20;
     private int rowsDataCount1 = 20;
@@ -451,7 +491,9 @@ public class GoodstorageController implements Initializable {
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
             destox = DestockerDelegate.findDescSortedByDate(offsetd, limis.intValue());
-            if(destox==null)return;
+            if (destox == null) {
+                destox = new ArrayList<>();
+            }
             List<Destocker> filteredDestox = new ArrayList<>();
             for(Destocker d : destox) {
                 if(d.getProductId() != null && ProduitDelegate.findProduit(d.getProductId().getUid()) != null) {
@@ -466,13 +508,23 @@ public class GoodstorageController implements Initializable {
             int offset = 0;
             Long limix = Math.min(offset + rowsDataCount, size);
             stox = StockerDelegate.findStockers();
-            list_stockers.addAll(stox.subList(offset, limix.intValue()));
+            if (stox == null) {
+                stox = new ArrayList<>();
+            }
+            int stockLimit = Math.min(limix.intValue(), stox.size());
+            list_stockers.addAll(stox.subList(offset, stockLimit));
             table_stockage.setItems(list_stockers);
             List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate();
+            if (foundl == null) {
+                foundl = List.of();
+            }
             listlivr.addAll(foundl);
             list_livraison.setItems(listlivr);
             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
             List<Fournisseur> lfs = FournisseurDelegate.findFournisseurs();
+            if (lfs == null) {
+                lfs = List.of();
+            }
             listfourn.addAll(lfs);
             list_supplier.setItems(listfourn);
             count_fournisseur.setText(String.format(bundle.getString("xitems"), listfourn.size()));
@@ -481,7 +533,9 @@ public class GoodstorageController implements Initializable {
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
             destox = DestockerDelegate.findDescSortedByDate(region, offsetd, limis.intValue());
-            if(destox==null)return;
+            if (destox == null) {
+                destox = new ArrayList<>();
+            }
             List<Destocker> filteredDestox = new ArrayList<>();
             for(Destocker d : destox) {
                 if(d.getProductId() != null && ProduitDelegate.findProduit(d.getProductId().getUid()) != null) {
@@ -495,15 +549,24 @@ public class GoodstorageController implements Initializable {
             int offset = 0;
             Long limix = Math.min(offset + rowsDataCount, size);
             stox = StockerDelegate.findStockers(region);
+            if (stox == null) {
+                stox = new ArrayList<>();
+            }
             int lim = limix.intValue();
             int vlim = Math.min(stox.size(), lim);
             list_stockers.addAll(stox.subList(offset, vlim));
             table_stockage.setItems(list_stockers);
             List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate(region);
+            if (foundl == null) {
+                foundl = List.of();
+            }
             listlivr.addAll(foundl);
             list_livraison.setItems(listlivr);
             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
             List<Fournisseur> lfs = FournisseurDelegate.findFournisseurs();
+            if (lfs == null) {
+                lfs = List.of();
+            }
             listfourn.addAll(lfs);
             list_supplier.setItems(listfourn);
             count_fournisseur.setText(String.format(bundle.getString("xitems"), listfourn.size()));
@@ -517,6 +580,10 @@ public class GoodstorageController implements Initializable {
     }
 
     public void setDatabase(String action) {
+        if (initialDataLoaded) {
+            return;
+        }
+        initialDataLoaded = true;
         this.action = action;
         kazisafe = KazisafeServiceFactory.createService(token);
         // Initialize StockDepotAgregateService for aggregate stock management
@@ -533,7 +600,7 @@ public class GoodstorageController implements Initializable {
         }
         populate();
         list_livraison.setCellFactory((ListView<Livraison> param) -> new ListCell<Livraison>() {
-            private ImageView imageView = new ImageView();
+            private final ImageView imageView = new ImageView();
 
             @Override
             protected void updateItem(Livraison item, boolean empty) {
@@ -542,27 +609,21 @@ public class GoodstorageController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getNumPiece() + ", " + item.getReference() + " " + item.getTopay() + " "
-                                    + item.getDateLivr().toString());
-                            imageView.setFitHeight(28);
-                            imageView.setFitWidth(28);
-                            imageView.setPreserveRatio(true);
-                            imageView.setImage(
-                                    new Image(AgentController.class.getResourceAsStream("/icons/add-product(1).png")));
-                            setGraphic(imageView);
-                        }
-                    });
-
+                    setText(item.getNumPiece() + ", " + item.getReference() + " " + item.getTopay() + " "
+                            + item.getDateLivr().toString());
+                    imageView.setFitHeight(28);
+                    imageView.setFitWidth(28);
+                    imageView.setPreserveRatio(true);
+                    imageView.setImage(
+                            new Image(AgentController.class.getResourceAsStream("/icons/add-product(1).png")));
+                    setGraphic(imageView);
                 }
             }
 
         });
 
         list_supplier.setCellFactory((ListView<Fournisseur> param) -> new ListCell<Fournisseur>() {
-            private ImageView imageView = new ImageView();
+            private final ImageView imageView = new ImageView();
 
             @Override
             protected void updateItem(Fournisseur item, boolean empty) {
@@ -571,19 +632,13 @@ public class GoodstorageController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getNomFourn() + ", " + item.getPhone() + " " + item.getAdresse());
-                            imageView.setFitHeight(28);
-                            imageView.setFitWidth(28);
-                            imageView.setPreserveRatio(true);
-                            imageView.setImage(
-                                    new Image(AgentController.class.getResourceAsStream("/icons/add-user32.png")));
-                            setGraphic(imageView);
-                        }
-                    });
-
+                    setText(item.getNomFourn() + ", " + item.getPhone() + " " + item.getAdresse());
+                    imageView.setFitHeight(28);
+                    imageView.setFitWidth(28);
+                    imageView.setPreserveRatio(true);
+                    imageView.setImage(
+                            new Image(AgentController.class.getResourceAsStream("/icons/add-user32.png")));
+                    setGraphic(imageView);
                 }
             }
 
@@ -714,29 +769,26 @@ public class GoodstorageController implements Initializable {
     }
 
     private void loadInv() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (products == null || products.isEmpty()) {
-                    products = delegates.ProduitDelegate.findProduits();
+        ManagedSessionFactory.runInBackground(() -> {
+            if (products == null || products.isEmpty()) {
+                products = delegates.ProduitDelegate.findProduits();
+            }
+            if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+                try {
+                    loadInventaireDepot(Util.filterNoNullMesure(products), region);
+                } catch (Exception ex) {
+                    Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
-                if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
-                    try {
-                        loadInventaireDepot(Util.filterNoNullMesure(products), region);
-                    } catch (Exception ex) {
-                        Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                } else {
-                    try {
-                        String selectedRegion = cbx_regions == null ? null : cbx_regions.getValue();
-                        loadInventaireDepot(Util.filterNoNullMesure(products),
-                                selectedRegion == null || selectedRegion.isBlank() ? region : selectedRegion);
-                    } catch (Exception ex) {
-                        Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+            } else {
+                try {
+                    String selectedRegion = cbx_regions == null ? null : cbx_regions.getValue();
+                    loadInventaireDepot(Util.filterNoNullMesure(products),
+                            selectedRegion == null || selectedRegion.isBlank() ? region : selectedRegion);
+                } catch (Exception ex) {
+                    Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-        }).start();
+        });
 
     }
 
@@ -915,7 +967,7 @@ public class GoodstorageController implements Initializable {
             return new SimpleStringProperty(param.getValue().getQuantRest());
         });
         col_cout_achat_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
-            return new SimpleStringProperty(String.format("%.2f USD", param.getValue().getCoutAchat()));
+            return new SimpleStringProperty(formatStockValue(param.getValue().getCoutAchat()));
         });
         col_valeur_rem_inv.setCellValueFactory((TableColumn.CellDataFeatures<InventoryItem, String> param) -> {
             return new SimpleStringProperty(param.getValue().getValeurStock());
@@ -982,7 +1034,7 @@ public class GoodstorageController implements Initializable {
                             + livraison.getDateLivr().toString() + " (" + stockrs.size() + " articles)");
                     table_stockage.setItems(stockrs);
                     count.setText(String.format(bundle.getString("xitems"), stockrs.size()));
-                    global_achat.setText("Total : USD " + livraison.getPayed());
+                    global_achat.setText("Total : " + formatStockValue(livraison.getPayed() == null ? 0 : livraison.getPayed()));
                     chbx_filter.setSelected(true);
                 }
             }
@@ -1059,7 +1111,7 @@ public class GoodstorageController implements Initializable {
 
                 // If nothing was loaded, trigger a backfill to ensure null/blank lot aggregates are created
                 if (loadedItems.isEmpty()) {
-                    Executors.newSingleThreadExecutor().execute(() -> {
+                    ManagedSessionFactory.runInBackground(() -> {
                         try {
                             StockerDelegate.backfillDepotAggregates(effectiveRegion);
                             // Refresh again after backfill
@@ -1172,7 +1224,7 @@ public class GoodstorageController implements Initializable {
         item.setQuantEntree(formatInventoryQuantity(entreesPc, item));
         item.setQuantSortie(formatInventoryQuantity(totalSortiesPc, item));
         item.setQuantRest(formatInventoryQuantity(stockRestPc, item));
-        item.setValeurStock(String.format("%.2f USD", valeur));
+        item.setValeurStock(formatStockValue(valeur));
         item.setStockAlerte(formatInventoryQuantity(alertPc, item));
         return item;
     }
@@ -1336,7 +1388,7 @@ public class GoodstorageController implements Initializable {
         }
         valStock = total;
         valSocks.setText("Valeur du stock : "
-                + BigDecimal.valueOf(total).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                + BigDecimal.valueOf(total).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
 
         boolean isRouge = cbx_filter_color_inv_depot.getValue() != null
                 && cbx_filter_color_inv_depot.getValue().contains("Rouge");
@@ -1396,8 +1448,7 @@ public class GoodstorageController implements Initializable {
 
         valStock = 0;
         lisinvent.clear();
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.execute(() -> {
+        ManagedSessionFactory.runInBackground(() -> {
             for (Produit p : lp) {
                 InventoryItem invent = new InventoryItem();
 
@@ -1521,7 +1572,7 @@ public class GoodstorageController implements Initializable {
                 invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
                 invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
                 invent.setValeurStock(
-                        BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
                 lisinvent.add(invent);
                 valStock += somVal;
             }
@@ -1530,7 +1581,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void run() {
                 valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             }
         });
     }
@@ -1689,7 +1740,7 @@ public class GoodstorageController implements Initializable {
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setValeurStock(
-                    BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                    BigDecimal.valueOf(somVal).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             lisinvent.add(invent);
             valStock += somVal;
         }
@@ -1697,7 +1748,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void run() {
                 valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             }
         });
         table11.setItems(result);
@@ -1775,7 +1826,7 @@ public class GoodstorageController implements Initializable {
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setValeurStock(
-                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             long cts = System.currentTimeMillis();
             long exp = dt == null ? 0 : Constants.Datetime.dateInMillis(dt);
             long comp = exp - cts;
@@ -1789,7 +1840,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void run() {
                 valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             }
         });
         table11.setItems(result);
@@ -1863,7 +1914,7 @@ public class GoodstorageController implements Initializable {
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setValeurStock(
-                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             double alert = lastStk.getStockAlerte();
             if (rst <= alert) {
                 result.add(invent);
@@ -1874,7 +1925,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void run() {
                 valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             }
         });
         table11.setItems(result);
@@ -1943,7 +1994,7 @@ public class GoodstorageController implements Initializable {
             invent.setQuantSortie((out / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setQuantRest((rst / mx.getQuantContenu()) + " " + mx.getDescription());
             invent.setValeurStock(
-                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                    BigDecimal.valueOf(rst * cu).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             if (out == 0) {
                 result.add(invent);
             }
@@ -1953,7 +2004,7 @@ public class GoodstorageController implements Initializable {
             @Override
             public void run() {
                 valSocks.setText(bundle.getString("xvaleur_stock_dispo") + " : "
-                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " USD");
+                        + BigDecimal.valueOf(valStock).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " " + CurrencyConverter.symbol(CurrencyConverter.mainCurrency()));
             }
         });
         table11.setItems(result);
@@ -2045,7 +2096,7 @@ public class GoodstorageController implements Initializable {
             table_stockage.setItems(rst);
             if (role.equals(Role.Trader.name()) || role.equals(Role.Manager.name())
                     || role.equals(Role.Finance.name()) || role.equals(Role.Finance_ALL_ACCESS)) {
-                global_achat.setText("Total : " + som + " USD");
+                global_achat.setText("Total : " + formatStockValue(som));
             }
 
             Platform.runLater(new Runnable() {
@@ -2196,6 +2247,9 @@ public class GoodstorageController implements Initializable {
             public void handle(ActionEvent event) {
                 // generation de la fiche de stock
                 InventoryItem ii = table11.getSelectionModel().getSelectedItem();
+                if (ii == null || ii.getProduit() == null) {
+                    return;
+                }
                 Produit p = ii.getProduit();
                 MainUI.floatDialog(tools.Constants.FICHESTOCK_DLG, 1165, 665, null, kazisafe, p, entreprise);
             }
@@ -2712,7 +2766,7 @@ public class GoodstorageController implements Initializable {
         }
         if (livraison != null && livraison.getUid().equals(saved.getUid())) {
             livraison = saved;
-            global_achat.setText("Total : USD " + safeAmount(saved.getPayed()));
+            global_achat.setText("Total : " + formatStockValue(safeAmount(saved.getPayed())));
         }
         MainUI.notify(null, "Succes", "Reglement fournisseur enregistre (recu: " + recu + ")", 4, "info");
     }
@@ -2791,7 +2845,7 @@ public class GoodstorageController implements Initializable {
             if (pi_refresh_inv != null) {
                 pi_refresh_inv.setVisible(true);
             }
-            Executors.newSingleThreadExecutor().execute(() -> {
+            ManagedSessionFactory.runInBackground(() -> {
                 try {
                     LocalDate today = LocalDate.now();
                     tools.Agregator.getInstance().agregate(today, today, "Journalier du " + today.toString());
@@ -2934,8 +2988,7 @@ public class GoodstorageController implements Initializable {
     }
 
     private void refreshLivraisonByHttp() {
-        Executors.newCachedThreadPool()
-                .submit(() -> {
+        ManagedSessionFactory.runInBackground(() -> {
                     try {
                         Response<List<Livraison>> rsts = kazisafe.refreshLivraison().execute();
                         System.out.println("Livraiz resp " + rsts);
@@ -3111,8 +3164,7 @@ public class GoodstorageController implements Initializable {
     }
 
     private void refreshDestockerByHttp() {
-        Executors.newCachedThreadPool()
-                .submit(() -> {
+        ManagedSessionFactory.runInBackground(() -> {
 
                     try {
                         Response<List<Destocker>> listdst = kazisafe.refreshDestockers().execute();
@@ -3174,50 +3226,38 @@ public class GoodstorageController implements Initializable {
     }
 
     private void saveLivraisonForcely(Livraison liv, Fournisseur f) {
-        int MAX_RETRY = 5;
-        int attempt = 0;
-        while (attempt < MAX_RETRY) {
-            try {
-                LivraisonDelegate.saveLivraison(liv);
-                break;
-            } catch (java.lang.IllegalStateException e) {
-                FournisseurDelegate.saveFournisseur(f);
-                liv.setFournId(f);
-            }
-            attempt++;
-            try {
-                TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt)); // Delai exponentiel
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        try {
+            SyncRetryHandler.retryVoid("Livraison", liv.getUid(), () -> {
+                try {
+                    LivraisonDelegate.saveLivraison(liv);
+                } catch (IllegalStateException e) {
+                    FournisseurDelegate.saveFournisseur(f);
+                    liv.setFournId(f);
+                    throw e;
+                }
+            }, 5);
+        } catch (Exception e) {
+            System.err.println("Erreur sauvegarde livraison: " + e.getMessage());
         }
-
     }
 
     private void saveStockForcely(Livraison liv, Stocker s, Fournisseur f) {
-        int MAX_RETRY = 5;
-        int attempt = 0;
-        while (attempt < MAX_RETRY) {
-            try {
-                Stocker saved = StockerDelegate.saveStocker(s);
-                StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), saved.getDateExpir());
-                break;
-            } catch (java.lang.IllegalStateException e) {
-                FournisseurDelegate.saveFournisseur(f);
-                liv.setFournId(f);
-                LivraisonDelegate.saveLivraison(liv);
-                s.setLivraisId(liv);
-            }
-            attempt++;
-            try {
-                TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt)); // Delai exponentiel
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        try {
+            SyncRetryHandler.retryVoid("Stocker", s.getUid(), () -> {
+                try {
+                    Stocker saved = StockerDelegate.saveStocker(s);
+                    StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), saved.getDateExpir());
+                } catch (IllegalStateException e) {
+                    FournisseurDelegate.saveFournisseur(f);
+                    liv.setFournId(f);
+                    LivraisonDelegate.saveLivraison(liv);
+                    s.setLivraisId(liv);
+                    throw e;
+                }
+            }, 5);
+        } catch (Exception e) {
+            System.err.println("Erreur sauvegarde stock: " + e.getMessage());
         }
-
     }
 
     /**
@@ -3401,9 +3441,9 @@ public class GoodstorageController implements Initializable {
 
         String regionText = region != null && !region.isEmpty() ? "Région: " + region : "Toutes régions";
         String message = String.format(
-                "Période: %s à %s\n%s\n\nNombre de produits: %d\nValeur totale du stock: %.2f USD",
+                "Période: %s à %s\n%s\n\nNombre de produits: %d\nValeur totale du stock: %s",
                 startDate.toString(), endDate.toString(), regionText,
-                summary.getStocks().size(), summary.getTotalValue());
+                summary.getStocks().size(), formatStockValue(summary.getTotalValue()));
 
         MainUI.notify(null, "Résumé Stock", message, 6, "info");
 
@@ -3428,7 +3468,7 @@ public class GoodstorageController implements Initializable {
             item.setCoutAchat(sd.getCoutAchat());
             item.setQuantRestValue(sd.getQuantite());
             item.setQuantRest(String.format("%.2f", sd.getQuantite()));
-            item.setValeurStock(String.format("%.2f USD", sd.getValeurStock()));
+            item.setValeurStock(formatStockValue(sd.getValeurStock()));
             item.setValeurStockValue(sd.getValeurStock());
             item.setRegion(sd.getRegion());
             item.setDate(sd.getDate());
@@ -3438,6 +3478,15 @@ public class GoodstorageController implements Initializable {
             lisinvent.add(item);
         }
         applyDepotInventoryFilters();
+    }
+
+    /** Valeurs stock stockees en USD, affichees dans la devise principale. */
+    private String formatStockValue(double usdStored) {
+        String main = CurrencyConverter.mainCurrency();
+        double value = CurrencyConverter.CDF.equals(main)
+                ? CurrencyConverter.fromUsd(usdStored, CurrencyConverter.CDF)
+                : CurrencyConverter.round(usdStored);
+        return CurrencyConverter.formatAmount(value, main);
     }
 
 }

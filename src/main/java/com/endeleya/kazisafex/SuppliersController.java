@@ -53,9 +53,12 @@ import java.util.logging.Logger;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import data.BaseModel;
+import tools.CurrencyConverter;
 import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
+import tools.NotificationHandler;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
@@ -79,6 +82,7 @@ public class SuppliersController implements Initializable {
      */
     Preferences pref;
     double taux;
+    String mainCurrency;
     Kazisafe ksf;
     @FXML
     Pane pane_progress_fourn;
@@ -133,6 +137,12 @@ public class SuppliersController implements Initializable {
     Entreprise entreprise;
     ObservableList<Fournisseur> lisfournisseur;
     ObservableList<Livraison> lisvraison;
+    private final java.util.concurrent.ExecutorService syncExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "Kazisafe-Supplier-SSE");
+                t.setDaemon(true);
+                return t;
+            });
 
     private static SuppliersController instance;
 
@@ -173,12 +183,7 @@ public class SuppliersController implements Initializable {
                 if (empty || item == null) {
                     setText(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getNomFourn() + " " + item.getAdresse() + " phone :" + item.getPhone());
-                        }
-                    });
+                    setText(item.getNomFourn() + " " + item.getAdresse() + " phone :" + item.getPhone());
                 }
             }
 
@@ -206,6 +211,7 @@ public class SuppliersController implements Initializable {
                 showDebtDetails(newVal);
             }
         });
+        NotificationHandler.setOnDataSyncListener(this::handleSyncFromServer);
 
         tf_filter_supplier_debt.textProperty().addListener((obs, oldVal, newValue) -> {
             if (!newValue.isEmpty()) {
@@ -225,13 +231,16 @@ public class SuppliersController implements Initializable {
         col_libelle.setCellValueFactory(new PropertyValueFactory<>("libelle"));
         col_libelle.setPrefWidth(200);
 
-        col_topay.setCellValueFactory(new PropertyValueFactory<>("topay"));
+        col_topay.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(
+                displaySupplierAmount(cellData.getValue().getTopay())));
         col_topay.setPrefWidth(100);
 
-        col_payed.setCellValueFactory(new PropertyValueFactory<>("payed"));
+        col_payed.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(
+                displaySupplierAmount(cellData.getValue().getPayed())));
         col_payed.setPrefWidth(100);
 
-        col_remained.setCellValueFactory(new PropertyValueFactory<>("remained"));
+        col_remained.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(
+                displaySupplierAmount(cellData.getValue().getRemained())));
         col_remained.setPrefWidth(100);
 
         ls_supplier_debt_details = FXCollections.observableArrayList();
@@ -263,6 +272,8 @@ public class SuppliersController implements Initializable {
     }
 
     private void showDebtDetails(Fournisseur f) {
+        taux = CurrencyConverter.activeRate();
+        mainCurrency = CurrencyConverter.mainCurrency();
         ls_supplier_debt_details.clear();
         List<Livraison> debts = LivraisonDelegate.findBySupplier(f.getUid());
         double total = 0;
@@ -278,18 +289,46 @@ public class SuppliersController implements Initializable {
                 if (chk_show_unpaid_only != null && chk_show_unpaid_only.isSelected()) {
                     if (remained > 0) {
                         ls_supplier_debt_details.add(l);
-                        total += remained;
+                        total += displaySupplierAmount(remained);
                     }
                 } else {
                     // Sinon afficher toutes les livraisons
                     ls_supplier_debt_details.add(l);
                     if (remained > 0) {
-                        total += remained;
+                        total += displaySupplierAmount(remained);
                     }
                 }
             }
         }
-        lbl_total_debt.setText(String.format("%.2f USD", total));
+        lbl_total_debt.setText(CurrencyConverter.formatAmount(total, mainCurrency));
+    }
+
+    private void handleSyncFromServer(BaseModel baseModel) {
+        if (baseModel == null) {
+            return;
+        }
+        if (!(baseModel instanceof Fournisseur) && !(baseModel instanceof Livraison)) {
+            return;
+        }
+        syncExecutor.submit(() -> {
+            List<Fournisseur> freshSuppliers = FournisseurDelegate.findFournisseurs();
+            Platform.runLater(() -> {
+                if (lisfournisseur != null && freshSuppliers != null) {
+                    lisfournisseur.setAll(freshSuppliers);
+                }
+                if (listvu_list_fournisseurs != null) {
+                    listvu_list_fournisseurs.setItems(lisfournisseur);
+                }
+                if (listvu_suppliers_debt != null) {
+                    listvu_suppliers_debt.setItems(lisfournisseur);
+                }
+                Fournisseur selected = listvu_suppliers_debt == null ? null
+                        : listvu_suppliers_debt.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    showDebtDetails(selected);
+                }
+            });
+        });
     }
 
     @FXML
@@ -327,22 +366,32 @@ public class SuppliersController implements Initializable {
             return;
         }
 
-        if (this.action.equals("create")) {
-            List<Fournisseur> fext = FournisseurDelegate.findByPhone(tf_phone_fourn.getText());
-            if (!fext.isEmpty()) {
+        if (choosenf == null) {
+            List<Fournisseur> fext = FournisseurDelegate.findByPhone(tf_phone_fourn.getText().trim());
+            boolean exists = false;
+            if (fext != null) {
+                for (Fournisseur f : fext) {
+                    if (f.getPhone() != null && f.getPhone().trim().equals(tf_phone_fourn.getText().trim())) {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+            if (exists) {
                 MainUI.notify(null, "Error", "Il semble que ce fournisseur existe deja", 4, "error");
                 return;
             }
             Fournisseur f = new Fournisseur(DataId.generate());
-            f.setAdresse(tf_adresse_fourn.getText());
-            f.setIdentification(tf_identif_fourn.getText());
-            f.setNomFourn(tf_nom_fourn.getText());
-            f.setPhone(tf_phone_fourn.getText());
+            f.setAdresse(tf_adresse_fourn.getText().trim());
+            f.setIdentification(tf_identif_fourn.getText().trim());
+            f.setNomFourn(tf_nom_fourn.getText().trim());
+            f.setPhone(tf_phone_fourn.getText().trim());
             Fournisseur frs = FournisseurDelegate.saveFournisseur(f);
 
             saveSupplierByHttp(f);
 
             if (frs != null) {
+                lisfournisseur.add(frs);
                 DeliveryController.getInstance().addSupplier(f);
                 Executors.newCachedThreadPool()
                         .submit(() -> {
@@ -350,25 +399,52 @@ public class SuppliersController implements Initializable {
                         });
                 GoodstorageController.getInstance().populateSupplier(Constants.ACTION_CREATE, frs);
                 MainUI.notify(null, "Succes", "Fournisseur enregistre avec succes", 4, "Info");
+                tf_adresse_fourn.clear();
+                tf_identif_fourn.clear();
+                tf_nom_fourn.clear();
+                tf_phone_fourn.clear();
             }
         } else {
-            if (choosenf != null) {
-                choosenf.setAdresse(tf_adresse_fourn.getText());
-                choosenf.setIdentification(tf_identif_fourn.getText());
-                choosenf.setNomFourn(tf_nom_fourn.getText());
-                choosenf.setPhone(tf_phone_fourn.getText());
-                Fournisseur f = FournisseurDelegate.updateFournisseur(choosenf);
-                if (f != null) {
-                    Executors.newCachedThreadPool()
-                            .submit(() -> {
-                                Util.sync(f, Constants.ACTION_UPDATE, Tables.FOURNISSEUR);
-                            });
-                    GoodstorageController.getInstance().populateSupplier(Constants.ACTION_UPDATE, f);
-                    MainUI.notify(null, "Succès", "Fournisseur modifié avec succes", 4, "Info");
+            List<Fournisseur> fext = FournisseurDelegate.findByPhone(tf_phone_fourn.getText().trim());
+            boolean exists = false;
+            if (fext != null) {
+                for (Fournisseur f : fext) {
+                    if (f.getPhone() != null && f.getPhone().trim().equals(tf_phone_fourn.getText().trim())
+                            && !f.getUid().equals(choosenf.getUid())) {
+                        exists = true;
+                        break;
+                    }
                 }
             }
+            if (exists) {
+                MainUI.notify(null, "Error", "Il semble que ce fournisseur existe deja", 4, "error");
+                return;
+            }
+            choosenf.setAdresse(tf_adresse_fourn.getText().trim());
+            choosenf.setIdentification(tf_identif_fourn.getText().trim());
+            choosenf.setNomFourn(tf_nom_fourn.getText().trim());
+            choosenf.setPhone(tf_phone_fourn.getText().trim());
+            Fournisseur f = FournisseurDelegate.updateFournisseur(choosenf);
+            if (f != null) {
+                saveSupplierByHttp(choosenf);
+                Executors.newCachedThreadPool()
+                        .submit(() -> {
+                            Util.sync(f, Constants.ACTION_UPDATE, Tables.FOURNISSEUR);
+                        });
+                GoodstorageController.getInstance().populateSupplier(Constants.ACTION_UPDATE, f);
+                int idx = lisfournisseur.indexOf(choosenf);
+                if (idx >= 0) {
+                    lisfournisseur.set(idx, choosenf);
+                }
+                MainUI.notify(null, "Succès", "Fournisseur modifié avec succes", 4, "Info");
+                listvu_list_fournisseurs.getSelectionModel().clearSelection();
+                choosenf = null;
+                tf_adresse_fourn.clear();
+                tf_identif_fourn.clear();
+                tf_nom_fourn.clear();
+                tf_phone_fourn.clear();
+            }
         }
-        choosenf = null;
     }
 
     @FXML
@@ -445,7 +521,8 @@ public class SuppliersController implements Initializable {
         // TODO
         pref = Preferences.userNodeForPackage(SyncEngine.class);
 
-        taux = pref.getDouble("taux2change", 2000);
+        taux = CurrencyConverter.activeRate();
+        mainCurrency = CurrencyConverter.mainCurrency();
         // store=JpaStorage.getInstance();
         // Configuration de l'icône PDF
         btn_export_pdf.setImage(new Image(SuppliersController.class.getResourceAsStream("/icons/download-pdf.png")));
@@ -461,11 +538,29 @@ public class SuppliersController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 if (choosenf != null) {
-                    // store.delete("uid", choosenf.getUid());
                     Fournisseur lsf = FournisseurDelegate.findFournisseur(choosenf.getUid());
-                    FournisseurDelegate.deleteFournisseur(lsf);// store.delete(lsf);
+                    FournisseurDelegate.deleteFournisseur(lsf);
                     lisfournisseur.remove(choosenf);
+                    listvu_list_fournisseurs.getSelectionModel().clearSelection();
+                    choosenf = null;
+                    tf_nom_fourn.clear();
+                    tf_phone_fourn.clear();
+                    tf_identif_fourn.clear();
+                    tf_adresse_fourn.clear();
                 }
+            }
+        });
+        MenuItem m3 = new MenuItem("Nouveau");
+        cm.getItems().add(m3);
+        m3.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                listvu_list_fournisseurs.getSelectionModel().clearSelection();
+                choosenf = null;
+                tf_nom_fourn.clear();
+                tf_phone_fourn.clear();
+                tf_identif_fourn.clear();
+                tf_adresse_fourn.clear();
             }
         });
 
@@ -514,6 +609,16 @@ public class SuppliersController implements Initializable {
                 thrwbl.printStackTrace();
             }
         });
+    }
+
+    /** Montants fournisseur stockes en USD convertis pour affichage. */
+    private double displaySupplierAmount(Double usdAmount) {
+        double value = usdAmount == null ? 0 : usdAmount;
+        String activeMain = CurrencyConverter.mainCurrency();
+        if (CurrencyConverter.CDF.equals(activeMain)) {
+            return CurrencyConverter.fromUsd(value, CurrencyConverter.CDF);
+        }
+        return CurrencyConverter.round(value);
     }
 
 }

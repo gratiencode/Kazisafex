@@ -85,6 +85,28 @@ public class AgentController implements Initializable {
         return instance;
     }
 
+    /**
+     * Rebind agent tables/lists after the cached page is reattached.
+     */
+    public void onCachedPageShown() {
+        if (tbl_hired_agents != null && employes != null) {
+            tbl_hired_agents.setItems(employes);
+            tbl_hired_agents.refresh();
+        }
+        if (list_agent_from_cloud != null && users != null) {
+            list_agent_from_cloud.setItems(users);
+            list_agent_from_cloud.refresh();
+        }
+        if (lst_features != null && notallowed != null) {
+            lst_features.setItems(notallowed);
+            lst_features.refresh();
+        }
+        if (lst_allowed_features != null && allowed != null) {
+            lst_allowed_features.setItems(allowed);
+            lst_allowed_features.refresh();
+        }
+    }
+
     @FXML
     private TextField tf_nom;
     @FXML
@@ -220,19 +242,13 @@ public class AgentController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getPermissionname());
-                            imageView.setFitHeight(12);
-                            imageView.setFitWidth(12);
-                            imageView.setPreserveRatio(true);
-                            imageView.setImage(
-                                    new Image(AgentController.class.getResourceAsStream("/icons/lock-padlock.png")));
-                            setGraphic(imageView);
-                        }
-                    });
-
+                    setText(item.getPermissionname());
+                    imageView.setFitHeight(12);
+                    imageView.setFitWidth(12);
+                    imageView.setPreserveRatio(true);
+                    imageView.setImage(
+                            new Image(AgentController.class.getResourceAsStream("/icons/lock-padlock.png")));
+                    setGraphic(imageView);
                 }
             }
 
@@ -247,19 +263,13 @@ public class AgentController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getPermissionname());
-                            imageView.setFitHeight(12);
-                            imageView.setFitWidth(12);
-                            imageView.setPreserveRatio(true);
-                            imageView.setImage(
-                                    new Image(AgentController.class.getResourceAsStream("/icons/unlock-padlock.png")));
-                            setGraphic(imageView);
-                        }
-                    });
-
+                    setText(item.getPermissionname());
+                    imageView.setFitHeight(12);
+                    imageView.setFitWidth(12);
+                    imageView.setPreserveRatio(true);
+                    imageView.setImage(
+                            new Image(AgentController.class.getResourceAsStream("/icons/unlock-padlock.png")));
+                    setGraphic(imageView);
                 }
             }
 
@@ -275,19 +285,13 @@ public class AgentController implements Initializable {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    Platform.runLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            setText(item.getPrenom() + ", " + item.getNom() + " " + item.getPhone());
-                            imageView.setFitHeight(30);
-                            imageView.setFitWidth(30);
-                            imageView.setPreserveRatio(true);
-                            imageView.setImage(
-                                    new Image(AgentController.class.getResourceAsStream("/icons/cloud_agent.png")));
-                            setGraphic(imageView);
-                        }
-                    });
-
+                    setText(item.getPrenom() + ", " + item.getNom() + " " + item.getPhone());
+                    imageView.setFitHeight(30);
+                    imageView.setFitWidth(30);
+                    imageView.setPreserveRatio(true);
+                    imageView.setImage(
+                            new Image(AgentController.class.getResourceAsStream("/icons/cloud_agent.png")));
+                    setGraphic(imageView);
                 }
             }
 
@@ -337,10 +341,11 @@ public class AgentController implements Initializable {
         if (choosenPermission != null) {
 
             try {
+                String roleName = resolveSelectedRoleName();
 
                 Response<Affecter> exec = kazisafe.createAffecter(
                         choosenPermission.getUid(),
-                        cbx_roles_agents.getSelectionModel().getSelectedItem(),
+                        roleName,
                         choosenE.getRegion(),
                         choosenE.getEngagementId()).execute();
                 if (exec.isSuccessful()) {
@@ -482,7 +487,7 @@ public class AgentController implements Initializable {
                             tf_prenom.setText(choosenE.getPrenom());
                             txt_phone_agent.setText(choosenE.getPhone());
                             cbx_region_affect.setValue(choosenE.getRegion());
-                            cbx_roles_agents.setValue(choosenE.getPoste());
+                            selectRoleByName(choosenE.getPoste());
                         }
                     });
 
@@ -507,8 +512,9 @@ public class AgentController implements Initializable {
                 if (showAndWait.get() == ButtonType.YES) {
                     MainUI.notify(null, "Info", "Révocation de l'agent en cours...", 3, "info");
                     String cuser = pref.get("userid", entrepise.getUid());
+                    String roleName = resolveSelectedRoleName();
                     kazisafe.affectAgent(cuser, choosenE.getUserId(),
-                            entrepise.getUid(), cbx_roles_agents.getSelectionModel().getSelectedItem(),
+                            entrepise.getUid(), roleName,
                             "true", cbx_region_affect.getValue(), cbx_roles_agents.getValue(),
                             "Fired", LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
                             .enqueue(new Callback<Employee>() {
@@ -653,8 +659,9 @@ public class AgentController implements Initializable {
             if (showAndWait.get() == ButtonType.YES) {
                 MainUI.notify(null, "Info", "Réaffectation de l'agent en cours...", 3, "info");
                 String cuser = pref.get("userid", entrepise.getUid());
+                String roleName = resolveSelectedRoleName();
                 kazisafe.affectAgent(cuser, choosenE.getUserId(),
-                        entrepise.getUid(), cbx_roles_agents.getSelectionModel().getSelectedItem(),
+                        entrepise.getUid(), roleName,
                         "false", cbx_region_affect.getValue(), cbx_roles_agents.getValue(),
                         "Reafectation", LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
                         .enqueue(new Callback<Employee>() {
@@ -689,11 +696,11 @@ public class AgentController implements Initializable {
         }
         MainUI.notify(null, "Info", "Création d'agent en cours...", 3, "info");
         String cuser = pref.get("userid", entrepise.getUid());
-        Role rolex = getRole(cbx_roles_agents.getSelectionModel().getSelectedIndex());
+        String roleName = resolveSelectedRoleName();
         kazisafe.affectAgent(cuser,
                 choosenU.getUid(),
                 this.entrepise.getUid(),
-                rolex != null ? rolex.name() : cbx_roles_agents.getSelectionModel().getSelectedItem(),
+                roleName,
                 "false", cbx_region_affect.getValue(), cbx_roles_agents.getValue(),
                 choosenU.getPrenom(), LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
                 .enqueue(new Callback<Employee>() {
@@ -742,6 +749,78 @@ public class AgentController implements Initializable {
 
     private int getRoleIndex(String role) {
         return cbx_roles_agents.getItems().indexOf(role);
+    }
+
+    private String resolveSelectedRoleName() {
+        int selectedIndex = cbx_roles_agents.getSelectionModel().getSelectedIndex();
+        Role selectedRole = getRole(selectedIndex);
+        if (selectedRole != null) {
+            return selectedRole.name();
+        }
+        String selectedValue = cbx_roles_agents.getValue();
+        if (selectedValue == null) {
+            return null;
+        }
+        try {
+            return Role.valueOf(selectedValue).name();
+        } catch (IllegalArgumentException ex) {
+            int displayIndex = cbx_roles_agents.getItems().indexOf(selectedValue);
+            Role displayRole = getRole(displayIndex);
+            return displayRole != null ? displayRole.name() : selectedValue;
+        }
+    }
+
+    private void selectRoleByName(String roleName) {
+        if (roleName == null) {
+            return;
+        }
+        try {
+            Role roleEnum = Role.valueOf(roleName);
+            int index;
+            switch (roleEnum) {
+                case Trader:
+                    index = 0;
+                    break;
+                case Manager:
+                    index = 1;
+                    break;
+                case Finance:
+                    index = 2;
+                    break;
+                case Magazinner:
+                    index = 3;
+                    break;
+                case Saler:
+                    index = 4;
+                    break;
+                case Magazinner_ALL_ACCESS:
+                    index = 5;
+                    break;
+                case Finance_ALL_ACCESS:
+                    index = 6;
+                    break;
+                case Saler_ALL_ACCESS:
+                    index = 7;
+                    break;
+                case Manager_ALL_ACCESS:
+                    index = 8;
+                    break;
+                default:
+                    index = -1;
+            }
+            if (index >= 0) {
+                cbx_roles_agents.getSelectionModel().select(index);
+                return;
+            }
+        } catch (IllegalArgumentException ex) {
+            // fall through to display-label matching
+        }
+        int displayIndex = cbx_roles_agents.getItems().indexOf(roleName);
+        if (displayIndex >= 0) {
+            cbx_roles_agents.getSelectionModel().select(displayIndex);
+        } else {
+            cbx_roles_agents.setValue(roleName);
+        }
     }
 
     @FXML
