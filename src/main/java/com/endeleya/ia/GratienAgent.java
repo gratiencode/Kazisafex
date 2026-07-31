@@ -6,10 +6,10 @@ import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
-public interface JemimaAgent {
+public interface GratienAgent {
 
     @SystemMessage("""
-            Tu es Jemima, l'assistant de Kazisafe.
+            Tu es Gratien, l'assistant de Kazisafe.
             A ce jours, nous sommes le {{curentDate}},
             Tu aides l'utilisateur dans ses taches quotidiennes au sein de son entreprise.
             Entreprise courante:

@@ -8,6 +8,12 @@ package com.endeleya.kazisafex;
 //
 import com.fasterxml.jackson.databind.ObjectMapper;
 import data.core.KazisafeServiceFactory;
+import data.helpers.Credentials;
+import data.helpers.LoginWebResult;
+import data.network.Kazisafe;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -17,8 +23,8 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ResourceBundle;
 import java.util.Map;
+import java.util.ResourceBundle;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,12 +45,6 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.stage.Screen;
-import jakarta.persistence.EntityManager;
-
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
-import data.network.Kazisafe;
-import data.helpers.LoginWebResult;
 import org.apache.commons.io.IOUtils;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -55,7 +55,6 @@ import tools.MainUI;
 import tools.NetLoockup;
 import tools.SyncEngine;
 import tools.Util;
-import data.helpers.Credentials;
 
 /**
  *
@@ -65,14 +64,19 @@ public class EntryPointController implements Initializable {
 
     @FXML
     ComboBox<String> langs;
+
     @FXML
     ImageView flag_lang;
+
     @FXML
     Label txt_version, appName;
+
     @FXML
     CheckBox showpswd;
+
     @FXML
     Pane portParam;
+
     @FXML
     TextField inputPort;
 
@@ -134,87 +138,108 @@ public class EntryPointController implements Initializable {
     @FXML
     public void createPort(Event e) {
         try {
-            pref.putInt("default_mysql_port", Integer.parseInt(inputPort.getText()));
-            MainUI.notify(null, "Succes", "Port configuré avec succès", 4, "info");
+            pref.putInt(
+                "default_mysql_port",
+                Integer.parseInt(inputPort.getText())
+            );
+            MainUI.notify(
+                null,
+                "Succes",
+                "Port configuré avec succès",
+                4,
+                "info"
+            );
         } catch (Exception ex) {
-            MainUI.notify(null, "Erreur", "Mettez les chiffre uniquement!", 4, "error");
+            MainUI.notify(
+                null,
+                "Erreur",
+                "Mettez les chiffre uniquement!",
+                4,
+                "error"
+            );
         }
         portParam.setVisible(false);
     }
-//
-//    public static EntityManager initObjectDatabase(final String dbname) {
-//        String path = null, fpath = null, secpath = null, secfile;
-//
-//        InputStream is = EntryPointController.class.getResourceAsStream("/sec/cacerts.jks");
-//        if (PlatformUtil.isWindows()) {
-//            path = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + "datastore";
-//            secpath = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + ".security";
-//            fpath = path + File.separator + dbname + ".odb";
-//        } else if (PlatformUtil.isLinux()) {
-//            path = "/home/" + System.getProperty("user.name") + "/Kazisafe/datastore";
-//            secpath = "/home/" + System.getProperty("user.name") + File.separator + "Kazisafe" + File.separator
-//                    + ".security";
-//            fpath = path + File.separator + dbname + ".odb";
-//        } else if (PlatformUtil.isMac()) {
-//
-//            path = "/Users" + File.separator + System.getProperty("user.name") + File.separator + "Kazisafe"
-//                    + File.separator + "datastore";
-//            secpath = "/Users/" + System.getProperty("user.name") + File.separator + "Kazisafe" + File.separator
-//                    + ".security";
-//            fpath = path + File.separator + dbname + ".odb";
-//        }
-//        secfile = secpath + File.separator + "cacerts.jks";
-//        File folder = new File(path);
-//        File secfolder = new File(secpath);
-//        File file = null;
-//        boolean dir = folder.exists();
-//        boolean secdir = secfolder.exists();
-//        MainUI.cPath(path);
-//        if (!dir) {
-//            dir = folder.mkdirs();
-//            secdir = secfolder.mkdirs();
-//        }
-//        System.out.println("Droit Folder " + dir);
-//
-//        if (dir) {
-//            file = new File(fpath);
-//            // System.out.println("Droit "+file.canWrite());
-//            if (!file.exists()) {
-//                try {
-//                    file.createNewFile();
-//                } catch (IOException ex) {
-//                    Logger.getLogger(Kazisafex.class.getName()).log(Level.SEVERE, null, ex);
-//                }
-//            }
-//            File sec = new File(secfile);
-//            try {
-//                FileOutputStream fos = new FileOutputStream(sec);
-//                // byte[] buffer = FileUtils.readAllBytes(is);
-//                IOUtils.copyLarge(is, fos);
-//            } catch (FileNotFoundException ex) {
-//                Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
-//            } catch (IOException ex) {
-//                Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
-//            }
-//            System.setProperty("derby.system.home", folder.getAbsolutePath());
-//        }
-//
-//        EntityManagerFactory emf = Persistence.createEntityManagerFactory(fpath);
-//        EntityManager em = emf.createEntityManager();
-//
-//        return em;
-//    }
+
+    //
+    //    public static EntityManager initObjectDatabase(final String dbname) {
+    //        String path = null, fpath = null, secpath = null, secfile;
+    //
+    //        InputStream is = EntryPointController.class.getResourceAsStream("/sec/cacerts.jks");
+    //        if (PlatformUtil.isWindows()) {
+    //            path = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + "datastore";
+    //            secpath = System.getenv("ProgramData") + File.separator + "Kazisafe" + File.separator + ".security";
+    //            fpath = path + File.separator + dbname + ".odb";
+    //        } else if (PlatformUtil.isLinux()) {
+    //            path = "/home/" + System.getProperty("user.name") + "/Kazisafe/datastore";
+    //            secpath = "/home/" + System.getProperty("user.name") + File.separator + "Kazisafe" + File.separator
+    //                    + ".security";
+    //            fpath = path + File.separator + dbname + ".odb";
+    //        } else if (PlatformUtil.isMac()) {
+    //
+    //            path = "/Users" + File.separator + System.getProperty("user.name") + File.separator + "Kazisafe"
+    //                    + File.separator + "datastore";
+    //            secpath = "/Users/" + System.getProperty("user.name") + File.separator + "Kazisafe" + File.separator
+    //                    + ".security";
+    //            fpath = path + File.separator + dbname + ".odb";
+    //        }
+    //        secfile = secpath + File.separator + "cacerts.jks";
+    //        File folder = new File(path);
+    //        File secfolder = new File(secpath);
+    //        File file = null;
+    //        boolean dir = folder.exists();
+    //        boolean secdir = secfolder.exists();
+    //        MainUI.cPath(path);
+    //        if (!dir) {
+    //            dir = folder.mkdirs();
+    //            secdir = secfolder.mkdirs();
+    //        }
+    //        System.out.println("Droit Folder " + dir);
+    //
+    //        if (dir) {
+    //            file = new File(fpath);
+    //            // System.out.println("Droit "+file.canWrite());
+    //            if (!file.exists()) {
+    //                try {
+    //                    file.createNewFile();
+    //                } catch (IOException ex) {
+    //                    Logger.getLogger(Kazisafex.class.getName()).log(Level.SEVERE, null, ex);
+    //                }
+    //            }
+    //            File sec = new File(secfile);
+    //            try {
+    //                FileOutputStream fos = new FileOutputStream(sec);
+    //                // byte[] buffer = FileUtils.readAllBytes(is);
+    //                IOUtils.copyLarge(is, fos);
+    //            } catch (FileNotFoundException ex) {
+    //                Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
+    //            } catch (IOException ex) {
+    //                Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
+    //            }
+    //            System.setProperty("derby.system.home", folder.getAbsolutePath());
+    //        }
+    //
+    //        EntityManagerFactory emf = Persistence.createEntityManagerFactory(fpath);
+    //        EntityManager em = emf.createEntityManager();
+    //
+    //        return em;
+    //    }
 
     @FXML
     TextField pswd_field;
+
     @FXML
     TextField username_field;
+
     @FXML
     TextField showpswd_field;
+
     @FXML
     TextField identification;
+
     @FXML
     Pane pane_progress;
+
     Kazisafe kazisafe;
     Preferences pref;
     LoginWebResult genResult = new LoginWebResult();
@@ -237,9 +262,12 @@ public class EntryPointController implements Initializable {
         if (!keepSession) {
             return;
         }
+
         String token = pref.get("token", null);
         String euid = pref.get("eUid", null);
-        if (token == null || token.isBlank() || euid == null || euid.isBlank()) {
+        if (
+            token == null || token.isBlank() || euid == null || euid.isBlank()
+        ) {
             return;
         }
         String region = pref.get("region", "Lubumbashi");
@@ -254,116 +282,194 @@ public class EntryPointController implements Initializable {
             Screen scr = Screen.getPrimary();
             double height = scr.getVisualBounds().getHeight();
             double width = scr.getVisualBounds().getWidth();
-            MainUI.loadMainView(this.getClass(), "mainuix.fxml", height, width, genResult);
-            Kazisafex.stagex.close();
+            if (
+                MainUI.loadMainView(
+                    this.getClass(),
+                    "mainuix.fxml",
+                    height,
+                    width,
+                    genResult
+                )
+            ) {
+                Kazisafex.stagex.close();
+            }
         });
     }
 
     private void synchronousLogin(Credentials creds) {
         pane_progress.setVisible(true);
-        Executors.newSingleThreadExecutor()
-                .submit(() -> {
-                    try {
-                        final boolean[] loginSucceeded = new boolean[]{false};
-                        Response<LoginWebResult> reponse = kazisafe.desktopSignin(creds).execute();
-                        if (reponse.isSuccessful()) {
-                            LoginWebResult body = reponse.body();
-                            if (body == null) {
-                                MainUI.notify(null, bundle.getString("error"), bundle.getString("networkerror"), 3,
-                                        "error");
-                            } else {
-                                Object obj = body;
-                                switch (obj) {
-                                    case String message -> {
-                                        switch (message) {
-                                            case "Utilisateur introuvable" ->
-                                                MainUI.notify(null, bundle.getString("error"),
-                                                        bundle.getString("login.userincorect"), 4, "error");
-                                            case "Entreprise introuvable" ->
-                                                MainUI.notify(null, bundle.getString("error"),
-                                                        bundle.getString("login.compnotfound"), 12, "error");
-                                            case "Entreprise suspendue" ->
-                                                MainUI.notify(null, bundle.getString("error"),
-                                                        bundle.getString("login.suspended"), 16, "Info");
-                                            case "Engagement introuvable" ->
-                                                MainUI.notify(null, bundle.getString("error"),
-                                                        bundle.getString("login.engageinc"), 4, "error");
-                                            default -> {
-                                            }
-                                        }
-                                    }
-                                    case LoginWebResult lr -> {
-                                        if (lr == null || lr.getToken() == null || lr.getToken().isBlank()) {
-                                            MainUI.notify(null, bundle.getString("error"),
-                                                    bundle.getString("networkerror"), 3, "error");
-                                            break;
-                                        }
-                                        pref.put("eUid", lr.getEntrepriseId());
-                                        pref.put("uname", lr.getPhone());
-                                        pref.put("region", lr.getRegion());
-                                        pref.put("token", lr.getToken());
-                                        pref.put("ucontract", lr.getUserContract());
-                                        genResult = lr;
-                                        loginSucceeded[0] = true;
-                                    }
+        Executors.newSingleThreadExecutor().submit(() -> {
+            try {
+                final boolean[] loginSucceeded = new boolean[] { false };
+                Response<LoginWebResult> reponse = kazisafe
+                    .desktopSignin(creds)
+                    .execute();
+                if (reponse.isSuccessful()) {
+                    LoginWebResult body = reponse.body();
+                    if (body == null) {
+                        MainUI.notify(
+                            null,
+                            bundle.getString("error"),
+                            bundle.getString("networkerror"),
+                            3,
+                            "error"
+                        );
+                    } else {
+                        Object obj = body;
+                        switch (obj) {
+                            case String message -> {
+                                switch (message) {
+                                    case "Utilisateur introuvable" -> MainUI.notify(
+                                        null,
+                                        bundle.getString("error"),
+                                        bundle.getString("login.userincorect"),
+                                        4,
+                                        "error"
+                                    );
+                                    case "Entreprise introuvable" -> MainUI.notify(
+                                        null,
+                                        bundle.getString("error"),
+                                        bundle.getString("login.compnotfound"),
+                                        12,
+                                        "error"
+                                    );
+                                    case "Entreprise suspendue" -> MainUI.notify(
+                                        null,
+                                        bundle.getString("error"),
+                                        bundle.getString("login.suspended"),
+                                        16,
+                                        "Info"
+                                    );
+                                    case "Engagement introuvable" -> MainUI.notify(
+                                        null,
+                                        bundle.getString("error"),
+                                        bundle.getString("login.engageinc"),
+                                        4,
+                                        "error"
+                                    );
                                     default -> {
                                     }
                                 }
                             }
-                        } else {
-                            String message = readableLoginError(reponse);
-                            MainUI.notify(null, bundle.getString("error"),
-                                    message, 15, "error");
-                        }
-                        Platform.runLater(() -> {
-                            pane_progress.setVisible(false);
-                            if (loginSucceeded[0]) {
-                                Screen scr = Screen.getPrimary();
-                                double height = scr.getVisualBounds().getHeight() * 1;
-                                double width = scr.getVisualBounds().getWidth() * 1;
-                                MainUI.loadMainView(this.getClass(), "mainuix.fxml", height, width, genResult);
-                                Kazisafex.stagex.close();
-                            }
-                        });
-                    } catch (IOException ex) {
-
-                        Platform.runLater(() -> {
-                            pane_progress.setVisible(false);
-                        });
-                        pref.putBoolean(NetLoockup.NETWORK_STATUS, NetLoockup.NETWORK_STATUS_DEFAULT);
-                        System.out.println("DEMOSTRATION-MODE : " + ex.getMessage());
-                        boolean sopen = pref.getBoolean("session", true);
-                        if (sopen) {
-                            String euid = pref.get("eUid", "__Generic_");
-                            String token = pref.get("token", null);
-                            String rl = pref.get("priv", "Trader");
-                            String region = pref.get("region", "Lubumbashi");
-                            if (token == null || token.isBlank()) {
-                                MainUI.notify(null, bundle.getString("error"), bundle.getString("networkerror"), 4,
-                                        "error");
-                                return;
-                            }
-                            genResult.setRegion(region);
-                            genResult.setToken(token);
-                            genResult.setEntrepriseId(euid);
-                            genResult.setRole(rl);
-                            Platform.runLater(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Screen scr = Screen.getPrimary();
-                                    double height = scr.getVisualBounds().getHeight() * 1;
-                                    double width = scr.getVisualBounds().getWidth() * 1;
-                                    MainUI.loadMainView(this.getClass(), "mainuix.fxml", height, width, genResult);
-                                    Kazisafex.stagex.close();
+                            case LoginWebResult lr -> {
+                                if (
+                                    lr == null ||
+                                    lr.getToken() == null ||
+                                    lr.getToken().isBlank()
+                                ) {
+                                    MainUI.notify(
+                                        null,
+                                        bundle.getString("error"),
+                                        bundle.getString("networkerror"),
+                                        3,
+                                        "error"
+                                    );
+                                    break;
                                 }
-                            });
-                        } else {
-                            MainUI.notify(null, bundle.getString("error"),
-                                    "Kazisafe n'a pas pu se connecter à l'internet,\n veuillez verifier l'etat de votre connection internet",
-                                    4, "error");
+                                pref.put("eUid", lr.getEntrepriseId());
+                                pref.put("uname", lr.getPhone());
+                                pref.put("region", lr.getRegion());
+                                pref.put("token", lr.getToken());
+                                pref.put("ucontract", lr.getUserContract());
+                                genResult = lr;
+                                loginSucceeded[0] = true;
+                            }
+                            default -> {
+                            }
+                        }
+                    }
+                } else {
+                    String message = readableLoginError(reponse);
+                    MainUI.notify(
+                        null,
+                        bundle.getString("error"),
+                        message,
+                        15,
+                        "error"
+                    );
+                }
+                Platform.runLater(() -> {
+                    pane_progress.setVisible(false);
+                    if (loginSucceeded[0]) {
+                        Screen scr = Screen.getPrimary();
+                        double height = scr.getVisualBounds().getHeight() * 1;
+                        double width = scr.getVisualBounds().getWidth() * 1;
+                        if (
+                            MainUI.loadMainView(
+                                this.getClass(),
+                                "mainuix.fxml",
+                                height,
+                                width,
+                                genResult
+                            )
+                        ) {
+                            Kazisafex.stagex.close();
                         }
                     }
                 });
+            } catch (IOException ex) {
+                Platform.runLater(() -> {
+                    pane_progress.setVisible(false);
+                });
+                pref.putBoolean(
+                    NetLoockup.NETWORK_STATUS,
+                    NetLoockup.NETWORK_STATUS_DEFAULT
+                );
+                System.out.println("DEMOSTRATION-MODE : " + ex.getMessage());
+                boolean sopen = pref.getBoolean("session", true);
+                if (sopen) {
+                    String euid = pref.get("eUid", "__Generic_");
+                    String token = pref.get("token", null);
+                    String rl = pref.get("priv", "Trader");
+                    String region = pref.get("region", "Lubumbashi");
+                    if (token == null || token.isBlank()) {
+                        MainUI.notify(
+                            null,
+                            bundle.getString("error"),
+                            bundle.getString("networkerror"),
+                            4,
+                            "error"
+                        );
+                        return;
+                    }
+                    genResult.setRegion(region);
+                    genResult.setToken(token);
+                    genResult.setEntrepriseId(euid);
+                    genResult.setRole(rl);
+                    Platform.runLater(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                Screen scr = Screen.getPrimary();
+                                double height =
+                                    scr.getVisualBounds().getHeight() * 1;
+                                double width =
+                                    scr.getVisualBounds().getWidth() * 1;
+                                if (
+                                    MainUI.loadMainView(
+                                        this.getClass(),
+                                        "mainuix.fxml",
+                                        height,
+                                        width,
+                                        genResult
+                                    )
+                                ) {
+                                    Kazisafex.stagex.close();
+                                }
+                            }
+                        }
+                    );
+                } else {
+                    MainUI.notify(
+                        null,
+                        bundle.getString("error"),
+                        "Kazisafe n'a pas pu se connecter à l'internet,\n veuillez verifier l'etat de votre connection internet",
+                        4,
+                        "error"
+                    );
+                }
+            }
+        });
     }
 
     private String readableLoginError(Response<?> response) {
@@ -374,8 +480,11 @@ public class EntryPointController implements Initializable {
                 message = extractMessageFromErrorBody(raw);
             }
         } catch (IOException ex) {
-            Logger.getLogger(EntryPointController.class.getName()).log(Level.WARNING,
-                    "Lecture du message d'erreur login impossible", ex);
+            Logger.getLogger(EntryPointController.class.getName()).log(
+                Level.WARNING,
+                "Lecture du message d'erreur login impossible",
+                ex
+            );
         }
         if (message == null || message.isBlank()) {
             message = "Erreur interne, HTTP: [" + response.code() + "]";
@@ -412,24 +521,40 @@ public class EntryPointController implements Initializable {
         if (lower.contains("entreprise") && lower.contains("introuvable")) {
             return "L'entreprise ayant cette identite est introuvable";
         }
-        if (lower.contains("affectation") || lower.contains("enregistré comme employé")
-                || lower.contains("enregistre comme employe")) {
+        if (
+            lower.contains("affectation") ||
+            lower.contains("enregistré comme employé") ||
+            lower.contains("enregistre comme employe")
+        ) {
             return "Vous n'avez pas d'affectation liee a cette entreprise, nous avons notifie son manager que vous essayez de vous y connecter";
         }
-        if (lower.contains("mot de passe") || lower.contains("credentials") || lower.contains("credential")) {
+        if (
+            lower.contains("mot de passe") ||
+            lower.contains("credentials") ||
+            lower.contains("credential")
+        ) {
             return "Utilisateur ou mot de passe incorrect";
         }
-        return message == null || message.isBlank() ? bundle.getString("networkerror") : message;
+        return message == null || message.isBlank()
+            ? bundle.getString("networkerror")
+            : message;
     }
 
     @FXML
     private void handleLoginAction(ActionEvent event) {
         kazisafe = KazisafeServiceFactory.createService(null);
-        if (pswd_field.getText().isEmpty() || username_field.getText().isEmpty()
-                || identification.getText().isEmpty()) {
+        if (
+            pswd_field.getText().isEmpty() ||
+            username_field.getText().isEmpty() ||
+            identification.getText().isEmpty()
+        ) {
             return;
         }
-        Credentials cred = new Credentials(username_field.getText(), pswd_field.getText(), identification.getText());
+        Credentials cred = new Credentials(
+            username_field.getText(),
+            pswd_field.getText(),
+            identification.getText()
+        );
         synchronousLogin(cred);
     }
 
@@ -457,7 +582,9 @@ public class EntryPointController implements Initializable {
         int proc = Runtime.getRuntime().availableProcessors();
         System.err.println("How many processors = " + proc);
         // "Swahili", "Lingala", , "Hindi", "Kinyarwanda", "Arabe"
-        langs.setItems(FXCollections.observableArrayList("Français", "English"));
+        langs.setItems(
+            FXCollections.observableArrayList("Français", "English")
+        );
         String langz = pref.get("lang", "fr");
         appName.setText("Kazisafe");
 
@@ -498,10 +625,16 @@ public class EntryPointController implements Initializable {
                 langs.getSelectionModel().select("Arabe");
                 Util.setImageResourceOn(flag_lang, "ar.png");
             }
-
         }
-        langs.getSelectionModel().selectedItemProperty()
-                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+        langs
+            .getSelectionModel()
+            .selectedItemProperty()
+            .addListener(
+                (
+                    ObservableValue<? extends String> observable,
+                    String oldValue,
+                    String newValue
+                ) -> {
                     switch (newValue) {
                         case "Français" -> {
                             pref.put("lang", "fr");
@@ -532,35 +665,56 @@ public class EntryPointController implements Initializable {
                             Util.setImageResourceOn(flag_lang, "ar.png");
                         }
                     }
-                });
-        pswd_field.textProperty()
-                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                }
+            );
+        pswd_field
+            .textProperty()
+            .addListener(
+                (
+                    ObservableValue<? extends String> observable,
+                    String oldValue,
+                    String newValue
+                ) -> {
                     if (newValue != null) {
                         if (!showpswd_field.isFocused()) {
                             showpswd_field.setText(newValue);
                         }
                     }
-                });
-        showpswd_field.textProperty()
-                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                }
+            );
+        showpswd_field
+            .textProperty()
+            .addListener(
+                (
+                    ObservableValue<? extends String> observable,
+                    String oldValue,
+                    String newValue
+                ) -> {
                     if (newValue != null) {
                         if (!pswd_field.isFocused()) {
                             pswd_field.setText(newValue);
                         }
                     }
-                });
-        showpswd.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
-                    pswd_field.setVisible(false);
-                    showpswd_field.setVisible(true);
-                } else {
-                    pswd_field.setVisible(true);
-                    showpswd_field.setVisible(false);
+                }
+            );
+        showpswd.selectedProperty().addListener(
+            new ChangeListener<Boolean>() {
+                @Override
+                public void changed(
+                    ObservableValue<? extends Boolean> observable,
+                    Boolean oldValue,
+                    Boolean newValue
+                ) {
+                    if (newValue) {
+                        pswd_field.setVisible(false);
+                        showpswd_field.setVisible(true);
+                    } else {
+                        pswd_field.setVisible(true);
+                        showpswd_field.setVisible(false);
+                    }
                 }
             }
-        });
+        );
         tryAutoLoginWithSavedSession();
     }
 
@@ -568,38 +722,45 @@ public class EntryPointController implements Initializable {
     public void gotoEndeleya(Event evt) {
         new Thread(() -> {
             try {
-                Desktop.getDesktop().browse(URI.create("https://www.endeleya.com"));
-            } catch (IOException e) {
-
-            }
+                Desktop.getDesktop().browse(
+                    URI.create("https://www.endeleya.com")
+                );
+            } catch (IOException e) {}
         }).start();
-
     }
 
     @FXML
     public void createNewAccount(Event e) {
-        Executors.newSingleThreadExecutor()
-                .execute(() -> {
-                    try {
-                        Desktop.getDesktop().browse(URI.create("https://cloud.kazisafe.com/signup"));
-                    } catch (IOException ex) {
-                        Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-
-                });
-
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                Desktop.getDesktop().browse(
+                    URI.create("https://cloud.kazisafe.com/signup")
+                );
+            } catch (IOException ex) {
+                Logger.getLogger(EntryPointController.class.getName()).log(
+                    Level.SEVERE,
+                    null,
+                    ex
+                );
+            }
+        });
     }
 
     @FXML
     public void recoverPassword(Event e) {
-        Executors.newSingleThreadExecutor()
-                .execute(() -> {
-                    try {
-                        // https://app.kazisafe.com/reset-password
-                        Desktop.getDesktop().browse(new URI("https://cloud.kazisafe.com/recover-password"));
-                    } catch (URISyntaxException | IOException ex) {
-                        Logger.getLogger(EntryPointController.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                });
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                // https://app.kazisafe.com/reset-password
+                Desktop.getDesktop().browse(
+                    new URI("https://cloud.kazisafe.com/recover-password")
+                );
+            } catch (URISyntaxException | IOException ex) {
+                Logger.getLogger(EntryPointController.class.getName()).log(
+                    Level.SEVERE,
+                    null,
+                    ex
+                );
+            }
+        });
     }
 }

@@ -67,6 +67,7 @@ import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
 import tools.Constants;
+import tools.SyncRetryHandler;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import delegates.LivraisonDelegate;
@@ -320,6 +321,7 @@ public class RecqController implements Initializable {
                 return;
             }
             recquisition = req;
+            obllot.add(req);
             if (this.action.equals(Constants.ACTION_UPDATE)) {
                 saveBtn.setText(this.bundle.getString("xbtn.update"));
                 mesureRecq = recquisition.getMesureId();
@@ -330,17 +332,37 @@ public class RecqController implements Initializable {
                     Livraison l = livs.get(0);
                     cbx_choose_livraison.getSelectionModel().select(l);
                 }
+                tf_prod_req.setText(choosenPro.getNomProduit() + " " + choosenPro.getMarque() + " " + choosenPro.getModele() + " " + (choosenPro.getTaille() == null ? "" : choosenPro.getTaille()) + " " + (choosenPro.getCouleur() == null ? "" : choosenPro.getCouleur()));
+                tf_quant_req.setText(String.valueOf(req.getQuantite()));
+                tf_cout_achat_req.setText(String.valueOf(req.getCoutAchat()));
+                tf_numlot_req.setText(req.getNumlot() == null ? "" : req.getNumlot());
+                tf_alerte_req.setText(String.valueOf(req.getStockAlert()));
+                tf_obs_req.setText(req.getObservation() == null ? "" : req.getObservation());
+                if (req.getDate() != null) {
+                    dpk_date_req.setValue(req.getDate().toLocalDate());
+                }
+                if (req.getDateExpiry() != null) {
+                    dpk_date_expiry_req.setValue(req.getDateExpiry());
+                }
+                Mesure m = recquisition.getMesureId() == null ? null : MesureDelegate.findMesure(recquisition.getMesureId().getUid());
+                if (m != null) {
+                    cbx_mesure_req.getSelectionModel().select(m);
+                    cbx_choose_mesure_vente.getSelectionModel().select(m);
+                }
+                List<PrixDeVente> prs = RecquisitionDelegate.findLastPrices(choosenPro.getUid());
+                prices = FXCollections.observableArrayList();
+                tilepn_prices1.getChildren().clear();
+                for (PrixDeVente pv : prs) {
+                    addPrice(pv, tilepn_prices1, true);
+                }
+            } else {
+                tf_alerte_req.setText(String.valueOf(req.getStockAlert()));
+                tf_quant_req.setText(String.valueOf(req.getQuantite()));
+                if (req.getDateExpiry() != null) {
+                    dpk_date_expiry_req.setValue(req.getDateExpiry());
+                }
+                prices = FXCollections.observableArrayList();
             }
-            tf_alerte_req.setText(String.valueOf(req.getStockAlert()));
-            tf_quant_req.setText(String.valueOf(req.getQuantite()));
-            LocalDate dat = req.getDateExpiry();
-            if (dat != null) {
-                DateTimeFormatter formater = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(ZoneId.systemDefault());
-                dpk_date_expiry_req.setValue(dat);
-            }
-            obllot.add(req);
-            prices = FXCollections.observableArrayList();
-
         }
     }
 
@@ -497,6 +519,18 @@ public class RecqController implements Initializable {
             cbx_mesure_req.getSelectionModel().selectFirst();
             cbx_choose_mesure_vente.setItems(FXCollections.observableArrayList(mzs));
             cbx_choose_mesure_vente.getSelectionModel().selectFirst();
+
+            if (action != null && action.equals(Constants.ACTION_UPDATE)) {
+                if (recquisition != null && recquisition.getMesureId() != null) {
+                    Mesure m = MesureDelegate.findMesure(recquisition.getMesureId().getUid());
+                    if (m != null) {
+                        cbx_mesure_req.getSelectionModel().select(m);
+                        cbx_choose_mesure_vente.getSelectionModel().select(m);
+                    }
+                }
+                return;
+            }
+
             List<Recquisition> proxt = RecquisitionDelegate.findDescSortedByDateForProduit(choosenPro.getUid());
             if (!proxt.isEmpty()) {
                 Recquisition fromlast = proxt.get(0);
@@ -511,8 +545,6 @@ public class RecqController implements Initializable {
                     cbx_choose_mesure_vente.setItems(FXCollections.observableArrayList(lms));
                     if (action.equals(Constants.ACTION_CREATE)) {
                         recquisition = null;
-                    } else {
-                        recquisition = fromlast;
                     }
                     if (prices != null && tilepn_prices1 != null) {
                         prices.clear();
@@ -675,7 +707,7 @@ public class RecqController implements Initializable {
             if (prod != null) {
                 List<PrixDeVente> prices = RecquisitionDelegate.findLastPrices(prod.getUid());
                 for (PrixDeVente pv : prices) {
-                    addPrice(pv, tilepn_prices1,false);
+                    addPrice(pv, tilepn_prices1,true);
                 }
             }
         }
@@ -711,7 +743,6 @@ public class RecqController implements Initializable {
         region = pref.get("region", "...");
         pricepane.setVisible(false);
         config();
-        // TODO
     }
 
     @FXML
@@ -735,71 +766,50 @@ public class RecqController implements Initializable {
     CountDownLatch cx = new CountDownLatch(1);
 
     private void saveRecqusitionByHttp(Recquisition req) {
-
         Executors.newSingleThreadExecutor().submit(() -> {
             if (!Util.isInternetAndBaseApiReachable()) {
                 return;
             }
-            int attempt = 0;
-            while (attempt < MAX_RETRY) {
-                try {
+            try {
+                SyncRetryHandler.retryVoid("Recquisition", req.getUid(), () -> {
                     if (trySaveRecquis(req)) {
                         System.out.println("Recquisition enregistré au serveur.");
                         cx.countDown();
-                        break;
-                    } else {
-                        Produit produit = ProduitDelegate.findProduit(req.getProductId().getUid());
-                        List<Mesure> mesures = MesureDelegate.findMesureByProduit(produit.getUid());
-                        sendProduitIfNotExist(produit, mesures);
+                        return;
                     }
-                } catch (IOException e) {
-                    System.err.println("Erreur lors de l'enregistrement du stock " + e.getMessage());
-                }
-                attempt++;
-                try {
-                    TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt)); // Delai exponentiel
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                    Produit produit = ProduitDelegate.findProduit(req.getProductId().getUid());
+                    List<Mesure> mesures = MesureDelegate.findMesureByProduit(produit.getUid());
+                    sendProduitIfNotExist(produit, mesures);
+                    throw new Exception("Recquisition non enregistrée");
+                }, MAX_RETRY);
+            } catch (Exception e) {
+                System.err.println("Erreur lors de l'enregistrement du stock " + e.getMessage());
             }
         });
-
     }
 
     private void savePriceByHttp(PrixDeVente pv) {
-        Executors.newSingleThreadExecutor()
-                .submit(() -> {
-                    if (!Util.isInternetAndBaseApiReachable()) {
+        Executors.newSingleThreadExecutor().submit(() -> {
+            if (!Util.isInternetAndBaseApiReachable()) {
+                return;
+            }
+            try {
+                cx.await();
+                SyncRetryHandler.retryVoid("PrixDeVente", pv.getUid(), () -> {
+                    int code = pricefy(pv);
+                    if (code == 200) {
+                        System.out.println("Price saved");
                         return;
                     }
-                    try {
-                        cx.await();
-                        int atempt = 0;
-                        while (atempt < MAX_RETRY) {
-                            try {
-                                int code = pricefy(pv);
-                                if (code == 200) {
-                                    System.out.println("Price saved");
-                                    break;
-                                }
-                                System.out.println("Price coded " + code);
-                            } catch (IOException ex) {
-                                Logger.getLogger(RecqController.class.getName()).log(Level.SEVERE, null, ex);
-                                break;
-                            }
-                            atempt++;
-                            try {
-                                TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, atempt)); // Delai exponentiel
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(RecqController.class.getName()).log(Level.SEVERE, null, ex);
-
-                    }
-                });
+                    System.out.println("Price coded " + code);
+                    throw new Exception("Prix non enregistré, code=" + code);
+                }, MAX_RETRY);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(RecqController.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (Exception e) {
+                System.out.println("Erreur sauvegarde prix: " + e.getMessage());
+            }
+        });
     }
 
     private int pricefy(PrixDeVente pv) throws IOException {
@@ -1087,6 +1097,7 @@ public class RecqController implements Initializable {
             if (pv == null) {
                 tosave.setRecquisitionId(recquisition);
                 PrixDeVenteDelegate.savePrixDeVente(tosave);
+                savePriceByHttp(tosave);
             }
         }
     }
@@ -1109,6 +1120,9 @@ public class RecqController implements Initializable {
         recquisition.setProductId(choosenPro);
         recquisition.setQuantite(Double.parseDouble(tf_quant_req.getText()));
         recquisition.setStockAlert(Double.valueOf(tf_alerte_req.getText()));
+        recquisition.setCoutAchat(Double.parseDouble(tf_cout_achat_req.getText()));
+        recquisition.setNumlot(tf_numlot_req.getText());
+        recquisition.setObservation(tf_obs_req.getText());
 
         if (role.equals(Role.Trader.name()) || role.equals(Role.Manager.name()) || role.equals(Role.Magazinner.name()) || role.contains(Role.ALL_ACCESS.name())) {
             Recquisition req = RecquisitionDelegate.updateRecquisition(recquisition);

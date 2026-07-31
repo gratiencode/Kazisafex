@@ -111,8 +111,8 @@ public class CompactMode {
     public CompactMode(Kazisafe kazisafe, Preferences pref) {
         this.kazisafe = kazisafe;
         this.pref = pref;
-        this.taux2change = pref.getDouble("taux2change", 2800);
-        devise = pref.get("mainCur", "USD");
+        this.taux2change = CurrencyConverter.activeRate();
+        this.devise = CurrencyConverter.mainCurrency();
     }
 
     public Entreprise getEntreprise() {
@@ -321,7 +321,7 @@ public class CompactMode {
             double q = (double) event.getNewValue().doubleValue();
             vl.setQuantite(q);
             vl.setMontantUsd(q * vl.getPrixUnit());
-            vl.setMontantCdf(q * (vl.getPrixUnit() * taux2change));
+            vl.setMontantCdf(CurrencyConverter.fromUsd(vl.getMontantUsd(), CurrencyConverter.CDF));
             saleitems.set(indexOf(vl), vl);
             somme += vl.getMontantUsd();
             notify(vl, somme);
@@ -338,7 +338,7 @@ public class CompactMode {
             double pvunit = (double) event.getNewValue().doubleValue();
             vl.setPrixUnit(pvunit);
             vl.setMontantUsd(pvunit * vl.getQuantite());
-            vl.setMontantCdf(vl.getQuantite() * (pvunit * taux2change));
+            vl.setMontantCdf(CurrencyConverter.fromUsd(vl.getMontantUsd(), CurrencyConverter.CDF));
             saleitems.set(indexOf(vl), vl);
             somme += vl.getMontantUsd();
             notify(vl, somme);

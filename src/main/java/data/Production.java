@@ -51,7 +51,7 @@ import java.util.UUID;
     @NamedQuery(name = "Production.findByRegion", query = "SELECT p FROM Production p WHERE p.region = :region"),
     @NamedQuery(name = "Production.findByEtat", query = "SELECT p FROM Production p WHERE p.etat = :etat")})
 
-public class Production implements Serializable {
+public class Production extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

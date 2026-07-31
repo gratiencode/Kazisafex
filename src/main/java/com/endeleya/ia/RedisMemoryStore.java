@@ -158,7 +158,7 @@ public class RedisMemoryStore {
             Object pong = command("PING");
             return "PONG".equalsIgnoreCase(String.valueOf(pong));
         } catch (IOException | RuntimeException ex) {
-            LOGGER.log(Level.INFO, "Redis non disponible pour Jemima: {0}", ex.getMessage());
+            LOGGER.log(Level.INFO, "Redis non disponible pour Gratien: {0}", ex.getMessage());
             return false;
         }
     }
@@ -258,7 +258,7 @@ public class RedisMemoryStore {
     }
 
     private String key(String sessionId) {
-        return "kazisafex:jemima:memory:" + sessionId.trim();
+        return "kazisafex:Gratien:memory:" + sessionId.trim();
     }
 
     private static void writeAscii(ByteArrayOutputStream out, String value) {

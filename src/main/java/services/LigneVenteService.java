@@ -662,7 +662,10 @@ public class LigneVenteService implements LigneVenteStorage {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT p.uid , p.clientId, p.montantCdf, p.montantUsd, p.numlot, p.prixUnit, p.quantite,"
                     + "  COALESCE(p.coutAchat,0) as coutAchat, p.mesure_id, p.product_id, p.reference_uid,"
-                    + "  p.deleted_at, p.updated_at FROM ligne_vente p WHERE p.updated_at >= ?");
+                    + "  p.deleted_at, p.updated_at FROM ligne_vente p"
+                    + "  WHERE p.updated_at >= ?"
+                    + "  AND EXISTS (SELECT 1 FROM produit pr WHERE pr.uid = p.product_id)"
+                    + "  AND EXISTS (SELECT 1 FROM vente v WHERE v.uid = p.reference_uid)");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), LigneVente.class);

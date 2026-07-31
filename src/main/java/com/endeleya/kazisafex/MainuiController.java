@@ -228,6 +228,10 @@ public class MainuiController implements Initializable {
         return instance;
     }
 
+    /**
+     * @deprecated Use {@link tools.DataCache} instead.
+     */
+    @Deprecated
     public static ConcurrentHashMap<String, Object> dataCache;
     private static final double LAYOUTY = 59.0;
     private static final double LAYOUTX = 30.0;
@@ -290,15 +294,11 @@ public class MainuiController implements Initializable {
     private AnchorPane showPane;
 
     /**
-     * Pages already opened during this main-window session.  Keeping the FXML
-     * root also keeps its controller and the data it has loaded alive when the
-     * user navigates to another menu.
+     * Replaced by {@link tools.DataCache}.  The old {@code pageCache} that
+     * kept entire AnchorPane FXML trees alive has been removed: views are now
+     * rebuilt fresh every time (solving VirtualFlow rendering issues) while
+     * only the data lists are cached in {@link tools.DataCache}.
      */
-    private final ConcurrentHashMap<String, AnchorPane> pageCache =
-        new ConcurrentHashMap<>();
-
-    /** Prevents concurrent first-load of the same FXML page. */
-    private final Object pageCacheLock = new Object();
 
     @FXML
     private AreaChart<String, Number> venteChart;
@@ -690,10 +690,7 @@ public class MainuiController implements Initializable {
 
     private BufferedImage resizeImage(BufferedImage aCompres, int w, int h) {
         BufferedImage resized = new BufferedImage(
-            w,
-            h,
-            BufferedImage.TYPE_INT_RGB
-        );
+            w,h,BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = resized.createGraphics();
         g2d.setRenderingHint(
             RenderingHints.KEY_INTERPOLATION,
@@ -1382,86 +1379,17 @@ public class MainuiController implements Initializable {
     }
 
     /**
-     * Returns the page previously created for a menu, or creates it on its
-     * first visit.  The cache belongs to this main controller, so it is reset
-     * naturally when the user closes the main window or starts a new session.
+     * Always loads a fresh FXML page.  Views are rebuilt every time to avoid
+     * VirtualFlow rendering issues.  Data is cached separately via
+     * {@link tools.DataCache}.
      */
-    private AnchorPane getCachedPage(String fxml, Object... arguments) {
-        AnchorPane cachedPage = pageCache.get(fxml);
-        if (cachedPage != null) {
-            return cachedPage;
-        }
-
-        synchronized (pageCacheLock) {
-            cachedPage = pageCache.get(fxml);
-            if (cachedPage != null) {
-                return cachedPage;
-            }
-
-            AnchorPane loadedPage = MainUI.getPage(this, fxml, token, arguments);
-            if (loadedPage == null) {
-                return null;
-            }
-
-            AnchorPane existingPage = pageCache.putIfAbsent(fxml, loadedPage);
-            return existingPage == null ? loadedPage : existingPage;
-        }
+    private AnchorPane loadPage(String fxml, Object... arguments) {
+        return MainUI.getPage(this, fxml, token, arguments);
     }
 
     /**
-     * After reattaching a cached page, rebind virtualized controls then rebuild
-     * VirtualFlow. Controllers with {@code onCachedPageShown} must be notified
-     * or tables/lists stay blank / unresponsive after the first visit.
+     * Pages are no longer cached.  Each navigation loads a fresh FXML view.
      */
-    private void showCachedPage(AnchorPane page, String fxml) {
-        if (page == null) {
-            return;
-        }
-        notifyCachedPageShown(fxml);
-        MainUI.refreshCachedPage(page);
-        // Second pulse after layout has real sizes (column widths, skins).
-        Platform.runLater(() -> MainUI.refreshCachedPage(page));
-    }
-
-    private void notifyCachedPageShown(String fxml) {
-        if (fxml == null) {
-            return;
-        }
-        switch (fxml) {
-            case tools.Constants.POS_VIEW -> {
-                PosController pos = PosController.getInstance();
-                if (pos != null) {
-                    pos.onCachedPageShown();
-                }
-            }
-            case tools.Constants.STORAGE_VIEW -> {
-                GoodstorageController stock = GoodstorageController.getInstance();
-                if (stock != null) {
-                    stock.onCachedPageShown();
-                }
-            }
-            case tools.Constants.CAISSE_VIEW -> {
-                TresorerieController tresor = TresorerieController.getInstance();
-                if (tresor != null) {
-                    tresor.onCachedPageShown();
-                }
-            }
-            case tools.Constants.PRODUITS_VIEW -> {
-                ProduitsController produits = ProduitsController.getInstance();
-                if (produits != null) {
-                    produits.onCachedPageShown();
-                }
-            }
-            case tools.Constants.AGENTS_VIEW -> {
-                AgentController agentsCtrl = AgentController.getInstance();
-                if (agentsCtrl != null) {
-                    agentsCtrl.onCachedPageShown();
-                }
-            }
-            default -> {
-            }
-        }
-    }
 
     public void setUserPhone(String phone) {
         this.phone = phone;
@@ -1523,7 +1451,7 @@ public class MainuiController implements Initializable {
                                 : !CURRENT_VIEW.equals(viewName)
                         ) {
                             txt_states_features.setText("...");
-                            AnchorPane p = getCachedPage(
+                            AnchorPane p = loadPage(
                                 xml,
                                 getEntreprisex(),
                                 kazisafe
@@ -1535,7 +1463,6 @@ public class MainuiController implements Initializable {
                             p.setLayoutX(LAYOUTX);
                             mainpane.getChildren().remove(0);
                             mainpane.getChildren().add(p);
-                            showCachedPage(p, xml);
                             pane_title.setText(title);
                             image_title.setImage(
                                 new Image(
@@ -1565,7 +1492,7 @@ public class MainuiController implements Initializable {
     ) {
         if (CURRENT_VIEW == null ? true : !CURRENT_VIEW.equals(viewName)) {
             txt_states_features.setText("...");
-            AnchorPane p = getCachedPage(
+            AnchorPane p = loadPage(
                 xml,
                 getEntreprisex(),
                 v,
@@ -1578,7 +1505,6 @@ public class MainuiController implements Initializable {
             p.setLayoutX(LAYOUTX);
             mainpane.getChildren().remove(0);
             mainpane.getChildren().add(p);
-            showCachedPage(p, xml);
             pane_title.setText(title);
             image_title.setImage(
                 new Image(
@@ -1625,7 +1551,7 @@ public class MainuiController implements Initializable {
                     : !CURRENT_VIEW.equals(tools.Constants.AGENTS)
             ) {
                 txt_states_features.setText("...");
-                AnchorPane p = getCachedPage(
+                AnchorPane p = loadPage(
                     tools.Constants.AGENTS_VIEW,
                     getEntreprisex(),
                     kazisafe
@@ -1637,7 +1563,6 @@ public class MainuiController implements Initializable {
                 p.setLayoutX(LAYOUTX);
                 mainpane.getChildren().remove(0);
                 mainpane.getChildren().add(p);
-                showCachedPage(p, tools.Constants.AGENTS_VIEW);
                 pane_title.setText("Agents");
                 image_title.setImage(
                     new Image(
@@ -1655,7 +1580,7 @@ public class MainuiController implements Initializable {
     @FXML
     private void switchToCompany(MouseEvent event) {
         txt_states_features.setText("...");
-        AnchorPane p = getCachedPage(
+        AnchorPane p = loadPage(
             tools.Constants.ENTREPRISE_VIEW,
             getEntreprisex(),
             kazisafe,
@@ -1668,7 +1593,6 @@ public class MainuiController implements Initializable {
         p.setLayoutX(LAYOUTX);
         mainpane.getChildren().remove(0);
         mainpane.getChildren().add(p);
-        showCachedPage(p, tools.Constants.ENTREPRISE_VIEW);
         pane_title.setText("Entreprise");
         image_title.setImage(
             new Image(
@@ -1725,7 +1649,7 @@ public class MainuiController implements Initializable {
                                 : !CURRENT_VIEW.equals(tools.Constants.PRODUIT)
                         ) {
                             txt_states_features.setText("...");
-                            AnchorPane p = getCachedPage(
+                            AnchorPane p = loadPage(
                                 tools.Constants.PRODUITS_VIEW,
                                 entreprisex
                             );
@@ -1736,7 +1660,6 @@ public class MainuiController implements Initializable {
                             p.setLayoutX(LAYOUTX);
                             mainpane.getChildren().remove(0);
                             mainpane.getChildren().add(p);
-                            showCachedPage(p, tools.Constants.PRODUITS_VIEW);
                             pane_title.setText("Produits");
                             image_title.setImage(
                                 new Image(

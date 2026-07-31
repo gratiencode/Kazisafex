@@ -21,7 +21,7 @@ import org.bsc.langgraph4j.state.AgentState;
 import org.bsc.langgraph4j.state.Channel;
 import org.bsc.langgraph4j.state.Channels;
 
-public class JemimaExpenseWorkflow {
+public class GratienExpenseWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String MODEL_NAME = System.getProperty(
@@ -39,8 +39,8 @@ public class JemimaExpenseWorkflow {
     private ExpenseDraft pendingDraft;
     private boolean awaitingConfirmation;
 
-    public JemimaExpenseWorkflow(JemimaTools tools, ExpenseAgentRunner expenseAgentRunner) {
-        JemimaTools usedTools = tools == null ? new JemimaTools() : tools;
+    public GratienExpenseWorkflow(GratienTools tools, ExpenseAgentRunner expenseAgentRunner) {
+        GratienTools usedTools = tools == null ? new GratienTools() : tools;
         this.expenseAgentRunner = expenseAgentRunner == null ? usedTools::insertExpenseOutput : expenseAgentRunner;
     }
 

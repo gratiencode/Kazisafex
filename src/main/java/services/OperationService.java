@@ -34,15 +34,9 @@ public class OperationService implements OperationStorage {
     public boolean isExists(String uid) {
         String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
                 + "FROM Operation c WHERE c.uid = :id";
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
-                    .setParameter("id", uid)
-                    .getSingleResult());
-        }
-        return ManagedSessionFactory.getEntityManager()
-                .createQuery(jpql, Boolean.class)
+        return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
                 .setParameter("id", uid)
-                .getSingleResult();
+                .getSingleResult());
     }
 
     public OperationService() {
@@ -51,89 +45,48 @@ public class OperationService implements OperationStorage {
 
     @Override
     public Operation createOperation(Operation cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element ops " + e.getLibelle() + " enregistree");
-                AggregateTriggerService.getInstance().notifyOperation(e);
-            });
+        ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
             return cat;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().merge(cat);
-        etr.commit();
+        });
+        System.out.println("Element ops " + cat.getLibelle() + " enregistree");
         AggregateTriggerService.getInstance().notifyOperation(cat);
         return cat;
     }
 
     @Override
     public Operation updateOperation(Operation cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.merge(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element ops " + e.getLibelle() + " supprrimee");
-                AggregateTriggerService.getInstance().notifyOperation(e);
-            });
+        ManagedSessionFactory.executeWrite(em -> {
+            em.merge(cat);
             return cat;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-
-        ManagedSessionFactory.getEntityManager().merge(cat);
-        etr.commit();
+        });
+        System.out.println("Element ops " + cat.getLibelle() + " supprrimee");
         AggregateTriggerService.getInstance().notifyOperation(cat);
         return cat;
     }
 
     @Override
     public void deleteOperation(Operation cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.remove(em.merge(cat));
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element ops " + e.getLibelle() + " enregistree");
-                AggregateTriggerService.getInstance().notifyOperation(e);
-            });
-            return;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
-        etr.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.remove(em.merge(cat));
+            return cat;
+        });
+        System.out.println("Element ops " + cat.getLibelle() + " enregistree");
         AggregateTriggerService.getInstance().notifyOperation(cat);
     }
 
     @Override
     public Operation findOperation(String catId) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> em.find(Operation.class, catId));
-        }
-        return ManagedSessionFactory.getEntityManager().find(Operation.class, catId);
+        return ManagedSessionFactory.executeRead(em -> em.find(Operation.class, catId));
     }
 
     @Override
     public List<Operation> findOperations() {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNamedQuery("Operation.findAll");
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Operation.findAll");
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Operation.findAll");
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -145,16 +98,11 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.tresor_id =  ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, objId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, objId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, objId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -165,16 +113,11 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.depense_id =  ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, depId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, depId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, depId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -185,18 +128,12 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.depense_id =  ? AND tresor_id = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, depId);
-                    query.setParameter(2, tresorId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, depId);
-            query.setParameter(2, tresorId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, depId);
+                query.setParameter(2, tresorId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -205,18 +142,12 @@ public class OperationService implements OperationStorage {
     @Override
     public List<Operation> findOperations(int start, int max) {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNamedQuery("Operation.findAll");
-                    query.setFirstResult(start);
-                    query.setMaxResults(max);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Operation.findAll");
-            query.setFirstResult(start);
-            query.setMaxResults(max);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Operation.findAll");
+                query.setFirstResult(start);
+                query.setMaxResults(max);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -227,12 +158,9 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM operation");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
-                });
-            }
-            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                return (Long) em.createNativeQuery(sb.toString()).getSingleResult();
+            });
         } catch (NoResultException e) {
             return 0L;
         }
@@ -241,16 +169,11 @@ public class OperationService implements OperationStorage {
     @Override
     public List<Operation> findOperations(String region) {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNamedQuery("Operation.findByRegion");
-                    query.setParameter("region", region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Operation.findByRegion");
-            query.setParameter("region", region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Operation.findByRegion");
+                query.setParameter("region", region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -261,18 +184,12 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.date BETWEEN ? AND ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, date.atStartOfDay());
-                    query.setParameter(2, addDays.atStartOfDay());
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, date.atStartOfDay());
-            query.setParameter(2, addDays.atStartOfDay());
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, date.atStartOfDay());
+                query.setParameter(2, addDays.atStartOfDay());
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -283,20 +200,13 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.date BETWEEN ? AND ? AND p.region = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, d1.atStartOfDay());
-                    query.setParameter(2, kesho.atStartOfDay());
-                    query.setParameter(3, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, d1.atStartOfDay());
-            query.setParameter(2, kesho.atStartOfDay());
-            query.setParameter(3, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, d1.atStartOfDay());
+                query.setParameter(2, kesho.atStartOfDay());
+                query.setParameter(3, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -304,39 +214,15 @@ public class OperationService implements OperationStorage {
 
     @Override
     public List<Operation> mergeSet(Set<Operation> bulk) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                int i = 0;
-                for (Operation lj : bulk) {
-                    i++;
-                    em.merge(lj);
-                }
-                Enumeration<Operation> enums = Collections.enumeration(bulk);
-                return Collections.list(enums);
-            });
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-
-        int i = 0;
-        for (Operation lj : bulk) {
-            i++;
-            ManagedSessionFactory.getEntityManager().merge(lj);
-            if (i % 16 == 0) {
-                etr.commit();
-                ManagedSessionFactory.getEntityManager().clear();
-                EntityTransaction etr2 = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!etr2.isActive()) {
-                    etr2.begin();
-                }
-
+        return ManagedSessionFactory.executeRead(em -> {
+            int i = 0;
+            for (Operation lj : bulk) {
+                i++;
+                em.merge(lj);
             }
-        }
-        etr.commit();
-        Enumeration<Operation> enums = Collections.enumeration(bulk);
-        return Collections.list(enums);
+            Enumeration<Operation> enums = Collections.enumeration(bulk);
+            return Collections.list(enums);
+        });
     }
 
     @Override
@@ -346,17 +232,11 @@ public class OperationService implements OperationStorage {
 
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.updated_at >= ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, offline);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, offline);
-
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, offline);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -367,16 +247,11 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.imputation = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, DEPT);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, DEPT);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, DEPT);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -387,20 +262,13 @@ public class OperationService implements OperationStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM operation p WHERE p.depense_id =  ? AND p.date BETWEEN ? AND ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                    query.setParameter(1, dep.getUid());
-                    query.setParameter(2, date1.atStartOfDay());
-                    query.setParameter(3, date2.atStartOfDay());
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-            query.setParameter(1, dep.getUid());
-            query.setParameter(2, date1.atStartOfDay());
-            query.setParameter(3, date2.atStartOfDay());
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Operation.class);
+                query.setParameter(1, dep.getUid());
+                query.setParameter(2, date1.atStartOfDay());
+                query.setParameter(3, date2.atStartOfDay());
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -410,20 +278,13 @@ public class OperationService implements OperationStorage {
     public boolean isExists(String uid, LocalDateTime atime) {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT * FROM operation p WHERE p.uid = ? AND p.updated_at = ?");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), Operation.class);
-                query.setParameter(1, uid);
-                query.setParameter(2, atime);
-                List<Operation> result = query.getResultList();
-                return !result.isEmpty();
-            });
-        }
-        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Operation.class);
-        query.setParameter(1, uid);
-        query.setParameter(2, atime);
-        List<Operation> result = query.getResultList();
-        return !result.isEmpty();
+        return ManagedSessionFactory.executeRead(em -> {
+            Query query = em.createNativeQuery(sb.toString(), Operation.class);
+            query.setParameter(1, uid);
+            query.setParameter(2, atime);
+            List<Operation> result = query.getResultList();
+            return !result.isEmpty();
+        });
     }
 
 }

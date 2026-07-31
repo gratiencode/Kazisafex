@@ -153,11 +153,36 @@ public final class CurrencyConverter {
         return round(usdAmount * rateFromUsd(currency));
     }
 
+    public static BigDecimal toUsd(BigDecimal amount, String currency) {
+        if (amount == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+        }
+        BigDecimal rate = BigDecimal.valueOf(rateFromUsd(currency));
+        return roundMoney(amount.divide(rate, 8, RoundingMode.HALF_EVEN));
+    }
+
+    public static BigDecimal fromUsd(BigDecimal usdAmount, String currency) {
+        if (usdAmount == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+        }
+        BigDecimal rate = BigDecimal.valueOf(rateFromUsd(currency));
+        return roundMoney(usdAmount.multiply(rate));
+    }
+
     public static double convert(double amount, String fromCurrency, String toCurrency) {
         String from = normalize(fromCurrency);
         String to = normalize(toCurrency);
         if (from.equals(to)) {
             return round(amount);
+        }
+        return fromUsd(toUsd(amount, from), to);
+    }
+
+    public static BigDecimal convert(BigDecimal amount, String fromCurrency, String toCurrency) {
+        String from = normalize(fromCurrency);
+        String to = normalize(toCurrency);
+        if (from.equals(to)) {
+            return roundMoney(amount);
         }
         return fromUsd(toUsd(amount, from), to);
     }
@@ -199,6 +224,62 @@ public final class CurrencyConverter {
 
     public static double round(double value) {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+    }
+
+    public static BigDecimal roundMoney(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+        }
+        return value.setScale(2, RoundingMode.HALF_EVEN);
+    }
+
+    public static String formatAmount(BigDecimal amount, String currency) {
+        return roundMoney(amount).toPlainString() + " " + symbol(currency);
+    }
+
+    /** Taux CDF actif (1 USD = N CDF), synchronise avec ParametreController. */
+    public static double activeRate() {
+        return legacyCdfRate();
+    }
+
+    /** Prix stocke en USD converti pour affichage dans la devise principale. */
+    public static double priceFromStorageUsd(double usdPrice) {
+        return fromUsd(usdPrice, mainCurrency());
+    }
+
+    /** Montant saisi dans la devise principale vers USD (stockage prix). */
+    public static double priceToStorageUsd(double mainCurrencyPrice) {
+        return toUsd(mainCurrencyPrice, mainCurrency());
+    }
+
+    public static double legacyTotalInMainCurrency(double usd, double cdf) {
+        return amountFromLegacyStorage(usd, cdf, mainCurrency());
+    }
+
+    public static String formatAmount(double amount, String currency) {
+        return round(amount) + " " + symbol(currency);
+    }
+
+    public static String formatLegacyTotal(double usd, double cdf) {
+        String main = mainCurrency();
+        return formatAmount(amountFromLegacyStorage(usd, cdf, main), main);
+    }
+
+    public static String formatEquivalent(double amount, String fromCurrency) {
+        return equivalentLabel(amount, fromCurrency);
+    }
+
+    public static double debtInMainCurrency(double debt, String debtCurrency) {
+        if (debt == 0) {
+            return 0;
+        }
+        String code = normalize(debtCurrency == null || debtCurrency.isEmpty() ? USD : debtCurrency);
+        return convert(debt, code, mainCurrency());
+    }
+
+    /** Arrondi CDF sans decimales (usage panier). */
+    public static double roundCdf(double value) {
+        return BigDecimal.valueOf(value).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
     }
 
     public static final class AmountUsdCdf {

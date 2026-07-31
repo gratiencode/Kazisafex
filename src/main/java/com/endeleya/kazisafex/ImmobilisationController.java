@@ -30,16 +30,26 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.input.MouseEvent;
+import tools.DataCache;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
 import tools.Util;
 
 public class ImmobilisationController implements Initializable {
+
+    /**
+     * Rebind the immobilisation table to the master ObservableList after the
+     * cached page is reattached. Does not reload from the database.
+     */
+    public void onCachedPageShown() {
+        // No longer needed — views are rebuilt fresh each time.
+    }
 
     private static ImmobilisationController instance;
 
@@ -108,7 +118,8 @@ public class ImmobilisationController implements Initializable {
     private void loadData() {
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    List<Immobilisation> lims = ImmobilisationDelegate.findImmobilisations();
+                    List<Immobilisation> lims = DataCache.getOrLoad("immobilisations-list",
+                            () -> ImmobilisationDelegate.findImmobilisations());
                     immobilisations.setAll(lims);
                 });
     }
@@ -432,4 +443,5 @@ public class ImmobilisationController implements Initializable {
         txt_residuelle.clear();
         txt_duree.clear();
     }
+
 }

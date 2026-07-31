@@ -162,47 +162,38 @@
                                                             </AnchorPane>
                                                          </content>
                                                       </ScrollPane>
-                                                      <AnchorPane fx:id="list_mode" prefHeight="437.0" prefWidth="885.0">
-                                                         <children>
-                                                            <Label fx:id="tbl_pro_count" layoutX="764.0" layoutY="443.0" prefHeight="16.0" prefWidth="103.0" text="0 element" AnchorPane.bottomAnchor="16.0" AnchorPane.rightAnchor="21.0" />
-                                                            <TableView fx:id="tbl_list_pro" onMouseClicked="#selectProduct" prefHeight="439.0" prefWidth="881.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="36.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="4.0" AnchorPane.topAnchor="4.0">
-                                                              <columns>
-                                                                  <TableColumn fx:id="col_codebar_view" prefWidth="75.0" text="Codebar" />
-                                                                <TableColumn fx:id="col_nomprod_view" prefWidth="75.0" text="Nom du produit" />
-                                                                <TableColumn fx:id="col_marque_view" prefWidth="75.0" text="Marque " />
-                                                                  <TableColumn fx:id="col_modele_view" prefWidth="75.0" text="Modele/Forme" />
-                                                                  <TableColumn fx:id="col_taille_view" prefWidth="75.0" text="Taille/Concentration" />
-                                                                  <TableColumn fx:id="col_quanite_view" prefWidth="75.0" text="Quantité" />
-                                                                  <TableColumn fx:id="col_purchaseprice_view" prefWidth="75.0" text="Prix d'achat" />
-                                                                  <TableColumn fx:id="col_numlot_view111" prefWidth="75.0" text="Prix de ventes">
-                                                                     <columns>
-                                                                        <TableColumn fx:id="col_saleprice_view" prefWidth="75.0" text="Gros" />
-                                                                        <TableColumn fx:id="col_saleprice_detail" prefWidth="75.0" text="Detail" />
-                                                                     </columns>
-                                                                  </TableColumn>
-                                                                  <TableColumn fx:id="col_numlot_view" prefWidth="75.0" text="Lot" />
-                                                                  <TableColumn fx:id="col_date_expir_view" prefWidth="75.0" text="Peremption" />
-                                                              </columns>
-                                                               <columnResizePolicy>
-                                                                  <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
-                                                               </columnResizePolicy>
-                                                            </TableView>
-                                                         </children>
-                                                      </AnchorPane>
+                                                       <AnchorPane fx:id="list_mode" prefHeight="475.0" prefWidth="876.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+                                                          <children>
+                                                             <TableView fx:id="tbl_list_pro" onMouseClicked="#selectProduct" prefHeight="460.0" prefWidth="886.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="15.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="2.0" AnchorPane.topAnchor="0.0">
+                                                               <columns>
+                                                                   <TableColumn fx:id="col_codebar_view" prefWidth="75.0" text="Codebar" />
+                                                                 <TableColumn fx:id="col_nomprod_view" prefWidth="75.0" text="Nom du produit" />
+                                                                 <TableColumn fx:id="col_marque_view" prefWidth="75.0" text="Marque " />
+                                                                   <TableColumn fx:id="col_modele_view" prefWidth="75.0" text="Modele/Forme" />
+                                                                   <TableColumn fx:id="col_taille_view" prefWidth="75.0" text="Taille/Concentration" />
+                                                                   <TableColumn fx:id="col_quanite_view" prefWidth="75.0" text="Quantité" />
+                                                                   <TableColumn fx:id="col_purchaseprice_view" prefWidth="75.0" text="Prix d'achat" />
+                                                                   <TableColumn fx:id="col_numlot_view111" prefWidth="75.0" text="Prix de ventes">
+                                                                      <columns>
+                                                                         <TableColumn fx:id="col_saleprice_view" prefWidth="75.0" text="Gros" />
+                                                                         <TableColumn fx:id="col_saleprice_detail" prefWidth="75.0" text="Detail" />
+                                                                      </columns>
+                                                                   </TableColumn>
+                                                                   <TableColumn fx:id="col_numlot_view" prefWidth="75.0" text="Lot" />
+                                                                   <TableColumn fx:id="col_date_expir_view" prefWidth="75.0" text="Peremption" />
+                                                               </columns>
+                                                                <columnResizePolicy>
+                                                                   <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                                </columnResizePolicy>
+                                                             </TableView>
+                                                          </children>
+                                                       </AnchorPane>
                                                    </children>
                                                 </StackPane>
                                                 <AnchorPane layoutX="-4.0" layoutY="2.0" prefHeight="36.0" prefWidth="885.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
                                                    <children>
-                                                      <ImageView fx:id="syncSales" fitHeight="26.0" fitWidth="37.0" layoutX="836.0" layoutY="4.0" onMouseClicked="#uploadToCloud" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="12.0">
-                                                         <image>
-                                                            <Image url="@../icons/cloud-computing.png" />
-                                                         </image>
-                                                         <cursor>
-                                                            <Cursor fx:constant="HAND" />
-                                                         </cursor>
-                                                      </ImageView>
                                                       <ProgressIndicator fx:id="syncIndicator" layoutX="809.0" layoutY="7.0" prefHeight="24.0" prefWidth="19.0" visible="false" AnchorPane.rightAnchor="46.0" />
-                                                      <ImageView fx:id="btn_view_mode" fitHeight="24.0" fitWidth="19.0" layoutX="449.0" layoutY="7.0" onMouseClicked="#switchModeView" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="449.0">
+                                                      <ImageView fx:id="btn_view_mode" fitHeight="24.0" fitWidth="19.0" layoutX="449.0" layoutY="7.0" onMouseClicked="#switchModeView" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="10.0" AnchorPane.leftAnchor="449.0">
                                                          <image>
                                                             <Image url="@../icons/list.png" />
                                                          </image>
@@ -210,7 +201,7 @@
                                                             <Cursor fx:constant="HAND" />
                                                          </cursor>
                                                       </ImageView>
-                                                      <ImageView fitHeight="24.0" fitWidth="45.0" layoutX="406.0" layoutY="4.0" onMouseClicked="#refreshPos" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="406.0">
+                                                      <ImageView fitHeight="24.0" fitWidth="45.0" layoutX="406.0" layoutY="4.0" onMouseClicked="#refreshPos" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="11.0" AnchorPane.leftAnchor="406.0">
                                                          <image>
                                                             <Image url="@../icons/refresh-buttons(1).png" />
                                                          </image>
@@ -218,9 +209,9 @@
                                                             <Cursor fx:constant="HAND" />
                                                          </cursor>
                                                       </ImageView>
-                                                      <ComboBox fx:id="cbx_categofilter" editable="true" layoutX="237.0" layoutY="5.0" prefHeight="24.0" prefWidth="156.0" promptText="%xfilter_by_category" AnchorPane.leftAnchor="237.0" />
-                                                      <CheckBox fx:id="chbx_scancbar" layoutX="10.0" layoutY="8.0" mnemonicParsing="false" prefHeight="18.0" prefWidth="220.0" text="%xrech_scan_codebar" textFill="#51b9f2" AnchorPane.leftAnchor="10.0" />
-                                                      <ImageView fx:id="cloturer_now" fitHeight="26.0" fitWidth="37.0" layoutX="809.0" layoutY="5.0" onMouseClicked="#gotoCloture" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="53.0">
+                                                      <ComboBox fx:id="cbx_categofilter" editable="true" layoutX="237.0" layoutY="5.0" prefHeight="24.0" prefWidth="156.0" promptText="%xfilter_by_category" AnchorPane.bottomAnchor="8.0" AnchorPane.leftAnchor="237.0" />
+                                                      <CheckBox fx:id="chbx_scancbar" layoutX="10.0" layoutY="8.0" mnemonicParsing="false" prefHeight="18.0" prefWidth="220.0" text="%xrech_scan_codebar" textFill="#51b9f2" AnchorPane.bottomAnchor="11.0" AnchorPane.leftAnchor="10.0" />
+                                                      <ImageView fx:id="cloturer_now" fitHeight="26.0" fitWidth="37.0" layoutX="848.0" layoutY="5.0" onMouseClicked="#gotoCloture" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="5.0" AnchorPane.rightAnchor="14.0">
                                                          <image>
                                                             <Image url="@../icons/annual-report.png" />
                                                          </image>
@@ -228,6 +219,7 @@
                                                             <Cursor fx:constant="HAND" />
                                                          </cursor>
                                                       </ImageView>
+                                                      <Label fx:id="tbl_pro_count" layoutX="640.0" layoutY="8.0" prefHeight="16.0" prefWidth="200.0" style="-fx-background-color: #3a3a3a; -fx-padding: 2 6 2 6; -fx-background-radius: 3;" text="0 element" textFill="WHITE" AnchorPane.bottomAnchor="8.0" AnchorPane.rightAnchor="48.0" />
                                                    </children>
                                                 </AnchorPane>
                                              </children>
@@ -613,14 +605,22 @@
                                                                   <Cursor fx:constant="HAND" />
                                                                </cursor>
                                                             </Button>
-                                                            <Button layoutX="16.0" layoutY="445.0" mnemonicParsing="false" onAction="#cloturerInventaire" prefHeight="24.0" prefWidth="175.0" style="-fx-background-color: #44cef5;" text="Cloturer l'inventaire physique" textFill="WHITE" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="16.0">
-                                                               <effect>
-                                                                  <DropShadow />
-                                                               </effect>
-                                                               <cursor>
-                                                                  <Cursor fx:constant="HAND" />
-                                                               </cursor>
-                                                            </Button>
+<Button fx:id="btn_cloture_inventaire" layoutX="16.0" layoutY="445.0" mnemonicParsing="false" onAction="#cloturerInventaire" prefHeight="24.0" prefWidth="175.0" style="-fx-background-color: #44cef5;" text="Cloturer l'inventaire physique" textFill="WHITE" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="16.0">
+                                                                <effect>
+                                                                   <DropShadow />
+                                                                </effect>
+                                                                <cursor>
+                                                                   <Cursor fx:constant="HAND" />
+                                                                </cursor>
+                                                             </Button>
+                                                             <Button fx:id="btn_annuler_cloture" layoutX="16.0" layoutY="445.0" mnemonicParsing="false" onAction="#annulerCloture" prefHeight="24.0" prefWidth="140.0" style="-fx-background-color: #f54444;" text="Annuler clôture" textFill="WHITE" visible="false" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="195.0">
+                                                                <effect>
+                                                                   <DropShadow />
+                                                                </effect>
+                                                                <cursor>
+                                                                   <Cursor fx:constant="HAND" />
+                                                                </cursor>
+                                                             </Button>
                                                             <Separator layoutX="4.0" layoutY="218.0" prefHeight="3.0" prefWidth="881.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="3.0" />
                                                             <Button layoutX="413.0" layoutY="71.0" mnemonicParsing="false" onAction="#createNewProductIfnotExist" prefHeight="24.0" prefWidth="50.0" style="-fx-background-color: #44cef5;" text="+" textFill="WHITE" AnchorPane.leftAnchor="413.0" AnchorPane.topAnchor="71.0" />
                                                             <Label fx:id="txt_cloture_message_compter" layoutX="248.0" layoutY="449.0" prefHeight="16.0" prefWidth="143.0" text="Cloture d'inventaire en cours..." visible="false" AnchorPane.bottomAnchor="18.0" AnchorPane.leftAnchor="248.0" />

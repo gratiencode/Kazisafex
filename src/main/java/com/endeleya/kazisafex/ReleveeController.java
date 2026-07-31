@@ -54,6 +54,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
@@ -226,6 +227,8 @@ public class ReleveeController implements Initializable {
     String role;
     String region;
     double restapayer = 0, payee = 0;
+    private boolean billsLoaded = false;
+    private boolean unpaidsLoaded = false;
 
     public static ReleveeController getInstance() {
         if (instance == null) {
@@ -582,7 +585,8 @@ public class ReleveeController implements Initializable {
         bills.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
+                if (newValue && !billsLoaded) {
+                    billsLoaded = true;
                     restapayer = 0;
                     payee = 0;
                     fact_arrier.clear();
@@ -645,7 +649,8 @@ public class ReleveeController implements Initializable {
         unpaids.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
+                if (newValue && !unpaidsLoaded) {
+                    unpaidsLoaded = true;
                     arrierre_pane.setVisible(true);
                     //affiche les variables
                     Platform.runLater(() -> {

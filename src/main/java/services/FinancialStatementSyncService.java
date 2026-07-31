@@ -484,21 +484,11 @@ public class FinancialStatementSyncService {
     }
 
     private <T> T runWrite(java.util.function.Function<EntityManager, T> action) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.submitWrite(action).join();
-        }
-        return action.apply(ManagedSessionFactory.getEntityManager());
+        return ManagedSessionFactory.executeWrite(action);
     }
 
     private <T> T runRead(java.util.function.Function<EntityManager, T> action) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(action);
-        }
-        return action.apply(ManagedSessionFactory.getEntityManager());
-    }
-
-    private boolean isSqlite() {
-        return ManagedSessionFactory.isEmbedded();
+        return ManagedSessionFactory.executeRead(action);
     }
 
     private String normalizeRegion(String region) {

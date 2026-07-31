@@ -2367,15 +2367,13 @@ public class Util {
         if (lvs == null) {
             return 0;
         }
+        String target = CurrencyConverter.normalize(dev == null ? CurrencyConverter.mainCurrency() : dev);
         double rst = 0;
         for (LigneVente lv : lvs) {
-            if (dev.equals("USD")) {
-                rst += lv.getMontantUsd();
-            } else {
-                rst += lv.getMontantCdf();
-            }
+            rst += CurrencyConverter.amountFromLegacyStorage(
+                    lv.getMontantUsd(), lv.getMontantCdf(), target);
         }
-        return rst;
+        return CurrencyConverter.round(rst);
     }
 
     public static PrixDeVente findPrice(List<PrixDeVente> ps, String uid) {
@@ -4343,11 +4341,16 @@ public class Util {
     }
 
     public static double sumAllCurency(List<Traisorerie> lts, double taux) {
+        return sumAllCurency(lts, taux, CurrencyConverter.mainCurrency());
+    }
+
+    public static double sumAllCurency(List<Traisorerie> lts, double taux, String targetCurrency) {
         double rst = 0;
         for (Traisorerie t : lts) {
-            rst += (t.getMontantUsd() + (t.getMontantCdf() / taux));
+            rst += CurrencyConverter.amountFromLegacyStorage(
+                    t.getMontantUsd(), t.getMontantCdf(), targetCurrency);
         }
-        return rst;
+        return CurrencyConverter.round(rst);
     }
 
     public static List<Traisorerie> collectPaidDebt(List<Traisorerie> lt) {
@@ -5061,7 +5064,8 @@ public class Util {
             doc.add(new Paragraph("Produit  : " + p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
                     + (p.getTaille() == null ? "" : p.getTaille()) + " "
                     + (p.getCouleur() == null ? "" : p.getCouleur())));
-            doc.add(new Paragraph("Mesure en " + m.getDescription() + " et devise en USD "));
+            doc.add(new Paragraph("Mesure en " + (m == null ? "unité de base" : m.getDescription())
+                    + " et devise en USD "));
             Table table = new Table(12);
             table.setFontSize(13);
             table.setWidth(UnitValue.createPercentValue(100f));
@@ -5155,6 +5159,55 @@ public class Util {
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
+    }
+
+    /** Exporte la même chronologie que la fiche de stock affichée à l'écran. */
+    public static File exportXlsFicheStock(List<FicheItem> datas, Mesure mesure, Produit produit) {
+        String path = MainUI.cPath("/Media/fichedestocks");
+        File file = new File(path + "/ksf-fiche-stock" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+        try (FileOutputStream output = new FileOutputStream(file);
+                HSSFWorkbook workbook = new HSSFWorkbook()) {
+            HSSFSheet sheet = workbook.createSheet("Fiche de stock");
+            HSSFRow title = sheet.createRow(0);
+            title.createCell(0).setCellValue("FICHE DE STOCK");
+            sheet.createRow(1).createCell(0).setCellValue("Produit : "
+                    + produit.getNomProduit() + " " + produit.getMarque() + " " + produit.getModele());
+            sheet.createRow(2).createCell(0).setCellValue("Unité : "
+                    + (mesure == null ? "unité de base" : mesure.getDescription()));
+
+            String[] headers = { "Date", "Libellé", "Qté entrée", "PU entrée", "Valeur entrée",
+                    "Qté sortie", "Dernier coût achat", "Valeur sortie", "Qté restante",
+                    "Coût unitaire restant", "Valeur restante", "Destination" };
+            HSSFRow header = sheet.createRow(4);
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+
+            int rowIndex = 5;
+            for (FicheItem item : datas) {
+                HSSFRow row = sheet.createRow(rowIndex++);
+                row.createCell(0).setCellValue(Constants.DATE_HEURE_FORMAT.format(item.getDate()));
+                row.createCell(1).setCellValue(item.getLibelles() == null ? "" : item.getLibelles());
+                row.createCell(2).setCellValue(item.getQuantiteEntree());
+                row.createCell(3).setCellValue(item.getPrixUnitEntree());
+                row.createCell(4).setCellValue(item.getCoutTotalEntree());
+                row.createCell(5).setCellValue(item.getQuantiteSortie());
+                row.createCell(6).setCellValue(item.getCoutUnitaireSortie());
+                row.createCell(7).setCellValue(item.getCoutTotalSortie());
+                row.createCell(8).setCellValue(item.getQuantiteRestant());
+                row.createCell(9).setCellValue(item.getCoutUnitRestant());
+                row.createCell(10).setCellValue(item.getCoutTotalRestant());
+                row.createCell(11).setCellValue(item.getDestination() == null ? "" : item.getDestination());
+            }
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            workbook.write(output);
+            return file;
+        } catch (IOException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        }
     }
 
     public static File exportPDFicheDebiteurs(List<DebtItem> datas) {
@@ -5392,13 +5445,97 @@ public class Util {
         return result;
     }
 
+    /**
+     * Builds the POS stock card from the same movements used by the theoretical
+     * inventory: recquisitions are entries and sales lines are exits.
+     */
+    public static List<FicheItem> findFicheDeStockPos(Mesure displayMesure,
+            List<Mesure> mesures, List<Recquisition> recquisitions,
+            List<LigneVente> ventes, Produit produit) {
+        List<FicheItem> movements = new ArrayList<>();
+
+        for (Recquisition recquisition : recquisitions) {
+            Mesure mesure = findMesure(mesures, recquisition.getMesureId());
+            if (mesure == null || mesure.getQuantContenu() == null || recquisition.getDate() == null) {
+                continue;
+            }
+            double contenu = mesure.getQuantContenu();
+            double quantite = recquisition.getQuantite() * contenu;
+            FicheItem item = new FicheItem();
+            item.setUidRef(recquisition.getUid());
+            item.setUidProduit(produit.getUid());
+            item.setDate(Constants.Datetime.toUtilDate(recquisition.getDate().toLocalDate()));
+            item.setMesure(mesure);
+            item.setLibelles(recquisition.getObservation() == null || recquisition.getObservation().isBlank()
+                    ? "Recquisition " + safeReference(recquisition.getReference())
+                    : recquisition.getObservation());
+            item.setQuantiteEntree(quantite);
+            item.setPrixUnitEntree(recquisition.getCoutAchat() / contenu);
+            item.setCoutTotalEntree(recquisition.getCoutAchat() * recquisition.getQuantite());
+            movements.add(item);
+        }
+
+        for (LigneVente vente : ventes) {
+            Mesure mesure = findMesure(mesures, vente.getMesureId());
+            if (mesure == null || mesure.getQuantContenu() == null || vente.getReference() == null
+                    || vente.getReference().getDateVente() == null) {
+                continue;
+            }
+            double contenu = mesure.getQuantContenu();
+            double coutAchat = vente.getCoutAchat() == null ? 0d : vente.getCoutAchat();
+            double quantite = vente.getQuantite() * contenu;
+            FicheItem item = new FicheItem();
+            item.setUidRef(String.valueOf(vente.getUid()));
+            item.setUidProduit(produit.getUid());
+            item.setDate(Constants.Datetime.toUtilDate(vente.getReference().getDateVente().toLocalDate()));
+            item.setMesure(mesure);
+            item.setLibelles("Vente " + safeReference(vente.getReference().getReference()));
+            item.setDestination(vente.getClientId());
+            item.setQuantiteSortie(quantite);
+            item.setCoutUnitaireSortie(coutAchat / contenu);
+            item.setCoutTotalSortie(coutAchat * vente.getQuantite());
+            movements.add(item);
+        }
+
+        return formatStockCard(displayMesure, calculerFicheDeStock(movements));
+    }
+
+    private static String safeReference(String reference) {
+        return reference == null || reference.isBlank() ? "" : reference;
+    }
+
+    private static List<FicheItem> formatStockCard(Mesure mesure, List<FicheItem> ficheItems) {
+        List<FicheItem> result = new ArrayList<>();
+        double contenu = mesure == null || mesure.getQuantContenu() == null ? 1d : mesure.getQuantContenu();
+        for (FicheItem fi : ficheItems) {
+            double cump = fi.getCoutUnitaireSortie() * contenu;
+            double pue = fi.getPrixUnitEntree() * contenu;
+            double qe = fi.getQuantiteEntree() / contenu;
+            double qs = fi.getQuantiteSortie() / contenu;
+            double qr = fi.getQuantiteRestant() / contenu;
+            double cumpr = fi.getCoutUnitRestant() * contenu;
+            fi.setCoutUnitaireSortie(BigDecimal.valueOf(cump).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setPrixUnitEntree(BigDecimal.valueOf(pue).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteEntree(BigDecimal.valueOf(qe).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteSortie(BigDecimal.valueOf(qs).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setQuantiteRestant(BigDecimal.valueOf(qr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutUnitRestant(BigDecimal.valueOf(cumpr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            fi.setCoutTotalRestant(BigDecimal.valueOf(cumpr * qr).setScale(3, RoundingMode.HALF_EVEN).doubleValue());
+            result.add(fi);
+        }
+        return result;
+    }
+
     private static List<FicheItem> calculerFicheDeStock(List<Mesure> lmzr, List<Stocker> ls, List<Destocker> ld,
             Produit p) {
-        List<FicheItem> fis = merge(lmzr, ls, ld, p);
+        return calculerFicheDeStock(merge(lmzr, ls, ld, p));
+    }
+
+    private static List<FicheItem> calculerFicheDeStock(List<FicheItem> fis) {
         List<FicheItem> result = new ArrayList<>();
         fis = sort(fis);
         List<FicheItem> fix = new ArrayList<>();
-        double e = 0, s = 0, qr = 0, cumpr = 0, ctr = 0, draft = 0;
+        double e = 0, s = 0, qr = 0, dernierCoutAchat = 0, ctr = 0;
         for (int i = 0; i < fis.size(); i++) {
             FicheItem fi = fis.get(i);
             fix.add(fi);
@@ -5416,17 +5553,14 @@ public class Util {
                 }
             }
 
-            if (cumpr == 0) {
-                cumpr = fi.getPrixUnitEntree();
-            } else {
-                if (fi.getQuantiteEntree() > 0) {
-                    draft = (ctr + fi.getCoutTotalEntree());
-                    cumpr = draft / qr;
-                }
+            // Le solde est valorisé au dernier coût d'achat connu, conformément
+            // à la présentation attendue sur la fiche de stock.
+            if (fi.getQuantiteEntree() > 0) {
+                dernierCoutAchat = fi.getPrixUnitEntree();
             }
-            ctr = cumpr * qr;
+            ctr = dernierCoutAchat * qr;
             fi.setQuantiteRestant(qr);
-            fi.setCoutUnitRestant(cumpr);
+            fi.setCoutUnitRestant(dernierCoutAchat);
             fi.setCoutTotalRestant(ctr);
             result.add(fi);
         }
@@ -5890,6 +6024,7 @@ public class Util {
     public static void exportXlsSupplierStatement(Fournisseur f, List<Livraison> debts) {
         try (Workbook workbook = new XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Relevé de Dette - " + f.getNomFourn());
+            String mainCurrency = CurrencyConverter.mainCurrency();
 
             // Header Info
             Row r0 = sheet.createRow(0);
@@ -5904,8 +6039,8 @@ public class Util {
             r2.createCell(0).setCellValue("Date du Relevé:");
             r2.createCell(1).setCellValue(LocalDate.now().toString());
 
-            String[] columns = {"Date", "Num Pièce", "Libellé", "Montant Facturé (USD)", "Montant Payé (USD)",
-                "Reste à Payer (USD)"};
+            String[] columns = {"Date", "Num Pièce", "Libellé", "Montant Facturé (" + mainCurrency + ")",
+                "Montant Payé (" + mainCurrency + ")", "Reste à Payer (" + mainCurrency + ")"};
 
             Row headerRow = sheet.createRow(4);
             CellStyle headerCellStyle = workbook.createCellStyle();
@@ -5928,10 +6063,13 @@ public class Util {
                 row.createCell(0).setCellValue(l.getDateLivr() != null ? l.getDateLivr().toString() : "");
                 row.createCell(1).setCellValue(l.getNumPiece());
                 row.createCell(2).setCellValue(l.getLibelle());
-                row.createCell(3).setCellValue(l.getTopay() != null ? l.getTopay() : 0d);
-                row.createCell(4).setCellValue(l.getPayed() != null ? l.getPayed() : 0d);
-                row.createCell(5).setCellValue(l.getRemained() != null ? l.getRemained() : 0d);
-                totalDebt += (l.getRemained() != null ? l.getRemained() : 0d);
+                double topay = l.getTopay() != null ? l.getTopay() : 0d;
+                double payed = l.getPayed() != null ? l.getPayed() : 0d;
+                double remained = l.getRemained() != null ? l.getRemained() : 0d;
+                row.createCell(3).setCellValue(CurrencyConverter.convert(topay, CurrencyConverter.USD, mainCurrency));
+                row.createCell(4).setCellValue(CurrencyConverter.convert(payed, CurrencyConverter.USD, mainCurrency));
+                row.createCell(5).setCellValue(CurrencyConverter.convert(remained, CurrencyConverter.USD, mainCurrency));
+                totalDebt += CurrencyConverter.convert(remained, CurrencyConverter.USD, mainCurrency);
             }
 
             Row footRow = sheet.createRow(rowNum + 1);
@@ -6205,6 +6343,7 @@ public class Util {
     public static void exportXlsClientStatement(Client c, List<Vente> debts) {
         try (Workbook workbook = new XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Relevé de Dette - " + c.getNomClient());
+            String mainCurrency = CurrencyConverter.mainCurrency();
 
             Row r0 = sheet.createRow(0);
             r0.createCell(0).setCellValue("Client:");
@@ -6222,8 +6361,8 @@ public class Util {
             r3.createCell(0).setCellValue("Date du Relevé:");
             r3.createCell(1).setCellValue(LocalDate.now().toString());
 
-            String[] columns = {"Date", "Num Facture", "Libellé", "Net à Payer (USD)", "Déjà Payé (USD)",
-                "Reste (USD)"};
+            String[] columns = {"Date", "Num Facture", "Libellé", "Net à Payer (" + mainCurrency + ")",
+                "Déjà Payé (" + mainCurrency + ")", "Reste (" + mainCurrency + ")"};
 
             Row headerRow = sheet.createRow(5);
             CellStyle headerCellStyle = workbook.createCellStyle();
@@ -6247,11 +6386,14 @@ public class Util {
                         .setCellValue(v.getDateVente() != null ? v.getDateVente().toLocalDate().toString() : "");
                 row.createCell(1).setCellValue(v.getReference());
                 row.createCell(2).setCellValue(v.getLibelle());
-                row.createCell(3).setCellValue(v.getMontantUsd());
-                double payed = v.getMontantUsd() - v.getMontantDette();
+                double net = CurrencyConverter.amountFromLegacyStorage(v.getMontantUsd(), v.getMontantCdf(), mainCurrency);
+                double payed = CurrencyConverter.amountFromLegacyStorage(v.getMontantUsd(), v.getMontantCdf(), mainCurrency)
+                        - CurrencyConverter.debtInMainCurrency(v.getMontantDette(), v.getDeviseDette());
+                double remained = CurrencyConverter.debtInMainCurrency(v.getMontantDette(), v.getDeviseDette());
+                row.createCell(3).setCellValue(net);
                 row.createCell(4).setCellValue(payed);
-                row.createCell(5).setCellValue(v.getMontantDette());
-                totalDebt += v.getMontantDette();
+                row.createCell(5).setCellValue(remained);
+                totalDebt += remained;
             }
 
             Row footRow = sheet.createRow(rowNum + 1);
@@ -6289,8 +6431,8 @@ public class Util {
 
     public static File exportPdfClientStatement(Client c, List<Vente> debts, Entreprise entrep) {
         try {
-            double taux_dechange = pref.getDouble("taux2change", 2350);
-            String devise_symbole = pref.get("mainCur", "USD");
+            double taux_dechange = CurrencyConverter.activeRate();
+            String devise_symbole = CurrencyConverter.mainCurrency();
             String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
             File dir = new File(path);
             if (!dir.exists()) {
@@ -6405,19 +6547,16 @@ public class Util {
                         pdf.addCell(v.getDateVente().toLocalDate().toString(), egray);
                         pdf.addCell(v.getReference(), egray);
                         pdf.addCell(v.getLibelle(), egray);
-                        double topay = devise_symbole.equals("USD")
-                                ? (v.getMontantUsd() + (v.getMontantCdf() / taux_dechange))
-                                : ((v.getMontantUsd() * taux_dechange) + v.getMontantCdf());
-                        topay = topay + v.getMontantDette();
-                        pdf.addCell(String.format("%.2f", topay), egray);
-                        double payed = devise_symbole.equals("USD")
-                                ? (v.getMontantUsd() + (v.getMontantCdf() / taux_dechange))
-                                : ((v.getMontantUsd() * taux_dechange) + v.getMontantCdf());
-                        payed = BigDecimal.valueOf(payed)
-                                .setScale(2, BigDecimal.ROUND_HALF_EVEN).doubleValue();
-                        pdf.addCell(String.format("%.2f", payed), egray);
-                        pdf.addCell(String.format("%.2f", v.getMontantDette()), egray);
-                        totalDebt += v.getMontantDette();
+                        double topay = CurrencyConverter.amountFromLegacyStorage(
+                                v.getMontantUsd(), v.getMontantCdf(), devise_symbole);
+                        topay = topay + CurrencyConverter.debtInMainCurrency(v.getMontantDette(), v.getDeviseDette());
+                        pdf.addCell(String.format("%.2f %s", topay, CurrencyConverter.symbol(devise_symbole)), egray);
+                        double payed = CurrencyConverter.amountFromLegacyStorage(
+                                v.getMontantUsd(), v.getMontantCdf(), devise_symbole);
+                        pdf.addCell(String.format("%.2f %s", payed, CurrencyConverter.symbol(devise_symbole)), egray);
+                        double remain = CurrencyConverter.debtInMainCurrency(v.getMontantDette(), v.getDeviseDette());
+                        pdf.addCell(String.format("%.2f %s", remain, CurrencyConverter.symbol(devise_symbole)), egray);
+                        totalDebt += remain;
                     }
 
                     // Summary
@@ -6426,7 +6565,7 @@ public class Util {
                     pdf.addCell("TOTAL", endeleya);
                     pdf.addCell("", endeleya);
                     pdf.addCell("", endeleya);
-                    pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                    pdf.addCell(String.format("%.2f %s", totalDebt, CurrencyConverter.symbol(devise_symbole)), endeleya);
                 } finally {
                     if (contentStream != null) {
                         contentStream.close();
@@ -6443,6 +6582,7 @@ public class Util {
 
     public static File exportPdfSupplierStatement(Fournisseur f, List<Livraison> debts, Entreprise entrep) {
         try {
+            String devise = CurrencyConverter.mainCurrency();
             String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
             File dir = new File(path);
             if (!dir.exists()) {
@@ -6559,10 +6699,13 @@ public class Util {
                         pdf.addCell(l.getDateLivr() != null ? l.getDateLivr().toString() : "", egray);
                         pdf.addCell(l.getNumPiece(), egray);
                         pdf.addCell(l.getLibelle(), egray);
-                        pdf.addCell(String.format("%.2f", l.getTopay() != null ? l.getTopay() : 0.0), egray);
-                        pdf.addCell(String.format("%.2f", l.getPayed() != null ? l.getPayed() : 0.0), egray);
-                        pdf.addCell(String.format("%.2f", l.getRemained() != null ? l.getRemained() : 0.0), egray);
-                        totalDebt += (l.getRemained() != null ? l.getRemained() : 0.0);
+                        double topay = l.getTopay() != null ? l.getTopay() : 0.0;
+                        double payed = l.getPayed() != null ? l.getPayed() : 0.0;
+                        double remain = l.getRemained() != null ? l.getRemained() : 0.0;
+                        pdf.addCell(String.format("%.2f %s", topay, CurrencyConverter.symbol(devise)), egray);
+                        pdf.addCell(String.format("%.2f %s", payed, CurrencyConverter.symbol(devise)), egray);
+                        pdf.addCell(String.format("%.2f %s", remain, CurrencyConverter.symbol(devise)), egray);
+                        totalDebt += remain;
                     }
 
                     // Total Row
@@ -6571,7 +6714,7 @@ public class Util {
                     pdf.addCell("", null);
                     pdf.addCell("TOTAL", endeleya);
                     pdf.addCell("", endeleya);
-                    pdf.addCell(String.format("%.2f USD", totalDebt), endeleya);
+                    pdf.addCell(String.format("%.2f %s", totalDebt, CurrencyConverter.symbol(devise)), endeleya);
                 } finally {
                     if (contentStream != null) {
                         contentStream.close();
@@ -6588,6 +6731,7 @@ public class Util {
 
     public static File exportPdfSuppliersDebt(List<Fournisseur> suppliers, Entreprise entrep) {
         try {
+            String devise = CurrencyConverter.mainCurrency();
             String path = System.getProperty("user.home") + "/Documents/Kazisafex/Reports";
             File dir = new File(path);
             if (!dir.exists()) {
@@ -6698,7 +6842,7 @@ public class Util {
                         pdf.addCell(f.getNomFourn(), egray);
                         pdf.addCell(f.getAdresse(), egray);
                         pdf.addCell(f.getPhone(), egray);
-                        pdf.addCell(String.format("%.2f USD", totalDebt), egray);
+                        pdf.addCell(String.format("%.2f %s", totalDebt, CurrencyConverter.symbol(devise)), egray);
                         globalTotal += totalDebt;
                     }
 
@@ -6706,7 +6850,7 @@ public class Util {
                     pdf.addCell("", null);
                     pdf.addCell("", null);
                     pdf.addCell("TOTAL GLOBAL", endeleya);
-                    pdf.addCell(String.format("%.2f USD", globalTotal), endeleya);
+                    pdf.addCell(String.format("%.2f %s", globalTotal, CurrencyConverter.symbol(devise)), endeleya);
                 } finally {
                     if (contentStream != null) {
                         contentStream.close();

@@ -82,6 +82,12 @@ public class WriteQueueManager {
 
     public void shutdown() {
         running.set(false);
+        WriteTask<?> stranded;
+        while ((stranded = queue.poll()) != null) {
+            stranded.getFuture().completeExceptionally(
+                new IllegalStateException("WriteQueue shut down before task could execute")
+            );
+        }
     }
 }
 

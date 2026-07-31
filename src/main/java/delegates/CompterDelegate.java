@@ -40,6 +40,10 @@ public class CompterDelegate {
         getStorage().removeNoCountedProducts(inv);
     }
 
+    public static void closeInventoryByFixingNoCounts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
+        getStorage().removeNoCountedProducts(inv, onCreated);
+    }
+
     public static Compter findCompter(String uid) {
         return getStorage().findCompter(uid);
     }

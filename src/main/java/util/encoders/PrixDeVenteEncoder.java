@@ -40,7 +40,8 @@ public class PrixDeVenteEncoder implements Encoder.Text<PrixDeVente> {
                 .add("counter", ins.getCounter())
                 .add("from", ins.getFrom())
                 .add("payload", ins.getPayload())
-                .add("prixUnitaire", ins.getPrixUnitaire());
+                .add("prixUnitaire", ins.getPrixUnitaire())
+                .add("pourcentParCunit", ins.getPourcentParCunit() == null ? 0 : ins.getPourcentParCunit());
         builder.add("mesureId", Json.createObjectBuilder()
                 .add("uid", ins.getMesureId().getUid()));
         builder.add("recquisitionId", Json.createObjectBuilder()

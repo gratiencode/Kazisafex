@@ -310,13 +310,8 @@ public class NotificationHandler implements EventHandler {
                                                     recquisition
                                                 );
                                         }
-                                        Produit p = ProduitDelegate.findProduit(
-                                            recquisition.getProductId().getUid()
-                                        );
-                                        RecquisitionDelegate.rectifyStock(
-                                            p,
-                                            LocalDate.now(),
-                                            LocalDate.now(),
+                                        services.SyncEpochManager.enqueue(
+                                            recquisition.getProductId().getUid(),
                                             recquisition.getRegion(),
                                             recquisition.getNumlot()
                                         );
@@ -439,16 +434,11 @@ public class NotificationHandler implements EventHandler {
                                                     saleitem
                                                 );
                                         }
-                                        Produit p = ProduitDelegate.findProduit(
-                                            saleitem.getProductId().getUid()
-                                        );
                                         Vente vr = VenteDelegate.findVente(
                                             saleitem.getReference().getUid()
                                         );
-                                        RecquisitionDelegate.rectifyStock(
-                                            p,
-                                            LocalDate.now(),
-                                            LocalDate.now(),
+                                        services.SyncEpochManager.enqueue(
+                                            saleitem.getProductId().getUid(),
                                             vr.getRegion(),
                                             saleitem.getNumlot()
                                         );
@@ -766,6 +756,7 @@ public class NotificationHandler implements EventHandler {
     }
 
     private void notifySynced(BaseModel uid) {
+        DataCache.invalidateAll();
         broadcastDataSynced(uid);
     }
 }

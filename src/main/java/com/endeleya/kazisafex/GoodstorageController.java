@@ -107,6 +107,7 @@ import tools.Util;
 import tools.NotificationHandler;
 import tools.CurrencyConverter;
 import tools.Constants;
+import tools.DataCache;
 import tools.SyncRetryHandler;
 import data.helpers.Role;
 import data.network.Kazisafe;
@@ -133,40 +134,8 @@ public class GoodstorageController implements Initializable {
         return instance;
     }
 
-    /**
-     * Rebind lists/tables to master ObservableLists after cached page reattach.
-     * Does not reload from the database.
-     */
     public void onCachedPageShown() {
-        if (list_livraison != null && listlivr != null) {
-            list_livraison.setItems(listlivr);
-            list_livraison.refresh();
-            if (count_livraizon != null && bundle != null) {
-                count_livraizon.setText(
-                    String.format(bundle.getString("xitems"), listlivr.size())
-                );
-            }
-        }
-        if (list_supplier != null && listfourn != null) {
-            list_supplier.setItems(listfourn);
-            list_supplier.refresh();
-            if (count_fournisseur != null && bundle != null) {
-                count_fournisseur.setText(
-                    String.format(bundle.getString("xitems"), listfourn.size())
-                );
-            }
-        }
-        if (table_stockage != null && list_stockers != null) {
-            table_stockage.setItems(list_stockers);
-            table_stockage.refresh();
-            if (count != null) {
-                count.setText(table_stockage.getItems().size() + " éléments");
-            }
-        }
-        if (table1 != null && lisdestocker != null) {
-            table1.setItems(lisdestocker);
-            table1.refresh();
-        }
+        // No longer needed — views are rebuilt fresh each time.
     }
 
     @FXML
@@ -343,7 +312,9 @@ public class GoodstorageController implements Initializable {
     List<Stocker> stox;
     List<Destocker> destox;
     Entreprise entreprise;
-    private boolean initialDataLoaded = false;
+    private boolean tabLivraisonLoaded = false;
+    private boolean tabDestockLoaded = false;
+    private boolean tabInventLoaded = false;
     private int starting = 0;
     private int rowsDataCount = 20;
     private int rowsDataCount1 = 20;
@@ -490,7 +461,8 @@ public class GoodstorageController implements Initializable {
             long sized = ProduitDelegate.getCount();
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
-            destox = DestockerDelegate.findDescSortedByDate(offsetd, limis.intValue());
+            destox = DataCache.getOrLoad("storage-destocker-all",
+                () -> DestockerDelegate.findDescSortedByDate(offsetd, limis.intValue()));
             if (destox == null) {
                 destox = new ArrayList<>();
             }
@@ -507,21 +479,24 @@ public class GoodstorageController implements Initializable {
             long size = StockerDelegate.getCount();
             int offset = 0;
             Long limix = Math.min(offset + rowsDataCount, size);
-            stox = StockerDelegate.findStockers();
+            stox = DataCache.getOrLoad("storage-stocker-all",
+                () -> StockerDelegate.findStockers());
             if (stox == null) {
                 stox = new ArrayList<>();
             }
             int stockLimit = Math.min(limix.intValue(), stox.size());
             list_stockers.addAll(stox.subList(offset, stockLimit));
             table_stockage.setItems(list_stockers);
-            List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate();
+            List<Livraison> foundl = DataCache.getOrLoad("storage-livraison-all",
+                () -> LivraisonDelegate.findDescSortedByDate());
             if (foundl == null) {
                 foundl = List.of();
             }
             listlivr.addAll(foundl);
             list_livraison.setItems(listlivr);
             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
-            List<Fournisseur> lfs = FournisseurDelegate.findFournisseurs();
+            List<Fournisseur> lfs = DataCache.getOrLoad("storage-fournisseur",
+                () -> FournisseurDelegate.findFournisseurs());
             if (lfs == null) {
                 lfs = List.of();
             }
@@ -532,7 +507,8 @@ public class GoodstorageController implements Initializable {
             long sized = DestockerDelegate.getCount();
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
-            destox = DestockerDelegate.findDescSortedByDate(region, offsetd, limis.intValue());
+            destox = DataCache.getOrLoad("storage-destocker-" + region,
+                () -> DestockerDelegate.findDescSortedByDate(region, offsetd, limis.intValue()));
             if (destox == null) {
                 destox = new ArrayList<>();
             }
@@ -548,7 +524,8 @@ public class GoodstorageController implements Initializable {
             long size = LivraisonDelegate.getCount();
             int offset = 0;
             Long limix = Math.min(offset + rowsDataCount, size);
-            stox = StockerDelegate.findStockers(region);
+            stox = DataCache.getOrLoad("storage-stocker-" + region,
+                () -> StockerDelegate.findStockers(region));
             if (stox == null) {
                 stox = new ArrayList<>();
             }
@@ -556,14 +533,16 @@ public class GoodstorageController implements Initializable {
             int vlim = Math.min(stox.size(), lim);
             list_stockers.addAll(stox.subList(offset, vlim));
             table_stockage.setItems(list_stockers);
-            List<Livraison> foundl = LivraisonDelegate.findDescSortedByDate(region);
+            List<Livraison> foundl = DataCache.getOrLoad("storage-livraison-" + region,
+                () -> LivraisonDelegate.findDescSortedByDate(region));
             if (foundl == null) {
                 foundl = List.of();
             }
             listlivr.addAll(foundl);
             list_livraison.setItems(listlivr);
             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
-            List<Fournisseur> lfs = FournisseurDelegate.findFournisseurs();
+            List<Fournisseur> lfs = DataCache.getOrLoad("storage-fournisseur",
+                () -> FournisseurDelegate.findFournisseurs());
             if (lfs == null) {
                 lfs = List.of();
             }
@@ -580,10 +559,6 @@ public class GoodstorageController implements Initializable {
     }
 
     public void setDatabase(String action) {
-        if (initialDataLoaded) {
-            return;
-        }
-        initialDataLoaded = true;
         this.action = action;
         kazisafe = KazisafeServiceFactory.createService(token);
         // Initialize StockDepotAgregateService for aggregate stock management
@@ -696,11 +671,11 @@ public class GoodstorageController implements Initializable {
 
         lisinvent = FXCollections.observableArrayList();
 
-        loadInv();
         tab_livraison.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
+                if (newValue && !tabLivraisonLoaded) {
+                    tabLivraisonLoaded = true;
                 }
 
             }
@@ -708,7 +683,8 @@ public class GoodstorageController implements Initializable {
         tab_destock.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
+                if (newValue && !tabDestockLoaded) {
+                    tabDestockLoaded = true;
                     table1.setItems(lisdestocker);
                 }
 
@@ -717,7 +693,8 @@ public class GoodstorageController implements Initializable {
         tab_invent.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
+                if (newValue && !tabInventLoaded) {
+                    tabInventLoaded = true;
                     loadInv();
                 }
             }
@@ -760,10 +737,12 @@ public class GoodstorageController implements Initializable {
         return regions;
     }
 
+    @FXML
     public void gotoSuplier(Event e) {
         MainUI.floatDialog(tools.Constants.FOURNISSEUR_DLG, 1090, 508, null, kazisafe, entreprise, null);
     }
 
+    @FXML
     public void gotoDelivery(Event e) {
         MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, null);
     }
@@ -2839,9 +2818,11 @@ public class GoodstorageController implements Initializable {
     @FXML
     private void refreshFinAccount(MouseEvent event) {
         if (tab_destock.isSelected()) {
+            tabDestockLoaded = false;
             lisdestocker.setAll(Util.filterNoNullMesure(destox));
             table1.setItems(lisdestocker);
         } else if (tab_invent.isSelected()) {
+            tabInventLoaded = false;
             if (pi_refresh_inv != null) {
                 pi_refresh_inv.setVisible(true);
             }
@@ -2906,16 +2887,19 @@ public class GoodstorageController implements Initializable {
 
         if (tab_livraison.isSelected()) {
             ComboBox cbx = (ComboBox) evt.getSource();
+            if (cbx.getSelectionModel().getSelectedItem() == null) return;
             rowsDataCount = (int) cbx.getSelectionModel().getSelectedItem();
             pagination.setPageFactory(this::createStockagePage);
             System.out.println("Row set to " + rowsDataCount);
         } else if (tab_destock.isSelected()) {
             ComboBox cbx = (ComboBox) evt.getSource();
+            if (cbx.getSelectionModel().getSelectedItem() == null) return;
             rowsDataCount1 = (int) cbx.getSelectionModel().getSelectedItem();
             pagination1.setPageFactory(this::createDestockagePage);
             System.out.println("Row set to " + rowsDataCount1);
         } else {
             ComboBox cbx = (ComboBox) evt.getSource();
+            if (cbx.getSelectionModel().getSelectedItem() == null) return;
             rowsDataCount11 = (int) cbx.getSelectionModel().getSelectedItem();
             refreshDepotInventoryTable();
             System.out.println("Row set to " + rowsDataCount11);
@@ -2978,12 +2962,14 @@ public class GoodstorageController implements Initializable {
 
     @FXML
     public void refreshLivrByHttp(Event evt) {
+        tabLivraisonLoaded = false;
         pane_wait_import.setVisible(true);
         refreshLivraisonByHttp();
     }
 
     @FXML
     public void refreshDestHttp(Event evt) {
+        tabDestockLoaded = false;
         refreshDestockerByHttp();
     }
 

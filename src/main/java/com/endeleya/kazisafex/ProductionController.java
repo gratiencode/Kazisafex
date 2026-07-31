@@ -76,6 +76,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Pagination;
 import javafx.scene.control.Tab;
@@ -102,6 +103,7 @@ import retrofit2.Response;
 import services.utils.RegionRegistry;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
+import tools.DataCache;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -520,6 +522,10 @@ public class ProductionController implements Initializable {
         instance = this;
     }
 
+    public void onCachedPageShown() {
+        // No longer needed — views are rebuilt fresh each time.
+    }
+
     public void addProduct(Produit p) {
         ols_produits.add(p);
     }
@@ -550,7 +556,10 @@ public class ProductionController implements Initializable {
         ols_imputers = FXCollections.observableArrayList();
         ols_imputeraff_indir = FXCollections.observableArrayList();
         
-        ols_produits.addAll(ProduitDelegate.findProduits()==null?List.of():ProduitDelegate.findProduits());
+        ols_produits.addAll(DataCache.getOrLoad("produits_all", () -> {
+            List<Produit> p = ProduitDelegate.findProduits();
+            return p == null ? List.of() : p;
+        }));
         cbx_mesure_to_prod.setItems(ols_mesures);
         cbx_mesure_deprod.setItems(ols_mesure_deprod);
         cbx_produits_prod.setItems(ols_produits);
@@ -565,14 +574,14 @@ public class ProductionController implements Initializable {
         cbx_depot_deprod.setItems(ols_entr_deposer);
 
         ols_entr_livr = FXCollections.observableArrayList();
-        ols_operations.setAll(OperationDelegate.findOperationByImputation(Constants.DEPT_PRODUCTION));
+        ols_operations.setAll(DataCache.getOrLoad("operations_production", () -> OperationDelegate.findOperationByImputation(Constants.DEPT_PRODUCTION)));
 
         cbx_livraison_intraposage.setItems(ols_entr_livr);
         ols_intra_matiere = FXCollections.observableArrayList();
         tbl_intrant.setItems(ols_intra_matiere);
         cbx_matiere_intraposage.setItems(ols_intra_matiere);
 
-        cbx_matiere_to_prod.setItems(FXCollections.observableArrayList(MatiereDelegate.findMatieres()
+        cbx_matiere_to_prod.setItems(FXCollections.observableArrayList(DataCache.<List<Matiere>>getOrLoad("matieres_all", () -> MatiereDelegate.findMatieres())
                 .stream().filter(i -> (i.getTypeMatiere().equals("Matiere premiere")
                 || i.getTypeMatiere().equals("Matiere consommable")
                 || i.getTypeMatiere().equals("Produit semi fini")))
@@ -600,7 +609,6 @@ public class ProductionController implements Initializable {
         initTables();
         initUpdaTable();
         initTbl();
-// TODO
     }
 
     public void initArgs(Object... objs) {
@@ -898,8 +906,8 @@ public class ProductionController implements Initializable {
     private String NON_COMMENCE = "Non commencée", LANCEE = "Lancée", EN_COURS = "En cours...", TERMINEE = "Términée", SUSPENDUE = "Suspendue", ANNULEE = "Annulée", REPRISE = "Réprise", EN_ETUDE = "En étude", EN_TEST = "En test";
 
     private void loadData() {
-        ols_intra_matiere.addAll(MatiereDelegate.findMatieres());
-        ols_entr_deposer.addAll(DepotDelegate.findDepots());
+        ols_intra_matiere.addAll(DataCache.getOrLoad("matieres_all", () -> MatiereDelegate.findMatieres()));
+        ols_entr_deposer.addAll(DataCache.getOrLoad("depots_all", () -> DepotDelegate.findDepots()));
         cbx_devise_intrapos.setItems(FXCollections.observableArrayList("USD", "CDF"));
         cbx_deviz_charg_aff_to_prod.setItems(FXCollections.observableArrayList("USD", "CDF"));
         cbx_type_intrant.setItems(FXCollections.observableArrayList("Matiere premiere", "Matiere consommable", "Produit semi fini"));
@@ -911,22 +919,23 @@ public class ProductionController implements Initializable {
         cbx_quality_to_prod.setItems(FXCollections.observableArrayList("Superieur", "Moyen", "Faible"));
         cbx_quality_deprod.setItems(cbx_quality_to_prod.getItems());
         tf_quant_sku_intrant.setText("1");
-        ols_entr_livr.addAll(LivraisonDelegate.findLivraisons());
-        ols_entreposer.addAll(EntreposerDelegate.findEntreposers()
+        ols_entr_livr.addAll(DataCache.getOrLoad("livraisons_all", () -> LivraisonDelegate.findLivraisons()));
+        List<Entreposer> allEntreposers = DataCache.getOrLoad("entreposers_all", () -> EntreposerDelegate.findEntreposers());
+        ols_entreposer.addAll(allEntreposers
                 .stream().filter(i -> (i.getNiveauFabrication().equals(Constants.MANUFACTURING_LEVEL_RAW_MATERIAL)
                 || i.getNiveauFabrication().equals(Constants.MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT))).collect(Collectors.toList()));
-        ols_entreposer_stock.addAll(EntreposerDelegate.findEntreposersGroupedByIntrant());
-        ols_entreposer_pfini.setAll(EntreposerDelegate.findEntreposers()
+        ols_entreposer_stock.addAll(DataCache.getOrLoad("entreposers_grouped_stock", () -> EntreposerDelegate.findEntreposersGroupedByIntrant()));
+        ols_entreposer_pfini.setAll(allEntreposers
                 .stream().filter(i -> (i.getNiveauFabrication().equals(Constants.MANUFACTURING_LEVEL_MADE_PRODUCT)
                 || i.getNiveauFabrication().equals(Constants.MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT))).collect(Collectors.toList()));
-        ols_productions.addAll(ProductionDelegate.findProductions());
+        ols_productions.addAll(DataCache.getOrLoad("productions_all", () -> ProductionDelegate.findProductions()));
         ols_productions_terminee.setAll(ols_productions.stream()
                 .filter(e -> e.getEtat().equals(TERMINEE)).collect(Collectors.toList()));
-        ols_depenses.addAll(DepenseDelegate.findDepenses());
+        ols_depenses.addAll(DataCache.getOrLoad("depenses_all", () -> DepenseDelegate.findDepenses()));
         cbx_charge_indir.setItems(ols_depenses);
-        ols_repartirs.addAll(RepartirDelegate.findRepartirs());
-        ols_imputers.addAll(ImputerDelegate.findImputers());
-        ols_imputeraff_indir.addAll(ImputerDelegate.findImputers());
+        ols_repartirs.addAll(DataCache.getOrLoad("repartirs_all", () -> RepartirDelegate.findRepartirs()));
+        ols_imputers.addAll(DataCache.getOrLoad("imputers_all", () -> ImputerDelegate.findImputers()));
+        ols_imputeraff_indir.addAll(DataCache.getOrLoad("imputers_indir", () -> ImputerDelegate.findImputers()));
         cbx_sku_intrant.getSelectionModel().selectFirst();
         RegionRegistry.selectSavedRegion(pref, cbx_region_depot);
         RegionRegistry.selectSavedRegion(pref, cbx_region_intrant);

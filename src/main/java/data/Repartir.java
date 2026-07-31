@@ -40,7 +40,7 @@ import java.util.UUID;
     @NamedQuery(name = "Repartir.findByRegion", query = "SELECT r FROM Repartir r WHERE r.region = :region"),
     @NamedQuery(name = "Repartir.findByNumlot", query = "SELECT r FROM Repartir r WHERE r.numlot = :numlot")})
 
-public class Repartir implements Serializable {
+public class Repartir extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

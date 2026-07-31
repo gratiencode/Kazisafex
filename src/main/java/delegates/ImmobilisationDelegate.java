@@ -9,7 +9,6 @@ import IServices.ImmobilisationStorage;
 import data.AmortissementAgregate;
 import data.Immobilisation;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -165,20 +164,10 @@ public class ImmobilisationDelegate {
     }
 
     private static void runInTransaction(java.util.function.Consumer<EntityManager> action) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                action.accept(em);
-                return null;
-            });
-            return;
-        }
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        EntityTransaction tx = em.getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        action.accept(em);
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            action.accept(em);
+            return null;
+        });
     }
 
     public static boolean shouldAgregate() {

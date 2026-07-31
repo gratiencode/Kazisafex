@@ -951,13 +951,8 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString(), Recquisition.class)
-                        .setParameter(1, objId).getResultList());
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, objId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString(), Recquisition.class)
+                    .setParameter(1, objId).getResultList());
         } catch (NoResultException e) {
             return null;
         }
@@ -968,14 +963,11 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM recquisition");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Long.class);
-                    Long dos = (Long) query.getSingleResult();
-                    return dos == null ? 0 : dos;
-                });
-            }
-            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Long.class);
+                Long dos = (Long) query.getSingleResult();
+                return dos == null ? 0 : dos;
+            });
         } catch (NoResultException e) {
             return 0L;
         }
@@ -986,21 +978,15 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.numlot = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, objId);
-                    query.setParameter(2, lot);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, objId);
-            query.setParameter(2, lot);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, objId);
+                query.setParameter(2, lot);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
-        } // To change body of generated methods, choose Tools | Templates.
+        }
     }
 
     public List<Recquisition> findOrphanRecquisitions(String prodId) {
@@ -1031,19 +1017,14 @@ public class RecquisitionService implements RecquisitionStorage {
             sb.append("(SELECT s.uid FROM recquisition s WHERE s.uid IN ");
             sb.append("(SELECT pv.recquisition_id FROM prix_de_vente pv) AND s.product_id = ? ORDER BY s.date DESC)");
 
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), PrixDeVente.class);
-                    query.setParameter(1, prodId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), PrixDeVente.class);
-            query.setParameter(1, prodId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), PrixDeVente.class);
+                query.setParameter(1, prodId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
-        } // To change body of generated methods, choose Tools | Templates.
+        }
     }
 
     @Override
@@ -1051,18 +1032,12 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ORDER BY s.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    query.setParameter(2, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            query.setParameter(2, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1075,26 +1050,16 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM stock_agregate s WHERE s.product_id = ? AND s.region LIKE ? "
                     + "AND s.final_quantity > 0 AND s.destroyed = ? ORDER BY s.date_expiration ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
-                    query.setParameter(1, prod);
-                    query.setParameter(2, region == null ? "%" : region).setParameter(3, Boolean.FALSE);
-                    List<StockAgregate> rst = query.getResultList();
-                    for (StockAgregate stockAgregate : rst) {
-                        result.put(stockAgregate.getNumlot(), stockAgregate);
-                    }
-                    return List.copyOf(result.values());
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), StockAgregate.class);
-            query.setParameter(1, prod);
-            query.setParameter(2, region == null ? "%" : region).setParameter(3, Boolean.FALSE);
-            List<StockAgregate> rst = query.getResultList();
-            for (StockAgregate stockAgregate : rst) {
-                result.put(stockAgregate.getNumlot(), stockAgregate);
-            }
-            return new ArrayList<>(result.values());
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
+                query.setParameter(1, prod);
+                query.setParameter(2, region == null ? "%" : region).setParameter(3, Boolean.FALSE);
+                List<StockAgregate> rst = query.getResultList();
+                for (StockAgregate stockAgregate : rst) {
+                    result.put(stockAgregate.getNumlot(), stockAgregate);
+                }
+                return List.copyOf(result.values());
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1107,19 +1072,11 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    List<Recquisition> l = query.getResultList();
-                    result.addAll(l);
-                    return result;
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            List<Recquisition> l = query.getResultList();
-            result.addAll(l);
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                return query.getResultList();
+            });
         } catch (Exception e) {
 
         }
@@ -1131,16 +1088,11 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.dateExpiry ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1151,22 +1103,14 @@ public class RecquisitionService implements RecquisitionStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT * FROM compter p WHERE p.product_id =  ? AND p.date_count BETWEEN ? AND  ? AND p.region = ? ORDER BY p.date_count DESC LIMIT 1 ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, puid);
-                    query.setParameter(2, dateDebut);
-                    query.setParameter(3, dateFin);
-                    query.setParameter(4, region);
-                    return (Compter) query.getSingleResult();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, puid);
-            query.setParameter(2, dateDebut);
-            query.setParameter(3, dateFin);
-            query.setParameter(4, region);
-            return (Compter) query.getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, puid);
+                query.setParameter(2, dateDebut);
+                query.setParameter(3, dateFin);
+                query.setParameter(4, region);
+                return (Compter) query.getSingleResult();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1177,16 +1121,11 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.date ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1197,16 +1136,11 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? ORDER BY s.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1218,18 +1152,12 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ORDER BY s.dateExpiry ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    query.setParameter(2, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            query.setParameter(2, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1240,18 +1168,12 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ORDER BY s.date ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    query.setParameter(2, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            query.setParameter(2, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -1262,18 +1184,12 @@ public class RecquisitionService implements RecquisitionStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM recquisition s WHERE s.product_id = ? AND s.region = ? ORDER BY s.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
-                    query.setParameter(1, uid);
-                    query.setParameter(2, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Recquisition.class);
-            query.setParameter(1, uid);
-            query.setParameter(2, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Recquisition.class);
+                query.setParameter(1, uid);
+                query.setParameter(2, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -3630,7 +3546,7 @@ public class RecquisitionService implements RecquisitionStorage {
     public boolean cloturerStocks(String region, LocalDate datedebut, LocalDate datefin, String context) {
         // Cloture journaliere: produit + lot + region.
         Executors.newSingleThreadExecutor()
-                .submit(() -> {
+                .submit(() -> ManagedSessionFactory.runWithCleanup(() -> {
 
                     LocalDate targetDay = datefin == null ? LocalDate.now() : datefin;
                     LocalDate dEffDeb = datedebut == null ? targetDay : datedebut;
@@ -3653,7 +3569,7 @@ public class RecquisitionService implements RecquisitionStorage {
                         notifyCallback(index, produits.size(), produit);
                     }
                     notifyClotureFinish(produits.size());
-                });
+                }));
         return true;
     }
 

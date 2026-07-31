@@ -11,6 +11,7 @@ import delegates.ClientOrganisationDelegate;
 import delegates.VenteDelegate;
 import data.Vente;
 import data.core.KazisafeServiceFactory;
+import tools.NotificationHandler;
 import java.net.URL;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +57,7 @@ import data.Entreprise;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import tools.CurrencyConverter;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -76,6 +78,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.Priority;
+import data.BaseModel;
 
 /**
  * FXML Controller class
@@ -157,6 +160,12 @@ public class ClientController implements Initializable {
     ResourceBundle bundle;
     Entreprise entreprise;
     Kazisafe kazisafe;
+    private final java.util.concurrent.ExecutorService syncExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "Kazisafe-Client-SSE");
+                t.setDaemon(true);
+                return t;
+            });
 
     private static ClientController instance;
     private String devise;
@@ -185,15 +194,34 @@ public class ClientController implements Initializable {
     int indexorg = -1;
 
     public void addClient(Client liv) {
-        Client l = ClientDelegate.findClient(liv.getUid());// db.findByUid(Client.class, liv.getUid());
+        Client l = ClientDelegate.findClient(liv.getUid());
         if (l == null) {
-            l = ClientDelegate.saveClient(liv);// db.insertOnly(liv);
+            l = ClientDelegate.saveClient(liv);
         } else {
-            l = ClientDelegate.updateClient(liv);// db.updateOnly(liv);
+            l = ClientDelegate.updateClient(liv);
         }
         if (lsclts != null) {
-            lsclts.add(l);
+            final Client toAdd = l;
+            Platform.runLater(() -> addClientToListSafe(toAdd));
         }
+    }
+
+    /**
+     * Adds a client to lsclts only if no client with the same UID already exists.
+     * If a client with the same UID is found, it is updated in place.
+     * Must be called on the JavaFX Application Thread.
+     */
+    private void addClientToListSafe(Client client) {
+        if (lsclts == null || client == null) {
+            return;
+        }
+        for (int i = 0; i < lsclts.size(); i++) {
+            if (lsclts.get(i).getUid().equals(client.getUid())) {
+                lsclts.set(i, client); // update in place
+                return;
+            }
+        }
+        lsclts.add(client);
     }
 
     public void addClientOrganisation(ClientOrganisation liv) {
@@ -239,6 +267,7 @@ public class ClientController implements Initializable {
                 "Agro-alimentaire", "Service public", "Autres"));
         cbx_clients_parent.setItems(lsclts);
         initDebtTab();
+        NotificationHandler.setOnDataSyncListener(this::handleSyncFromServer);
         tf_search_client.textProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -366,12 +395,94 @@ public class ClientController implements Initializable {
                     Optional<ButtonType> showAndWait = alertdlg.showAndWait();
                     if (showAndWait.get() == ButtonType.YES) {
                         if (role.equals(Role.Trader.name()) || role.contains(Role.Manager.name())) {
-                            ClientDelegate.deleteClient(choosenParent);// db.delete(choosenClient);
+                            ClientDelegate.deleteClient(choosenClient);
                             lsclts.remove(choosenClient);
+                            list_vu_saved_client_.getSelectionModel().clearSelection();
+                            choosenClient = null;
+                            tf_adresse_client_.clear();
+                            tf_email_client_.clear();
+                            tf_nom_client_.clear();
+                            tf_phone_client_.clear();
+                            cbx_type_client_.getSelectionModel().selectFirst();
+                            savedOrgs.setValue(null);
+                            cbx_clients_parent.setValue(null);
                             MainUI.notify(null, "Succes", "Client supprime avec succes", 3, "info");
                         }
                     }
                 }
+            }
+        });
+        MenuItem mMerge = new MenuItem(bundle.getString("xbtn.merge_duplicates") != null ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
+        cm.getItems().add(mMerge);
+        mMerge.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
+                        bundle.getString("sure2mergeduplicates") != null ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        ButtonType.YES, ButtonType.CANCEL);
+                alertdlg.setTitle(bundle.getString("warning"));
+                alertdlg.setHeaderText(null);
+                Optional<ButtonType> showAndWait = alertdlg.showAndWait();
+                if (showAndWait.isPresent() && showAndWait.get() == ButtonType.YES) {
+                    java.util.concurrent.Executors.newSingleThreadExecutor().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                int count = ClientDelegate.mergeAllDuplicateClients();
+                                javafx.application.Platform.runLater(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        lsclts.clear();
+                                        List<Client> refreshed = ClientDelegate.findClients();
+                                        if (refreshed != null) {
+                                            lsclts.addAll(refreshed);
+                                        }
+                                        list_vu_saved_client_.setItems(lsclts);
+                                        if (listvu_clients_debt != null) {
+                                            listvu_clients_debt.setItems(lsclts);
+                                        }
+                                        
+                                        list_vu_saved_client_.getSelectionModel().clearSelection();
+                                        choosenClient = null;
+                                        tf_adresse_client_.clear();
+                                        tf_email_client_.clear();
+                                        tf_nom_client_.clear();
+                                        tf_phone_client_.clear();
+                                        cbx_type_client_.getSelectionModel().selectFirst();
+                                        savedOrgs.setValue(null);
+                                        cbx_clients_parent.setValue(null);
+                                        
+                                        String successMsg = bundle.getString("xduplicates_merged_success") != null ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
+                                        MainUI.notify(null, "Succès", successMsg + " (" + count + " fusions)", 4, "info");
+                                    }
+                                });
+                            } catch (Exception ex) {
+                                javafx.application.Platform.runLater(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        MainUI.notify(null, "Erreur", "La fusion a échoué: " + ex.getMessage(), 4, "error");
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+        });
+        MenuItem m3 = new MenuItem(bundle.getString("new") != null ? bundle.getString("new") : "Nouveau");
+        cm.getItems().add(m3);
+        m3.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                list_vu_saved_client_.getSelectionModel().clearSelection();
+                choosenClient = null;
+                tf_adresse_client_.clear();
+                tf_email_client_.clear();
+                tf_nom_client_.clear();
+                tf_phone_client_.clear();
+                cbx_type_client_.getSelectionModel().selectFirst();
+                savedOrgs.setValue(null);
+                cbx_clients_parent.setValue(null);
             }
         });
         list_vu_saved_client_.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Client>() {
@@ -508,32 +619,25 @@ public class ClientController implements Initializable {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("fillfield"), 5, "error");
             return;
         }
-        List<Client> lclt = ClientDelegate.findClientByPhone(tf_phone_client_.getText());// db.findWithAndClause(Client.class,
-        // new String[]{"phone"}, new
-        // String[]{tf_phone_client_.getText()});
-        if (!lclt.isEmpty()) {
-            MainUI.notify(null, bundle.getString("error"), bundle.getString("clientexist"), 3, "error");
-            return;
-        }
         int indextype = cbx_type_client_.getSelectionModel().getSelectedIndex();
-        Client c = new Client();
-        c.setAdresse(tf_adresse_client_.getText());
-        c.setEmail(tf_email_client_.getText());
-        c.setNomClient(tf_nom_client_.getText());
-        c.setPhone(tf_phone_client_.getText());
-        c.setTypeClient("#" + indextype);
-        if (indextype == 3 && choosenParent == null) {
-            choosenParent = ClientDelegate.findAnonymousClient();
-        }
-        c.setParentId(choosenParent == null ? ClientDelegate.findAnonymousClient() : choosenParent);
-        List<Client> clients = ClientDelegate.findClientByPhone(c.getPhone());
-        if (clients.isEmpty()) {
+        if (choosenClient == null) {
+            List<Client> lclt = ClientDelegate.findClientByPhone(tf_phone_client_.getText().trim());
+            if (!lclt.isEmpty()) {
+                MainUI.notify(null, bundle.getString("error"), bundle.getString("clientexist"), 3, "error");
+                return;
+            }
+            Client c = new Client();
+            c.setAdresse(tf_adresse_client_.getText().trim());
+            c.setEmail(tf_email_client_.getText().trim());
+            c.setNomClient(tf_nom_client_.getText().trim());
+            c.setPhone(tf_phone_client_.getText().trim());
+            c.setTypeClient("#" + indextype);
+            if (indextype == 3 && choosenParent == null) {
+                choosenParent = ClientDelegate.findAnonymousClient();
+            }
+            c.setParentId(choosenParent == null ? ClientDelegate.findAnonymousClient() : choosenParent);
             Client svd = ClientDelegate.saveClient(c);
             saveClientByHttp(svd);
-            // Executors.newCachedThreadPool()
-            // .submit(() -> {
-            // Util.sync(svd, Constants.ACTION_CREATE, Tables.CLIENT);
-            // });
 
             if (indexorg == 1 && savedOrgs.getValue() != null) {
                 ClientAppartenir cap = new ClientAppartenir(DataId.generate());
@@ -541,14 +645,61 @@ public class ClientController implements Initializable {
                 cap.setClientOrganisationId(savedOrgs.getValue());
                 cap.setDateAppartenir(LocalDate.now());
                 cap.setRegion(region);
-                ClientAppartenir svap = ClientAppartenirDelegate.saveClientAppartenir(cap); // db.insertAndSync(cap);
+                ClientAppartenir svap = ClientAppartenirDelegate.saveClientAppartenir(cap);
                 Executors.newCachedThreadPool()
                         .submit(() -> {
                             Util.sync(svap, Constants.ACTION_CREATE, Tables.CLIENTAPPARTENIR);
                         });
             }
             if (svd != null) {
+                addClientToListSafe(svd);
                 MainUI.notify(null, bundle.getString("success"), bundle.getString("clientsaved"), 4, "info");
+                // Clear fields
+                tf_adresse_client_.clear();
+                tf_email_client_.clear();
+                tf_nom_client_.clear();
+                tf_phone_client_.clear();
+                cbx_type_client_.getSelectionModel().selectFirst();
+                savedOrgs.setValue(null);
+                cbx_clients_parent.setValue(null);
+            }
+        } else {
+            List<Client> lclt = ClientDelegate.findClientByPhone(tf_phone_client_.getText().trim());
+            if (!lclt.isEmpty() && !lclt.get(0).getUid().equals(choosenClient.getUid())) {
+                MainUI.notify(null, bundle.getString("error"), bundle.getString("clientexist"), 3, "error");
+                return;
+            }
+            choosenClient.setAdresse(tf_adresse_client_.getText().trim());
+            choosenClient.setEmail(tf_email_client_.getText().trim());
+            choosenClient.setNomClient(tf_nom_client_.getText().trim());
+            choosenClient.setPhone(tf_phone_client_.getText().trim());
+            choosenClient.setTypeClient("#" + indextype);
+            if (indextype == 3 && choosenParent == null) {
+                choosenParent = ClientDelegate.findAnonymousClient();
+            }
+            choosenClient.setParentId(choosenParent == null ? ClientDelegate.findAnonymousClient() : choosenParent);
+            Client f = ClientDelegate.updateClient(choosenClient);
+            if (f != null) {
+                saveClientByHttp(f);
+                Executors.newCachedThreadPool()
+                        .submit(() -> {
+                            Util.sync(f, Constants.ACTION_UPDATE, Tables.CLIENT);
+                        });
+                int idx = lsclts.indexOf(choosenClient);
+                if (idx >= 0) {
+                    lsclts.set(idx, choosenClient);
+                }
+                MainUI.notify(null, bundle.getString("success"), "Client modifié avec succès", 4, "info");
+                // Clear fields and selection
+                list_vu_saved_client_.getSelectionModel().clearSelection();
+                choosenClient = null;
+                tf_adresse_client_.clear();
+                tf_email_client_.clear();
+                tf_nom_client_.clear();
+                tf_phone_client_.clear();
+                cbx_type_client_.getSelectionModel().selectFirst();
+                savedOrgs.setValue(null);
+                cbx_clients_parent.setValue(null);
             }
         }
     }
@@ -652,8 +803,8 @@ public class ClientController implements Initializable {
         configList();
         ContextMenu cmenu = new ContextMenu();
         role = pref.get("priv", null);
-        tauxDeChange=pref.getDouble("taux2change", 2800);
-        devise=pref.get("mainCur", "USD");
+        tauxDeChange = CurrencyConverter.activeRate();
+        devise = CurrencyConverter.mainCurrency();
         MenuItem mi = new MenuItem("Voir la consommation");
         cmenu.getItems().add(mi);
         mi.setOnAction((event) -> {
@@ -712,40 +863,91 @@ public class ClientController implements Initializable {
         col_cli_libelle.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getLibelle()));
         col_cli_libelle.setPrefWidth(200);
 
-        col_cli_topay.setCellValueFactory(cellData ->{ 
+        col_cli_topay.setCellValueFactory(cellData -> {
             Vente v = cellData.getValue();
-            double total=0;
-            if(devise.equals("USD")){
-                double cdf=v.getMontantCdf();
-                total = Math.max(0,(v.getMontantUsd()+(cdf/tauxDeChange)) + v.getMontantDette());
-            }else if(devise.equals("CDF")){
-                double usd=v.getMontantUsd();
-                total = Math.max(0,(v.getMontantCdf()+(usd*tauxDeChange)) + v.getMontantDette());
-            }
-            return new SimpleObjectProperty<>(total);
+            double cash = CurrencyConverter.legacyTotalInMainCurrency(v.getMontantUsd(), v.getMontantCdf());
+            double debt = CurrencyConverter.debtInMainCurrency(
+                    v.getMontantDette() == null ? 0 : v.getMontantDette(), v.getDeviseDette());
+            return new SimpleObjectProperty<>(Math.max(0, cash + debt));
         });
         col_cli_topay.setPrefWidth(100);
 
         col_cli_payed.setCellValueFactory(cellData -> {
             Vente v = cellData.getValue();
-           double payed=0;
-           if(devise.equals("USD")){
-                double cdf=v.getMontantCdf();
-                payed = (v.getMontantUsd()+(cdf/tauxDeChange));
-            }else if(devise.equals("CDF")){
-                double usd=v.getMontantUsd();
-                payed = (v.getMontantCdf()+(usd*tauxDeChange));
-            }
+            double payed = CurrencyConverter.legacyTotalInMainCurrency(v.getMontantUsd(), v.getMontantCdf());
             return new SimpleObjectProperty<>(payed);
         });
         col_cli_payed.setPrefWidth(100);
 
         col_cli_remained
-                .setCellValueFactory(cellData -> new SimpleObjectProperty<>(cellData.getValue().getMontantDette()));
+                .setCellValueFactory(cellData -> new SimpleObjectProperty<>(
+                        CurrencyConverter.debtInMainCurrency(
+                                cellData.getValue().getMontantDette() == null ? 0 : cellData.getValue().getMontantDette(),
+                                cellData.getValue().getDeviseDette())));
         col_cli_remained.setPrefWidth(100);
 
         listvu_clients_debt.setItems(lsclts);
         listvu_clients_debt.setCellFactory(list_vu_saved_client_.getCellFactory());
+        ContextMenu cmDebt = new ContextMenu();
+        MenuItem mMergeDebt = new MenuItem(bundle.getString("xbtn.merge_duplicates") != null ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
+        cmDebt.getItems().add(mMergeDebt);
+        listvu_clients_debt.setContextMenu(cmDebt);
+        mMergeDebt.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
+                        bundle.getString("sure2mergeduplicates") != null ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        ButtonType.YES, ButtonType.CANCEL);
+                alertdlg.setTitle(bundle.getString("warning"));
+                alertdlg.setHeaderText(null);
+                Optional<ButtonType> showAndWait = alertdlg.showAndWait();
+                if (showAndWait.isPresent() && showAndWait.get() == ButtonType.YES) {
+                    java.util.concurrent.Executors.newSingleThreadExecutor().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                int count = ClientDelegate.mergeAllDuplicateClients();
+                                javafx.application.Platform.runLater(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        lsclts.clear();
+                                        List<Client> refreshed = ClientDelegate.findClients();
+                                        if (refreshed != null) {
+                                            lsclts.addAll(refreshed);
+                                        }
+                                        list_vu_saved_client_.setItems(lsclts);
+                                        if (listvu_clients_debt != null) {
+                                            listvu_clients_debt.setItems(lsclts);
+                                        }
+                                        
+                                        list_vu_saved_client_.getSelectionModel().clearSelection();
+                                        choosenClient = null;
+                                        tf_adresse_client_.clear();
+                                        tf_email_client_.clear();
+                                        tf_nom_client_.clear();
+                                        tf_phone_client_.clear();
+                                        cbx_type_client_.getSelectionModel().selectFirst();
+                                        savedOrgs.setValue(null);
+                                        cbx_clients_parent.setValue(null);
+                                        
+                                        String successMsg = bundle.getString("xduplicates_merged_success") != null ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
+                                        MainUI.notify(null, "Succès", successMsg + " (" + count + " fusions)", 4, "info");
+                                    }
+                                });
+                            } catch (Exception ex) {
+                                javafx.application.Platform.runLater(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        MainUI.notify(null, "Erreur", "La fusion a échoué: " + ex.getMessage(), 4, "error");
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
 
         tf_filter_client_debt.textProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue.isEmpty()) {
@@ -811,6 +1013,8 @@ public class ClientController implements Initializable {
     }
 
     private void showDebtDetails(Client c) {
+        tauxDeChange = CurrencyConverter.activeRate();
+        devise = CurrencyConverter.mainCurrency();
         ls_client_debt_details.clear();
         double totalDebt = 0;
         List<Vente> allCreditSales = VenteDelegate.findCreditSales();
@@ -821,19 +1025,58 @@ public class ClientController implements Initializable {
                     if (chk_show_unpaid_only != null && chk_show_unpaid_only.isSelected()) {
                         if (v.getMontantDette() > 0) {
                             ls_client_debt_details.add(v);
-                            totalDebt += v.getMontantDette();
+                            totalDebt += CurrencyConverter.debtInMainCurrency(
+                                    v.getMontantDette(), v.getDeviseDette());
                         }
                     } else {
                         // Sinon afficher toutes les ventes à crédit
                         ls_client_debt_details.add(v);
                         if (v.getMontantDette() > 0) {
-                            totalDebt += v.getMontantDette();
+                            totalDebt += CurrencyConverter.debtInMainCurrency(
+                                    v.getMontantDette(), v.getDeviseDette());
                         }
                     }
                 }
             }
         }
-        lbl_total_client_debt.setText(String.format("%.2f USD", totalDebt));
+        lbl_total_client_debt.setText(CurrencyConverter.formatAmount(totalDebt, devise));
+    }
+
+    private void handleSyncFromServer(BaseModel baseModel) {
+        if (baseModel == null) {
+            return;
+        }
+        if (!(baseModel instanceof Client)
+                && !(baseModel instanceof ClientOrganisation)
+                && !(baseModel instanceof ClientAppartenir)
+                && !(baseModel instanceof Vente)) {
+            return;
+        }
+        syncExecutor.submit(() -> {
+            List<Client> freshClients = ClientDelegate.findClients();
+            List<ClientOrganisation> freshOrgs = ClientOrganisationDelegate.findClientOrganisations();
+            Platform.runLater(() -> {
+                if (lsclts != null && freshClients != null) {
+                    lsclts.setAll(freshClients);
+                }
+                if (orgs != null && freshOrgs != null) {
+                    orgs.setAll(freshOrgs);
+                }
+                if (cbx_clients_parent != null) {
+                    cbx_clients_parent.setItems(lsclts);
+                }
+                if (list_vu_saved_client_ != null) {
+                    list_vu_saved_client_.setItems(lsclts);
+                }
+                if (listvu_clients_debt != null) {
+                    listvu_clients_debt.setItems(lsclts);
+                }
+                Client selected = listvu_clients_debt == null ? null : listvu_clients_debt.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    showDebtDetails(selected);
+                }
+            });
+        });
     }
 
     @FXML
@@ -860,7 +1103,6 @@ public class ClientController implements Initializable {
                         }
                     }
                 });
-
     }
 
     private void saveClientByHttp(Client client) {
@@ -883,4 +1125,5 @@ public class ClientController implements Initializable {
                     }
                 });
     }
+
 }

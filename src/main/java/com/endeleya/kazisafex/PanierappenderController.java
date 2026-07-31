@@ -28,6 +28,7 @@ import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
+import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
@@ -46,6 +47,8 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TableView;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
@@ -72,6 +75,7 @@ import data.Recquisition;
 import data.StockAgregate;
 import data.Stocker;
 import org.apache.commons.lang3.StringUtils;
+import tools.CurrencyConverter;
 import tools.Constants;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -171,7 +175,7 @@ public class PanierappenderController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         bundle = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux2change = pref.getDouble("taux2change", 2000);
+        taux2change = CurrencyConverter.activeRate();
         region = pref.get("region", "...");
         role = pref.get("priv", "");
         meth = pref.get("meth", "fifo");
@@ -208,7 +212,7 @@ public class PanierappenderController implements Initializable {
 //                    double tcfd = BigDecimal.valueOf(d * cdf).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
                     txt_total_cdf.setText(String.valueOf(Math.round(d * cdf)));
                     txt_total_usd.setText(String.valueOf(tusd));
-                    lbl_usd_part.setVisible(false);
+                    // Les champs USD restent toujours visibles quelle que soit la devise.
                 } else {
                     tf_prix_unitr_usd.setText(String.valueOf(pvd.getPrixUnitaire()));
                     double pv = Double.parseDouble(tf_prix_unitr_usd.getText());
@@ -270,6 +274,7 @@ public class PanierappenderController implements Initializable {
     ComboBox<Printer> cbx_printers;
 //appel initial
     public void setProduit(Entreprise eze, Kazisafe ksf, Produit produit, String action, long id) {
+        taux2change = CurrencyConverter.activeRate();
         if (produit == null) {
             return;
         }
@@ -372,9 +377,7 @@ public class PanierappenderController implements Initializable {
                 double tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                 txt_total_cdf.setText(String.valueOf(tcdf));
                 txt_total_usd.setText(String.valueOf(tusd));
-                tf_prix_unitr_usd.setVisible(false);
-                txt_total_usd.setVisible(false);
-                lbl_usd_part.setVisible(false);
+                // Les champs USD restent toujours visibles quelle que soit la devise.
             } else {
                 tf_prix_unitr_usd.setText(String.valueOf(pvx.getPrixUnitaire()));
                 tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire() * taux2change));
@@ -679,9 +682,7 @@ public class PanierappenderController implements Initializable {
             double tcfd = BigDecimal.valueOf(d * fc).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
             txt_total_cdf.setText(String.valueOf(tcfd));
             txt_total_usd.setText(String.valueOf(tusd));
-            tf_prix_unitr_usd.setVisible(false);
-            txt_total_usd.setVisible(false);
-            lbl_usd_part.setVisible(false);
+            // Les champs USD restent toujours visibles quelle que soit la devise.
         } else {
             tf_prix_unitr_usd.setText(String.valueOf(pvx.getPrixUnitaire()));
             tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire() * taux2change));
@@ -981,9 +982,7 @@ public class PanierappenderController implements Initializable {
                     tcdf = BigDecimal.valueOf(d * pv.getPrixUnitaire())
                             .setScale(0, RoundingMode.HALF_EVEN).doubleValue();
                     tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                    tf_prix_unitr_usd.setVisible(false);
-                    txt_total_usd.setVisible(false);
-                    lbl_usd_part.setVisible(false);
+                    // Les champs USD restent toujours visibles quelle que soit la devise.
                 } else {
                     tusd = BigDecimal.valueOf(d * pv.getPrixUnitaire()).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                     tcdf = BigDecimal.valueOf(tusd * taux2change).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
@@ -1014,11 +1013,9 @@ public class PanierappenderController implements Initializable {
                 if (dvz.equals("CDF")) {
                     tcdf = BigDecimal.valueOf(d * pup).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
                     tusd = BigDecimal.valueOf(tcdf / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                    tf_prix_unitr_usd.setVisible(false);
-                    txt_total_usd.setVisible(false);
-                    lbl_usd_part.setVisible(false);
+                    // Les champs USD restent toujours visibles quelle que soit la devise.
                     txt_total_cdf.setText(String.valueOf(tcdf));
-                    txt_total_usd.setText(String.valueOf(tcdf));
+                    txt_total_usd.setText(String.valueOf(tusd));
                 } else {
                     tusd = BigDecimal.valueOf(d * pup).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                     tcdf = BigDecimal.valueOf(tusd * taux2change).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
@@ -1101,7 +1098,7 @@ public class PanierappenderController implements Initializable {
             MainUI.notify(null, bundle.getString("error"), "Prix ou quantité invalide.", 4, "error");
             return;
         }
-        String dex = pref.get("mainCur", "USD");
+        String dex = CurrencyConverter.mainCurrency();
         double qr = parseDoubleOrDefault(tf_input_quant.getText(), 0);
         if (qr <= 0) {
             MainUI.notify(null, bundle.getString("error"), "La quantité doit être supérieure à 0.", 4, "error");
@@ -1115,10 +1112,10 @@ public class PanierappenderController implements Initializable {
         }
         double valeurTotalUsd = parseDoubleOrDefault(txt_total_usd.getText(), qr * prixUnitUsd);
         double valeurTotalCdf = parseDoubleOrDefault(txt_total_cdf.getText(), qr * prixUnitCdf);
-        if ("USD".equals(dex)) {
-            valeurTotalCdf = valeurTotalUsd * taux2change;
+        if (CurrencyConverter.USD.equals(dex)) {
+            valeurTotalCdf = CurrencyConverter.fromUsd(valeurTotalUsd, CurrencyConverter.CDF);
         } else {
-            valeurTotalUsd = valeurTotalCdf / taux2change;
+            valeurTotalUsd = CurrencyConverter.toUsd(valeurTotalCdf, CurrencyConverter.CDF);
         }
 
         // Reprendre la quantite courante juste avant validation pour eviter un stale state.

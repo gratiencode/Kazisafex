@@ -104,6 +104,7 @@ import tools.NotificationHandler;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Transaction;
+import tools.DataCache;
 import tools.Util;
 import data.helpers.Role;
 import data.helpers.TypeTraisorerie;
@@ -128,22 +129,7 @@ public class TresorerieController implements Initializable {
      * Rebind tables/lists after the cached page is reattached to the scene.
      */
     public void onCachedPageShown() {
-        if (tresors != null && comptes != null) {
-            tresors.setItems(comptes);
-            tresors.refresh();
-        }
-        if (ls_depense != null && depenses != null) {
-            ls_depense.setItems(depenses);
-            ls_depense.refresh();
-        }
-        if (tbl_transaction != null && lstransaction != null) {
-            tbl_transaction.setItems(lstransaction);
-            tbl_transaction.refresh();
-        }
-        if (tbl_depenses_realisees != null && depensesRealisees != null) {
-            tbl_depenses_realisees.setItems(depensesRealisees);
-            tbl_depenses_realisees.refresh();
-        }
+        // No longer needed — views are rebuilt fresh each time.
     }
 
     @FXML
@@ -358,7 +344,6 @@ public class TresorerieController implements Initializable {
     Depense d;
 
     private static TresorerieController instance;
-    private boolean initialDataLoaded = false;
     private ResourceBundle bundle;
     @FXML
     private ComboBox<?> cbx_frequence_depense;
@@ -731,10 +716,6 @@ public class TresorerieController implements Initializable {
     }
 
     public void setUp(Entreprise eze, Vente v, Facture f) {
-        if (initialDataLoaded) {
-            return;
-        }
-        initialDataLoaded = true;
         token = pref.get("token", null);
         kazisafe = KazisafeServiceFactory.createService(token);
         this.entreprise = eze;
@@ -755,18 +736,19 @@ public class TresorerieController implements Initializable {
         cbx_depenses.setItems(depenses);
         lstrz = new ArrayList<>();
         List<DepenseAgregate> rawDep;
+        String regionKey = (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) ? "all" : region;
         if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
             cbx_region.setVisible(true);
-            lstrz.addAll(TraisorerieDelegate.findTraisoreries());
-            comptes.addAll(CompteTresorDelegate.findCompteTresors());
-            depenses.addAll(DepenseDelegate.findDepenses());
-            rawDep = DepenseAgregateDelegate.findDepenseAgregates();
+            lstrz.addAll(DataCache.getOrLoad("tresorerie-transactions-" + regionKey, TraisorerieDelegate::findTraisoreries));
+            comptes.addAll(DataCache.getOrLoad("tresorerie-comptes-" + regionKey, () -> CompteTresorDelegate.findCompteTresors()));
+            depenses.addAll(DataCache.getOrLoad("tresorerie-depenses-" + regionKey, () -> DepenseDelegate.findDepenses()));
+            rawDep = DataCache.getOrLoad("tresorerie-depenses-realisees-" + regionKey, DepenseAgregateDelegate::findDepenseAgregates);
         } else {
             cbx_region.setVisible(false);
-            lstrz.addAll(TraisorerieDelegate.findTraisoreries(region));
-            comptes.addAll(CompteTresorDelegate.findCompteTresors(region));
-            depenses.addAll(DepenseDelegate.findDepenses(region));
-            rawDep = DepenseAgregateDelegate.findDepenseAgregates(region);
+            lstrz.addAll(DataCache.getOrLoad("tresorerie-transactions-" + regionKey, () -> TraisorerieDelegate.findTraisoreries(region)));
+            comptes.addAll(DataCache.getOrLoad("tresorerie-comptes-" + regionKey, () -> CompteTresorDelegate.findCompteTresors(region)));
+            depenses.addAll(DataCache.getOrLoad("tresorerie-depenses-" + regionKey, () -> DepenseDelegate.findDepenses(region)));
+            rawDep = DataCache.getOrLoad("tresorerie-depenses-realisees-" + regionKey, () -> DepenseAgregateDelegate.findDepenseAgregates(region));
         }
         fillDepensesRealiseesAggregate(rawDep);
 

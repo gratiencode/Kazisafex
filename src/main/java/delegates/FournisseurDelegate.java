@@ -80,4 +80,44 @@ public class FournisseurDelegate {
     public static double getTotalDebt() {
         return getStorage().getTotalDebt();
     }
+
+    public static void mergeFournisseur(Fournisseur local, Fournisseur incoming) {
+        if (incoming.getNomFourn() != null && !incoming.getNomFourn().trim().isEmpty()) {
+            local.setNomFourn(incoming.getNomFourn().trim());
+        }
+        if (incoming.getAdresse() != null && !incoming.getAdresse().trim().isEmpty()) {
+            local.setAdresse(incoming.getAdresse().trim());
+        }
+        if (incoming.getIdentification() != null && !incoming.getIdentification().trim().isEmpty()) {
+            local.setIdentification(incoming.getIdentification().trim());
+        }
+        if (incoming.getPhone() != null && !incoming.getPhone().trim().isEmpty()) {
+            local.setPhone(incoming.getPhone().trim());
+        }
+        if (incoming.getDeletedAt() != null) {
+            local.setDeletedAt(incoming.getDeletedAt());
+        }
+        local.setUpdatedAt(LocalDateTime.now());
+    }
+
+    public static Fournisseur syncFournisseurSafe(Fournisseur supplier) {
+        Fournisseur localSupplier = findFournisseur(supplier.getUid());
+        if (localSupplier == null && supplier.getPhone() != null && !supplier.getPhone().trim().isEmpty()) {
+            List<Fournisseur> byPhone = findByPhone(supplier.getPhone().trim());
+            if (byPhone != null) {
+                for (Fournisseur f : byPhone) {
+                    if (f.getPhone() != null && f.getPhone().trim().equals(supplier.getPhone().trim())) {
+                        localSupplier = f;
+                        break;
+                    }
+                }
+            }
+        }
+        if (localSupplier == null) {
+            return saveFournisseur(supplier);
+        } else {
+            mergeFournisseur(localSupplier, supplier);
+            return updateFournisseur(localSupplier);
+        }
+    }
 }

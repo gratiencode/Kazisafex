@@ -12,6 +12,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.ThemeStyler;
 
 
@@ -31,6 +32,7 @@ public class Kazisafex extends Application {
         instance=this;
         pref=Preferences.userNodeForPackage(SyncEngine.class);
         System.out.println("Time now: "+System.currentTimeMillis());
+        SyncLogger.init();
     }
     
     public static Kazisafex getInstance(){

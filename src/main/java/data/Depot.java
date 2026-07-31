@@ -40,7 +40,7 @@ import java.util.List;
     @NamedQuery(name = "Depot.findByTypeDepot", query = "SELECT d FROM Depot d WHERE d.typeDepot = :typeDepot"),
     @NamedQuery(name = "Depot.findByRegion", query = "SELECT d FROM Depot d WHERE d.region = :region")})
 
-public class Depot implements Serializable {
+public class Depot extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

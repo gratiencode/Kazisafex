@@ -15,7 +15,7 @@ import jakarta.persistence.PreUpdate;
 
 @Entity
 @Table(name = "immobilisation")
-public class Immobilisation {
+public class Immobilisation extends BaseModel implements java.io.Serializable {
     @Id
     @Basic(optional = false)
     @NotNull

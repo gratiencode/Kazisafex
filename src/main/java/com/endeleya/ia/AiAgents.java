@@ -59,13 +59,14 @@ public final class AiAgents {
     private static final AiAgents INSTANCE = new AiAgents();
 
     private final Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
-    private final JemimaTools jemimaTools;
-    private final JemimaInvoiceWorkflow invoiceWorkflow;
-    private final JemimaSaleWorkflow saleWorkflow;
-    private final JemimaExpenseWorkflow expenseWorkflow;
+    private final GratienTools GratienTools;
+    private final GratienInvoiceWorkflow invoiceWorkflow;
+    private final GratienProductImageWorkflow productImageWorkflow;
+    private final GratienSaleWorkflow saleWorkflow;
+    private final GratienExpenseWorkflow expenseWorkflow;
     private final RedisMemoryStore memoryStore;
     private final ChatMemoryProvider memoryProvider;
-    private final JemimaAgent assistant;
+    private final GratienAgent assistant;
     private final ProductCreatorAgent productCreatorAgent;
     private final SupplierDeliveryAgent supplierDeliveryAgent;
     private final RequisitionPriceAgent requisitionPriceAgent;
@@ -79,8 +80,8 @@ public final class AiAgents {
     private volatile PendingInvoiceIntent pendingInvoiceIntent;
 
     private AiAgents() {
-        // JemimaTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
-        this.jemimaTools = new JemimaTools();
+        // GratienTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
+        this.GratienTools = new GratienTools();
         // La memoire Redis garde le contexte par entreprise/utilisateur avec fallback local.
         this.memoryStore = new RedisMemoryStore();
         this.memoryProvider = memoryProvider(memoryStore);
@@ -91,10 +92,10 @@ public final class AiAgents {
                 .returnThinking(true)
                 .timeout(Duration.ofMinutes(5))
                 .build();
-        // Pattern LangChain4j demande: proxy agent + function calling via JemimaTools + memoire.
-        this.assistant = AiServices.builder(JemimaAgent.class)
+        // Pattern LangChain4j demande: proxy agent + function calling via GratienTools + memoire.
+        this.assistant = AiServices.builder(GratienAgent.class)
                 .streamingChatModel(oschatmodel)
-                .tools(jemimaTools)
+                .tools(GratienTools)
                 .chatMemoryProvider(memoryProvider)
                 .build();
         this.productCreatorAgent = buildAgent(ProductCreatorAgent.class, oschatmodel);
@@ -106,17 +107,18 @@ public final class AiAgents {
         this.expenseOperationAgent = buildAgent(ExpenseOperationAgent.class, oschatmodel);
         this.workflowCancellationAgent = buildAgent(WorkflowCancellationAgent.class, oschatmodel);
         // Le workflow recoit les tools afin que les agents puissent creer livraison, recquisitions et prix.
-        this.invoiceWorkflow = new JemimaInvoiceWorkflow(jemimaTools, this::runInvoiceAgents);
-        this.saleWorkflow = new JemimaSaleWorkflow(jemimaTools, this::runSaleAgents);
-        this.expenseWorkflow = new JemimaExpenseWorkflow(jemimaTools, this::runExpenseAgents);
+        this.invoiceWorkflow = new GratienInvoiceWorkflow(GratienTools, this::runInvoiceAgents);
+        this.productImageWorkflow = new GratienProductImageWorkflow(GratienTools);
+        this.saleWorkflow = new GratienSaleWorkflow(GratienTools, this::runSaleAgents);
+        this.expenseWorkflow = new GratienExpenseWorkflow(GratienTools, this::runExpenseAgents);
     }
 
     public static AiAgents getInstance() {
         return INSTANCE;
     }
 
-    public JemimaTools getJemimaTools() {
-        return jemimaTools;
+    public GratienTools getGratienTools() {
+        return GratienTools;
     }
 
     public void startForCurrentSession() {
@@ -172,7 +174,7 @@ public final class AiAgents {
                 2. `vente` ou `sortie` pour une sortie de stock
                 3. `dépense` pour enregistrer une dépense
 
-                Répondez avec l'un de ces mots pour que Jemima lance le bon workflow.
+                Répondez avec l'un de ces mots pour que Gratien lance le bon workflow.
                 """;
         appendMemory("user", safe(question, "[document joint sans intention précisée]"));
         appendMemory("assistant", prompt);
@@ -215,6 +217,10 @@ public final class AiAgents {
 
     public boolean shouldHandleInvoice(String question, List<File> attachments) {
         return invoiceWorkflow.shouldHandle(question, attachments);
+    }
+
+    public boolean shouldHandleProductImage(String question, List<File> attachments) {
+        return productImageWorkflow.shouldHandle(question, attachments);
     }
 
     public boolean shouldHandleSale(String question, List<File> attachments) {
@@ -274,7 +280,7 @@ public final class AiAgents {
 
     public boolean shouldHandleWorkflowCancellation(String question) {
         startForCurrentSession();
-        if (jemimaTools.hasPendingWorkflowCancellation(sessionId)) {
+        if (GratienTools.hasPendingWorkflowCancellation(sessionId)) {
             return true;
         }
         String value = question == null ? "" : question.toLowerCase();
@@ -291,7 +297,7 @@ public final class AiAgents {
     public String orchestrateWorkflowCancellation(String question) {
         startForCurrentSession();
         appendMemory("user", safe(question, ""));
-        String state = jemimaTools.pendingWorkflowCancellationState(sessionId);
+        String state = GratienTools.pendingWorkflowCancellationState(sessionId);
         String result = runAgent("workflow_cancellation_agent",
                 () -> workflowCancellationAgent.execute(sessionId, sessionId, state, safe(question, "")));
         appendMemory("workflow_cancellation_agent", result);
@@ -329,12 +335,20 @@ public final class AiAgents {
                     .compile();
             Optional<ServiceAgentState> ignored = graph.invoke(Map.of("step", "start"));
         } catch (Exception ex) {
-            // En cas d'echec LangGraph4j, le workflow direct garde Jemima utilisable.
+            // En cas d'echec LangGraph4j, le workflow direct garde Gratien utilisable.
             LOGGER.log(Level.WARNING, "LangGraph4j AiAgents a bascule en execution directe", ex);
             answer[0] = invoiceWorkflow.handle(question, attachments);
             appendMemory("assistant", answer[0]);
         }
         return answer[0] == null ? "Je n'ai pas pu orchestrer cette facture." : answer[0];
+    }
+
+    public String orchestrateProductImage(String question, List<File> attachments) {
+        startForCurrentSession();
+        appendMemory("user", safe(question, "[image de produits jointe]"));
+        String answer = productImageWorkflow.handle(question, attachments);
+        appendMemory("assistant", answer);
+        return answer;
     }
 
     public String orchestrateSale(String question, List<File> attachments) {
@@ -354,26 +368,26 @@ public final class AiAgents {
     }
 
     private String runInvoiceAgents(InvoiceDraft draft) {
-        String workflowId = jemimaTools.registerInvoiceWorkflow(draft);
+        String workflowId = GratienTools.registerInvoiceWorkflow(draft);
         String[] finalAnswer = new String[1];
-        appendMemory("invoice-workflow", "Demarrage workflow " + workflowId + " : " + jemimaTools.workflowState(workflowId));
+        appendMemory("invoice-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.workflowState(workflowId));
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("product_creator_agent", node_async(state -> {
                         String result = runAgent("product_creator_agent",
-                                () -> productCreatorAgent.execute(sessionId, workflowId, jemimaTools.workflowState(workflowId)));
+                                () -> productCreatorAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
                         appendMemory("product_creator_agent", result);
                         return Map.of("step", "product_creator_agent");
                     }))
                     .addNode("supplier_delivery_agent", node_async(state -> {
                         String result = runAgent("supplier_delivery_agent",
-                                () -> supplierDeliveryAgent.execute(sessionId, workflowId, jemimaTools.workflowState(workflowId)));
+                                () -> supplierDeliveryAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
                         appendMemory("supplier_delivery_agent", result);
                         return Map.of("step", "supplier_delivery_agent");
                     }))
                     .addNode("requisition_price_agent", node_async(state -> {
                         finalAnswer[0] = runAgent("requisition_price_agent",
-                                () -> requisitionPriceAgent.execute(sessionId, workflowId, jemimaTools.workflowState(workflowId)));
+                                () -> requisitionPriceAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
                         appendMemory("requisition_price_agent", finalAnswer[0]);
                         return Map.of("step", "requisition_price_agent");
                     }))
@@ -385,28 +399,28 @@ public final class AiAgents {
             Optional<ServiceAgentState> ignored = graph.invoke(Map.of("step", "start"));
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "Workflow multi-agents facture en fallback direct", ex);
-            finalAnswer[0] = jemimaTools.insertInvoiceSupply(draft);
+            finalAnswer[0] = GratienTools.insertInvoiceSupply(draft);
         }
         return finalAnswer[0] == null || finalAnswer[0].isBlank()
-                ? jemimaTools.workflowState(workflowId)
+                ? GratienTools.workflowState(workflowId)
                 : finalAnswer[0];
     }
 
     private String runSaleAgents(SaleDraft draft) {
-        String workflowId = jemimaTools.registerSaleWorkflow(draft);
+        String workflowId = GratienTools.registerSaleWorkflow(draft);
         String[] finalAnswer = new String[1];
-        appendMemory("sale-workflow", "Demarrage workflow " + workflowId + " : " + jemimaTools.saleWorkflowState(workflowId));
+        appendMemory("sale-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.saleWorkflowState(workflowId));
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("sale_creation_agent", node_async(state -> {
                         String result = runAgent("sale_creation_agent",
-                                () -> saleCreationAgent.execute(sessionId, workflowId, jemimaTools.saleWorkflowState(workflowId)));
+                                () -> saleCreationAgent.execute(sessionId, workflowId, GratienTools.saleWorkflowState(workflowId)));
                         appendMemory("sale_creation_agent", result);
                         return Map.of("step", "sale_creation_agent");
                     }))
                     .addNode("sale_treasury_agent", node_async(state -> {
                         finalAnswer[0] = runAgent("sale_treasury_agent",
-                                () -> saleTreasuryAgent.execute(sessionId, workflowId, jemimaTools.saleWorkflowState(workflowId)));
+                                () -> saleTreasuryAgent.execute(sessionId, workflowId, GratienTools.saleWorkflowState(workflowId)));
                         appendMemory("sale_treasury_agent", finalAnswer[0]);
                         return Map.of("step", "sale_treasury_agent");
                     }))
@@ -417,28 +431,28 @@ public final class AiAgents {
             Optional<ServiceAgentState> ignored = graph.invoke(Map.of("step", "start"));
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "Workflow vente/sortie en fallback direct", ex);
-            finalAnswer[0] = jemimaTools.insertSaleOutput(draft);
+            finalAnswer[0] = GratienTools.insertSaleOutput(draft);
         }
         return finalAnswer[0] == null || finalAnswer[0].isBlank()
-                ? jemimaTools.saleWorkflowState(workflowId)
+                ? GratienTools.saleWorkflowState(workflowId)
                 : finalAnswer[0];
     }
 
     private String runExpenseAgents(ExpenseDraft draft) {
-        String workflowId = jemimaTools.registerExpenseWorkflow(draft);
+        String workflowId = GratienTools.registerExpenseWorkflow(draft);
         String[] finalAnswer = new String[1];
-        appendMemory("expense-workflow", "Demarrage workflow " + workflowId + " : " + jemimaTools.expenseWorkflowState(workflowId));
+        appendMemory("expense-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.expenseWorkflowState(workflowId));
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("expense_preparation_agent", node_async(state -> {
                         String result = runAgent("expense_preparation_agent",
-                                () -> expensePreparationAgent.execute(sessionId, workflowId, jemimaTools.expenseWorkflowState(workflowId)));
+                                () -> expensePreparationAgent.execute(sessionId, workflowId, GratienTools.expenseWorkflowState(workflowId)));
                         appendMemory("expense_preparation_agent", result);
                         return Map.of("step", "expense_preparation_agent");
                     }))
                     .addNode("expense_operation_agent", node_async(state -> {
                         finalAnswer[0] = runAgent("expense_operation_agent",
-                                () -> expenseOperationAgent.execute(sessionId, workflowId, jemimaTools.expenseWorkflowState(workflowId)));
+                                () -> expenseOperationAgent.execute(sessionId, workflowId, GratienTools.expenseWorkflowState(workflowId)));
                         appendMemory("expense_operation_agent", finalAnswer[0]);
                         return Map.of("step", "expense_operation_agent");
                     }))
@@ -449,10 +463,10 @@ public final class AiAgents {
             Optional<ServiceAgentState> ignored = graph.invoke(Map.of("step", "start"));
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "Workflow depense en fallback direct", ex);
-            finalAnswer[0] = jemimaTools.insertExpenseOutput(draft);
+            finalAnswer[0] = GratienTools.insertExpenseOutput(draft);
         }
         return finalAnswer[0] == null || finalAnswer[0].isBlank()
-                ? jemimaTools.expenseWorkflowState(workflowId)
+                ? GratienTools.expenseWorkflowState(workflowId)
                 : finalAnswer[0];
     }
 
@@ -548,7 +562,7 @@ public final class AiAgents {
     private <T> T buildAgent(Class<T> agentType, StreamingChatModel model) {
         return AiServices.builder(agentType)
                 .streamingChatModel(model)
-                .tools(jemimaTools)
+                .tools(GratienTools)
                 .chatMemoryProvider(memoryProvider)
                 .build();
     }

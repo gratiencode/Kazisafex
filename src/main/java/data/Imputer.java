@@ -42,7 +42,7 @@ import java.time.LocalDateTime;
     @NamedQuery(name = "Imputer.findByPercent", query = "SELECT i FROM Imputer i WHERE i.percent = :percent"),
     @NamedQuery(name = "Imputer.findByRegion", query = "SELECT i FROM Imputer i WHERE i.region = :region")})
 
-public class Imputer implements Serializable {
+public class Imputer extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

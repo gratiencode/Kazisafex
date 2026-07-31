@@ -45,6 +45,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -70,6 +71,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import services.utils.RegionRegistry;
+import tools.CurrencyConverter;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -299,7 +301,7 @@ public class StoreformController implements Initializable {
             tabPanelot.getSelectionModel().select(lottab);
         }
 //         cbx_devise_price.setItems(FXCollections.observableArrayList("USD", "CDF"));
-        String maindev = pref.get("mainCur", "USD");
+        String maindev = CurrencyConverter.mainCurrency();
 //         cbx_devise_price.getSelectionModel().select(maindev);
         RegionRegistry.loadAndSync(pref, ksf, regions);
         RegionRegistry.selectSavedRegion(pref, cbx_regions);
@@ -1136,7 +1138,7 @@ public class StoreformController implements Initializable {
         MainUI.setPattern(dpk_expir_lot);
         // pricepane.setVisible(...);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux = pref.getDouble("taux2change", 2000);
+        taux = CurrencyConverter.activeRate();
         region = pref.get("region", null);
         token = pref.get("token", null);
         role = pref.get("priv", null);
@@ -1225,4 +1227,5 @@ public class StoreformController implements Initializable {
             Logger.getLogger(StoreformController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
 }

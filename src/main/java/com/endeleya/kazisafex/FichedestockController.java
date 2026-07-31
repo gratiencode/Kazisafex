@@ -10,12 +10,15 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -30,6 +33,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableView;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
@@ -38,9 +42,16 @@ import javafx.util.StringConverter;
 
 import data.Destocker;
 import data.Entreprise;
+import data.LigneVente;
 import data.Mesure;
 import data.Produit;
+import data.Recquisition;
 import data.Stocker;
+import delegates.DestockerDelegate;
+import delegates.LigneVenteDelegate;
+import delegates.MesureDelegate;
+import delegates.RecquisitionDelegate;
+import delegates.StockerDelegate;
 import services.utils.RegionRegistry;
 import tools.FicheItem;
 import services.RepportService;
@@ -110,6 +121,7 @@ public class FichedestockController implements Initializable {
     private String role;
     private String region;
     ResourceBundle bundle;
+    private boolean usePosMovements;
     
 
     public FichedestockController() {
@@ -124,7 +136,13 @@ public class FichedestockController implements Initializable {
     }
 
     public void setDatabase(Entreprise eze,Kazisafe kazisafe, Produit p) {
+        setDatabase(eze, kazisafe, p, null);
+    }
+
+    public void setDatabase(Entreprise eze, Kazisafe kazisafe, Produit p,
+            String movementSource) {
         this.produit = p;
+        this.usePosMovements = "POS".equalsIgnoreCase(movementSource);
         txt_produit_id.setText(p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " " + (p.getTaille() == null ? "" : p.getTaille()) + " " + (p.getCouleur() == null ? "" : p.getCouleur()));
       
         ficheItems = FXCollections.observableArrayList();
@@ -132,26 +150,19 @@ public class FichedestockController implements Initializable {
         cbx_regions.setItems(regions); 
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
         RegionRegistry.selectSavedRegion(pref, cbx_regions);
-        List<FicheItem> fiche;
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-          
-        } else {
-           
-                  
-        }
-//        ficheItems.setAll(fiche);
         table_fiche_stock.setItems(ficheItems);
-        mzrs = FXCollections.observableArrayList();
+        mzrs = FXCollections.observableArrayList(MesureDelegate.findMesureByProduit(produit.getUid()));
         cbx_choose_mesure.setItems(mzrs);
-        cbx_choose_mesure.getSelectionModel().selectFirst();
-        txt_count.setText(String.format(bundle.getString("xitems"), ficheItems.size()));
+        if (!mzrs.isEmpty()) {
+            cbx_choose_mesure.getSelectionModel().selectFirst();
+        } else {
+            refreshFiche();
+        }
         cbx_regions.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null) {
-                   
-//                    ficheItems.setAll(fichel);
-                    table_fiche_stock.setItems(ficheItems);
+                    refreshFiche();
                 }
             }
         });
@@ -169,7 +180,6 @@ public class FichedestockController implements Initializable {
         role = pref.get("priv", null);
         region = pref.get("regon", "...");
         configs();
-        // TODO
     }
 
     private void configs() {
@@ -190,10 +200,7 @@ public class FichedestockController implements Initializable {
         });
         cbx_choose_mesure.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Mesure> observable, Mesure oldValue, Mesure newValue) -> {
             choosenM = newValue;
-            if (choosenM != null) {
-               
-//                ficheItems.setAll(fiche);
-            }
+            refreshFiche();
         });
         col_destination_fiche.setCellValueFactory((TableColumn.CellDataFeatures<FicheItem, String> param) -> new SimpleStringProperty(param.getValue().getDestination()));
         col_libelle_fiche.setCellValueFactory((TableColumn.CellDataFeatures<FicheItem, String> param) -> new SimpleStringProperty(param.getValue().getLibelles()));
@@ -270,53 +277,89 @@ public class FichedestockController implements Initializable {
 
     @FXML
     private void chooseByDate(ActionEvent evt) {
-        if (dpk_debut_fiche.getValue() != null && dpk_fin_fiche.getValue() != null) {
-            long debut = tools.Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
-            long fin = tools.Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
-            
-           
-//                    produit, debut, fin);
-//            ficheItems.setAll(fiche);
-            txt_count.setText(String.format(bundle.getString("xitems"), ficheItems.size() ));
-        }
+        refreshFiche();
     }
 
     @FXML
     private void refresh(Event e) {
-//        List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-//                db.findByProduit(Stocker.class, produit.getUid()),
-//                db.findByProduit(Destocker.class, produit.getUid()), produit);
-//        ficheItems.setAll(fiche);
+        refreshFiche();
+    }
+
+    /** Loads every incoming and outgoing movement in chronological order. */
+    private void refreshFiche() {
+        if (produit == null || ficheItems == null) {
+            return;
+        }
+
+        List<Mesure> mesures = MesureDelegate.findMesureByProduit(produit.getUid());
+        List<Stocker> entrees;
+        List<Destocker> sorties;
+        String selectedRegion = cbx_regions.getValue();
+        boolean allRegions = Role.Trader.name().equals(role)
+                || (role != null && role.contains(Role.ALL_ACCESS.name()));
+        if (allRegions || selectedRegion == null || selectedRegion.isBlank()) {
+            entrees = StockerDelegate.findStockerByProduit(produit.getUid());
+            sorties = DestockerDelegate.findByProduit(produit.getUid());
+        } else {
+            entrees = StockerDelegate.findStockerByProduit(produit.getUid(), selectedRegion);
+            sorties = DestockerDelegate.findByProduit(produit.getUid(), selectedRegion);
+        }
+
+        List<FicheItem> fiche;
+        if (usePosMovements) {
+            List<Recquisition> recquisitions = allRegions || selectedRegion == null || selectedRegion.isBlank()
+                    ? RecquisitionDelegate.findRecquisitionByProduit(produit.getUid())
+                    : RecquisitionDelegate.findRecquisitionByProduitRegion(produit.getUid(), selectedRegion);
+            List<LigneVente> ventes = allRegions || selectedRegion == null || selectedRegion.isBlank()
+                    ? LigneVenteDelegate.findByProduit(produit.getUid())
+                    : LigneVenteDelegate.findByProduitRegion(produit.getUid(), selectedRegion);
+            fiche = Util.findFicheDeStockPos(choosenM, mesures, recquisitions, ventes, produit);
+        } else {
+            if (dpk_debut_fiche.getValue() != null && dpk_fin_fiche.getValue() != null) {
+                long debut = Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
+                long fin = Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
+                fiche = Util.findFicheDeStock(choosenM, mesures, entrees, sorties, produit, debut, fin);
+            } else {
+                fiche = Util.findFicheDeStock(choosenM, mesures, entrees, sorties, produit);
+            }
+        }
+        if (dpk_debut_fiche.getValue() != null && dpk_fin_fiche.getValue() != null && usePosMovements) {
+            long debut = Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
+            long fin = Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
+            fiche.removeIf(item -> item.getDate().getTime() < debut || item.getDate().getTime() > fin);
+        }
+        ficheItems.setAll(fiche);
+        txt_count.setText(String.format(bundle.getString("xitems"), ficheItems.size()));
     }
 
     @FXML
     private void downloadPdf(MouseEvent event) {
-        new Thread(new Runnable() {
-            private File fichedestock;
+        exportFiche(true);
+    }
 
-            @Override
-            public void run() {
-                if (dpk_debut_fiche.getValue() != null && dpk_debut_fiche.getValue() != null) {
-                    long debut = tools.Constants.Datetime.dateInMillis(dpk_debut_fiche.getValue());
-//                    long fin = tools.Constants.Datetime.dateInMillis(dpk_fin_fiche.getValue());
-//                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-//                            db.findByProduit(Stocker.class, produit.getUid()),
-//                            db.findByProduit(Destocker.class, produit.getUid()), produit, debut, fin);
-//                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
-                } else {
-//                    List<FicheItem> fiche = Util.findFicheDeStock(choosenM, db.findByProduit(Mesure.class, produit.getUid()),
-//                           db.findByProduit(Stocker.class, produit.getUid()),
-//                           db.findByProduit(Destocker.class, produit.getUid()), produit);
-//                    fichedestock = Util.exportPDFicheStock(fiche, choosenM, produit);
-                }
+    @FXML
+    private void downloadExcel(MouseEvent event) {
+        exportFiche(false);
+    }
+
+    private void exportFiche(boolean pdf) {
+        if (produit == null || ficheItems == null || ficheItems.isEmpty()) {
+            return;
+        }
+        List<FicheItem> data = new ArrayList<>(ficheItems);
+        Mesure mesure = choosenM;
+        new Thread(() -> {
+            File file = pdf
+                    ? Util.exportPDFicheStock(data, mesure, produit)
+                    : Util.exportXlsFicheStock(data, mesure, produit);
+            if (file != null && Desktop.isDesktopSupported()) {
                 try {
-
-                    Desktop.getDesktop().open(fichedestock);
+                    Desktop.getDesktop().open(file);
                 } catch (IOException ex) {
                     Logger.getLogger(FichedestockController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-        }).start();
+        }, "stock-card-export").start();
     }
 
     public void setSelectedItem(FicheItem selectedItem) {

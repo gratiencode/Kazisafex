@@ -36,6 +36,7 @@ import tools.ComptageItem;
 import tools.Constants;
 import tools.DataId;
 import tools.SyncEngine;
+import tools.SyncLogger;
 
 /**
  *
@@ -64,19 +65,20 @@ public class CompterService implements CompterStorage {
 
     public CompterService() {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        taux = pref.getDouble("taux2change", 2000);
-        devise = pref.get("mainCur", "USD");
+        taux = tools.CurrencyConverter.activeRate();
+        devise = tools.CurrencyConverter.mainCurrency();
     }
 
     @Override
     public Compter createCompter(Compter cat) {
+        boolean isDeleted = cat.getDeletedAt() != null;
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
             }).join();
-            editStock(cat,true);
-            System.out.println("Element " + cat.getProductId().getNomProduit() + " comptee");
+            if (!isDeleted) editStock(cat, true);
+            System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " comptee");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -85,20 +87,36 @@ public class CompterService implements CompterStorage {
         }
         ManagedSessionFactory.getEntityManager().persist(cat);
         tx.commit();
-        editStock(cat,true);
+        if (!isDeleted) editStock(cat, true);
         return cat;
     }
 
     @Override
     public Compter updateCompter(Compter cat) {
+        boolean isDeleted = cat.getDeletedAt() != null;
+        String uid = cat.getUid();
+        if (cat.getInventaireId() == null) {
+            SyncLogger.getInstance().log(
+                new IllegalStateException("Compter " + uid + " has null inventaireId — skipped"),
+                "CompterService.updateCompter", "compter", uid
+            );
+            return cat;
+        }
+        if (cat.getProductId() == null) {
+            SyncLogger.getInstance().log(
+                new IllegalStateException("Compter " + uid + " has null productId — skipped"),
+                "CompterService.updateCompter", "compter", uid
+            );
+            return cat;
+        }
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.merge(cat);
                     return cat;
                 }).join();
-                editStock(cat,false);
-                System.out.println("Element " + cat.getProductId().getNomProduit() + " recomptee");
+                if (!isDeleted) editStock(cat, false);
+                System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " recomptee");
                 return cat;
             }
             EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -107,7 +125,7 @@ public class CompterService implements CompterStorage {
             }
             ManagedSessionFactory.getEntityManager().merge(cat);
             tx.commit();
-            editStock(cat,false);
+            if (!isDeleted) editStock(cat, false);
         } catch (jakarta.persistence.EntityNotFoundException e) {
             System.err.println("Erreur Message : " + e.getMessage());
         }
@@ -116,20 +134,115 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void deleteCompter(Compter obj) {
+        // Sauvegarder les champs necessaires avant suppression
+        Produit prod = obj.getProductId();
+        String region = obj.getRegion();
+        Inventaire inv = obj.getInventaireId();
+        String lot = obj.getNumlot();
+        LocalDateTime dateCountLdt = obj.getDateCount();
+        LocalDate dateCount = dateCountLdt != null ? dateCountLdt.toLocalDate() : LocalDate.now();
+        Mesure mesure = obj.getMesureId();
+        double coutAchat = obj.getCoutAchat();
+        LocalDate dateExp = obj.getDateExpiration();
+
+        // Supprimer le compter de la base
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(obj));
                 return obj;
             }).join();
-            System.out.println("Element " + obj.getProductId().getNomProduit() + " comptee supprimee");
-            return;
+        } else {
+            EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
+            if (!etr.isActive()) {
+                etr.begin();
+            }
+            ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(obj));
+            etr.commit();
         }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
+        System.out.println("Element " + (prod != null ? prod.getNomProduit() : "?") + " comptee supprimee");
+
+        // Revertir les ajustements de stock generes par ce comptage
+        revertCompterAdjustments(prod, lot, region, inv, dateCount, mesure, coutAchat, dateExp);
+    }
+
+    private void revertCompterAdjustments(Produit prod, String lot, String region, Inventaire inv,
+            LocalDate dateCount, Mesure mesure, double coutAchat, LocalDate dateExp) {
+        if (prod == null || inv == null) return;
+
+        // 1. Purger les anciens ajustements #INV pour ce produit/lot
+        String refJour = inv.getCodeInventaire() + "-" + dateCount.toString();
+        purgeAjustementLigneVente(refJour, prod.getUid(), lot, region);
+        purgeAjustementRecquisition("#INV-" + inv.getCodeInventaire(), prod.getUid(), lot, region);
+
+        // 2. Verifier s'il reste d'autres comptages pour ce produit+lot+inventaire
+        double remainingReel = sommeComptage(prod, lot, inv);
+
+        if (remainingReel > 0) {
+            // 3. Recalculer les ajustements avec les lignes restantes
+            double stockTheorik = delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
+                    prod.getUid(), lot, region);
+            double difference = remainingReel - stockTheorik;
+
+            // Mettre a jour les metadonnees des comptages restants
+            double qc = (mesure != null && mesure.getQuantContenu() != null && mesure.getQuantContenu() > 0)
+                    ? mesure.getQuantContenu() : 1.0;
+            double ecartEnMesure = difference / qc;
+            double thEnMesure = stockTheorik / qc;
+            updateCompterMeta(prod.getUid(), inv.getUid(), lot, region, ecartEnMesure, thEnMesure);
+
+            Mesure mesUnit = findUnitForProduit(prod.getUid(), 1.0);
+            if (mesUnit == null) mesUnit = mesure;
+
+            if (difference < 0) {
+                Vente found = findOrCreateVenteAj(inv.getCodeInventaire(), region);
+                LigneVente lv = new LigneVente(DataId.generateLong());
+                lv.setCoutAchat(0d);
+                lv.setMesureId(mesUnit);
+                lv.setClientId("#INV");
+                lv.setMontantCdf(0);
+                lv.setMontantUsd(0);
+                lv.setNumlot(lot);
+                lv.setPrixUnit(0d);
+                lv.setProductId(prod);
+                lv.setQuantite(Math.abs(difference));
+                lv.setReference(found);
+                createLigneVente(inv, lv);
+            } else if (difference > 0) {
+                Recquisition last = getLastEntry(prod.getUid());
+                double coutUnit = (coutAchat > 0) ? (coutAchat / qc) : 0.0;
+                Recquisition rq = new Recquisition(DataId.generate());
+                rq.setCoutAchat(coutUnit);
+                rq.setDate(LocalDateTime.now());
+                rq.setDateExpiry(dateExp);
+                rq.setMesureId(mesUnit);
+                rq.setNumlot(lot);
+                rq.setObservation("Ajustement Inventaire (+) " + inv.getCodeInventaire());
+                rq.setProductId(prod);
+                rq.setQuantite(difference);
+                rq.setReference("#INV-" + inv.getCodeInventaire());
+                rq.setRegion(region);
+                rq.setStockAlert(1d);
+                Recquisition crq = createRecquisition(inv, rq);
+                if (last != null) {
+                    List<PrixDeVente> prices = delegates.RecquisitionDelegate.findLastPrices(prod.getUid());
+                    if (prices != null) {
+                        for (PrixDeVente price : prices) {
+                            PrixDeVente pv = new PrixDeVente(DataId.generate());
+                            pv.setRecquisitionId(crq);
+                            pv.setDevise(price.getDevise());
+                            pv.setMesureId(price.getMesureId());
+                            pv.setPourcentParCunit(0d);
+                            pv.setPrixUnitaire(price.getPrixUnitaire());
+                            pv.setQmax(price.getQmax());
+                            pv.setQmin(price.getQmin());
+                            createPrixDeVente(pv);
+                        }
+                    }
+                }
+            }
         }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(obj));
-        etr.commit();
+        // else: aucun comptage restant -> les purges ont deja ramene le stock
+        // a son etat d'avant le comptage via rectifyStock appele dans les purge*()
     }
 
     @Override
@@ -674,6 +787,11 @@ public class CompterService implements CompterStorage {
      */
     @Override
     public void removeNoCountedProducts(Inventaire inv) {
+        removeNoCountedProducts(inv, null);
+    }
+
+    @Override
+    public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
         if (inv == null || inv.getUid() == null || inv.getRegion() == null || inv.getCodeInventaire() == null) {
             return;
         }
@@ -683,41 +801,65 @@ public class CompterService implements CompterStorage {
         }
 
         for (Produit produit : lspr) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new RuntimeException("Cloture annulee par l'utilisateur");
+            }
             if (produit == null || produit.getUid() == null) {
                 continue;
             }
-            Compter cpte = findComptageByInventaireProduit(inv.getUid(), produit.getUid());
-            if (cpte != null) {
-                continue;
-            }
-            // creation des compter avec 0 quant par lot
-            List<Recquisition> llots = RecquisitionDelegate.findDistinctLotHeads(produit, inv.getRegion());
-            for (Recquisition llot : llots) {
-                Compter co = new Compter();
-                StockAgregate stock = findLotStock(produit.getUid(), llot.getNumlot(), LocalDate.now(),
-                        inv.getRegion());
-                if (stock == null) {
-                    continue;
+            List<String> allLots = findAllDistinctLots(produit.getUid(), inv.getRegion());
+            for (String lot : allLots) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new RuntimeException("Cloture annulee par l'utilisateur");
                 }
-                double stockTheorik = stock.getFinalQuantity() == null ? 0d : stock.getFinalQuantity();
-                co.setCoutAchat(stock.getCoutAchat());
+                if (lot == null || lot.isBlank()) continue;
+                List<Compter> existing = findComptageForProduit(produit.getUid(), inv.getUid(), lot, inv.getRegion());
+                if (existing != null && !existing.isEmpty()) continue;
+                StockAgregate stock = findLotStock(produit.getUid(), lot, LocalDate.now(), inv.getRegion());
+                double stockTheorik = (stock != null && stock.getFinalQuantity() != null) ? stock.getFinalQuantity() : 0d;
+                Compter co = new Compter();
+                co.setCoutAchat(stock != null && stock.getCoutAchat() != null ? stock.getCoutAchat() : 0d);
                 co.setDateCount(LocalDateTime.now());
-                co.setDateExpiration(llot.getDateExpiry());
-                co.setEcart((0d - stockTheorik));
+                co.setEcart(-stockTheorik);
                 co.setInventaireId(inv);
-                co.setMesureId(stock.getMesureId());
-                co.setNumlot(llot.getNumlot());
-                co.setObservation(llot.getObservation());
+                co.setMesureId(stock != null ? stock.getMesureId() : null);
+                co.setNumlot(lot);
                 co.setProductId(produit);
                 co.setQuantite(0);
                 co.setQuantiteTheorik(stockTheorik);
                 co.setRegion(inv.getRegion());
                 co.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
                 createCompter(co);
-
+                if (onCreated != null) onCreated.accept(co);
             }
-
         }
+    }
+
+    private List<String> findAllDistinctLots(String productId, String region) {
+        String sql = "SELECT DISTINCT numlot FROM recquisition WHERE product_id = ? AND region = ? "
+                + "UNION "
+                + "SELECT DISTINCT num_lot FROM stock_agregate WHERE product_id = ? AND region = ? "
+                + "AND num_lot IS NOT NULL AND num_lot != ''";
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query q = em.createNativeQuery(sql);
+                q.setParameter(1, productId);
+                q.setParameter(2, region);
+                q.setParameter(3, productId);
+                q.setParameter(4, region);
+                @SuppressWarnings("unchecked")
+                List<String> rows = q.getResultList();
+                return rows;
+            });
+        }
+        Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sql);
+        q.setParameter(1, productId);
+        q.setParameter(2, region);
+        q.setParameter(3, productId);
+        q.setParameter(4, region);
+        @SuppressWarnings("unchecked")
+        List<String> rows = q.getResultList();
+        return rows;
     }
 
     StockAgregate stock;

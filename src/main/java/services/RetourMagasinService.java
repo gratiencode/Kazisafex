@@ -40,6 +40,15 @@ public class RetourMagasinService implements RetourMagasinStorage {
 
     @Override
     public RetourMagasin createRetourMagasin(RetourMagasin cat) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.persist(cat);
+                return cat;
+            }).thenAccept(e -> {
+                  AggregateTriggerService.getInstance().notifyLigneVente(e.getLigneVenteId());
+            });
+            return cat;
+        }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
@@ -51,6 +60,15 @@ public class RetourMagasinService implements RetourMagasinStorage {
 
     @Override
     public RetourMagasin updateRetourMagasin(RetourMagasin cat) {
+        if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.merge(cat);
+                return cat;
+            }).thenAccept(e -> {
+                  AggregateTriggerService.getInstance().notifyLigneVente(e.getLigneVenteId());
+            });
+            return cat;
+        }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
@@ -62,6 +80,15 @@ public class RetourMagasinService implements RetourMagasinStorage {
 
     @Override
     public void deleteRetourMagasin(RetourMagasin cat) {
+         if (ManagedSessionFactory.isEmbedded()) {
+            ManagedSessionFactory.submitWrite(em -> {
+                em.remove(em.merge(cat));
+                return cat;
+            }).thenAccept(e -> {
+                  AggregateTriggerService.getInstance().notifyLigneVente(e.getLigneVenteId());
+            });
+            return;
+        }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
@@ -72,6 +99,11 @@ public class RetourMagasinService implements RetourMagasinStorage {
 
     @Override
     public RetourMagasin findRetourMagasin(String catId) {
+         if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                       return em.find(RetourMagasin.class, catId);
+                });
+            }
         return ManagedSessionFactory.getEntityManager().find(RetourMagasin.class, catId);
     }
 
@@ -80,6 +112,12 @@ public class RetourMagasinService implements RetourMagasinStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM retour_magasin");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Long.class);
+                    return (Long) query.getSingleResult();
+                });
+            }
             return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
         } catch (NoResultException e) {
             return 0L;
@@ -89,6 +127,12 @@ public class RetourMagasinService implements RetourMagasinStorage {
     @Override
     public List<RetourMagasin> findRetourMagasins() {
         try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("RetourMagasin.findAll");
+                    return query.getResultList();
+                });
+            }
             Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("RetourMagasin.findAll");
             return query.getResultList();
         } catch (NoResultException e) {
@@ -99,6 +143,14 @@ public class RetourMagasinService implements RetourMagasinStorage {
     @Override
     public List<RetourMagasin> findRetourMagasins(int start, int max) {
         try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNamedQuery("RetourMagasin.findAll");
+                    query.setFirstResult(start);
+                    query.setMaxResults(max);
+                    return query.getResultList();
+                });
+            }
             Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("RetourMagasin.findAll");
             query.setFirstResult(start);
             query.setMaxResults(max);
@@ -113,7 +165,15 @@ public class RetourMagasinService implements RetourMagasinStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM retour_magasin WHERE reference_vente  = ? ");
-            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).setParameter(1, uid)
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), Long.class);
+                    query.setParameter(1, uid);
+                    return (Long) query.getSingleResult();
+                });
+            }
+            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString())
+                    .setParameter(1, uid)
                     .getSingleResult();
         } catch (NoResultException e) {
             return 0L;
@@ -125,6 +185,13 @@ public class RetourMagasinService implements RetourMagasinStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM retour_magasin WHERE ligne_vente_id  = ? ");
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> {
+                    Query query = em.createNativeQuery(sb.toString(), RetourMagasin.class);
+                    query.setParameter(1, uid);
+                    return query.getResultList();
+                });
+            }
             return ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), RetourMagasin.class)
                     .setParameter(1, uid).getResultList();
         } catch (NoResultException e) {
@@ -138,7 +205,6 @@ public class RetourMagasinService implements RetourMagasinStorage {
         if (!etr.isActive()) {
             etr.begin();
         }
-
         int i = 0;
         for (RetourMagasin lj : bulk) {
             i++;
@@ -162,7 +228,6 @@ public class RetourMagasinService implements RetourMagasinStorage {
     public List<RetourMagasin> findUnSyncedRetourMagasins(long disconnected_at) {
         try {
             Timestamp offline = new Timestamp(disconnected_at);
-
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM retour_magasin p WHERE p.updated_at >= ?");
             if (ManagedSessionFactory.isEmbedded()) {
@@ -175,7 +240,6 @@ public class RetourMagasinService implements RetourMagasinStorage {
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(),
                     RetourMagasin.class);
             query.setParameter(1, offline);
-
             return query.getResultList();
         } catch (NoResultException e) {
             return null;

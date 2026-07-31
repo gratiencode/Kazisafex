@@ -25,7 +25,7 @@ import java.util.prefs.Preferences;
  */
 public class Constants {
 
-    public static final String APP_VERSION = "2.0.26-build1";
+    public static final String APP_VERSION = "2.1.1-optys";
     public static final String LOGIN_SCREEN = "keti_UI.fxml";
     public static final String MAIN_SCREEN = "mainuix.fxml";
     public static final String STORAGE_VIEW = "Goodstorage.fxml";
@@ -54,11 +54,16 @@ public class Constants {
     public static final String CAISSES = "finance-ui";
     public static final String REPPORTS = "repport-ui";
 
-    public static final SimpleDateFormat DATE_HEURE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-    public static final SimpleDateFormat DATE_ONLY_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
-    public static final SimpleDateFormat YEAR_AND_MONTH_FORMAT = new SimpleDateFormat("yyyy-MM");
-    public static final SimpleDateFormat YEAR_ONLY_FORMAT = new SimpleDateFormat("yyyy");
-    public static final SimpleDateFormat TIMESTAMPED_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss");
+    public static final SimpleDateFormat DATE_HEURE_FORMAT =
+        new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+    public static final SimpleDateFormat DATE_ONLY_FORMAT =
+        new SimpleDateFormat("yyyy-MM-dd");
+    public static final SimpleDateFormat YEAR_AND_MONTH_FORMAT =
+        new SimpleDateFormat("yyyy-MM");
+    public static final SimpleDateFormat YEAR_ONLY_FORMAT =
+        new SimpleDateFormat("yyyy");
+    public static final SimpleDateFormat TIMESTAMPED_FORMAT =
+        new SimpleDateFormat("yyyyMMddHHmmss");
     public static final Calendar Calendrier = Calendar.getInstance();
     public static final long MILLSECONDS_JOURN = 86400000;
 
@@ -152,15 +157,27 @@ public class Constants {
     public static final String IS_PROMOTION_VALID = "VALID_PROMOTION";
     public static final String NEW_SALE = "Nouveau";
     public static final String FIDELISER = "Fidelise";
-    public final static String DATA_STOCKER_POS = "position-stocker";
-    public final static String ROOT = System.getProperty("user.home") + File.separator + "KSafe" + File.separator + "files" + File.separator + "marshal";
-    public final static String ROOT_STORAGE = System.getProperty("user.home") + File.separator + "KSafe" + File.separator + "files";
-    public final static int TIMEOUT_USSD = 3000;
-    public final static String CASH = "Paiement Cash";
-    public final static String CREDIT = "A Credit";
-    public final static String CREDIT_ET_CASH = "Cash et credit";
-    public final static String BANK = "Paiement par Banque";
-    public final static String MOBILE_MONEY = "Mobile money";
+    public static final String DATA_STOCKER_POS = "position-stocker";
+    public static final String ROOT =
+        System.getProperty("user.home") +
+        File.separator +
+        "KSafe" +
+        File.separator +
+        "files" +
+        File.separator +
+        "marshal";
+    public static final String ROOT_STORAGE =
+        System.getProperty("user.home") +
+        File.separator +
+        "KSafe" +
+        File.separator +
+        "files";
+    public static final int TIMEOUT_USSD = 3000;
+    public static final String CASH = "Paiement Cash";
+    public static final String CREDIT = "A Credit";
+    public static final String CREDIT_ET_CASH = "Cash et credit";
+    public static final String BANK = "Paiement par Banque";
+    public static final String MOBILE_MONEY = "Mobile money";
     public static final String PIN_AIRTEL = "PIN_AIRTEL";
     public static final String PIN_VODACOM = "PIN_VODACOM";
     public static final String PIN_ORANGE = "PIN_ORANGE";
@@ -170,8 +187,9 @@ public class Constants {
     public static final String BONUS_JOURN = "Bonus journalier";
     public static final String ETAT_SUBSCRIPTION_EXPIRY = "Expiree";
     public static final String ETAT_SUBSCRIPTION_VALID = "Valide";
-    public static final String ETAT_SUBSCRIPTION_EN_CONSOMMATION="En consommation";
-    public static final String SUBSCRIPTION_PRO="PRO";
+    public static final String ETAT_SUBSCRIPTION_EN_CONSOMMATION =
+        "En consommation";
+    public static final String SUBSCRIPTION_PRO = "PRO";
     public static final String SYNC_STATUS_SYNCED = "SYNCED";
     public static final String SYNC_STATUS_NEW = "NEW";
     public static final String SYNC_STATUS_DELETE = "DELETE";
@@ -191,24 +209,43 @@ public class Constants {
     public static final long ARSENIC = SILVER * 2;
     public static final String DATE = "today";
     public static final String ACTION_READ = "read";
-    public static SimpleDateFormat dateFormater = new SimpleDateFormat("yyyy-MM-dd");
+    public static SimpleDateFormat dateFormater = new SimpleDateFormat(
+        "yyyy-MM-dd"
+    );
     public static String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";
 
     public static class Datetime {
 
         public static String format(Date d) {
-            SimpleDateFormat dateF = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            SimpleDateFormat dateF = new SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss"
+            );
             return dateF.format(d);
         }
 
         public static Date toDate(Date d) {
-            DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
-            Date datesL = Date.from(LocalDateTime.parse(d.toString(), df).atOffset(ZoneOffset.UTC).toInstant());
+            DateTimeFormatter df = DateTimeFormatter.ofPattern(
+                "yyyy-MM-dd",
+                Locale.US
+            );
+            Date datesL = Date.from(
+                LocalDateTime.parse(d.toString(), df)
+                    .atOffset(ZoneOffset.UTC)
+                    .toInstant()
+            );
             return datesL;
         }
 
         public static Date parse(String date) {
-            return Date.from(LocalDateTime.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)).toInstant(ZoneOffset.UTC));
+            return Date.from(
+                LocalDateTime.parse(
+                    date,
+                    DateTimeFormatter.ofPattern(
+                        "yyyy-MM-dd HH:mm:ss",
+                        Locale.US
+                    )
+                ).toInstant(ZoneOffset.UTC)
+            );
         }
 
         public static Date toSimpleDate(Date date) {
@@ -245,11 +282,17 @@ public class Constants {
         }
 
         public static LocalDateTime toLocalDateTime(Date date) {
-            return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return date
+                .toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
         }
 
         public static long dateInMillis(LocalDate ldt) {
-            return ldt.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            return ldt
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
         }
 
         public static String getMonthName(String numRepres) {
@@ -280,7 +323,6 @@ public class Constants {
             }
             return "";
         }
-
     }
 
     public static String getStringPref(String key, String def) {

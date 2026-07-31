@@ -39,11 +39,13 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.ImageView;
@@ -84,6 +86,7 @@ import services.FinancialStatementAgregateService;
 import services.FinancialStatementSyncService;
 import tools.FinancialRowModel;
 import tools.FinancialTableBinder;
+import tools.DataCache;
 import tools.SaleReport;
 
 /**
@@ -155,6 +158,14 @@ public class RepportController implements Initializable {
 
     private static RepportController instance;
     Entreprise entreprise;
+
+    /**
+     * Rebind virtualized controls to the master ObservableLists after the
+     * cached page is reattached. Does not reload from the database.
+     */
+    public void onCachedPageShown() {
+        // No longer needed — views are rebuilt fresh each time.
+    }
     @FXML
     TableView<SaleReport> tbreport;
     @FXML
@@ -918,9 +929,10 @@ public class RepportController implements Initializable {
     double marg = 0;
 
     private List<SaleReport> rapporterParProduit(LocalDate debut, LocalDate fin, String region) {
-        List<SaleReport> reports = RepportDelegate.findSaleReportPerProduct(debut, fin,
-                region == null ? detectRegion(role) : region);
-        return reports;
+        String usedRegion = region == null ? detectRegion(role) : region;
+        return DataCache.getOrLoad(
+                "report-sale-per-product-" + debut + "-" + fin + "-" + usedRegion,
+                () -> RepportDelegate.findSaleReportPerProduct(debut, fin, usedRegion));
     }
 
     private boolean isPeriodInList(List<Periode> listp, Periode p) {
@@ -968,10 +980,13 @@ public class RepportController implements Initializable {
                     double resultJana = (venteJana - chargeJana);
                     double progresLeo = ((resultLeo - resultJana) / resultJana) * 100;
 
-                    List<SaleReport> reports = RepportDelegate.findSaleReportPerProduct(date1, date2,
-                            detectRegion(role));
-                    List<SaleReport> repcats = RepportDelegate.findSaleReportPerCategory(date1, date2,
-                            detectRegion(role));
+                    String regionKey = detectRegion(role);
+                    List<SaleReport> reports = DataCache.getOrLoad(
+                            "report-sale-per-product-" + date1 + "-" + date2 + "-" + regionKey,
+                            () -> RepportDelegate.findSaleReportPerProduct(date1, date2, regionKey));
+                    List<SaleReport> repcats = DataCache.getOrLoad(
+                            "report-sale-per-category-" + date1 + "-" + date2 + "-" + regionKey,
+                            () -> RepportDelegate.findSaleReportPerCategory(date1, date2, regionKey));
 
                     Platform.runLater(() -> {
                         comment(lbl_comment_CA, img_indic_CA, progres);
@@ -1065,7 +1080,9 @@ public class RepportController implements Initializable {
     private void ponctuel() {
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    List<RecentSale> recents = RepportDelegate.findRecentSales(detectRegion(role));
+                    List<RecentSale> recents = DataCache.getOrLoad(
+                            "report-recent-sales-" + detectRegion(role),
+                            () -> RepportDelegate.findRecentSales(detectRegion(role)));
                     Platform.runLater(() -> {
                         recentSales.setItems(FXCollections.observableArrayList(recents));
                     });
@@ -1195,7 +1212,9 @@ public class RepportController implements Initializable {
     public void dashCardVente() {
         LocalDate kesho = dpk_fin_report.getValue();
         LocalDate d1 = dpk_debut_report.getValue();
-        double sumSales = RepportDelegate.chiffreDaffaire(d1, kesho, region == null ? "%" : region);
+        double sumSales = DataCache.getOrLoad(
+                "report-ca-" + d1 + "-" + kesho + "-" + region,
+                () -> RepportDelegate.chiffreDaffaire(d1, kesho, region == null ? "%" : region));
         Platform.runLater(() -> {
             txt_vente_report.setText(devise + " "
                     + formatNumber(BigDecimal.valueOf(sumSales).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
@@ -1231,8 +1250,13 @@ public class RepportController implements Initializable {
     public void dashCardResult() {
         LocalDate kesho = dpk_fin_report.getValue();
         LocalDate d1 = dpk_debut_report.getValue();
-        double ca = RepportDelegate.chiffreDaffaire(d1, kesho, region == null ? "%" : region);
-        double cv = RepportDelegate.chargeVariable(d1, kesho, region == null ? "%" : region);
+        String usedDashRegion = region == null ? "%" : region;
+        double ca = DataCache.getOrLoad(
+                "report-ca-" + d1 + "-" + kesho + "-" + usedDashRegion,
+                () -> RepportDelegate.chiffreDaffaire(d1, kesho, usedDashRegion));
+        double cv = DataCache.getOrLoad(
+                "report-cv-" + d1 + "-" + kesho + "-" + usedDashRegion,
+                () -> RepportDelegate.chargeVariable(d1, kesho, usedDashRegion));
         double result = ca - cv;
         Platform.runLater(() -> {
             txt_result_report.setText(devise + " "
@@ -1243,7 +1267,9 @@ public class RepportController implements Initializable {
     public void dashCardDepense() {
         LocalDate kesho = dpk_fin_report.getValue();
         LocalDate d1 = dpk_debut_report.getValue();
-        double exp = RepportDelegate.chargeVariable(d1, kesho, region == null ? "%" : region);
+        double exp = DataCache.getOrLoad(
+                "report-cv-" + d1 + "-" + kesho + "-" + (region == null ? "%" : region),
+                () -> RepportDelegate.chargeVariable(d1, kesho, region == null ? "%" : region));
         Platform.runLater(() -> {
             txt_depense_report.setText(devise + " "
                     + formatNumber(BigDecimal.valueOf(exp).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
@@ -1253,7 +1279,9 @@ public class RepportController implements Initializable {
     public void dashCardAmort() {
         LocalDate kesho = dpk_fin_report.getValue();
         LocalDate d1 = dpk_debut_report.getValue();
-        double amort = RepportDelegate.aggregatedAmortizationOf(d1, kesho, region == null ? "%" : region);
+        double amort = DataCache.getOrLoad(
+                "report-amort-" + d1 + "-" + kesho + "-" + (region == null ? "%" : region),
+                () -> RepportDelegate.aggregatedAmortizationOf(d1, kesho, region == null ? "%" : region));
         Platform.runLater(() -> {
             if (txt_amort_report != null) {
                 txt_amort_report.setText(devise + " "
@@ -1654,9 +1682,10 @@ public class RepportController implements Initializable {
     // }
     //
     // public List<Operation> getOps(Date date, String region) {
-    // List<Operation> vts =
-    // store.findAllByLocalDateIntervalInRegion(Operation.class,
-    // dpk_debut_report.getValue(), dpk_fin_report.getValue(), region);
-    // return vts;
+    //     List<Operation> vts =
+    //             store.findAllByLocalDateIntervalInRegion(Operation.class,
+    //             dpk_debut_report.getValue(), dpk_fin_report.getValue(), region);
+    //     return vts;
     // }
+
 }

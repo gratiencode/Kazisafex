@@ -69,6 +69,7 @@
                                  </padding>
                               </Label>
                            </children>
+
                         </HBox>
                      </children>
                   </AnchorPane>
@@ -98,27 +99,26 @@
                            </cursor>
                         </ImageView>
                         <Button fx:id="btn_theme_toggle" layoutX="132.0" layoutY="10.0" mnemonicParsing="false" onAction="#toggleTheme" prefHeight="24.0" prefWidth="55.0" style="-fx-background-radius: 12; -fx-background-color: #e5e7eb;" text="%xbtn.theme.dark" AnchorPane.rightAnchor="107.0" />
-                        <Label fx:id="user_connected" layoutX="57.0" layoutY="7.0" minWidth="1.0" prefHeight="20.0" prefWidth="140.0" text="%xlbel.loading" AnchorPane.leftAnchor="57.0" AnchorPane.rightAnchor="157.0">
-                           <font>
-                              <Font size="14.0" />
-                           </font>
-                           <padding>
-                              <Insets right="9.0" />
-                           </padding>
-                        </Label>
-                        <Label fx:id="txt_region" layoutX="59.0" layoutY="31.0" minWidth="1.0" prefHeight="16.0" prefWidth="121.0" text="%xlbel.loading" AnchorPane.leftAnchor="59.0" AnchorPane.rightAnchor="174.0">
-                           <font>
-                              <Font size="12.0" />
-                           </font>
-                           <padding>
-                              <Insets right="9.0" />
-                           </padding>
-                        </Label>
-                        <ImageView fx:id="img_profile" fitHeight="40.0" fitWidth="40.0" layoutX="4.0" layoutY="4.0" pickOnBounds="true" preserveRatio="true" AnchorPane.leftAnchor="0.0">
-                           <image>
-                              <Image url="@../icons/Male%x20User_100px.png" />
-                           </image>
-                        </ImageView>
+                        <HBox layoutX="4.0" layoutY="4.0" spacing="8.0" AnchorPane.leftAnchor="4.0" AnchorPane.topAnchor="6.0" AnchorPane.rightAnchor="160.0">
+                            <ImageView fx:id="img_company_logo" fitHeight="40.0" fitWidth="40.0" pickOnBounds="true" preserveRatio="true" visible="false" />
+                            <ImageView fx:id="img_profile" fitHeight="40.0" fitWidth="40.0" pickOnBounds="true" preserveRatio="true">
+                                <image>
+                                    <Image url="@../icons/Male%x20User_100px.png" />
+                                </image>
+                            </ImageView>
+                            <VBox spacing="1.0" alignment="CENTER_LEFT">
+                                <Label fx:id="user_connected" minWidth="1.0" prefHeight="20.0" text="%xlbel.loading" wrapText="true">
+                                   <font>
+                                      <Font size="14.0" />
+                                   </font>
+                                </Label>
+                                <Label fx:id="txt_region" minWidth="1.0" prefHeight="16.0" text="%xlbel.loading" wrapText="true">
+                                   <font>
+                                      <Font size="12.0" />
+                                   </font>
+                                </Label>
+                            </VBox>
+                        </HBox>
                         <ImageView fx:id="agrandir" fitHeight="16.0" fitWidth="16.0" layoutX="226.0" layoutY="10.0" onMouseClicked="#enlarge" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="48.0">
                            <image>
                               <Image url="@../icons/resize.png" />
@@ -241,7 +241,7 @@
                   <Separator prefHeight="0.0" prefWidth="46.0" visible="false" />
                   <AnchorPane style="-fx-background-color: #ffffff;">
                      <children>
-                        <ImageView fx:id="stockage" fitHeight="40.0" fitWidth="40.0" onMouseClicked="#switchToStock" onMouseDragExited="#onOutHome" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                        <ImageView fx:id="stockage" fitHeight="40.0" fitWidth="40.0" onMouseClicked="#switchToStock" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
                            <image>
                               <Image url="@../icons/warehouse(1).png" />
                            </image>
@@ -611,7 +611,7 @@
             </AnchorPane>
             <AnchorPane fx:id="ai_panel" prefHeight="740.0" prefWidth="626.0" style="-fx-background-color: linear-gradient(to bottom, #ffffff, #f4fbfe); -fx-border-color: rgba(68,206,245,0.35); -fx-border-width: 0 0 0 1;">
                <children>
-                  <Label alignment="CENTER" layoutX="8.0" layoutY="9.0" prefHeight="40.0" prefWidth="222.0" style="-fx-background-color: linear-gradient(to right, #44cef5, #1fa8cf); -fx-border-color: rgba(255,255,255,0.65); -fx-background-radius: 24; -fx-border-radius: 24; -fx-text-fill: white; -fx-effect: dropshadow(gaussian, rgba(68,206,245,0.30), 18, 0.25, 0, 8);" text="Jemima" textAlignment="CENTER" AnchorPane.leftAnchor="8.0" AnchorPane.topAnchor="9.0">
+                  <Label alignment="CENTER" layoutX="8.0" layoutY="9.0" prefHeight="40.0" prefWidth="222.0" style="-fx-background-color: linear-gradient(to right, #44cef5, #1fa8cf); -fx-border-color: rgba(255,255,255,0.65); -fx-background-radius: 24; -fx-border-radius: 24; -fx-text-fill: white; -fx-effect: dropshadow(gaussian, rgba(68,206,245,0.30), 18, 0.25, 0, 8);" text="Gratien" textAlignment="CENTER" AnchorPane.leftAnchor="8.0" AnchorPane.topAnchor="9.0">
                      <font>
                         <Font name="System Bold" size="20.0" />
                      </font>
@@ -633,7 +633,7 @@
                         </AnchorPane>
                         <AnchorPane prefHeight="118.0" prefWidth="228.0" style="-fx-background-color: white; -fx-border-color: rgba(68,206,245,0.30); -fx-background-radius: 18; -fx-border-radius: 18; -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.08), 16, 0.16, 0, 6);">
                            <children>
-                              <TextArea fx:id="txt_input_iaquery" prefWidth="200.0" promptText="Demandez à Jemima..." style="-fx-background-color: transparent; -fx-background-radius: 16; -fx-border-radius: 16; -fx-border-color: transparent; -fx-text-fill: #12203a; -fx-prompt-text-fill: #8da2b2;" wrapText="true" AnchorPane.bottomAnchor="8.0" AnchorPane.leftAnchor="10.0" AnchorPane.rightAnchor="48.0" AnchorPane.topAnchor="8.0">
+                              <TextArea fx:id="txt_input_iaquery" prefWidth="200.0" promptText="Demandez à Gratien..." style="-fx-background-color: transparent; -fx-background-radius: 16; -fx-border-radius: 16; -fx-border-color: transparent; -fx-text-fill: #12203a; -fx-prompt-text-fill: #8da2b2;" wrapText="true" AnchorPane.bottomAnchor="8.0" AnchorPane.leftAnchor="10.0" AnchorPane.rightAnchor="48.0" AnchorPane.topAnchor="8.0">
                                  <padding>
                                     <Insets bottom="6.0" left="6.0" right="6.0" top="6.0" />
                                  </padding>

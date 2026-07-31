@@ -27,6 +27,7 @@ public final class SchemaAutoUpdater {
             ensureAggregateSchema(connection);
             ensureStockAgregateSchema(connection);
             ensureFinancialStatementSchema(connection);
+            ensureSyncOutboxSchema(connection);
         } catch (SQLException ex) {
             throw new IllegalStateException("Echec de mise a jour automatique du schema: " + ex.getMessage(), ex);
         }
@@ -187,6 +188,13 @@ public final class SchemaAutoUpdater {
                     updated_at DATETIME
                 )
                 """.formatted(table));
+    }
+
+    private static void ensureSyncOutboxSchema(Connection connection) throws SQLException {
+        if (tableExists(connection, "sync_outbox")) {
+            addColumnIfMissing(connection, "sync_outbox", "status", "VARCHAR(50) DEFAULT 'PENDING'");
+            addColumnIfMissing(connection, "sync_outbox", "retry_count", "INTEGER DEFAULT 0");
+        }
     }
 
     private static void createTableIfMissing(Connection connection, String table, String sql) throws SQLException {

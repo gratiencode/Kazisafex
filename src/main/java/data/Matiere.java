@@ -41,7 +41,7 @@ import java.util.List;
     @NamedQuery(name = "Matiere.findByPerissable", query = "SELECT m FROM Matiere m WHERE m.perissable = :perissable"),
     @NamedQuery(name = "Matiere.findByRegion", query = "SELECT m FROM Matiere m WHERE m.region = :region")})
 
-public class Matiere implements Serializable {
+public class Matiere extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

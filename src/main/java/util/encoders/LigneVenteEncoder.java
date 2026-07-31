@@ -43,6 +43,7 @@ public class LigneVenteEncoder implements Encoder.Text<LigneVente> {
                 .add("payload", ins.getPayload())
                 .add("montantCdf", ins.getMontantCdf())
                 .add("montantUsd", ins.getMontantUsd())
+                .add("coutAchat", ins.getCoutAchat() == null ? 0 : ins.getCoutAchat())
                 .add("productId", Json.createObjectBuilder()
                         .add("uid", ins.getProductId().getUid()).build())
                 .add("mesureId", Json.createObjectBuilder()

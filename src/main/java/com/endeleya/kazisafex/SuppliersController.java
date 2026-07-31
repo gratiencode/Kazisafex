@@ -575,7 +575,6 @@ public class SuppliersController implements Initializable {
                 }
             }
         });
-
     }
 
     @FXML

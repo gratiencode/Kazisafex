@@ -40,7 +40,7 @@ import java.util.List;
     @NamedQuery(name = "MatiereSku.findByQuantContenuSku", query = "SELECT m FROM MatiereSku m WHERE m.quantContenuSku = :quantContenuSku"),
     @NamedQuery(name = "MatiereSku.findByRegion", query = "SELECT m FROM MatiereSku m WHERE m.region = :region")})
 
-public class MatiereSku implements Serializable {
+public class MatiereSku extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id

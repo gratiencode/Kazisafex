@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.application.Platform;
 import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -29,6 +30,7 @@ import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -49,6 +51,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import tools.Constants;
+import tools.DataCache;
 import tools.FileUtils;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -66,6 +69,14 @@ import okhttp3.RequestBody;
  * @author eroot
  */
 public class EntrepriseController implements Initializable {
+
+    /**
+     * Rebind virtualized controls to the master ObservableLists after the
+     * cached page is reattached. Does not reload from the database.
+     */
+    public void onCachedPageShown() {
+        // No longer needed — views are rebuilt fresh each time.
+    }
 
     @FXML
     private Label txt_nom_entreprise;
@@ -153,21 +164,27 @@ public class EntrepriseController implements Initializable {
         } catch (FileNotFoundException ex) {
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
-        ksf.getRegions().enqueue(new Callback<List<String>>() {
-            @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
-                if (rspns.isSuccessful()) {
-                    List<String> lreg = rspns.body();
-                    regions.setAll(lreg);
-                    System.err.println("Eze regions " + lreg.size());
+        List<String> cachedRegions = DataCache.get("entreprise-regions");
+        if (cachedRegions != null) {
+            regions.setAll(cachedRegions);
+        } else {
+            ksf.getRegions().enqueue(new Callback<List<String>>() {
+                @Override
+                public void onResponse(Call<List<String>> call, Response<List<String>> rspns) {
+                    if (rspns.isSuccessful()) {
+                        List<String> lreg = rspns.body();
+                        DataCache.put("entreprise-regions", lreg);
+                        regions.setAll(lreg);
+                        System.err.println("Eze regions " + lreg.size());
+                    }
                 }
-            }
 
-            @Override
-            public void onFailure(Call<List<String>> call, Throwable thrwbl) {
+                @Override
+                public void onFailure(Call<List<String>> call, Throwable thrwbl) {
 
-            }
-        });
+                }
+            });
+        }
         kazisafe.getAbonnements().enqueue(new Callback<List<Abonnement>>() {
             @Override
             public void onResponse(Call<List<Abonnement>> call, Response<List<Abonnement>> rspns) {
@@ -457,4 +474,5 @@ public class EntrepriseController implements Initializable {
         ImageView img = (ImageView) event.getSource();
         MainUI.removeShaddowEffect(img);
     }
+
 }

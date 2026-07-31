@@ -43,18 +43,16 @@ public class PriceMaker {
     }
 
     public void setTaux(double taux) {
-        this.taux = taux;
-        if (taux > 0) {
-            CurrencyConverter.saveLegacyCdfRate(taux);
-        }
+        this.taux = taux > 0 ? taux : CurrencyConverter.activeRate();
+    }
+
+    public void refreshFromPreferences() {
+        this.mainCurrency = CurrencyConverter.mainCurrency();
+        this.taux = CurrencyConverter.activeRate();
     }
 
     public double toCdf() {
-        if (this.mainCurrency.equals("USD")) {
-            return prix;
-        } else {
-            return prix * taux;
-        }
+        return CurrencyConverter.convert(this.prix, this.mainCurrency, CurrencyConverter.CDF);
     }
 
     public double sumFacture(List<LigneVente> lvs) {
@@ -104,11 +102,7 @@ public class PriceMaker {
     }
 
     public double toUsd() {
-        if (this.mainCurrency.equals("CDF")) {
-            return prix;
-        } else {
-            return BigDecimal.valueOf((prix / taux)).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-        }
+        return CurrencyConverter.convert(this.prix, this.mainCurrency, CurrencyConverter.USD);
     }
 
     public double convert(double amount, String fromCurrency, String toCurrency) {

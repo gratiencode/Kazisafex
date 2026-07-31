@@ -12,8 +12,6 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import data.Produit;
@@ -32,15 +30,9 @@ public class ProduitService implements ProduitStorage {
     public boolean isExists(String uid) {
         String jpql = "SELECT CASE WHEN COUNT(p) > 0 THEN TRUE ELSE FALSE END "
                 + "FROM Produit p WHERE p.uid = :id";
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
-                    .setParameter("id", uid)
-                    .getSingleResult());
-        }
-        return ManagedSessionFactory.getEntityManager()
-                .createQuery(jpql, Boolean.class)
+        return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
                 .setParameter("id", uid)
-                .getSingleResult();
+                .getSingleResult());
     }
 
     public ProduitService() {
@@ -49,96 +41,34 @@ public class ProduitService implements ProduitStorage {
 
     @Override
     public Produit createProduit(Produit pro) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(pro);
-                return pro;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getNomProduit() + " enregistree");
-            });
-            return pro;
-        }
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        EntityTransaction tx = em.getTransaction();
-        try {
-            tx.begin();
+        ManagedSessionFactory.executeWrite(em -> {
             em.persist(pro);
-            tx.commit();
             return pro;
-        } catch (Exception ex) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            throw ex;
-        } finally {
-            em.clear(); // libère le contexte
-        }
+        });
+        return pro;
     }
 
     @Override
     public Produit updateProduit(Produit cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.merge(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getNomProduit() + " MAJ");
-            });
+        ManagedSessionFactory.executeWrite(em -> {
+            em.merge(cat);
             return cat;
-        }
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        EntityTransaction tx = em.getTransaction();
-        try {
-            tx.begin();
-            Produit merged = em.merge(cat);
-            tx.commit();
-            return merged;
-        } catch (Exception ex) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            throw ex;
-        } finally {
-            em.clear();
-        }
+        });
+        return cat;
     }
 
     @Override
     public void deleteProduit(Produit cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.remove(em.merge(cat));
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getNomProduit() + " supprimee");
-            });
-            return;
-        }
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        EntityTransaction etr = em.getTransaction();
-        try {
-            if (!etr.isActive()) {
-                etr.begin();
-            }
+        ManagedSessionFactory.executeWrite(em -> {
             em.remove(em.merge(cat));
-            etr.commit();
-        } catch (Exception ex) {
-            if (etr.isActive()) {
-                etr.rollback();
-            }
-            throw ex;
-        } finally {
-            em.clear();
-        }
+            return cat;
+        });
     }
 
     @Override
     public List<Produit> mergeSet(Set<Produit> bulk) {
-        EntityManager em = ManagedSessionFactory.getEntityManager();
-        EntityTransaction tx = em.getTransaction();
-        List<Produit> result = new ArrayList<>();
-        try {
-            tx.begin();
+        return ManagedSessionFactory.executeWrite(em -> {
+            List<Produit> result = new ArrayList<>();
             int i = 0;
             for (Produit p : bulk) {
                 Produit merged = em.merge(p);
@@ -149,34 +79,19 @@ public class ProduitService implements ProduitStorage {
                     em.clear();
                 }
             }
-            tx.commit();
             return result;
-        } catch (Exception ex) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            throw ex;
-        } finally {
-            em.clear();
-        }
+        });
     }
 
     @Override
     public Produit findProduit(String catId) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> em.find(Produit.class, catId));
-        }
-        return ManagedSessionFactory.getEntityManager().find(Produit.class, catId);
+        return ManagedSessionFactory.executeRead(em -> em.find(Produit.class, catId));
     }
 
     @Override
     public List<Produit> findProduits() {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> em.createNamedQuery("Produit.findAll").getResultList());
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findAll");
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> em.createNamedQuery("Produit.findAll").getResultList());
         } catch (jakarta.persistence.EntityNotFoundException e) {
             return null;
         }
@@ -187,17 +102,11 @@ public class ProduitService implements ProduitStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM produit p WHERE p.categoryid_uid =  ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em
-                        -> {
-                    Query query = em.createNativeQuery(sb.toString(), Produit.class);
-                    query.setParameter(1, catId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Produit.class);
-            query.setParameter(1, catId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Produit.class);
+                query.setParameter(1, catId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -208,12 +117,9 @@ public class ProduitService implements ProduitStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT COUNT(*) FROM produit");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    return (Long) em.createNativeQuery(sb.toString(), Long.class).getSingleResult();
-                });
-            }
-            return (Long) ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                return (Long) em.createNativeQuery(sb.toString(), Long.class).getSingleResult();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -222,19 +128,12 @@ public class ProduitService implements ProduitStorage {
     @Override
     public List<Produit> findProduits(int start, int max) {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em
-                        -> {
-                    Query query = em.createNamedQuery("Produit.findAll");
-                    query.setFirstResult(start);
-                    query.setMaxResults(max);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findAll");
-            query.setFirstResult(start);
-            query.setMaxResults(max);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Produit.findAll");
+                query.setFirstResult(start);
+                query.setMaxResults(max);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -243,17 +142,11 @@ public class ProduitService implements ProduitStorage {
     @Override
     public Produit findByBarcode(String codebar) {
         try {
-
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNamedQuery("Produit.findByCodeBar");
-                    query.setParameter("codeBar", codebar);
-                    return (Produit) query.getSingleResult();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findByCodeBar");
-            query.setParameter("codeBar", codebar);
-            return (Produit) query.getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNamedQuery("Produit.findByCodeBar");
+                query.setParameter("codeBar", codebar);
+                return (Produit) query.getSingleResult();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -262,12 +155,7 @@ public class ProduitService implements ProduitStorage {
     @Override
     public List<Produit> findAllByCodebar(String codebarr) {
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> em.createNamedQuery("Produit.findByCodeBar").setParameter("codeBar", codebarr).getResultList());
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findByCodeBar");
-            query.setParameter("codeBar", codebarr);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> em.createNamedQuery("Produit.findByCodeBar").setParameter("codeBar", codebarr).getResultList());
         } catch (NoResultException e) {
             return null;
         }
@@ -301,25 +189,16 @@ public class ProduitService implements ProduitStorage {
     @Override
     public List<Produit> findByDescription(String nomProduit, String marque, String modele, String taille) {
         try {
-
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM produit p WHERE p.nomproduit =  ? "
                     + "AND p.marque = ? AND p.modele = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em
-                        -> {
-                    Query query = em.createNativeQuery(sb.toString(), Produit.class);
-                    query.setParameter(1, nomProduit);
-                    query.setParameter(2, marque);
-                    query.setParameter(3, modele);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Produit.class);
-            query.setParameter(1, nomProduit);
-            query.setParameter(2, marque);
-            query.setParameter(3, modele);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Produit.class);
+                query.setParameter(1, nomProduit);
+                query.setParameter(2, marque);
+                query.setParameter(3, modele);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -327,24 +206,18 @@ public class ProduitService implements ProduitStorage {
 
     @Override
     public List<Produit> findProduitByName(String regex) {
-        List<Produit> rsult = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT * FROM produit p WHERE CONCAT(p.codebar,' ',p.nomproduit,' ',p.marque,' ',p.modele,' ',p.taille,' ',p.couleur) LIKE ?");
         try {
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em
-                        -> {
-                    Query query = em.createNativeQuery(sb.toString(), Produit.class);
-                    query.setParameter(1, "%" + regex + "%");
-                    rsult.addAll(query.getResultList());
-                    return rsult;
-                });
-            }
-
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Produit.class);
+                query.setParameter(1, "%" + regex + "%");
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             System.err.println("Result is empty mon vieu");
         }
-        return rsult;
+        return new ArrayList<>();
     }
 
     @Override
@@ -353,16 +226,11 @@ public class ProduitService implements ProduitStorage {
             Timestamp offline = new Timestamp(disconnected_at);
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM produit p WHERE p.updated_at >= ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Produit.class);
-                    query.setParameter(1, offline);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Produit.class);
-            query.setParameter(1, offline);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Produit.class);
+                query.setParameter(1, offline);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -372,20 +240,13 @@ public class ProduitService implements ProduitStorage {
     public boolean isExists(String uid, LocalDateTime atime) {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT * FROM Produit p WHERE p.uid = ? AND p.updated_at = ?");
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), Produit.class);
-                query.setParameter(1, uid);
-                query.setParameter(2, atime);
-                List<Produit> result = query.getResultList();
-                return !result.isEmpty();
-            });
-        }
-        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Produit.class);
-        query.setParameter(1, uid);
-        query.setParameter(2, atime);
-        List<Produit> result = query.getResultList();
-        return !result.isEmpty();
+        return ManagedSessionFactory.executeRead(em -> {
+            Query query = em.createNativeQuery(sb.toString(), Produit.class);
+            query.setParameter(1, uid);
+            query.setParameter(2, atime);
+            List<Produit> result = query.getResultList();
+            return !result.isEmpty();
+        });
     }
 
 }

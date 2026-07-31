@@ -64,6 +64,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.AnchorPane;
+import tools.DataCache;
 import tools.DataId;
 import data.Presence;
 import delegates.PresenceDelegate;
@@ -89,22 +90,7 @@ public class AgentController implements Initializable {
      * Rebind agent tables/lists after the cached page is reattached.
      */
     public void onCachedPageShown() {
-        if (tbl_hired_agents != null && employes != null) {
-            tbl_hired_agents.setItems(employes);
-            tbl_hired_agents.refresh();
-        }
-        if (list_agent_from_cloud != null && users != null) {
-            list_agent_from_cloud.setItems(users);
-            list_agent_from_cloud.refresh();
-        }
-        if (lst_features != null && notallowed != null) {
-            lst_features.setItems(notallowed);
-            lst_features.refresh();
-        }
-        if (lst_allowed_features != null && allowed != null) {
-            lst_allowed_features.setItems(allowed);
-            lst_allowed_features.refresh();
-        }
+        // No longer needed — views are rebuilt fresh each time.
     }
 
     @FXML
@@ -867,7 +853,6 @@ public class AgentController implements Initializable {
         configPresenceTable();
         dpk_debut_presence.setValue(LocalDate.now().minusDays(7));
         dpk_fin_presence.setValue(LocalDate.now());
-       
     }
 
     private void configPresenceTable() {
@@ -880,7 +865,10 @@ public class AgentController implements Initializable {
     }
 
     private void loadPresences() {
-        presences.setAll(PresenceDelegate.findPresences());
+        List<Presence> cached = DataCache.getOrLoad("presences", PresenceDelegate::findPresences);
+        if (cached != null) {
+            presences.setAll(cached);
+        }
     }
 
     @FXML
@@ -917,10 +905,7 @@ public class AgentController implements Initializable {
     }
 
     private void loadFingerprintMappings() {
-        List<FingerprintMapping> maps = FingerprintMappingDelegate.findAll();
-        // Since employees are loaded asynchronisly, we might need to apply mappings
-        // later
-        // or just rely on findAgentByHash querying the Delegate
+        DataCache.getOrLoad("fingerprintMappings", FingerprintMappingDelegate::findAll);
     }
 
     private void handleScan(String hash) {

@@ -105,6 +105,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -133,6 +134,7 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import tools.CurrencyConverter;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -143,6 +145,7 @@ import tools.PriceMaker;
 import tools.SaleItemHelper;
 import tools.SubscriptionUtil;
 import tools.SyncEngine;
+import tools.SyncRetryHandler;
 import tools.Tables;
 import tools.Util;
 import utilities.PDFUtils;
@@ -308,6 +311,8 @@ public class PaymentController
     int compteur = 0;
     Traisorerie svincss;
     CountDownLatch cdl = new CountDownLatch(1);
+    private Stage dialogStage;
+    private volatile boolean saleSaveSubmitted = false;
     @FXML
     private DatePicker dpk_date_vente;
 
@@ -343,8 +348,8 @@ public class PaymentController
         this.idNat = this.pref.get("ent_idnat", "Aucun");
         this.nif = this.pref.get("ent_impot", "Aucun");
         this.phonez = this.pref.get("ent_phones", "");
-        this.maker.setMainCurrency(this.pref.get("mainCur", "USD"));
-        this.taux2change = this.pref.getDouble("taux2change", 2800.0);
+        this.maker.refreshFromPreferences();
+        this.taux2change = CurrencyConverter.activeRate();
         this.print = this.pref.getBoolean("print", true);
         this.role = this.pref.get("priv", null);
         this.region = this.pref.get("region", "...");
@@ -573,6 +578,7 @@ public class PaymentController
         this.messageForCustomer = this.pref.get("mesc", "Les marchandises vendues ne sont ni reprises ni echangees");
         this.kazisafe = KazisafeServiceFactory.createService((String) token);
         this.venteItems = new ArrayList<LigneVente>();
+
         Vente invoiceId = null;
         if (invoice != null && (invoices = VenteDelegate.findVente((int) invoice.getUid())) != null) {
             invoiceId = invoices;
@@ -584,32 +590,24 @@ public class PaymentController
         }
         double sommed = lignes.stream().mapToDouble(l -> l.getMontantUsd()).sum();
         double sommef = lignes.stream().mapToDouble(l -> l.getMontantCdf()).sum();
-        final double tot = lignes.stream().mapToDouble(l -> l.getMontantUsd()).sum();
-        if (this.maker.isCdf()) {
-            this.tf_nominal_recu_cdf.setVisible(false);
-            this.txt_eval_sum_cdf.setVisible(false);
-            this.tf_arembourser_cdf.setVisible(false);
-        } else {
-            this.tf_nominal_recu_cdf.setVisible(true);
-            this.txt_eval_sum_cdf.setVisible(true);
-            this.tf_arembourser_cdf.setVisible(true);
-        }
-        this.cdf = sommef;
-        this.revertUsd = this.usd = sommed;
+        final double totMain = CurrencyConverter.legacyTotalInMainCurrency(sommed, sommef);
+        // Les champs CDF et USD restent toujours visibles quelle que soit la devise principale.
+        this.cdf = CurrencyConverter.amountFromLegacyStorage(sommed, sommef, CurrencyConverter.CDF);
+        this.revertUsd = this.usd = CurrencyConverter.amountFromLegacyStorage(sommed, sommef, CurrencyConverter.USD);
         this.revertCdf = this.cdf;
-        this.txt_bill_somme_facture.setText("CDF : " + Math.round(sommef));
-        this.txt_bill_somme_credit.setText("CDF : " + Math.round(sommef));
-        this.sumCopy = sommed;
-        this.txt_eval_sum_usd.setText(String.valueOf(BigDecimal.valueOf(sommed).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
-        this.txt_eval_sum_cdf.setText(String.valueOf(Math.round(sommef)));
+        this.txt_bill_somme_facture.setText(CurrencyConverter.CDF + " : " + Math.round(this.cdf));
+        this.txt_bill_somme_credit.setText(CurrencyConverter.CDF + " : " + Math.round(this.cdf));
+        this.sumCopy = totMain;
+        this.txt_eval_sum_usd.setText(String.valueOf(this.usd));
+        this.txt_eval_sum_cdf.setText(String.valueOf(Math.round(this.cdf)));
         if (this.maker.isUsd()) {
-            this.cdf = sommed * this.taux2change;
-            this.revertUsd = this.usd = sommed;
+            this.cdf = CurrencyConverter.fromUsd(this.usd, CurrencyConverter.CDF);
+            this.revertUsd = this.usd;
             this.revertCdf = this.cdf;
-            this.txt_bill_somme_facture.setText("USD : " + tot);
-            this.txt_bill_somme_credit.setText("USD : " + tot);
-            this.sumCopy = sommed;
-            this.txt_eval_sum_usd.setText(String.valueOf(sommed));
+            this.txt_bill_somme_facture.setText(CurrencyConverter.USD + " : " + totMain);
+            this.txt_bill_somme_credit.setText(CurrencyConverter.USD + " : " + totMain);
+            this.sumCopy = totMain;
+            this.txt_eval_sum_usd.setText(String.valueOf(this.usd));
             this.txt_eval_sum_cdf.setText(String.valueOf(BigDecimal.valueOf(this.cdf).setScale(0, RoundingMode.HALF_EVEN).doubleValue()));
         }
         this.venteItems.clear();
@@ -630,7 +628,9 @@ public class PaymentController
                 this.pane_bill_cash_paid.setVisible(true);
                 this.txt_bill_cash_paid.setVisible(true);
                 this.txt_bill_somme_credit.setText(String.valueOf(invoiceId.getMontantDette()));
-                this.txt_bill_somme_facture.setText(String.valueOf(invoiceId.getMontantUsd() + invoiceId.getMontantCdf() / this.taux2change));
+                this.txt_bill_somme_facture.setText(String.valueOf(
+                        CurrencyConverter.legacyTotalInMainCurrency(
+                                invoiceId.getMontantUsd(), invoiceId.getMontantCdf())));
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             } else if (invoiceId.getPayment().contains("Cash") | invoiceId.getPayment().contains(TypeTraisorerie.ELECTRONIQUE.name()) | invoiceId.getPayment().contains("Banque")) {
@@ -649,6 +649,14 @@ public class PaymentController
             Client clt = ClientDelegate.findClient((String) invoiceId.getClientId().getUid());
             this.txt_nom_client1.setText("Tel : " + (clt.getPhone().length() < 8 ? "..." : clt.getPhone()));
             this.txt_nom_client.setText("Client : " + clt.getNomClient());
+            // Also populate the cliname TextField and phone field so that
+            // printReceipt / printBillViaBluetooth / printBillViaSerial read
+            // the correct client name from the stored invoice, not stale UI state.
+            Platform.runLater(() -> {
+                this.cliname.setText(clt.getNomClient());
+                this.tf_phone_client.setText(clt.getPhone());
+                this.client = clt;
+            });
         }
         this.vente4save = new Vente(ref);
         int tbil = this.pref.getInt("tranzit_bill", -100);
@@ -769,7 +777,7 @@ public class PaymentController
                     this.txt_bill_cash_paid.setVisible(false);
                 } else {
                     double sin = Double.parseDouble(this.tf_nominal_recu_usd.getText());
-                    this.txt_bill_somme_facture.setText(sin > tot ? String.valueOf(tot) : String.valueOf(sin));
+                    this.txt_bill_somme_facture.setText(sin > totMain ? String.valueOf(totMain) : String.valueOf(sin));
                     this.pane_bill_cash_paid.setVisible(true);
                     this.txt_bill_cash_paid.setVisible(true);
                     this.cbx_payment_mode.getSelectionModel().select(4);
@@ -779,7 +787,7 @@ public class PaymentController
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             } else {
-                this.txt_bill_somme_facture.setText(String.valueOf(tot));
+                this.txt_bill_somme_facture.setText(String.valueOf(totMain));
                 this.dpk_echeance_debt.setDisable(true);
                 this.cbx_payment_mode.getSelectionModel().select(0);
                 this.pane_bill_sum_credit.setVisible(false);
@@ -905,7 +913,7 @@ public class PaymentController
                     this.txt_bill_cash_paid.setVisible(false);
                 } else {
                     double sin = Double.parseDouble(this.tf_nominal_recu_cdf.getText());
-                    this.txt_bill_somme_facture.setText(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue() > tot ? String.valueOf(tot) : String.valueOf(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue()));
+                    this.txt_bill_somme_facture.setText(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue() > totMain ? String.valueOf(totMain) : String.valueOf(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue()));
                     this.cbx_payment_mode.getSelectionModel().select(4);
                     this.pane_bill_cash_paid.setVisible(true);
                     this.txt_bill_cash_paid.setVisible(true);
@@ -916,7 +924,7 @@ public class PaymentController
                 this.txt_lbl_credit.setVisible(true);
             } else {
                 this.dpk_echeance_debt.setDisable(true);
-                this.txt_bill_somme_facture.setText(String.valueOf(tot));
+                this.txt_bill_somme_facture.setText(String.valueOf(totMain));
                 this.cbx_payment_mode.getSelectionModel().select(0);
                 this.pane_bill_sum_credit.setVisible(false);
                 this.txt_lbl_credit.setVisible(false);
@@ -1005,7 +1013,7 @@ public class PaymentController
                     if (!txt_eval_sum_usd.getText().equals("0.0") && !txt_eval_sum_cdf.getText().equals("0.0")) {
                         txt_reduction.setVisible(true);
                         double dette = Double.parseDouble(txt_eval_sum_usd.getText());
-                        double pred = BigDecimal.valueOf(dette / tot * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
+                        double pred = BigDecimal.valueOf(dette / totMain * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
                         txt_lbl_credit.setText("R\u00e9duction : (" + pred + "%)");
                         txt_reduction.setText("R\u00e9duction : (" + pred + "%)");
                         vente4save.setMontantDette(Double.valueOf(0.0));
@@ -1016,7 +1024,7 @@ public class PaymentController
                     if (!txt_eval_sum_usd.getText().equals("0.0") && !txt_eval_sum_cdf.getText().equals("0.0")) {
                         txt_reduction.setVisible(true);
                         double dette = Double.parseDouble(txt_eval_sum_usd.getText());
-                        double pred = BigDecimal.valueOf(dette / tot * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
+                        double pred = BigDecimal.valueOf(dette / totMain * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
                         txt_lbl_credit.setText("R\u00e9duction : (" + pred + "%)");
                         txt_reduction.setText("R\u00e9duction : (" + pred + "%)");
                         vente4save.setMontantDette(Double.valueOf(0.0));
@@ -1034,7 +1042,7 @@ public class PaymentController
                     if (!txt_eval_sum_usd.getText().equals("0.0") && !txt_eval_sum_cdf.getText().equals("0.0")) {
                         txt_reduction.setVisible(true);
                         double dette = Double.parseDouble(txt_eval_sum_usd.getText());
-                        double pred = BigDecimal.valueOf(dette / tot * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
+                        double pred = BigDecimal.valueOf(dette / totMain * 100.0).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
                         txt_lbl_credit.setText("R\u00e9duction : (" + pred + "%)");
                         txt_reduction.setText("R\u00e9duction : (" + pred + "%)");
                         vente4save.setMontantDette(Double.valueOf(0.0));
@@ -1259,12 +1267,17 @@ public class PaymentController
         if (this.chbx_print_thermal.isSelected()) {
             this.print();
         } else {
-            List items = LigneVenteDelegate.findByReference(vx.getUid());
+            // Always fetch fresh items from DB to guarantee all ligne_ventes are printed,
+            // even when the in-memory venteItems list was cleared or is stale.
+            List<LigneVente> items = LigneVenteDelegate.findByReference(vx.getUid());
             if (this.defaultPrinter != null) {
                 double paid = this.maker.isUsd() ? this.toUsd() : this.toCdf();
-                Client cl = vx.getClientId();
+                // Prefer the client from the persisted Vente record so that "Voir la facture"
+                // always shows the correct client, regardless of cliname TextField state.
+                Client cl = ClientDelegate.findClient((String) vx.getClientId().getUid());
+                if (cl == null) cl = vx.getClientId();
                 System.out.println("Printing...");
-                String nomCl = this.cliname.getText().isEmpty() ? cl.getNomClient() : this.cliname.getText();
+                String nomCl = cl.getNomClient();
                 this.printReceipt(this.defaultPrinter.getName(), this.entrepName, this.rccm, vx.getReference(), items, paid, nomCl, cl.getPhone(), this.maker.getMainCurrency(), this.taux2change);
             }
         }
@@ -1302,6 +1315,12 @@ public class PaymentController
 
     @FXML
     public void saveVente(Event et) {
+        if (dialogStage == null && et != null && et.getSource() instanceof Node) {
+            try {
+                dialogStage = (Stage) ((Node) et.getSource()).getScene().getWindow();
+            } catch (Exception ignored) {
+            }
+        }
         if (!((String) this.cbx_payment_mode.getValue()).equals("CREDIT") && this.choosenComptTr == null) {
             MainUI.notify(null, (String) "Erreur", (String) "Veuillez selectionner le compte de tresorerie puis continuer", (long) 4L, (String) "error");
             return;
@@ -1389,126 +1408,137 @@ public class PaymentController
                 this.client = (Client) clts.get(0);
             }
         }
-        this.vente4save.setDateVente(dpk_date_vente.getValue().atTime(LocalTime.now()));
-        this.vente4save.setRegion(this.region);
-        this.vente4save.setLibelle((String) (this.tflibelle.getText().isEmpty() ? "Vente - Ref  " + this.vente4save.getReference() : this.tflibelle.getText()));
-        this.vente4save.setLatitude(0.0);
-        this.vente4save.setLongitude(0.0);
-//        
-        if (this.vente4save != null) {
-            Vente vtx;
-            this.vente4save.setClientId(this.client);
-            Map<String, Double> lotAvailablePiecesCache = new HashMap<>();
-            if (!this.clients.contains(this.client) && this.save2favorite.isSelected()) {
-                this.clients.add(this.client);
-            }
-            if ((vtx = VenteDelegate.findVente(this.vente4save.getUid())) == null) {
-                Vente vent = VenteDelegate.saveVente((Vente) this.vente4save);
-                for (LigneVente ligneVente : this.venteItems) {
-                    this.saveLigneVenteWithLotSplitting(ligneVente, vent, dev, lotAvailablePiecesCache);
-                }
+        this.saleSaveSubmitted = true;
+        CompletableFuture.runAsync(() -> {
+            try {
+                this.vente4save.setDateVente(dpk_date_vente.getValue().atTime(LocalTime.now()));
+                this.vente4save.setRegion(this.region);
+                this.vente4save.setLibelle(this.tflibelle.getText().isEmpty()
+                        ? "Vente - Ref  " + this.vente4save.getReference() : this.tflibelle.getText());
+                this.vente4save.setLatitude(0.0);
+                this.vente4save.setLongitude(0.0);
 
-            } else {
-                List<LigneVente> lvs = LigneVenteDelegate.findByReference(this.vente4save.getUid());
-                System.out.println("Venty " + this.vente4save.getLibelle());
-                Vente vent = VenteDelegate.updateVente((Vente) this.vente4save);
-                if (!lvs.isEmpty()) {
-                    for (LigneVente lv : lvs) {
-                        LigneVenteDelegate.deleteLigneVente(lv);
+                if (this.vente4save != null) {
+                    Vente vtx;
+                    this.vente4save.setClientId(this.client);
+                    Map<String, Double> lotAvailablePiecesCache = new HashMap<>();
+                    if (!this.clients.contains(this.client) && this.save2favorite.isSelected()) {
+                        this.clients.add(this.client);
                     }
-                    for (LigneVente i : this.venteItems) {
-                        this.saveLigneVenteWithLotSplitting(i, vent, dev, lotAvailablePiecesCache);
+                    if ((vtx = VenteDelegate.findVente(this.vente4save.getUid())) == null) {
+                        Vente vent = VenteDelegate.saveVente(this.vente4save);
+                        for (LigneVente ligneVente : this.venteItems) {
+                            this.saveLigneVenteWithLotSplitting(ligneVente, vent, dev, lotAvailablePiecesCache);
+                        }
+                    } else {
+                        List<LigneVente> lvs = LigneVenteDelegate.findByReference(this.vente4save.getUid());
+                        System.out.println("Venty " + this.vente4save.getLibelle());
+                        Vente vent = VenteDelegate.updateVente(this.vente4save);
+                        if (!lvs.isEmpty()) {
+                            for (LigneVente lv : lvs) {
+                                LigneVenteDelegate.deleteLigneVente(lv);
+                            }
+                            for (LigneVente i : this.venteItems) {
+                                this.saveLigneVenteWithLotSplitting(i, vent, dev, lotAvailablePiecesCache);
+                            }
+                        }
                     }
+                    System.out.println("Ventitem count : " + this.venteItems.size());
+                    this.vente4save.setLigneVenteList(this.venteItems);
+                    this.pref.putInt("_bill_counter_", this.compteur);
+                    this.pref.putInt("tranzit_bill", -100);
+                    if (!((String) this.cbx_payment_mode.getValue()).equals("CREDIT")) {
+                        LocalDate ldt = this.vente4save.getDateVente().toLocalDate();
+                        Traisorerie trzr = TraisorerieDelegate.findExistingOf("BE" + Constants.dateTodayRef(ldt), ldt, this.choosenComptTr.getUid(), this.region);
+                        double d = VenteDelegate.sumUsdSaleOf(ldt, ldt, this.region);
+                        double sumCdf = VenteDelegate.sumCdfSaleOf(ldt, ldt, this.region);
+                        double balcdf = TraisorerieDelegate.findCurrentBalanceCdf(this.choosenComptTr.getUid(), ldt, ldt, this.region);
+                        double balusd = TraisorerieDelegate.findCurrentBalanceUsd(this.choosenComptTr.getUid(), ldt, ldt, this.region);
+                        System.err.println("comptresor " + ((CompteTresor) this.cbx_comptes.getValue()).getIntitule() + " " + balcdf + " usdb " + balusd);
+                        if (trzr == null) {
+                            trzr = new Traisorerie(DataId.generate());
+                            trzr.setDate(LocalDateTime.now());
+                            trzr.setLibelle("Ventes journalier");
+                            trzr.setMontantCdf(sumCdf);
+                            trzr.setMontantUsd(d);
+                            trzr.setMouvement(Mouvment.AUGMENTATION.name());
+                            trzr.setReference("BE" + Constants.dateTodayRef(ldt));
+                            trzr.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
+                            trzr.setRegion(this.region);
+                            trzr.setTresorId(this.choosenComptTr);
+                            trzr.setSoldeCdf(balcdf + this.vente4save.getMontantCdf());
+                            trzr.setSoldeUsd(balusd + this.vente4save.getMontantUsd());
+                            this.svincss = TraisorerieDelegate.saveTraisorerie(trzr);
+                        } else {
+                            trzr.setLibelle("Ventes journalier");
+                            trzr.setMontantCdf(sumCdf);
+                            trzr.setMontantUsd(d);
+                            trzr.setDate(LocalDateTime.now());
+                            trzr.setMouvement(Mouvment.AUGMENTATION.name());
+                            trzr.setTresorId(this.choosenComptTr);
+                            trzr.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
+                            trzr.setSoldeCdf(balcdf + this.vente4save.getMontantCdf());
+                            trzr.setSoldeUsd(balusd + this.vente4save.getMontantUsd());
+                            this.svincss = TraisorerieDelegate.updateTraisorerie(trzr);
+                        }
+                    }
+                    System.out.println("SERVICE TX SAVED " + (this.svincss != null ? this.svincss.getSoldeUsd() : "N/A"));
 
-                }
-            }
-            System.out.println("Ventitem count : " + this.venteItems.size());
-            this.vente4save.setLigneVenteList(this.venteItems);
-            this.pref.putInt("_bill_counter_", this.compteur);
-            this.pref.putInt("tranzit_bill", -100);
-            if (!((String) this.cbx_payment_mode.getValue()).equals("CREDIT")) {
-                LocalDate ldt = this.vente4save.getDateVente().toLocalDate();
-                Traisorerie trzr = TraisorerieDelegate.findExistingOf((String) ("BE" + Constants.dateTodayRef((LocalDate) ldt)), (LocalDate) ldt, (String) this.choosenComptTr.getUid(), (String) this.region);
-                double d = VenteDelegate.sumUsdSaleOf((LocalDate) ldt, (LocalDate) ldt, (String) this.region);
-                double sumCdf = VenteDelegate.sumCdfSaleOf((LocalDate) ldt, (LocalDate) ldt, (String) this.region);
-                double balcdf = TraisorerieDelegate.findCurrentBalanceCdf((String) this.choosenComptTr.getUid(), (LocalDate) ldt, (LocalDate) ldt, (String) this.region);
-                double balusd = TraisorerieDelegate.findCurrentBalanceUsd((String) this.choosenComptTr.getUid(), (LocalDate) ldt, (LocalDate) ldt, (String) this.region);
-                System.err.println("comptresor " + ((CompteTresor) this.cbx_comptes.getValue()).getIntitule() + " " + balcdf + " usdb " + balusd);
-                if (trzr == null) {
-                    trzr = new Traisorerie(DataId.generate());
-                    trzr.setDate(LocalDateTime.now());
-                    trzr.setLibelle("Ventes journalier");
-                    trzr.setMontantCdf(sumCdf);
-                    trzr.setMontantUsd(d);
-                    trzr.setMouvement(Mouvment.AUGMENTATION.name());
-                    trzr.setReference("BE" + Constants.dateTodayRef((LocalDate) ldt));
-                    trzr.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
-                    trzr.setRegion(this.region);
-                    trzr.setTresorId(this.choosenComptTr);
-                    trzr.setSoldeCdf(Double.valueOf(balcdf + this.vente4save.getMontantCdf()));
-                    trzr.setSoldeUsd(Double.valueOf(balusd + this.vente4save.getMontantUsd()));
-                    this.svincss = TraisorerieDelegate.saveTraisorerie((Traisorerie) trzr);
-                } else {
-                    trzr.setLibelle("Ventes journalier ");
-                    trzr.setMontantCdf(sumCdf);
-                    trzr.setMontantUsd(d);
-                    trzr.setLibelle("Ventes journalier");
-                    trzr.setDate(LocalDateTime.now());
-                    trzr.setMouvement(Mouvment.AUGMENTATION.name());
-                    trzr.setTresorId(this.choosenComptTr);
-                    trzr.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
-                    trzr.setSoldeCdf(Double.valueOf(balcdf + this.vente4save.getMontantCdf()));
-                    trzr.setSoldeUsd(Double.valueOf(balusd + this.vente4save.getMontantUsd()));
-                    this.svincss = TraisorerieDelegate.updateTraisorerie((Traisorerie) trzr);
-                }
-            }
-            System.out.println("SERVICE TX SAVED " + this.svincss.getSoldeUsd());
-
-            if (this.chbx_print_receipt.isSelected()) {
-                if (this.chbx_print_thermal.isSelected()) {
-                    this.print();
-                }
-                if (this.defaultPrinter != null) {
-                    for (int i = 0; i < this.copies; ++i) {
-                        System.out.println("Printing on thermal... " + i);
-                        double paid = this.maker.isUsd() ? this.toUsd() : this.toCdf();
-                        Client cl = this.vente4save.getClientId();
-                        System.out.println("Printing...");
-                        this.printReceipt(this.defaultPrinter.getName(), this.entrepName,
-                                this.rccm, this.vente4save.getReference(), this.venteItems, paid,
-                                cl.getNomClient(), cl.getPhone(), this.maker.getMainCurrency(), this.taux2change);
+                    if (this.chbx_print_receipt.isSelected()) {
+                        if (this.chbx_print_thermal.isSelected()) {
+                            this.print();
+                        }
+                        if (this.defaultPrinter != null) {
+                            // Fetch fresh items from DB to ensure all saved ligne_ventes
+                            // (including lot-split sub-lines) are included in the receipt.
+                            List<LigneVente> printItems = LigneVenteDelegate.findByReference(this.vente4save.getUid());
+                            if (printItems.isEmpty()) {
+                                printItems = this.venteItems; // fallback to in-memory if DB fetch fails
+                            }
+                            for (int i = 0; i < this.copies; ++i) {
+                                System.out.println("Printing on thermal... " + i);
+                                double paid = this.maker.isUsd() ? this.toUsd() : this.toCdf();
+                                Client cl = this.vente4save.getClientId();
+                                System.out.println("Printing...");
+                                this.printReceipt(this.defaultPrinter.getName(), this.entrepName,
+                                        this.rccm, this.vente4save.getReference(), printItems, paid,
+                                        cl.getNomClient(), cl.getPhone(), this.maker.getMainCurrency(), this.taux2change);
+                            }
+                        }
                     }
+                    Executors.newCachedThreadPool().submit(() -> {
+                        if (this.svincss != null) {
+                            boolean savecsh = this.saveCashByHttp(this.svincss);
+                            System.out.println("Tresorerie http saved is " + savecsh);
+                        }
+                    });
                 }
+            } catch (Exception ex) {
+                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, "Save error", ex);
+                Platform.runLater(() -> {
+                    MainUI.notify(null, "Erreur", "Erreur lors de l'enregistrement: " + ex.getMessage(), 4L, "error");
+                });
+                return;
             }
-            Executors.newCachedThreadPool().submit(() -> {
-                if (this.svincss != null) {
-                    boolean savecsh = this.saveCashByHttp(this.svincss);
-                    System.out.println("Tresorerie http saved is " + savecsh);
+            Platform.runLater(() -> {
+                PosController.getInstance().clearCart();
+                if (PosController.getInstance().savedCarts != null) {
+                    PosController.getInstance().savedCarts.removeIf(v -> v.getUid() == this.vente4save.getUid());
                 }
+                PosController.getInstance().choosenVente = null;
+                PosController.getInstance().refreshPosUi();
+                this.venteItems.clear();
+                MainUI.notify(null, "Info", "Vente enregistree avec succes", 4L, "info");
+                close(null);
             });
-            MainUI.notify(null, (String) "Info", (String) "Vente enregistree avec succes", (long) 4L, (String) "info");
             this.cdl.countDown();
-            this.tryToSaveSale(this.svincss == null ? null : this.svincss.getUid(), this.choosenComptTr, this.client, this.vente4save, this.vente4save.getLigneVenteList(), et);
-        }
-//        
+            this.tryToSaveSale(this.svincss == null ? null : this.svincss.getUid(), this.choosenComptTr, this.client, this.vente4save, this.vente4save.getLigneVenteList());
+        });
     }
 
-    private void tryToSaveSale(String transaction, CompteTresor ct, Client client, Vente vente, List<LigneVente> lignes, Event et) {
+    private void tryToSaveSale(String transaction, CompteTresor ct, Client client, Vente vente, List<LigneVente> lignes) {
         Executors.newCachedThreadPool().submit(() -> {
             if (!Util.isInternetAndBaseApiReachable()) {
-                Platform.runLater(() -> {
-                    PosController.getInstance().clearCart();
-                    try {
-                        if (PosController.getInstance().savedCarts != null) {
-                            PosController.getInstance().savedCarts.removeIf(v -> v.getUid() == vente.getUid());
-                        }
-                    } catch (Exception exception) {
-                        // empty catch block
-                    }
-                    PosController.getInstance().refreshPos(et);
-                    this.venteItems.clear();
-                    this.close(et);
-                });
                 return;
             }
             try {
@@ -1517,79 +1547,67 @@ public class PaymentController
                 // empty catch block
             }
 
-            int retries = 0;
-            block12:
-            while (retries < MAX_SALE_RETRY) {
-                try {
+            try {
+                SyncRetryHandler.retryVoid("Vente", String.valueOf(vente.getUid()), () -> {
                     vente.setClientId(client);
                     System.out.println("Client phone : " + client.getPhone());
-                    Response<Vente> rep = this.saveVenteByHttp(vente, client, ct, transaction, lignes);
+                    Response<Vente> rep = saveVenteByHttp(vente, client, ct, transaction, lignes);
                     if (rep == null) {
-                        System.out.println("Reponse save vente by http est NULL" + String.valueOf(rep));
-                        continue;
+                        System.out.println("Reponse save vente by http est NULL");
+                        throw new Exception("Réponse null");
                     }
                     int reponse = rep.code();
                     System.out.println("Reponse http code - de vente " + reponse);
                     switch (reponse) {
-                        case 417: {
+                        case 417:
                             System.out.println("T3 Client " + reponse + " " + client.getPhone());
-                            List cs = ClientDelegate.findClientByPhone((String) client.getPhone());
-                            if (!cs.isEmpty()) {
-                                System.err.println("Clients is Empty");
-                                Client c = (Client) cs.get(0);
-                                boolean client_saved = this.saveClientByHttp(c);
-                                System.out.println("Client enregistre : " + (client_saved ? "OK" : "OOps! error"));
-                                break;
+                            {
+                                List<Client> cs = ClientDelegate.findClientByPhone((String) client.getPhone());
+                                if (!cs.isEmpty()) {
+                                    System.err.println("Clients is Empty");
+                                    Client c = cs.get(0);
+                                    boolean client_saved = saveClientByHttp(c);
+                                    System.out.println("Client enregistre : " + (client_saved ? "OK" : "OOps! error"));
+                                } else {
+                                    Client sc = ClientDelegate.saveClient(client);
+                                    System.out.println("Save clt " + sc.getPhone());
+                                }
                             }
-                            Client sc = ClientDelegate.saveClient((Client) client);
-                            System.out.println("Save clt " + sc.getPhone());
                             break;
-                        }
-                        case 412: {
+                        case 412:
                             System.out.println("T3 Compte Tresor " + reponse);
-                            List comptes = CompteTresorDelegate.findByNumeroCompte((String) ct.getNumeroCompte());
-                            if (comptes.isEmpty()) {
-                                break;
+                            {
+                                List<CompteTresor> comptes = CompteTresorDelegate.findByNumeroCompte(ct.getNumeroCompte());
+                                if (!comptes.isEmpty()) {
+                                    System.err.println("After if compte tres");
+                                    CompteTresor compte = comptes.get(0);
+                                    saveCompte(compte);
+                                    Util.sync(compte, Constants.ACTION_CREATE, Tables.COMPTETRESOR);
+                                }
                             }
-                            System.err.println("After if compte tres");
-                            CompteTresor compte = (CompteTresor) comptes.get(0);
-                            this.saveCompte(compte);
-                            Executors.newCachedThreadPool().submit(() -> Util.sync((BaseModel) compte, (String) "create", (Tables) Tables.COMPTETRESOR));
                             break;
-                        }
-                        case 400: {
+                        case 400:
                             for (LigneVente ligne : lignes) {
-                                Produit produit = ProduitDelegate.findProduit((String) ligne.getProductId().getUid());
-                                List mesures = MesureDelegate.findMesureByProduit((String) produit.getUid());
-                                this.sendProduitIfNotExist(produit, mesures);
+                                Produit produit = ProduitDelegate.findProduit(ligne.getProductId().getUid());
+                                List<Mesure> mesures = MesureDelegate.findMesureByProduit(produit.getUid());
+                                sendProduitIfNotExist(produit, mesures);
                             }
                             break;
-                        }
-                        case 200: {
+                        case 200:
                             System.out.println("Vente enregistree au serveur avec succes");
-                            break block12;
-                        }
-                        default: {
+                            return;
+                        default:
                             System.out.println("Reponse par defaut " + reponse);
-                        }
                     }
-                    ++retries;
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(200L * (long) Math.pow(2.0, retries));
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                } catch (IOException ex) {
-                    System.out.println("T3 ERROR " + ex.getMessage());
-                    Logger.getLogger(PaymentController.class.getName()).log(Level.INFO, null, ex);
-                    break;
-                }
+                    throw new Exception("Vente non enregistrée, code=" + reponse);
+                }, MAX_SALE_RETRY);
+            } catch (Exception e) {
+                System.out.println("Erreur vente: " + e.getMessage());
             }
             Platform.runLater(() -> {
-                PosController.getInstance().clearCart();
-                PosController.getInstance().refreshPos(et);
-                this.venteItems.clear();
-                this.close(et);
+                if (dialogStage != null && dialogStage.isShowing()) {
+                    dialogStage.close();
+                }
             });
         });
     }
@@ -1712,10 +1730,20 @@ public class PaymentController
 
     @FXML
     private void close(Event evt) {
-        Node n = (Node) evt.getSource();
-        Stage st = (Stage) n.getScene().getWindow();
-        st.close();
-        PosController.getInstance().choosenVente = null;
+        if (dialogStage != null && dialogStage.isShowing()) {
+            dialogStage.close();
+        } else if (evt != null && evt.getSource() instanceof Node) {
+            try {
+                Stage st = (Stage) ((Node) evt.getSource()).getScene().getWindow();
+                if (st != null) {
+                    st.close();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (!saleSaveSubmitted) {
+            PosController.getInstance().choosenVente = null;
+        }
     }
 
     @FXML
@@ -1956,7 +1984,17 @@ public class PaymentController
             if (this.txt_print_status != null) {
                 this.txt_print_status.setText("Printing via BT...");
             }
-            this.printReceipt(this.defaultPrinter.getName(), this.entrepName, this.rccm, this.vente4save.getReference(), this.venteItems, this.ff + this.fd, this.cliname.getText(), this.tf_phone_client.getText(), this.maker.getMainCurrency(), this.taux2change);
+            // Fetch fresh items from DB so all ligne_ventes are printed.
+            List<LigneVente> btItems = LigneVenteDelegate.findByReference(this.vente4save.getUid());
+            if (btItems.isEmpty()) btItems = this.venteItems;
+            String clientName = (this.client != null && this.client.getNomClient() != null)
+                    ? this.client.getNomClient()
+                    : (this.cliname.getText().isBlank() ? "Anonyme" : this.cliname.getText());
+            String clientPhone = (this.client != null && this.client.getPhone() != null)
+                    ? this.client.getPhone() : this.tf_phone_client.getText();
+            this.printReceipt(this.defaultPrinter.getName(), this.entrepName, this.rccm,
+                    this.vente4save.getReference(), btItems, this.ff + this.fd,
+                    clientName, clientPhone, this.maker.getMainCurrency(), this.taux2change);
         }
     }
 
@@ -1965,7 +2003,17 @@ public class PaymentController
             if (this.txt_print_status != null) {
                 this.txt_print_status.setText("Printing via Serial...");
             }
-            this.printReceipt(this.defaultPrinter.getName(), this.entrepName, this.rccm, this.vente4save.getReference(), this.venteItems, this.ff + this.fd, this.cliname.getText(), this.tf_phone_client.getText(), this.maker.getMainCurrency(), this.taux2change);
+            // Fetch fresh items from DB so all ligne_ventes are printed.
+            List<LigneVente> serialItems = LigneVenteDelegate.findByReference(this.vente4save.getUid());
+            if (serialItems.isEmpty()) serialItems = this.venteItems;
+            String clientName = (this.client != null && this.client.getNomClient() != null)
+                    ? this.client.getNomClient()
+                    : (this.cliname.getText().isBlank() ? "Anonyme" : this.cliname.getText());
+            String clientPhone = (this.client != null && this.client.getPhone() != null)
+                    ? this.client.getPhone() : this.tf_phone_client.getText();
+            this.printReceipt(this.defaultPrinter.getName(), this.entrepName, this.rccm,
+                    this.vente4save.getReference(), serialItems, this.ff + this.fd,
+                    clientName, clientPhone, this.maker.getMainCurrency(), this.taux2change);
         }
     }
 

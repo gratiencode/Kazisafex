@@ -56,6 +56,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.MenuItem;
@@ -91,6 +92,7 @@ import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.CurrencyConverter;
 import tools.DataId;
+import tools.SyncRetryHandler;
 import tools.MainUI;
 import tools.SyncEngine;
 import tools.ComboBoxAutoCompletion;
@@ -1036,22 +1038,17 @@ public class DestockController implements Initializable {
             if (!Util.isInternetAndBaseApiReachable()) {
                 return;
             }
-            int attempt = 0;
-            while (attempt < MAX_RETRY) {
-                try {
+            try {
+                SyncRetryHandler.retryVoid("Destocker", destocker.getUid(), () -> {
                     if (trySaveDestocker(destocker)) {
-                        break;
+                        return;
                     }
-                    sendProduitIfNotExist(ProduitDelegate.findProduit(destocker.getProductId().getUid()), MesureDelegate.findMesureByProduit(destocker.getProductId().getUid()));
-                } catch (IOException e) {
-                    System.err.println("Erreur: " + e.getMessage());
-                }
-                attempt++;
-                try {
-                    TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, attempt));
-                } catch (InterruptedException e) {
-                    break;
-                }
+                    sendProduitIfNotExist(ProduitDelegate.findProduit(destocker.getProductId().getUid()),
+                            MesureDelegate.findMesureByProduit(destocker.getProductId().getUid()));
+                    throw new Exception("Destocker non enregistré");
+                }, MAX_RETRY);
+            } catch (Exception e) {
+                System.err.println("Erreur: " + e.getMessage());
             }
         });
     }
@@ -1094,4 +1091,5 @@ public class DestockController implements Initializable {
     }
 
     private static final int MAX_RETRY = 3;
+
 }

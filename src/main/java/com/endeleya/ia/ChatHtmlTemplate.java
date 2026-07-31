@@ -116,7 +116,7 @@ public final class ChatHtmlTemplate {
                border-color: rgba(156, 163, 175, .24);
            }
            .assistant .text::before {
-               content: "J";
+               content: "G";
                position: absolute;
                left: -7px;
                top: -7px;
@@ -335,7 +335,7 @@ public final class ChatHtmlTemplate {
                    event.preventDefault();
                    event.stopPropagation();
                    const text = (textProvider && textProvider()) || textDiv.dataset.rawText || '';
-                   replyToJemimaMessage(text);
+                   replyToGratienMessage(text);
                };
                assistantActions(textDiv).appendChild(button);
            }
@@ -349,7 +349,7 @@ public final class ChatHtmlTemplate {
                    event.preventDefault();
                    event.stopPropagation();
                    const text = (textProvider && textProvider()) || textDiv.dataset.rawText || '';
-                   copyJemimaMessage(text, button);
+                   copyGratienMessage(text, button);
                };
                assistantActions(textDiv).appendChild(button);
            }
@@ -359,11 +359,11 @@ public final class ChatHtmlTemplate {
                attachReplyButton(textDiv, textProvider);
            }
 
-           function replyToJemimaMessage(text) {
+           function replyToGratienMessage(text) {
                const value = String(text || '');
                try {
                    if (window.kazisafeChat) {
-                       window.kazisafeChat.replyToJemima(value);
+                       window.kazisafeChat.replyToGratien(value);
                    }
                } catch (error) {
                    console.log('reply bridge unavailable', error);
@@ -381,7 +381,7 @@ public final class ChatHtmlTemplate {
                }
            }
 
-           function copyJemimaMessage(text, button) {
+           function copyGratienMessage(text, button) {
                const value = String(text || '');
                const done = function() {
                    const previous = button.textContent;
@@ -391,10 +391,10 @@ public final class ChatHtmlTemplate {
                };
                if (navigator.clipboard && navigator.clipboard.writeText) {
                    navigator.clipboard.writeText(value).catch(function() {
-                       copyJemimaMessageViaBridge(value);
+                       copyGratienMessageViaBridge(value);
                    });
                }
-               copyJemimaMessageViaBridge(value);
+               copyGratienMessageViaBridge(value);
                done();
            }
 
@@ -409,11 +409,11 @@ public final class ChatHtmlTemplate {
                }, 1500);
            }
 
-           function copyJemimaMessageViaBridge(text) {
+           function copyGratienMessageViaBridge(text) {
                const value = String(text || '');
                try {
                    if (window.kazisafeChat) {
-                       window.kazisafeChat.copyJemimaMessage(value);
+                       window.kazisafeChat.copyGratienMessage(value);
                    }
                } catch (error) {
                    console.log('copy bridge unavailable', error);
@@ -532,10 +532,10 @@ public final class ChatHtmlTemplate {
         """;
         return html
                 .replace("__BODY_CLASS__", dark ? "dark" : "light")
-                .replace("__READY_TEXT__", cssText(label(lang, "xjemima.ready", "Jemima est prête")))
-                .replace("__REPLY_TEXT__", jsLiteralContent(label(lang, "xjemima.reply", "Répondre")))
-                .replace("__COPY_TEXT__", jsLiteralContent(label(lang, "xjemima.copy", "Copier")))
-                .replace("__COPIED_TEXT__", jsLiteralContent(label(lang, "xjemima.copied", "Texte copié")));
+                .replace("__READY_TEXT__", cssText(label(lang, "xGratien.ready", "Gratien est prêt")))
+                .replace("__REPLY_TEXT__", jsLiteralContent(label(lang, "xGratien.reply", "Répondre")))
+                .replace("__COPY_TEXT__", jsLiteralContent(label(lang, "xGratien.copy", "Copier")))
+                .replace("__COPIED_TEXT__", jsLiteralContent(label(lang, "xGratien.copied", "Texte copié")));
     }
 
     private static String label(String lang, String key, String fallback) {

@@ -54,5 +54,7 @@ public interface CompterStorage {
     
     public void removeNoCountedProducts(Inventaire inv);
     
+    public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated);
+    
     public void confirmerComptage(ComptageItem comptage);
 }

@@ -45,4 +45,9 @@ public interface ClientStorage {
     public boolean isExists(String uid, LocalDateTime atime);
 
     public double getTotalDebt();
+
+    public void mergeDuplicateClients(Client keeper, Client duplicate);
+
+    public int mergeAllDuplicateClients();
 }
+

@@ -73,6 +73,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Pagination;
 import javafx.scene.control.ProgressIndicator;
@@ -115,6 +116,7 @@ import retrofit2.Call;
 import retrofit2.Response;
 import services.utils.RegionRegistry;
 import tools.Constants;
+import tools.DataCache;
 import tools.DataId;
 import tools.DataImporter;
 import tools.DownloadTask;
@@ -165,12 +167,16 @@ public class ProduitsController implements Initializable {
      * Rebind product table after the cached page is reattached to the scene.
      */
     public void onCachedPageShown() {
-        if (table != null && produitsList != null) {
-            table.setItems(produitsList);
-            table.refresh();
-            if (count != null) {
-                count.setText(table.getItems().size() + " éléments");
-            }
+        // No longer needed — views are rebuilt fresh each time.
+    }
+    
+    private void updatePagination() {
+        if (produitsList == null) return;
+        int pageCount = (produitsList.size() + rowsDataCount - 1) / rowsDataCount;
+        pagination.setPageCount(pageCount > 0 ? pageCount : 1);
+        pagination.setCurrentPageIndex(0);
+        if (count != null) {
+            count.setText(produitsList.size() + " éléments");
         }
     }
 
@@ -248,7 +254,6 @@ public class ProduitsController implements Initializable {
     String choosenregion;
     String localPath;
     boolean downloaded = false;
-    private boolean initialDataLoaded = false;
     private ResourceBundle bundle;
 
     public ProduitsController() {
@@ -288,6 +293,12 @@ public class ProduitsController implements Initializable {
                 .observableArrayList(Arrays.asList(20, 25, 50, 100, 250, 500, 1000));
         rowPP.setItems(rows);
         rowPP.getSelectionModel().select(0);
+        rowPP.setOnAction(event -> {
+            if (rowPP.getValue() != null) {
+                rowsDataCount = rowPP.getValue();
+                updatePagination();
+            }
+        });
         pane_4region.setVisible(false);
         pane_wait_import.setVisible(false);
         pagination.setPageFactory(this::createDataPage);
@@ -793,18 +804,13 @@ public class ProduitsController implements Initializable {
     }
 
     public void setToken(String token) {
-        if (initialDataLoaded) {
-            return;
-        }
-        initialDataLoaded = true;
         this.token = token;
         kazisafe = KazisafeServiceFactory.createService(token);
         // this.database = RepportService.getInstance();
         // mesureLs = mesures.findAll();
-        catList.addAll(CategoryDelegate.findCategories());
-        List<Produit> lp=ProduitDelegate.findProduits();
+        catList.addAll(DataCache.getOrLoad("produits-categories", () -> CategoryDelegate.findCategories()));
+        List<Produit> lp = DataCache.getOrLoad("produits-list", () -> ProduitDelegate.findProduits());
         produitsList.addAll(lp==null?List.of():lp);
-        table.setItems(produitsList);
         cbx_choose_category.setItems(catList);
         cbx_catwrap.setItems(catList);
         ObservableSet<Printer> osp = Printer.getAllPrinters();
@@ -818,11 +824,8 @@ public class ProduitsController implements Initializable {
             }
         });
         cbx_printers.getSelectionModel().select(defaultPrinter);
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                count.setText(table.getItems().size() + " éléments");
-            }
+        Platform.runLater(() -> {
+            updatePagination();
         });
         cbx_regions.getSelectionModel().selectedItemProperty()
                 .addListener(new ChangeListener<String>() {
@@ -1007,6 +1010,7 @@ public class ProduitsController implements Initializable {
     @FXML
     private void selectRowPerPage(ActionEvent evt) {
         ComboBox cbx = (ComboBox) evt.getSource();
+        if (cbx.getSelectionModel().getSelectedItem() == null) return;
         rowsDataCount = (int) cbx.getSelectionModel().getSelectedItem();
         pagination.setPageFactory(this::createDataPage);
         System.out.println("Row set to " + rowsDataCount);

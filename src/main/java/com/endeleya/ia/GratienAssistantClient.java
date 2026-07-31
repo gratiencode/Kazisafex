@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-public final class JemimaAssistantClient {
+public final class GratienAssistantClient {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String MODEL_NAME = System.getProperty(
@@ -30,10 +30,14 @@ public final class JemimaAssistantClient {
             System.getenv().getOrDefault("AI_MODEL", AiAgents.getSpeedModel()));
     private static final int MAX_FILE_CHARS = 18_000;
     private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
-    private static final JemimaAssistantClient INSTANCE = new JemimaAssistantClient();
+    private static final GratienAssistantClient INSTANCE = new GratienAssistantClient();
+    private static final String AGENT_DIR = java.nio.file.Paths.get(
+            System.getProperty("user.dir"), "Media", "ia", "gratien").toString();
+    private static final java.io.File AGENT_FILE = new java.io.File(AGENT_DIR, "AGENT.md");
+    private static final java.io.File USER_FILE = new java.io.File(AGENT_DIR, "USER.md");
 
     private final StreamingChatModel model;
-    // AiAgents orchestre les factures et expose les JemimaTools partages.
+    // AiAgents orchestre les factures et expose les GratienTools partages.
     private final AiAgents aiAgents = AiAgents.getInstance();
 
     public interface StreamCallback {
@@ -48,7 +52,7 @@ public final class JemimaAssistantClient {
         }
     }
 
-    private JemimaAssistantClient() {
+    private GratienAssistantClient() {
         model = OllamaStreamingChatModel.builder()
                 .baseUrl(OLLAMA_BASE_URL)
                 .modelName(MODEL_NAME)
@@ -57,12 +61,19 @@ public final class JemimaAssistantClient {
                 .build();
     }
 
-    public static JemimaAssistantClient getInstance() {
+    public static GratienAssistantClient getInstance() {
         return INSTANCE;
     }
 
     public void stream(String question, List<File> attachments,String entreprise, StreamCallback callback) {
         aiAgents.startForCurrentSession();
+        if (question != null && question.trim().toLowerCase(Locale.ROOT).startsWith("/kanuni ")) {
+            String instruction = question.trim().substring(8).strip();
+            String result = saveUserInstruction(instruction);
+            callback.onToken(result + "\n\n" + loadAgentContext());
+            callback.onComplete();
+            return;
+        }
         if (aiAgents.shouldHandleWorkflowCancellation(question)) {
             // L'annulation a son agent dedie afin de demander confirmation avant toute interruption.
             callback.onToken(aiAgents.orchestrateWorkflowCancellation(question));
@@ -75,8 +86,14 @@ public final class JemimaAssistantClient {
             callback.onComplete();
             return;
         }
+        if (aiAgents.shouldHandleProductImage(question, attachments)) {
+            // Image simple de produits: Gratien lit les articles puis demande quantites/prix avant approvisionnement generique.
+            callback.onToken(aiAgents.orchestrateProductImage(question, attachments));
+            callback.onComplete();
+            return;
+        }
         if (aiAgents.shouldClarifyInvoiceIntent(question, attachments)) {
-            // Avant toute lecture de facture ambigue, Jemima demande si c'est une entree, une sortie ou une depense.
+            // Avant toute lecture de facture ambigue, Gratien demande si c'est une entree, une sortie ou une depense.
             callback.onToken(aiAgents.askInvoiceIntentClarification(question, attachments));
             callback.onComplete();
             return;
@@ -99,9 +116,12 @@ public final class JemimaAssistantClient {
             callback.onComplete();
             return;
         }
+        String context = loadAgentContext();
+        String contextualized = context.isEmpty() ? question : question + "\n\nContexte:\n" + context;
+
         if (attachments == null || attachments.isEmpty()) {
-            // Chat texte: proxy LangChain4j avec JemimaTools, memoire et function calling.
-            aiAgents.streamGeneral(question, entreprise, callback::onToken, callback::onProcess,
+            // Chat texte: proxy LangChain4j avec GratienTools, memoire et function calling.
+            aiAgents.streamGeneral(contextualized, entreprise, callback::onToken, callback::onProcess,
                     callback::onComplete, callback::onError);
             return;
         }
@@ -115,7 +135,7 @@ public final class JemimaAssistantClient {
             return;
         }
 
-        model.chat(buildRequest(question, entreprise,attachments), new StreamingChatResponseHandler() {
+        model.chat(buildRequest(contextualized, entreprise,attachments), new StreamingChatResponseHandler() {
             @Override
             public void onPartialResponse(String partialResponse) {
                 callback.onToken(partialResponse);
@@ -146,31 +166,31 @@ public final class JemimaAssistantClient {
         if (requestsQuarterlyYear(value)) {
             int anchorYear = requestedAnchorYear(question);
             if (value.contains("excel") || value.contains("xlsx")) {
-                return aiAgents.getJemimaTools().generateFinancialStatementsQuarterlyExcel(anchorYear, null);
+                return aiAgents.getGratienTools().generateFinancialStatementsQuarterlyExcel(anchorYear, null);
             }
             if (value.contains("pdf") || value.contains("télécharge") || value.contains("telecharge")
                     || value.contains("download")) {
-                return aiAgents.getJemimaTools().generateFinancialStatementsQuarterlyPdf(anchorYear, null);
+                return aiAgents.getGratienTools().generateFinancialStatementsQuarterlyPdf(anchorYear, null);
             }
         }
         int yearlySpan = requestedYearSpan(value);
         if (yearlySpan > 0) {
             int anchorYear = requestedAnchorYear(question);
             if (value.contains("excel") || value.contains("xlsx")) {
-                return aiAgents.getJemimaTools().generateFinancialStatementsYearlyExcel(anchorYear, yearlySpan, null);
+                return aiAgents.getGratienTools().generateFinancialStatementsYearlyExcel(anchorYear, yearlySpan, null);
             }
             if (value.contains("pdf") || value.contains("télécharge") || value.contains("telecharge")
                     || value.contains("download")) {
-                return aiAgents.getJemimaTools().generateFinancialStatementsYearlyPdf(anchorYear, yearlySpan, null);
+                return aiAgents.getGratienTools().generateFinancialStatementsYearlyPdf(anchorYear, yearlySpan, null);
             }
         }
         LocalDateRange range = LocalDateRange.from(question);
         if (value.contains("excel") || value.contains("xlsx")) {
-            return aiAgents.getJemimaTools().generateFinancialStatementsExcel(range.start(), range.end(), null);
+            return aiAgents.getGratienTools().generateFinancialStatementsExcel(range.start(), range.end(), null);
         }
         if (value.contains("pdf") || value.contains("télécharge") || value.contains("telecharge")
                 || value.contains("download")) {
-            return aiAgents.getJemimaTools().generateFinancialStatementsPdf(range.start(), range.end(), null);
+            return aiAgents.getGratienTools().generateFinancialStatementsPdf(range.start(), range.end(), null);
         }
         return null;
     }
@@ -246,6 +266,38 @@ public final class JemimaAssistantClient {
         }
     }
 
+    public static String loadAgentContext() {
+        StringBuilder ctx = new StringBuilder();
+        if (AGENT_FILE.exists()) {
+            try {
+                ctx.append(Files.readString(AGENT_FILE.toPath(), StandardCharsets.UTF_8)).append("\n\n");
+            } catch (IOException ignored) {}
+        }
+        if (USER_FILE.exists()) {
+            try {
+                ctx.append("## Instructions personnalisees de l'utilisateur\n")
+                        .append(Files.readString(USER_FILE.toPath(), StandardCharsets.UTF_8)).append("\n\n");
+            } catch (IOException ignored) {}
+        }
+        return ctx.toString().strip();
+    }
+
+    public static String saveUserInstruction(String instruction) {
+        try {
+            java.io.File dir = new java.io.File(AGENT_DIR);
+            if (!dir.exists()) dir.mkdirs();
+            String existing = "";
+            if (USER_FILE.exists()) {
+                existing = Files.readString(USER_FILE.toPath(), StandardCharsets.UTF_8).strip();
+            }
+            String updated = existing.isEmpty() ? instruction : existing + "\n" + instruction;
+            Files.writeString(USER_FILE.toPath(), updated, StandardCharsets.UTF_8);
+            return "Instruction enregistree dans USER.md.";
+        } catch (IOException e) {
+            return "Erreur lors de l'enregistrement: " + e.getMessage();
+        }
+    }
+
     public static String attachmentSummary(List<File> attachments) {
         if (attachments == null || attachments.isEmpty()) {
             return "";
@@ -268,7 +320,7 @@ public final class JemimaAssistantClient {
         }
         String sm=new StringBuilder()
                 .append("""
-                        Tu es Jemima, l'assistant de Kazisafe. Réponds dans la langue de l'utilisateur, de maniere utile et structuré.
+                        Tu es Gratien, l'assistant de Kazisafe. Réponds dans la langue de l'utilisateur, de maniere utile et structuré.
                         Tu aide l'utilisateur dans ses taches quotidiennes au sein de leur entreprise
                         """)
                 .append(entreprise)

@@ -3,6 +3,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Hyperlink?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.RadioButton?>
 <?import javafx.scene.control.ScrollPane?>
@@ -31,7 +32,7 @@
       </Label>
       <ScrollPane layoutX="7.0" layoutY="64.0" prefHeight="479.0" prefWidth="1126.0" vvalue="0.64" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="64.0">
         <content>
-          <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="1461.0" prefWidth="1137.0">
+           <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="1640.0" prefWidth="1137.0">
                <children>
                   <AnchorPane layoutX="241.0" layoutY="11.0" prefHeight="183.0" prefWidth="754.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="142.0" AnchorPane.topAnchor="11.0">
                      <children>
@@ -89,7 +90,7 @@
                      </children>
                   </AnchorPane>
                   <Separator layoutX="1.0" layoutY="595.0" prefHeight="3.0" prefWidth="1126.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="-1.0" />
-                  <AnchorPane layoutX="242.0" layoutY="634.0" prefHeight="493.0" prefWidth="757.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="334.0" AnchorPane.leftAnchor="242.0" AnchorPane.rightAnchor="137.0">
+                   <AnchorPane layoutX="242.0" layoutY="634.0" prefHeight="493.0" prefWidth="757.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="242.0" AnchorPane.rightAnchor="137.0">
                      <children>
                         <Button layoutX="658.0" layoutY="267.0" mnemonicParsing="false" onAction="#setMessage4CustomersOnBill" prefHeight="30.0" prefWidth="60.0" text="OK" AnchorPane.rightAnchor="40.0" AnchorPane.topAnchor="267.0" />
                         <TextField fx:id="message4client" layoutX="244.0" layoutY="271.0" onAction="#setMessage4CustomersOnBill" prefHeight="26.0" prefWidth="402.0" promptText="%xprompt.message_fact" AnchorPane.leftAnchor="244.0" AnchorPane.rightAnchor="115.0" />
@@ -136,7 +137,7 @@
                      </children>
                   </AnchorPane>
                   <Separator layoutY="1142.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                  <AnchorPane layoutX="241.0" layoutY="1155.0" prefHeight="294.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.bottomAnchor="12.0" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                   <AnchorPane layoutX="241.0" layoutY="1155.0" prefHeight="294.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
                      <children>
                         <Label layoutX="57.0" layoutY="19.0" text="Mode de stockage de donnees" AnchorPane.leftAnchor="57.0" AnchorPane.topAnchor="19.0">
                            <font>
@@ -144,7 +145,7 @@
                            </font>
                         </Label>
                         <Separator layoutX="2.0" layoutY="58.0" prefHeight="3.0" prefWidth="754.0" AnchorPane.leftAnchor="1.0" AnchorPane.rightAnchor="2.0" />
-                        <Label layoutX="32.0" layoutY="256.0" prefHeight="20.0" prefWidth="315.0" text="Installer Kazisafe et commencer directement a l'utiliser" wrapText="true" AnchorPane.bottomAnchor="18.0" AnchorPane.leftAnchor="32.0">
+                         <Label layoutX="32.0" layoutY="256.0" prefHeight="20.0" prefWidth="315.0" text="Installer Kazisafe et commencer directement a l'utiliser" wrapText="true" AnchorPane.leftAnchor="32.0">
                            <font>
                               <Font size="11.0" />
                            </font>
@@ -164,7 +165,7 @@
                               <Image url="@../icons/officedatabase.png" />
                            </image>
                         </ImageView>
-                        <Separator layoutX="360.0" layoutY="92.0" orientation="VERTICAL" prefHeight="176.0" prefWidth="0.0" AnchorPane.bottomAnchor="25.0" AnchorPane.leftAnchor="360.0" AnchorPane.topAnchor="92.0" />
+                         <Separator layoutX="360.0" layoutY="92.0" orientation="VERTICAL" prefHeight="176.0" prefWidth="0.0" AnchorPane.leftAnchor="360.0" AnchorPane.topAnchor="92.0" />
                         <RadioButton fx:id="rb_emarque" layoutX="32.0" layoutY="82.0" mnemonicParsing="false" selected="true" text="Mode embarque" AnchorPane.leftAnchor="32.0" />
                         <RadioButton fx:id="rb_serveur" layoutX="391.0" layoutY="84.0" mnemonicParsing="false" text="Mode serveur" AnchorPane.leftAnchor="391.0" AnchorPane.topAnchor="84.0" />
                         <Label layoutX="386.0" layoutY="174.0" text="Connexion" AnchorPane.rightAnchor="302.0" />
@@ -173,15 +174,38 @@
                         <TextField fx:id="tf_port_serveur" layoutX="672.0" layoutY="212.0" prefHeight="24.0" prefWidth="76.0" promptText="ex: 3306" AnchorPane.rightAnchor="10.0" AnchorPane.topAnchor="212.0" />
                         <Label layoutX="387.0" layoutY="216.0" text="Serveur :" AnchorPane.leftAnchor="387.0" />
                         <Label layoutX="630.0" layoutY="215.0" text="Port :" AnchorPane.rightAnchor="93.0" AnchorPane.topAnchor="215.0" />
-                        <Button layoutX="386.0" layoutY="254.0" mnemonicParsing="false" onAction="#saveConfigurations" style="-fx-background-color: #44cef5;" text="Enregistrer la configuration" textFill="WHITE" AnchorPane.bottomAnchor="16.0" AnchorPane.leftAnchor="386.0">
+                         <Button layoutX="386.0" layoutY="254.0" mnemonicParsing="false" onAction="#saveConfigurations" style="-fx-background-color: #44cef5;" text="Enregistrer la configuration" textFill="WHITE" AnchorPane.leftAnchor="386.0">
                            <font>
                               <Font name="System Bold" size="13.0" />
                            </font>
                         </Button>
                      </children>
                   </AnchorPane>
-                  <Label layoutX="15.0" layoutY="1155.0" text="Parametre de stockage" />
-               </children>
+                   <Label layoutX="15.0" layoutY="1155.0" text="Parametre de stockage" />
+                   <Label layoutX="15.0" layoutY="1461.0" text="Fichier de logs" />
+                   <Separator layoutY="1449.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                    <AnchorPane layoutX="241.0" layoutY="1470.0" prefHeight="150.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                       <children>
+                          <Label text="Consultez, sauvegardez ou partagez le fichier de diagnostic" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="15.0" />
+                          <Button mnemonicParsing="false" onAction="#openLogFile" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le fichier de logs" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="45.0">
+                             <font>
+                                <Font name="System Bold" size="13.0" />
+                             </font>
+                          </Button>
+                          <Button mnemonicParsing="false" onAction="#openLogFolder" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le dossier" textFill="WHITE" AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="45.0">
+                             <font>
+                                <Font name="System Bold" size="13.0" />
+                             </font>
+                          </Button>
+                          <Button mnemonicParsing="false" onAction="#saveLogCopy" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Enregistrer une copie" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="95.0">
+                             <font>
+                                <Font name="System Bold" size="13.0" />
+                             </font>
+                          </Button>
+                          <Hyperlink fx:id="logFileHyperlink" onAction="#openLogFile" text="chargement..." AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="100.0" />
+                       </children>
+                    </AnchorPane>
+                </children>
             </AnchorPane>
         </content>
       </ScrollPane>

@@ -1,5 +1,6 @@
 package com.endeleya.ia;
 
+import com.endeleya.kazisafex.PaymentController;
 import com.github.anastaciocintra.escpos.EscPos;
 import com.github.anastaciocintra.escpos.EscPosConst;
 import com.github.anastaciocintra.escpos.Style;
@@ -13,20 +14,37 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
+import data.Aretirer;
 import data.Category;
 import data.Client;
+import data.ClientAppartenir;
+import data.ClientOrganisation;
 import data.CompteTresor;
+import data.Compter;
+import data.Depot;
 import data.Destocker;
 import data.Depense;
+import data.Entreposer;
 import data.Entreprise;
+import data.Facture;
 import data.Fournisseur;
+import data.Immobilisation;
+import data.Imputer;
+import data.Inventaire;
 import data.LigneVente;
 import data.Livraison;
+import data.Matiere;
+import data.MatiereSku;
 import data.Mesure;
 import data.Operation;
+import data.Presence;
 import data.PrixDeVente;
 import data.Produit;
+import data.Production;
 import data.Recquisition;
+import data.Repartir;
+import data.RetourDepot;
+import data.RetourMagasin;
 import data.SaleAgregate;
 import data.StockAgregate;
 import data.StockDepotAgregate;
@@ -38,21 +56,38 @@ import data.core.KazisafeServiceFactory;
 import data.helpers.Mouvment;
 import data.helpers.TypeTraisorerie;
 import data.network.Kazisafe;
+import delegates.AretirerDelegate;
 import delegates.CategoryDelegate;
 import delegates.ClientDelegate;
+import delegates.ClientAppartenirDelegate;
+import delegates.ClientOrganisationDelegate;
 import delegates.CompteTresorDelegate;
+import delegates.CompterDelegate;
+import delegates.DepotDelegate;
 import delegates.DestockerDelegate;
 import delegates.DepenseAgregateDelegate;
 import delegates.DepenseDelegate;
+import delegates.EntreposerDelegate;
+import delegates.FactureDelegate;
 import delegates.FournisseurDelegate;
+import delegates.ImmobilisationDelegate;
+import delegates.ImputerDelegate;
+import delegates.InventaireDelegate;
 import delegates.LigneVenteDelegate;
 import delegates.LivraisonDelegate;
+import delegates.MatiereDelegate;
+import delegates.MatiereSkuDelegate;
 import delegates.MesureDelegate;
 import delegates.OperationDelegate;
+import delegates.PresenceDelegate;
 import delegates.PrixDeVenteDelegate;
 import delegates.ProduitDelegate;
+import delegates.ProductionDelegate;
 import delegates.RecquisitionDelegate;
 import delegates.RepportDelegate;
+import delegates.RepartirDelegate;
+import delegates.RetourDepotDelegate;
+import delegates.RetourMagasinDelegate;
 import delegates.StockerDelegate;
 import delegates.TraisorerieDelegate;
 import delegates.VenteDelegate;
@@ -64,6 +99,11 @@ import java.awt.Desktop;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.text.DecimalFormat;
+import java.time.format.DateTimeFormatter;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import tools.CurrencyConverter;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -99,10 +139,21 @@ import javax.imageio.ImageIO;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import utilities.PDFUtils;
+import utilities.Peremption;
+import tools.Rupture;
 import retrofit2.Response;
 import services.FinancialStatementAgregateService;
 import services.ManagedSessionFactory;
 import services.StockDepotAgregateService;
+import com.endeleya.kazisafex.PaymentController;
 import tools.Constants;
 import tools.DataId;
 import tools.FileUtils;
@@ -112,12 +163,13 @@ import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
 
-public class JemimaTools {
+public class GratienTools {
 
     private final Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
     private final FinancialStatementAgregateService financialService = new FinancialStatementAgregateService();
     private final ObjectMapper mapper = new ObjectMapper();
     private static final Map<String, InvoiceWorkflowContext> INVOICE_WORKFLOWS = new ConcurrentHashMap<>();
+    private static final Map<String, CurrencyConversionState> PENDING_CURRENCY_CONVERSIONS = new ConcurrentHashMap<>();
     private static final Map<String, SaleWorkflowContext> SALE_WORKFLOWS = new ConcurrentHashMap<>();
     private static final Map<String, ExpenseWorkflowContext> EXPENSE_WORKFLOWS = new ConcurrentHashMap<>();
     private static final Map<String, ProductCodePrintBatch> PRODUCT_CODE_PRINT_BATCHES = new ConcurrentHashMap<>();
@@ -185,7 +237,7 @@ public class JemimaTools {
     @Tool("Genere le plan SQL et my.cnf pour configurer cette machine MySQL comme master de replication")
     public String generateMysqlReplicaConfiguration(
             @P("Utilisateur MySQL de replication a creer sur le master, ex: kazisafe_repl") String replicationUser,
-            @P("Mot de passe de l'utilisateur de replication; si vide Jemima genere un mot de passe") String replicationPassword,
+            @P("Mot de passe de l'utilisateur de replication; si vide Gratien genere un mot de passe") String replicationPassword,
             @P("Port MySQL du master; mettre 0 pour utiliser la configuration actuelle") int masterPort,
             @P("Server id MySQL du master; ex: 1") int masterServerId,
             @P("Server id MySQL du replica; ex: 2") int replicaServerId) {
@@ -211,12 +263,12 @@ public class JemimaTools {
             @P("Identifiant du plan retourne par generateMysqlReplicaConfiguration") String planId,
             @P("Host ou IP du serveur MySQL replica; doit etre different du master") String replicaHost,
             @P("Port MySQL du replica; mettre 0 pour 3306") int replicaPort,
-            @P("Mot de passe root MySQL du replica. Jemima doit le demander a l'utilisateur avant d'appeler ce tool") String mysqlRootPassword) {
+            @P("Mot de passe root MySQL du replica. Gratien doit le demander a l'utilisateur avant d'appeler ce tool") String mysqlRootPassword) {
         String key = safe(planId, "") + "|" + safe(replicaHost, "") + "|" + replicaPort + "|" + securePasswordKey(mysqlRootPassword);
         return executeOnce("executeMysqlReplicaConfiguration", key, () -> {
             MysqlReplicationPlan plan = MYSQL_REPLICATION_PLANS.get(safe(planId, "").trim());
             if (plan == null) {
-                return "Plan de réplication introuvable. Demandez d'abord à Jemima de générer la configuration replica.";
+                return "Plan de réplication introuvable. Demandez d'abord à Gratien de générer la configuration replica.";
             }
             String host = safe(replicaHost, "").trim();
             if (host.isBlank()) {
@@ -247,7 +299,7 @@ public class JemimaTools {
     public String testMysqlReplicaStatus(
             @P("Host ou IP du serveur MySQL replica a tester") String replicaHost,
             @P("Port MySQL du replica; mettre 0 pour 3306") int replicaPort,
-            @P("Mot de passe root MySQL du replica. Jemima doit le demander a l'utilisateur avant d'appeler ce tool") String mysqlRootPassword) {
+            @P("Mot de passe root MySQL du replica. Gratien doit le demander a l'utilisateur avant d'appeler ce tool") String mysqlRootPassword) {
         String key = safe(replicaHost, "") + "|" + replicaPort + "|" + securePasswordKey(mysqlRootPassword);
         return executeOnce("testMysqlReplicaStatus", key, () -> {
             String host = safe(replicaHost, "").trim();
@@ -328,7 +380,7 @@ public class JemimaTools {
                 List<PrixDeVente> previousPrices = previousSalePrices(product, latest.getUid());
                 if (!previousPrices.isEmpty()) {
                     List<PrixDeVente> copied = copySalePricesToRecquisition(previousPrices, latest, unit);
-                    report.append("\nRéparation appliquée: aucun prix sur la dernière réquisition, mais Jemima a trouvé ")
+                    report.append("\nRéparation appliquée: aucun prix sur la dernière réquisition, mais Gratien a trouvé ")
                             .append(previousPrices.size())
                             .append(" prix sur une réquisition précédente et l'a copié vers la dernière réquisition.\n")
                             .append("Prix copié(s): ").append(copied.size()).append("\n")
@@ -590,7 +642,7 @@ public class JemimaTools {
 
     @Tool("Demande confirmation avant d'annuler un workflow facture ou vente en cours")
     public String requestWorkflowCancellation(
-            @P("sessionId interne de Jemima") String sessionId,
+            @P("sessionId interne de Gratien") String sessionId,
             @P("workflowId optionnel. Laisser vide pour le dernier workflow actif.") String workflowId) {
         cleanupWorkflowCancellationRequests();
         String sessionKey = normalizeToolKey(sessionId);
@@ -605,12 +657,12 @@ public class JemimaTools {
         return "Voulez-vous vraiment annuler le workflow en cours " + target.workflowId()
                 + " (" + target.typeLabel() + ") ?\n\n"
                 + "Répondez `oui` pour annuler ou `non` pour le laisser continuer.\n"
-                + "Sans réponse dans 3 minutes, Jemima abandonnera l'annulation et le workflow continuera normalement.";
+                + "Sans réponse dans 3 minutes, Gratien abandonnera l'annulation et le workflow continuera normalement.";
     }
 
-    @Tool("Confirme ou refuse l'annulation du workflow en attente pour la session Jemima")
+    @Tool("Confirme ou refuse l'annulation du workflow en attente pour la session Gratien")
     public String answerWorkflowCancellation(
-            @P("sessionId interne de Jemima") String sessionId,
+            @P("sessionId interne de Gratien") String sessionId,
             @P("Réponse utilisateur: oui pour annuler, non pour garder le workflow") String answer) {
         cleanupWorkflowCancellationRequests();
         String sessionKey = normalizeToolKey(sessionId);
@@ -620,7 +672,7 @@ public class JemimaTools {
         }
         if (System.currentTimeMillis() > request.expiresAtMs()) {
             WORKFLOW_CANCELLATION_REQUESTS.remove(sessionKey);
-            return "Le délai de 3 minutes est dépassé. Jemima quitte l'annulation et laisse le workflow continuer.";
+            return "Le délai de 3 minutes est dépassé. Gratien quitte l'annulation et laisse le workflow continuer.";
         }
         if (!isPositiveConfirmation(answer)) {
             WORKFLOW_CANCELLATION_REQUESTS.remove(sessionKey);
@@ -663,16 +715,39 @@ public class JemimaTools {
             Client client = findOrCreateSaleClient(context.draft);
             Vente sale = findExistingSale(context.reference, context.date, context.region);
             boolean newSale = sale == null;
+            
+            // Handle payment type
+            String paymentType = safe(context.draft.getPaymentType(), "CASH");
+            String currency = safe(context.draft.getCurrency(), "USD");
+            
             if (newSale) {
                 sale = new Vente(DataId.generateInt());
                 sale.setReference(context.reference);
                 sale.setDateVente(context.date);
                 sale.setRegion(context.region);
                 sale.setClientId(client);
-                sale.setPayment(TypeTraisorerie.CAISSE.name());
-                sale.setLibelle("Sortie créée par Jemima");
+                String mappedPaymentType = paymentType;
+                if ("CASH".equals(paymentType)) mappedPaymentType = "Paiement Cash";
+                else if ("CREDIT".equals(paymentType)) mappedPaymentType = "Paiement a credit";
+                else if ("PARTIAL".equals(paymentType)) mappedPaymentType = "Paiement Credit partiel";
+                sale.setPayment(mappedPaymentType);
+                sale.setLibelle("Sortie créée par Gratien");
                 sale.setObservation("Vente");
-                sale.setDeviseDette(safe(context.draft.getCurrency(), "USD"));
+                sale.setDeviseDette(currency);
+                
+                // Set due date
+                if (context.draft.getDueDate() != null && !context.draft.getDueDate().isBlank()) {
+                    try {
+                        LocalDate dueDate = LocalDate.parse(context.draft.getDueDate());
+                        sale.setEcheance(dueDate);
+                    } catch (Exception e) {
+                        // If invalid, default to 30 days from context.date
+                        sale.setEcheance(context.date.toLocalDate().plusDays(30));
+                    }
+                } else if ("CREDIT".equals(paymentType) || "PARTIAL".equals(paymentType)) {
+                    // Default to 30 days
+                    sale.setEcheance(context.date.toLocalDate().plusDays(30));
+                }
             }
             List<LigneVente> lines = new ArrayList<>();
             double totalUsd = 0d;
@@ -702,7 +777,7 @@ public class JemimaTools {
                 line.setPrixUnit(price);
                 line.setNumlot("");
                 line.setCoutAchat(0d);
-                if ("CDF".equalsIgnoreCase(context.draft.getCurrency())) {
+                if ("CDF".equalsIgnoreCase(currency)) {
                     line.setMontantCdf(price * quantity);
                     totalCdf += line.getMontantCdf();
                 } else {
@@ -713,7 +788,23 @@ public class JemimaTools {
             }
             sale.setMontantUsd(totalUsd);
             sale.setMontantCdf(totalCdf);
-            sale.setMontantDette(0d);
+            
+            // Calculate debt
+            double total = "CDF".equalsIgnoreCase(currency) ? totalCdf : totalUsd;
+            double cashPaid = 0d;
+            if ("PARTIAL".equals(paymentType)) {
+                if (context.draft.getCashAmount() != null && context.draft.getCashAmount() > 0) {
+                    cashPaid = context.draft.getCashAmount();
+                } else if (context.draft.getCashPercentage() != null && context.draft.getCashPercentage() > 0) {
+                    cashPaid = (context.draft.getCashPercentage() / 100) * total;
+                }
+            } else if ("CASH".equals(paymentType)) {
+                cashPaid = total;
+            }
+            
+            double debt = total - cashPaid;
+            sale.setMontantDette(debt);
+            
             Vente savedSale = newSale ? VenteDelegate.saveVente(sale) : VenteDelegate.updateVente(sale);
             if (newSale) {
                 syncCreate(savedSale, Tables.VENTE);
@@ -738,7 +829,7 @@ public class JemimaTools {
             context.lines = savedLines;
             context.saleCreated = true;
             return (newSale ? "Vente creee: " : "Vente existante mise a jour: ") + savedSale.getReference() + ", lignes=" + savedLines.size()
-                    + ", total USD=" + totalUsd + ", total CDF=" + totalCdf;
+                    + ", total USD=" + totalUsd + ", total CDF=" + totalCdf + ", paiement=" + paymentType + ", dette=" + debt;
         });
     }
 
@@ -761,38 +852,80 @@ public class JemimaTools {
             if (context.treasuryCreated) {
                 return "Tresorerie deja creee pour la vente " + context.sale.getReference();
             }
-            CompteTresor account = findOrCreateSaleAccount(context.region);
-            String reference = "BE" + Constants.dateTodayRef(context.date.toLocalDate());
-            Traisorerie treasury = TraisorerieDelegate.findExistingOf(reference, context.date.toLocalDate(), account.getUid(), context.region);
-            boolean newTreasury = treasury == null;
-            if (newTreasury) {
-                treasury = new Traisorerie(DataId.generate());
-                treasury.setReference(reference);
-            }
-            treasury.setDate(context.date);
-            treasury.setLibelle("Ventes journalier");
-            treasury.setMontantUsd(context.sale.getMontantUsd());
-            treasury.setMontantCdf(context.sale.getMontantCdf());
-            treasury.setMouvement(Mouvment.AUGMENTATION.name());
-            treasury.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
-            treasury.setRegion(context.region);
-            treasury.setTresorId(account);
-            treasury.setSoldeUsd(context.sale.getMontantUsd());
-            treasury.setSoldeCdf(context.sale.getMontantCdf());
-            Traisorerie savedTreasury = newTreasury ? TraisorerieDelegate.saveTraisorerie(treasury) : TraisorerieDelegate.updateTraisorerie(treasury);
-            if (newTreasury) {
-                syncCreate(savedTreasury, Tables.TRAISORERIE);
+            
+            // Only create treasury entry if payment is not full credit
+            String paymentType = safe(context.draft.getPaymentType(), "CASH");
+            if (!"CREDIT".equals(paymentType)) {
+                CompteTresor account = findOrCreateSaleAccount(context.region);
+                String reference = "BE" + Constants.dateTodayRef(context.date.toLocalDate());
+                Traisorerie treasury = TraisorerieDelegate.findExistingOf(reference, context.date.toLocalDate(), account.getUid(), context.region);
+                boolean newTreasury = treasury == null;
+                if (newTreasury) {
+                    treasury = new Traisorerie(DataId.generate());
+                    treasury.setReference(reference);
+                }
+                treasury.setDate(context.date);
+                treasury.setLibelle("Ventes journalier");
+                
+                // Calculate amount to add (cash paid, not total)
+                String currency = safe(context.draft.getCurrency(), "USD");
+                double total = "CDF".equalsIgnoreCase(currency) ? context.sale.getMontantCdf() : context.sale.getMontantUsd();
+                double cashPaid = 0d;
+                if ("PARTIAL".equals(paymentType)) {
+                    if (context.draft.getCashAmount() != null && context.draft.getCashAmount() > 0) {
+                        cashPaid = context.draft.getCashAmount();
+                    } else if (context.draft.getCashPercentage() != null && context.draft.getCashPercentage() > 0) {
+                        cashPaid = (context.draft.getCashPercentage() / 100) * total;
+                    }
+                } else if ("CASH".equals(paymentType)) {
+                    cashPaid = total;
+                }
+                
+                // Get current balances
+                double currentBalanceUsd = 0d;
+                double currentBalanceCdf = 0d;
+                if (!newTreasury) {
+                    currentBalanceUsd = treasury.getSoldeUsd() != null ? treasury.getSoldeUsd() : 0d;
+                    currentBalanceCdf = treasury.getSoldeCdf() != null ? treasury.getSoldeCdf() : 0d;
+                }
+                
+                if ("CDF".equalsIgnoreCase(currency)) {
+                    treasury.setMontantCdf(cashPaid);
+                    treasury.setMontantUsd(0d);
+                    treasury.setSoldeCdf(currentBalanceCdf + cashPaid);
+                    treasury.setSoldeUsd(currentBalanceUsd);
+                } else {
+                    treasury.setMontantUsd(cashPaid);
+                    treasury.setMontantCdf(0d);
+                    treasury.setSoldeUsd(currentBalanceUsd + cashPaid);
+                    treasury.setSoldeCdf(currentBalanceCdf);
+                }
+                
+                treasury.setMouvement(Mouvment.AUGMENTATION.name());
+                treasury.setTypeTresorerie(TypeTraisorerie.CAISSE.name());
+                treasury.setRegion(context.region);
+                treasury.setTresorId(account);
+                
+                Traisorerie savedTreasury = newTreasury ? TraisorerieDelegate.saveTraisorerie(treasury) : TraisorerieDelegate.updateTraisorerie(treasury);
+                if (newTreasury) {
+                    syncCreate(savedTreasury, Tables.TRAISORERIE);
+                } else {
+                    syncUpdate(savedTreasury, Tables.TRAISORERIE);
+                }
+                context.account = account;
+                context.treasury = savedTreasury;
+                context.treasuryCreated = true;
+                String http = syncSaleByHttps(context);
+                return "Sortie enregistrée avec succès: " + context.sale.getReference()
+                        + "\nCompte: " + account.getIntitule()
+                        + "\nTransaction: " + savedTreasury.getUid()
+                        + "\nSynchronisation HTTPS: " + http;
             } else {
-                syncUpdate(savedTreasury, Tables.TRAISORERIE);
+                // Full credit, no treasury entry
+                String http = syncSaleByHttps(context);
+                return "Sortie enregistrée avec succès (crédit): " + context.sale.getReference()
+                        + "\nSynchronisation HTTPS: " + http;
             }
-            context.account = account;
-            context.treasury = savedTreasury;
-            context.treasuryCreated = true;
-            String http = syncSaleByHttps(context);
-            return "Sortie enregistrée avec succès: " + context.sale.getReference()
-                    + "\nCompte: " + account.getIntitule()
-                    + "\nTransaction: " + savedTreasury.getUid()
-                    + "\nSynchronisation HTTPS: " + http;
         });
     }
 
@@ -803,6 +936,60 @@ public class JemimaTools {
         String workflowId = registerExpenseWorkflow(draft);
         prepareExpenseCategoryAndAccount(workflowId);
         return createExpenseTreasuryAndOperation(workflowId);
+    }
+
+    public String insertGenericProductImageSupply(InvoiceDraft draft) {
+        return executeOnce("insertGenericProductImageSupply", draftKey(draft), () -> {
+            if (draft == null || !draft.hasLines()) {
+                return "Aucun produit valide à enregistrer depuis l'image.";
+            }
+            List<String> invalid = new ArrayList<>();
+            for (int i = 0; i < draft.getLines().size(); i++) {
+                InvoiceLine line = draft.getLines().get(i);
+                if (line == null || line.getProductName() == null || line.getProductName().isBlank()) {
+                    invalid.add((i + 1) + ". produit illisible");
+                    continue;
+                }
+                if (line.getQuantity() <= 0) {
+                    invalid.add((i + 1) + ". " + line.getProductName() + " sans quantité valide");
+                }
+                if (line.getSalePrice() == null || line.getSalePrice() <= 0) {
+                    invalid.add((i + 1) + ". " + line.getProductName() + " sans prix de vente valide");
+                }
+            }
+            if (!invalid.isEmpty()) {
+                return "Certaines lignes ne sont pas prêtes pour l'enregistrement:\n" + String.join("\n", invalid);
+            }
+
+            String workflowId = registerInvoiceWorkflow(draft);
+            InvoiceWorkflowContext context = workflow(workflowId);
+            if (context == null) {
+                return "Workflow générique introuvable.";
+            }
+            String region = pref.get("region", "Goma");
+            context.supplier = genericCompanySupplier();
+            context.delivery = findOrCreateGenericPosRecoveryDelivery(region);
+            context.deliveryCreated = true;
+
+            if (!context.productsCreated) {
+                createProductsAndMeasures(workflowId);
+            }
+
+            for (InvoiceLine line : context.draft.getLines()) {
+                Produit product = context.products.getOrDefault(lineKey(line), findOrCreateProduct(line));
+                Mesure unit = context.units.getOrDefault(lineKey(line), findOrCreateUnit(product, line));
+                Recquisition saved = findOrCreateRecquisition(context, line, product, unit, region);
+                createExplicitSalePrice(saved, unit, line, safe(context.draft.getCurrency(), "USD"));
+                RecquisitionDelegate.rectifyStock(product, LocalDate.now(), LocalDate.now(), region, saved.getNumlot());
+                context.inserted.add(product.getNomProduit()
+                        + " | quantité " + saved.getQuantite()
+                        + " | prix vente " + line.getSalePrice() + " " + safe(line.getSaleCurrency(), safe(context.draft.getCurrency(), "USD")));
+            }
+            context.requisitionsCreated = true;
+            return "Produits lus sur image enregistrés comme approvisionnement générique.\n"
+                    + "Livraison utilisée: " + context.delivery.getReference()
+                    + "\n\n" + String.join("\n", context.inserted);
+        });
     }
 
     public String registerExpenseWorkflow(ExpenseDraft draft) {
@@ -1008,7 +1195,7 @@ public class JemimaTools {
             }
             builder.append("\nConfirmez les produits à supprimer avec le format: ")
                     .append("numero ou plusieurs numeros séparés par virgule, par exemple `2, 5, 8`.\n")
-                    .append("Jemima utilisera le lot ").append(batchId).append(".");
+                    .append("Gratien utilisera le lot ").append(batchId).append(".");
             return builder.toString();
         });
     }
@@ -1020,7 +1207,7 @@ public class JemimaTools {
         return executeOnce("deleteConfirmedDuplicateProducts", safe(batchId, "") + "|" + safe(selectedNumbers, ""), () -> {
             DuplicateProductBatch batch = DUPLICATE_PRODUCT_BATCHES.get(batchId == null ? "" : batchId.trim());
             if (batch == null) {
-                return "Lot de doublons introuvable. Demandez d'abord à Jemima d'afficher les produits doublons.";
+                return "Lot de doublons introuvable. Demandez d'abord à Gratien d'afficher les produits doublons.";
             }
             List<Integer> numbers = parseSelectedNumbers(selectedNumbers);
             if (numbers.isEmpty()) {
@@ -1073,6 +1260,175 @@ public class JemimaTools {
         });
     }
 
+    @Tool("Détecte et fusionne automatiquement tous les clients doublons ayant le même nom et le même téléphone. Leurs ventes, commandes, retours magasin, retraits, appartenances d'organisation et historiques de paiement sont fusionnés et réassociés au client unique.")
+    public String mergeDuplicateClients() {
+        return executeOnce("mergeDuplicateClients", "all-clients", () -> {
+            try {
+                int count = ClientDelegate.mergeAllDuplicateClients();
+                if (count == 0) {
+                    return "Aucun client doublon n'a été détecté (même nom et même téléphone).";
+                }
+                return "La fusion des clients doublons a été effectuée avec succès ! " + count + " client(s) doublon(s) ont été fusionné(s) et leurs transactions associées ont été réassignées.";
+            } catch (Exception ex) {
+                return "Une erreur s'est produite lors de la fusion des clients doublons : " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Imprime une facture par son numero de reference sur l'imprimante par defaut.")
+    public String printInvoiceByReference(@P("Numero de reference de la facture a imprimer") String invoiceReference) {
+
+        return executeOnce("printInvoiceByReference", invoiceReference, () -> {
+            try {
+                // 1. Find the sale (Vente) by reference
+                List<Vente> ventes = VenteDelegate.findByRef(invoiceReference);
+                if (ventes == null || ventes.isEmpty()) {
+                    return "Aucune facture trouvée avec la référence: " + invoiceReference;
+                }
+                Vente vente = ventes.get(0); // Take the first one
+
+                // 2. Get line items (LigneVente)
+                List<LigneVente> items = LigneVenteDelegate.findByReference(vente.getUid());
+                if (items == null) {
+                    items = new ArrayList<>();
+                }
+
+                // 3. Get preferences and settings
+                String defPrinterName = pref.get("def-printer", null);
+                String entrepName = pref.get("ent_name", "unknown");
+                String rccm = pref.get("ent_ID", "Aucun");
+                double taux2change = CurrencyConverter.activeRate();
+                String mainCurrency = pref.get("currency", "USD");
+                
+                // 4. Get customer info
+                String clientName = "Anonyme";
+                String clientPhone = "";
+                Client client = vente.getClientId();
+                if (client != null) {
+                    clientName = client.getNomClient();
+                    clientPhone = client.getPhone() == null ? "" : client.getPhone();
+                }
+
+                // 5. Get amount paid (total sale)
+                double amountPaid = "USD".equalsIgnoreCase(mainCurrency) ? vente.getMontantUsd() : vente.getMontantCdf();
+
+                // 6. Find printer
+                PrintService ps = null;
+                if (defPrinterName != null && !defPrinterName.isBlank()) {
+                    ps = PrinterOutputStream.getPrintServiceByName(defPrinterName);
+                }
+                if (ps == null) {
+                    // Try default printer from system
+                    ps = PrintServiceLookup.lookupDefaultPrintService();
+                }
+                if (ps == null) {
+                    return "Aucune imprimante par défaut configurée ou trouvée.";
+                }
+
+                // 7. Print! (Let's replicate PaymentController's printReceipt logic)
+                PrinterOutputStream pos = new PrinterOutputStream(ps);
+                try (EscPos printer = new EscPos(pos)) {
+                    // Set character code table
+                    printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP863_Canadian_French);
+                    
+                    // Styles (like PaymentController)
+                    Style title = new Style()
+                            .setJustification(EscPosConst.Justification.Center)
+                            .setFontSize(
+                                pref.getInt("print-title-size", 1) == 1 ? Style.FontSize._1 :
+                                (pref.getInt("print-title-size", 1) == 2 ? Style.FontSize._2 : Style.FontSize._3),
+                                pref.getInt("print-title-size", 1) == 1 ? Style.FontSize._1 :
+                                (pref.getInt("print-title-size", 1) == 2 ? Style.FontSize._2 : Style.FontSize._3)
+                            );
+                    Style identite = new Style()
+                            .setJustification(EscPosConst.Justification.Center)
+                            .setFontSize(
+                                pref.getInt("print-identite-size", 1) == 1 ? Style.FontSize._1 :
+                                (pref.getInt("print-identite-size", 1) == 2 ? Style.FontSize._2 : Style.FontSize._3),
+                                pref.getInt("print-identite-size", 1) == 1 ? Style.FontSize._1 :
+                                (pref.getInt("print-identite-size", 1) == 2 ? Style.FontSize._2 : Style.FontSize._3)
+                            );
+                    Style right = new Style().setJustification(EscPosConst.Justification.Right);
+                    Style customer = new Style();
+
+                    // Print header (using preferences like MainuiController)
+                    String nomEntreprise = pref.get("ent_name", "unknown");
+                    String adresseEntreprise = pref.get("ent_adresse", "aucune");
+                    String telephoneEntreprise = pref.get("ent_phones", "");
+                    String emailEntreprise = pref.get("ent_email", "");
+                    
+                    printer.writeLF(identite, nomEntreprise);
+                    if (adresseEntreprise != null && !adresseEntreprise.isBlank()) {
+                        printer.writeLF(identite, adresseEntreprise);
+                    }
+                    if (telephoneEntreprise != null && !telephoneEntreprise.isBlank()) {
+                        printer.writeLF(identite, telephoneEntreprise);
+                    }
+                    if (emailEntreprise != null && !emailEntreprise.isBlank()) {
+                        printer.writeLF(identite, emailEntreprise);
+                    }
+
+                    // Invoice number and date
+                    printer.writeLF(right, " Facture N.: " + vente.getReference());
+                    LocalDateTime dv = vente.getDateVente();
+                    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                    printer.writeLF(right, dv == null ? dtf.format(LocalDateTime.now()) : dtf.format(dv));
+                    
+                    // Client
+                    printer.write("Client : ");
+                    printer.writeLF(customer, clientName);
+                    
+                    // Separator
+                    int lineWidth = pref.getInt("print-lines-dashcount", 48);
+                    printer.writeLF("-".repeat(lineWidth));
+                    
+                    // Print items
+                    boolean isUSD = "USD".equalsIgnoreCase(mainCurrency);
+                    DecimalFormat moneyFormat = isUSD ? new DecimalFormat("0.00") : new DecimalFormat("#,##0.00");
+                    for (LigneVente item : items) {
+                        Produit p = ProduitDelegate.findProduit((String) item.getProductId().getUid());
+                        List<String> nameLines = PaymentController.wrapText(
+                            (p != null ? p.getNomProduit() + " " + (p.getModele() != null ? p.getModele() : "") : "Produit inconnu"),
+                            lineWidth
+                        );
+                        for (String lineName : nameLines) {
+                            printer.writeLF(lineName);
+                        }
+                        String qtyStr = String.valueOf(item.getQuantite());
+                        String puStr = moneyFormat.format(item.getPrixUnit());
+                        String totalStr = moneyFormat.format(
+                            isUSD ? item.getMontantUsd() : item.getMontantCdf()
+                        );
+                        // Align right for quantity, price, total
+                        String itemLine = String.format(
+                            "%-" + (lineWidth - 25) + "s %6s %10s %10s",
+                            "",
+                            qtyStr,
+                            puStr,
+                            totalStr
+                        );
+                        printer.writeLF(itemLine);
+                    }
+                    
+                    printer.writeLF("-".repeat(lineWidth));
+                    
+                    // Total
+                    double grandTotal = isUSD ? vente.getMontantUsd() : vente.getMontantCdf();
+                    printer.writeLF(right, "Total : " + moneyFormat.format(grandTotal) + " " + mainCurrency);
+                    printer.feed(4);
+                    printer.cut(EscPos.CutMode.FULL);
+                } finally {
+                    pos.close();
+                }
+                
+                return "Impression de la facture " + invoiceReference + " terminée avec succès sur " + ps.getName() + ".";
+            } catch (Exception e) {
+                Logger.getLogger(GratienTools.class.getName()).log(Level.SEVERE, "Erreur lors de l'impression", e);
+                return "Erreur lors de l'impression: " + e.getMessage();
+            }
+        });
+    }
+    
     @Tool("Prepare et affiche les codes-barres ou QR codes des produits avant impression thermique. Peut cibler tous les produits, un nombre limite, ou des noms explicites.")
     public String prepareAllProductCodesForThermalPrint(
             @P("Format souhaite: auto, barcode ou qrcode. auto utilise code-barres pour les codes numeriques 12/13 chiffres, QR code sinon.") String format,
@@ -1144,7 +1500,7 @@ public class JemimaTools {
             if (!skipped.isEmpty()) {
                 builder.append("\nProduit(s) ignoré(s) car codebar vide: ").append(skipped.size()).append(".");
             }
-            builder.append("\n\nConfirmez si vous voulez tout imprimer. Après votre accord, Jemima utilisera le lot ")
+            builder.append("\n\nConfirmez si vous voulez tout imprimer. Après votre accord, Gratien utilisera le lot ")
                     .append(batchId).append(".");
             return builder.toString();
         });
@@ -1178,7 +1534,7 @@ public class JemimaTools {
         return executeOnce("printPreparedProductCodesOnThermal", safe(batchId, "") + "|" + safe(printerName, "default"), () -> {
             ProductCodePrintBatch batch = PRODUCT_CODE_PRINT_BATCHES.get(batchId == null ? "" : batchId.trim());
             if (batch == null) {
-                return "Lot d'impression introuvable. Demandez d'abord à Jemima de préparer les codes à imprimer.";
+                return "Lot d'impression introuvable. Demandez d'abord à Gratien de préparer les codes à imprimer.";
             }
             PrintService printService = findPrintService(printerName);
             if (printService == null) {
@@ -1450,10 +1806,10 @@ public class JemimaTools {
                 ```ini
                 [mysqld]
                 server-id=%d
-                log-bin=mysql-bin
-                binlog-format=ROW
-                gtid-mode=ON
-                enforce-gtid-consistency=ON
+                log_bin=mysql-bin
+                binlog_format=ROW
+                gtid_mode=ON
+                enforce_gtid-consistency=ON
                 ```
 
                 Configuration recommandée sur le replica:
@@ -1461,12 +1817,12 @@ public class JemimaTools {
                 [mysqld]
                 server-id=%d
                 relay-log=relay-bin
-                read-only=ON
-                gtid-mode=ON
-                enforce-gtid-consistency=ON
+                read_only=ON
+                gtid_mode=ON
+                enforce_gtid-consistency=ON
                 ```
 
-                Pour exécuter la configuration côté replica, Jemima doit demander le mot de passe root MySQL du replica, puis appeler l'outil d'exécution avec ce `planId` et l'adresse de la machine replica. La machine replica doit être différente du master.
+                Pour exécuter la configuration côté replica, Gratien doit demander le mot de passe root MySQL du replica, puis appeler l'outil d'exécution avec ce `planId` et l'adresse de la machine replica. La machine replica doit être différente du master.
                 """.formatted(
                 plan.planId(),
                 plan.masterHost(),
@@ -2331,7 +2687,7 @@ public class JemimaTools {
         delivery.setFournId(supplier);
         delivery.setLibelle("Transfert de mouvements depuis produits doublons");
         delivery.setNumPiece(reference);
-        delivery.setObservation("Livraison generique creee par Jemima pour transfert de doublons produits");
+        delivery.setObservation("Livraison generique creee par Gratien pour transfert de doublons produits");
         delivery.setReference(reference);
         delivery.setRegion(pref.get("region", "Goma"));
         delivery.setReduction(0d);
@@ -2457,6 +2813,10 @@ public class JemimaTools {
 
     @Tool("Insère en base les articles d'une facture validée comme réquisitions/approvisionnements")
     public String insertInvoiceSupply(@P("Brouillon facture validé") InvoiceDraft draft) {
+        String conversionIssue = checkCurrencyConversionBeforeWorkflow(draft);
+        if (conversionIssue != null) {
+            return conversionIssue;
+        }
         return executeOnce("insertInvoiceSupply", draftKey(draft), () -> {
             if (draft == null || !draft.hasLines()) {
                 return "Aucune ligne de facture valide à insérer.";
@@ -2614,7 +2974,7 @@ public class JemimaTools {
                 appendMarkdownTable(builder, "Compte de résultat", payload.headers(), payload.compteResultat());
                 appendMarkdownTable(builder, "Flux de trésorerie", payload.headers(), payload.fluxTresorerie());
                 builder.append("\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ");
-                builder.append("Après votre confirmation, Jemima générera un seul fichier final pour cette demande.");
+                builder.append("Après votre confirmation, Gratien générera un seul fichier final pour cette demande.");
                 return builder.toString();
             } catch (Exception ex) {
                 return "Impossible d'afficher le rapport financier: " + ex.getMessage();
@@ -2866,6 +3226,282 @@ public class JemimaTools {
         });
     }
 
+    @Tool("Affiche la liste des produits en rupture de stock (stock ≤ alerte ou stock = 0)")
+    public String listLowStockProducts() {
+        String region = resolveFinancialRegion(null);
+        List<Rupture> ruptures = RecquisitionDelegate.findStockEnRupture(region);
+        if (ruptures == null || ruptures.isEmpty()) {
+            return "Aucun produit en rupture de stock trouvé.";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("### Produits en rupture de stock (").append(ruptures.size()).append(")\n\n");
+        sb.append("| N# | Produit | Quantité | Prix unitaire | Localisation |\n");
+        sb.append("|---|---|---|---|---|\n");
+        int count = 0;
+        for (Rupture r : ruptures) {
+            count++;
+            Produit p = r.getProduit();
+            if (p == null) continue;
+            String designation = safe(p.getNomProduit(), "-")
+                    + (p.getMarque() != null ? " " + p.getMarque() : "")
+                    + (p.getModele() != null ? " " + p.getModele() : "");
+            String quantStr = r.getQuant() + " " + (r.getMesure() != null ? r.getMesure().getDescription() : "");
+            String puStr = String.valueOf(r.getUnitprice());
+            sb.append("| ").append(count)
+                    .append(" | ").append(designation)
+                    .append(" | ").append(quantStr)
+                    .append(" | ").append(puStr)
+                    .append(" | ").append(safe(r.getLocalisation(), "-"))
+                    .append(" |\n");
+        }
+        sb.append("\nPour générer un fichier PDF, utilisez la commande `exportLowStockProductsPdf()`.");
+        return sb.toString();
+    }
+
+    @Tool("Génère un fichier PDF listant les produits en rupture de stock et l'ouvre")
+    public String exportLowStockProductsPdf() {
+        try {
+            String region = resolveFinancialRegion(null);
+            List<Rupture> ruptures = RecquisitionDelegate.findStockEnRupture(region);
+            if (ruptures == null || ruptures.isEmpty()) {
+                return "Aucun produit en rupture de stock à exporter.";
+            }
+            Entreprise entreprise = currentEntreprise();
+            File file = generateLowStockPdf(entreprise, ruptures);
+            if (file != null && Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+            return "PDF généré avec succès: " + file.getAbsolutePath();
+        } catch (Exception ex) {
+            return "Échec génération PDF rupture de stock: " + ex.getMessage();
+        }
+    }
+
+    @Tool("Recherche et affiche les produits expirés ou sur le point d'expirer dans un délai donné")
+    public String listExpiringProducts(
+            @P("Nombre de mois pour l'échéance (ex: 4 pour les produits qui expirent dans 4 mois). Laissez vide ou 0 pour les produits déjà expirés.") String monthsStr) {
+        try {
+            int months = 0;
+            if (monthsStr != null && !monthsStr.isBlank()) {
+                months = Integer.parseInt(monthsStr.trim());
+                if (months < 0) months = 0;
+            }
+            LocalDate today = LocalDate.now();
+            LocalDate endDate = months > 0 ? today.plusMonths(months) : today;
+            String region = resolveFinancialRegion(null);
+            List<Peremption> expired = RecquisitionDelegate.showExpiredAtInterval(
+                    months > 0 ? today : LocalDate.of(1900, 1, 1), endDate, region);
+            if (expired == null || expired.isEmpty()) {
+                if (months > 0) {
+                    return "Aucun produit expirant dans les " + months + " prochains mois.";
+                }
+                return "Aucun produit déjà expiré trouvé.";
+            }
+            StringBuilder sb = new StringBuilder();
+            String title = months > 0
+                    ? "Produits expirant dans les " + months + " prochains mois"
+                    : "Produits déjà expirés";
+            sb.append("### ").append(title).append(" (").append(expired.size()).append(")\n\n");
+            sb.append("| N# | Produit | Lot | Quantité | Date expiration | Valeur |\n");
+            sb.append("|---|---|---|---|---|---|\n");
+            int count = 0;
+            for (Peremption p : expired) {
+                if (p == null || p.getQuantite() <= 0) continue;
+                count++;
+                sb.append("| ").append(count)
+                        .append(" | ").append(safe(p.getProduit(), "-"))
+                        .append(" | ").append(safe(p.getLot(), "-"))
+                        .append(" | ").append(p.getQuantite()).append(" ").append(safe(p.getMesure(), ""))
+                        .append(" | ").append(p.getDateExpiry() != null ? p.getDateExpiry().toString() : "-")
+                        .append(" | ").append(p.getValeur())
+                        .append(" |\n");
+            }
+            if (count == 0) {
+                return "Aucun produit avec stock > 0 trouvé dans cette période.";
+            }
+            sb.append("\nPour générer un fichier PDF, utilisez la commande `exportExpiringProductsPdf(")
+                    .append(months).append(")`.");
+            return sb.toString();
+        } catch (NumberFormatException e) {
+            return "Nombre de mois invalide. Veuillez entrer un nombre entier positif (ex: 4).";
+        } catch (Exception ex) {
+            return "Erreur lors de la recherche: " + ex.getMessage();
+        }
+    }
+
+    @Tool("Génère un fichier PDF listant les produits expirés ou sur le point d'expirer selon le délai spécifié et l'ouvre")
+    public String exportExpiringProductsPdf(
+            @P("Nombre de mois pour l'échéance (ex: 4). 0 ou vide pour les produits déjà expirés.") String monthsStr) {
+        try {
+            int months = 0;
+            if (monthsStr != null && !monthsStr.isBlank()) {
+                months = Integer.parseInt(monthsStr.trim());
+                if (months < 0) months = 0;
+            }
+            LocalDate today = LocalDate.now();
+            LocalDate endDate = months > 0 ? today.plusMonths(months) : today;
+            String region = resolveFinancialRegion(null);
+            List<Peremption> expired = RecquisitionDelegate.showExpiredAtInterval(
+                    months > 0 ? today : LocalDate.of(1900, 1, 1), endDate, region);
+            if (expired == null || expired.isEmpty()) {
+                return "Aucun produit à exporter.";
+            }
+            Entreprise entreprise = currentEntreprise();
+            File file = generateExpiredPdf(entreprise, expired, months);
+            if (file != null && Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+            return "PDF généré avec succès: " + file.getAbsolutePath();
+        } catch (NumberFormatException e) {
+            return "Nombre de mois invalide.";
+        } catch (Exception ex) {
+            return "Échec génération PDF: " + ex.getMessage();
+        }
+    }
+
+    @Tool("Verifie la derniere version de Kazisafe disponible et retourne les infos de mise a jour")
+    public String checkLatestVersion() {
+        try {
+            retrofit2.Retrofit retrofit = new retrofit2.Retrofit.Builder()
+                    .baseUrl("https://cloud.kazisafe.com/v1/")
+                    .addConverterFactory(retrofit2.converter.jackson.JacksonConverterFactory.create())
+                    .build();
+            data.network.Kazisafe api = retrofit.create(data.network.Kazisafe.class);
+            retrofit2.Response<data.Module> response = api.checkUpdates().execute();
+            if (!response.isSuccessful() || response.body() == null) {
+                return "Impossible de contacter le serveur de mise a jour.";
+            }
+            data.Module module = response.body();
+            String currentVersion = tools.Constants.APP_VERSION;
+            return "Derniere version disponible: " + module.getVersion()
+                    + "\nDate de publication: " + (module.getDateLancer() != null ? module.getDateLancer() : "inconnue")
+                    + "\nFichier: " + (module.getNomModule() != null ? module.getNomModule() : "non specifie")
+                    + "\nVersion actuelle installee: " + currentVersion
+                    + "\n\nPage officielle: https://endeleya.com/products/kazisafe";
+        } catch (Exception e) {
+            return "Erreur lors de la verification: " + e.getMessage();
+        }
+    }
+
+    @Tool("Consulte les pages officielles de Kazisafe sur https://endeleya.com/products/kazisafe et https://endeleya.com/kazisafe pour decouvrir les nouvelles fonctionnalites, les mises a jour recentes et la documentation")
+    public String fetchKazisafePage() {
+        StringBuilder result = new StringBuilder();
+        result.append(fetchSinglePage("https://endeleya.com/products/kazisafe", "Produits Kazisafe")).append("\n\n");
+        result.append(fetchSinglePage("https://endeleya.com/kazisafe", "Kazisafe")).append("\n\n");
+        return result.toString().strip();
+    }
+
+    private String fetchSinglePage(String urlStr, String label) {
+        try {
+            java.net.URL url = new java.net.URL(urlStr);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+            int status = conn.getResponseCode();
+            if (status != 200) {
+                return "[" + label + "] Le site a repondu avec le code HTTP " + status;
+            }
+            StringBuilder content = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\n");
+                }
+            }
+            conn.disconnect();
+            String html = content.toString();
+            String text = html.replaceAll("<script[^>]*>[\\s\\S]*?</script>", "")
+                    .replaceAll("<style[^>]*>[\\s\\S]*?</style>", "")
+                    .replaceAll("<[^>]+>", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (text.length() > 6000) {
+                text = text.substring(0, 6000) + "...\n[Texte tronque - page trop longue]";
+            }
+            return "--- " + label + " ---\n" + text;
+        } catch (Exception e) {
+            return "[" + label + "] Impossible de charger la page: " + e.getMessage();
+        }
+    }
+
+    @Tool("Recherche les produits existants dont le nom correspond a un texte de facture pour le desambiguiser")
+    public String findProductCandidates(
+            @P("Nom du produit tel qu'il apparait sur la facture") String productName) {
+        if (productName == null || productName.isBlank()) {
+            return "Nom de produit vide.";
+        }
+        List<Produit> exact = ProduitDelegate.findProduitByName(productName.trim());
+        if (exact != null && !exact.isEmpty()) {
+            Produit p = exact.get(0);
+            return "Produit trouve exactement:\n"
+                    + "- UID: " + p.getUid() + "\n"
+                    + "- Nom: " + productSearchText(p) + "\n"
+                    + "- Categorie: " + (p.getCategoryId() != null ? p.getCategoryId().getDescritption() : "-");
+        }
+        List<String> invoiceTokens = searchableProductTokens(productName);
+        if (invoiceTokens.isEmpty()) {
+            return "Impossible d'extraire des mots significatifs de ce nom.";
+        }
+        List<Produit> products = ProduitDelegate.findProduits();
+        if (products == null || products.isEmpty()) {
+            return "Aucun produit en base.";
+        }
+        List<Produit> candidates = new ArrayList<>();
+        List<Integer> scores = new ArrayList<>();
+        for (Produit product : products) {
+            List<String> productTokens = searchableProductTokens(productSearchText(product));
+            if (productTokens.isEmpty()) continue;
+            int matched = countMatchedInvoiceTokens(invoiceTokens, productTokens);
+            int minRequired = requiredInvoiceTokenMatches(invoiceTokens.size());
+            if (matched >= minRequired) {
+                candidates.add(product);
+                scores.add(matched);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return "Aucun produit existant ne correspond a '" + productName + "'.";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(candidates.size()).append(" produit(s) correspondent:\n\n");
+        sb.append("| N# | UID | Nom complet | Score |\n");
+        sb.append("|---|---|---|---|\n");
+        for (int i = 0; i < candidates.size(); i++) {
+            Produit p = candidates.get(i);
+            sb.append("| ").append(i + 1)
+                    .append(" | ").append(p.getUid())
+                    .append(" | ").append(productSearchText(p))
+                    .append(" | ").append(scores.get(i)).append("/").append(invoiceTokens.size())
+                    .append(" |\n");
+        }
+        sb.append("\nUtilisez `assignProductToLine` avec l'UID du produit choisi par l'utilisateur.");
+        return sb.toString();
+    }
+
+    @Tool("Assigne un produit existant a une ligne de facture dans le workflow en cours")
+    public String assignProductToLine(
+            @P("workflowId du workflow en cours") String workflowId,
+            @P("Index de la ligne (0-based)") int lineIndex,
+            @P("UID du produit a assigner") String productUid) {
+        InvoiceWorkflowContext ctx = INVOICE_WORKFLOWS.get(normalizeToolKey(workflowId));
+        if (ctx == null || ctx.draft == null) {
+            return "Workflow ou facture introuvable.";
+        }
+        List<InvoiceLine> lines = ctx.draft.getLines();
+        if (lineIndex < 0 || lineIndex >= lines.size()) {
+            return "Index de ligne invalide.";
+        }
+        Produit product = ProduitDelegate.findProduit(productUid);
+        if (product == null) {
+            return "Produit introuvable avec l'UID: " + productUid;
+        }
+        InvoiceLine line = lines.get(lineIndex);
+        line.setProductName(productSearchText(product).strip());
+        return "Ligne " + (lineIndex + 1) + " assignee au produit: " + productSearchText(product);
+    }
+
     public List<String> findMissingSalePrices(InvoiceDraft draft) {
         List<String> missing = new ArrayList<>();
         for (InvoiceLine line : draft.getLines()) {
@@ -3051,7 +3687,7 @@ public class JemimaTools {
     private String productVisibilityRepairInstructions(String batchId, String productName, String action) {
         return "\nAction proposée: " + action + "\n"
                 + "Lot de correction: " + batchId + "\n\n"
-                + "Pour confirmer, demandez à Jemima d'appliquer la correction avec ce JSON:\n"
+                + "Pour confirmer, demandez à Gratien d'appliquer la correction avec ce JSON:\n"
                 + "{\n"
                 + "  \"productName\":\"" + tableCell(productName) + "\",\n"
                 + "  \"quantity\":1,\n"
@@ -3218,7 +3854,7 @@ public class JemimaTools {
         delivery.setFournId(supplier);
         delivery.setLibelle("Approvisionnement générique pour visibilité POS");
         delivery.setNumPiece(reference);
-        delivery.setObservation("Livraison générique réutilisée par Jemima pour les produits absents du POS");
+        delivery.setObservation("Livraison générique réutilisée par Gratien pour les produits absents du POS");
         delivery.setReference(reference);
         delivery.setRegion(region);
         delivery.setReduction(0d);
@@ -3297,13 +3933,13 @@ public class JemimaTools {
     }
 
     private CompteTresor findOrCreateSaleAccount(String region) {
-        String numero = "JEMIMA-CAISSE-" + safe(region, "Goma").toUpperCase(Locale.ROOT);
+        String numero = "Gratien-CAISSE-" + safe(region, "Goma").toUpperCase(Locale.ROOT);
         List<CompteTresor> found = CompteTresorDelegate.findByNumeroCompte(numero);
         if (found != null && !found.isEmpty()) {
             return found.get(0);
         }
         CompteTresor account = new CompteTresor(DataId.generate());
-        account.setIntitule("Caisse Jemima");
+        account.setIntitule("Caisse Gratien");
         account.setBankName("Caisse");
         account.setNumeroCompte(numero);
         account.setTypeCompte(TypeTraisorerie.CAISSE.name());
@@ -3396,7 +4032,7 @@ public class JemimaTools {
 
     private CompteTresor findOrCreateExpenseAccount(ExpenseDraft draft, String region) {
         String type = normalizeTreasuryType(draft == null ? null : draft.getAccountType());
-        String accountName = safe(draft == null ? null : draft.getAccountName(), type.equals(TypeTraisorerie.CAISSE.name()) ? "Caisse Jemima" : type);
+        String accountName = safe(draft == null ? null : draft.getAccountName(), type.equals(TypeTraisorerie.CAISSE.name()) ? "Caisse Gratien" : type);
         List<CompteTresor> accounts = CompteTresorDelegate.findCompteTresors(region);
         if (accounts == null || accounts.isEmpty()) {
             accounts = CompteTresorDelegate.findCompteTresors();
@@ -3420,7 +4056,7 @@ public class JemimaTools {
                 }
             }
         }
-        String numero = "JEMIMA-" + type + "-" + safe(region, "Goma").toUpperCase(Locale.ROOT);
+        String numero = "Gratien-" + type + "-" + safe(region, "Goma").toUpperCase(Locale.ROOT);
         List<CompteTresor> found = CompteTresorDelegate.findByNumeroCompte(numero);
         if (found != null && !found.isEmpty()) {
             return found.get(0);
@@ -3506,6 +4142,19 @@ public class JemimaTools {
             List<Mesure> found = MesureDelegate.findMesureByProduit(product.getUid(), line.getMeasureName().trim());
             if (found != null && !found.isEmpty()) {
                 return found.get(0);
+            }
+        }
+        // If measure name not specified, choose the smallest measure (quantContenu smallest)
+        List<Mesure> allMeasures = MesureDelegate.findMesureByProduit(product.getUid());
+        if (allMeasures != null && !allMeasures.isEmpty()) {
+            Mesure smallest = null;
+            for (Mesure m : allMeasures) {
+                if (smallest == null || m.getQuantContenu() < smallest.getQuantContenu()) {
+                    smallest = m;
+                }
+            }
+            if (smallest != null) {
+                return smallest;
             }
         }
         Mesure unit = MesureDelegate.findByProduitAndQuant(product.getUid(), 1d);
@@ -3924,7 +4573,7 @@ public class JemimaTools {
     }
 
     private Fournisseur findOrCreateSupplier(InvoiceDraft draft) {
-        String supplierName = safe(draft.getSupplier(), "Fournisseur facture Jemima");
+        String supplierName = safe(draft.getSupplier(), "Fournisseur facture Gratien");
         Fournisseur existing = findExistingSupplierByName(supplierName);
         if (existing != null) {
             return enrichExistingSupplier(existing, draft);
@@ -4005,9 +4654,9 @@ public class JemimaTools {
         Livraison delivery = new Livraison(DataId.generate());
         delivery.setDateLivr(date == null ? LocalDate.now() : date);
         delivery.setFournId(supplier);
-        delivery.setLibelle("Facture fournisseur via Jemima");
+        delivery.setLibelle("Facture fournisseur via Gratien");
         delivery.setNumPiece(reference);
-        delivery.setObservation("Facture lue par Jemima");
+        delivery.setObservation("Facture lue par Gratien");
         delivery.setReference(reference);
         delivery.setRegion(region);
         delivery.setReduction(reduction);
@@ -4026,7 +4675,7 @@ public class JemimaTools {
         }
         Fournisseur supplier = context.supplier;
         if (supplier == null) {
-            supplier = findExistingSupplierByName(safe(context.draft.getSupplier(), "Fournisseur facture Jemima"));
+            supplier = findExistingSupplierByName(safe(context.draft.getSupplier(), "Fournisseur facture Gratien"));
         }
         if (supplier == null) {
             return false;
@@ -4171,7 +4820,7 @@ public class JemimaTools {
                Exemple:
                1, 1, 999999, 25, """).append(invoiceCurrency(draft)).append("""
 
-               Vous pouvez envoyer plusieurs lignes a la fois. Si un prix de vente n'est pas rentable, Jemima vous le signalera avant l'enregistrement.
+               Vous pouvez envoyer plusieurs lignes a la fois. Si un prix de vente n'est pas rentable, Gratien vous le signalera avant l'enregistrement.
                """);
         return builder.toString();
     }
@@ -4232,6 +4881,24 @@ public class JemimaTools {
         price.setQmin(qmin);
         price.setQmax(qmax);
         saveSalePrice(price, isNew);
+    }
+
+    private PrixDeVente createExplicitSalePrice(Recquisition recquisition, Mesure unit, InvoiceLine line, String currency) {
+        double qmin = line.getSalePriceQmin() == null || line.getSalePriceQmin() <= 0 ? 1d : line.getSalePriceQmin();
+        double qmax = line.getSalePriceQmax() == null || line.getSalePriceQmax() <= 0 ? 999999d : line.getSalePriceQmax();
+        PrixDeVente price = findExistingSalePrice(recquisition, unit, qmin, qmax);
+        boolean isNew = price == null;
+        if (isNew) {
+            price = new PrixDeVente(DataId.generate());
+        }
+        price.setRecquisitionId(recquisition);
+        price.setDevise(line.getSaleCurrency() == null || line.getSaleCurrency().isBlank() ? currency : line.getSaleCurrency());
+        price.setMesureId(unit);
+        price.setPourcentParCunit(computePercentPerCostUnit(recquisition, line));
+        price.setPrixUnitaire(line.getSalePrice());
+        price.setQmin(qmin);
+        price.setQmax(qmax);
+        return saveSalePrice(price, isNew);
     }
 
     private PrixDeVente findExistingSalePrice(Recquisition recquisition, Mesure measure, double qmin, double qmax) {
@@ -4503,6 +5170,145 @@ public class JemimaTools {
         return output;
     }
 
+    private File generateLowStockPdf(Entreprise entreprise, List<Rupture> ruptures) throws IOException {
+        PDDocument document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        int pageW = (int) PDRectangle.A4.getWidth();
+        int pageH = (int) PDRectangle.A4.getHeight();
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+        PDFUtils pdf = new PDFUtils(document, contentStream);
+        PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        java.awt.Color primary = new java.awt.Color(68, 206, 245);
+        java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+        String entName = entreprise != null ? safe(entreprise.getNomEntreprise(), "Kazisafe") : "Kazisafe";
+        pdf.addTextLine(entName, 25, pageH - 38, hbold, 18, java.awt.Color.BLACK);
+        pdf.addTextLine("Liste des produits en rupture de stock", 25, pageH - 65, hbold, 14, java.awt.Color.DARK_GRAY);
+        String dateStr = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        pdf.addTextLine("Date : " + dateStr, 25, pageH - 85, hnormal, 10, java.awt.Color.DARK_GRAY);
+        contentStream.setStrokingColor(primary);
+        contentStream.setLineWidth(2);
+        contentStream.moveTo(25, pageH - 95);
+        contentStream.lineTo(pageW - 25, pageH - 95);
+        contentStream.stroke();
+        int[] tableCols = {40, 230, 80, 65, 85};
+        pdf.addTable(tableCols, 25, 25, pageH - 130);
+        pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+        pdf.setRightAlignedColumns(new int[]{2, 3});
+        pdf.addCell("N#", primary);
+        pdf.addCell("Designation", primary);
+        pdf.addCell("Quantite", primary);
+        pdf.addCell("P.U.", primary);
+        pdf.addCell("Localisation", primary);
+        pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+        int i = 0;
+        int rowCount = 0;
+        for (Rupture r : ruptures) {
+            if (r == null || r.getProduit() == null) continue;
+            i++;
+            rowCount++;
+            if (rowCount > 25) {
+                contentStream.close();
+                PDPage nextPage = new PDPage(PDRectangle.A4);
+                document.addPage(nextPage);
+                contentStream = new PDPageContentStream(document, nextPage);
+                pdf = new PDFUtils(document, contentStream);
+                pdf.addTable(tableCols, 25, 25, pageH - 68);
+                pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                pdf.setRightAlignedColumns(new int[]{2, 3});
+                rowCount = 1;
+            }
+            Produit p = r.getProduit();
+            String designation = safe(p.getNomProduit(), "-")
+                    + (p.getMarque() != null ? " " + p.getMarque() : "")
+                    + (p.getModele() != null ? " " + p.getModele() : "");
+            String quantStr = String.valueOf(r.getQuant()) + " " + (r.getMesure() != null ? r.getMesure().getDescription() : "");
+            String puStr = String.valueOf(r.getUnitprice());
+            pdf.setRightAlignedColumns(new int[]{2, 3});
+            pdf.addCell(i + ".", egray);
+            pdf.addCell(designation, egray);
+            pdf.addCell(quantStr, egray);
+            pdf.addCell(puStr, egray);
+            pdf.addCell(safe(r.getLocalisation(), "-"), egray);
+        }
+        contentStream.close();
+        File output = FileUtils.pointFile("rupture-stock-" + System.currentTimeMillis() + ".pdf");
+        document.save(output);
+        document.close();
+        return output;
+    }
+
+    private File generateExpiredPdf(Entreprise entreprise, List<Peremption> expired, int months) throws IOException {
+        PDDocument document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        int pageW = (int) PDRectangle.A4.getWidth();
+        int pageH = (int) PDRectangle.A4.getHeight();
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+        PDFUtils pdf = new PDFUtils(document, contentStream);
+        PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        java.awt.Color primary = new java.awt.Color(68, 206, 245);
+        java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+        String entName = entreprise != null ? safe(entreprise.getNomEntreprise(), "Kazisafe") : "Kazisafe";
+        pdf.addTextLine(entName, 25, pageH - 38, hbold, 18, java.awt.Color.BLACK);
+        String title = months > 0
+                ? "Produits expirant dans les " + months + " mois"
+                : "Produits deja expires";
+        pdf.addTextLine(title, 25, pageH - 65, hbold, 14, java.awt.Color.DARK_GRAY);
+        String dateStr = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        pdf.addTextLine("Date : " + dateStr, 25, pageH - 85, hnormal, 10, java.awt.Color.DARK_GRAY);
+        contentStream.setStrokingColor(primary);
+        contentStream.setLineWidth(2);
+        contentStream.moveTo(25, pageH - 95);
+        contentStream.lineTo(pageW - 25, pageH - 95);
+        contentStream.stroke();
+        int[] tableCols = {30, 180, 70, 55, 80, 65};
+        pdf.addTable(tableCols, 25, 25, pageH - 130);
+        pdf.setFont(hnormal, 9, java.awt.Color.WHITE);
+        pdf.setRightAlignedColumns(new int[]{3, 5});
+        pdf.addCell("N#", primary);
+        pdf.addCell("Produit", primary);
+        pdf.addCell("Lot", primary);
+        pdf.addCell("Quantite", primary);
+        pdf.addCell("Date exp.", primary);
+        pdf.addCell("Valeur", primary);
+        pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+        int i = 0;
+        int rowCount = 0;
+        for (Peremption p : expired) {
+            if (p == null || p.getQuantite() <= 0) continue;
+            i++;
+            rowCount++;
+            if (rowCount > 25) {
+                contentStream.close();
+                PDPage nextPage = new PDPage(PDRectangle.A4);
+                document.addPage(nextPage);
+                contentStream = new PDPageContentStream(document, nextPage);
+                pdf = new PDFUtils(document, contentStream);
+                pdf.addTable(tableCols, 25, 25, pageH - 68);
+                pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+                pdf.setRightAlignedColumns(new int[]{3, 5});
+                rowCount = 1;
+            }
+            pdf.setRightAlignedColumns(new int[]{3, 5});
+            pdf.addCell(i + ".", egray);
+            pdf.addCell(safe(p.getProduit(), "-"), egray);
+            pdf.addCell(safe(p.getLot(), "-"), egray);
+            pdf.addCell(String.valueOf(p.getQuantite()) + " " + safe(p.getMesure(), ""), egray);
+            pdf.addCell(p.getDateExpiry() != null ? p.getDateExpiry().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-", egray);
+            pdf.addCell(String.valueOf(p.getValeur()), egray);
+        }
+        contentStream.close();
+        File output = FileUtils.pointFile("produits-expires-" + System.currentTimeMillis() + ".pdf");
+        document.save(output);
+        document.close();
+        return output;
+    }
+
     private String resolveFinancialRegion(String requestedRegion) {
         String currentRegion = pref.get("region", null);
         String requested = requestedRegion == null || requestedRegion.isBlank() ? currentRegion : requestedRegion.trim();
@@ -4579,6 +5385,261 @@ public class JemimaTools {
 
     private String invoiceCurrency(InvoiceDraft draft) {
         return draft == null || draft.getCurrency() == null || draft.getCurrency().isBlank() ? "USD" : draft.getCurrency();
+    }
+
+    private String checkCurrencyConversionBeforeWorkflow(InvoiceDraft draft) {
+        if (draft == null || !draft.hasLines()) return null;
+        String draftCurrency = tools.CurrencyConverter.normalize(invoiceCurrency(draft));
+        String mainCurrency = tools.CurrencyConverter.mainCurrency();
+        if (draftCurrency.equals(mainCurrency)) return null;
+
+        String dk = draftKey(draft);
+        CurrencyConversionState state = PENDING_CURRENCY_CONVERSIONS.get(dk);
+
+        if (state != null && state.resolved) {
+            if (state.converted && state.convertedDraft != null) {
+                applyConvertedDraft(draft, state.convertedDraft);
+            }
+            PENDING_CURRENCY_CONVERSIONS.remove(dk);
+            return null;
+        }
+
+        if (state == null) {
+            double defaultRate = tools.CurrencyConverter.rateFromUsd(draftCurrency);
+            PENDING_CURRENCY_CONVERSIONS.put(dk, new CurrencyConversionState(
+                    dk, draftCurrency, mainCurrency, defaultRate, false, false, 0, null, snapshotDraft(draft)
+            ));
+        }
+
+        return "⚠️ **Conversion de devise détectée**\n\n"
+                + "La facture est en **" + draftCurrency + "** mais la devise principale configurée est **" + mainCurrency + "**.\n\n"
+                + "Souhaitez-vous convertir les prix en " + mainCurrency + " ?\n\n"
+                + "- Répondez `oui` pour convertir avec le taux configuré (" + tools.CurrencyConverter.rateFromUsd(draftCurrency) + ")\n"
+                + "- Répondez `oui taux=XXXX` pour convertir avec un taux personnalisé\n"
+                + "- Répondez `non` pour ignorer et utiliser les montants originaux\n\n"
+                + "Utilisez la commande : `answerInvoiceConversion(draftKey=\"" + dk + "\", answer=\"...\")`";
+    }
+
+    @Tool("Répondre à la demande de conversion de devise pour une facture fournisseur")
+    public String answerInvoiceConversion(
+            @P("Clé unique du brouillon de facture (draftKey)") String draftKey,
+            @P("Réponse : oui, oui taux=XXXX, ou non") String answer) {
+        CurrencyConversionState state = PENDING_CURRENCY_CONVERSIONS.get(normalizeToolKey(draftKey));
+        if (state == null) {
+            return "Aucune conversion en attente pour cette clé de facture. Vérifiez le draftKey.";
+        }
+        if (state.resolved) {
+            return "Cette demande de conversion a déjà été traitée.";
+        }
+
+        String normalized = normalizeToolKey(answer);
+
+        if (normalized.equals("non") || normalized.equals("no") || normalized.equals("skip")) {
+            state.resolved = true;
+            state.converted = false;
+            return "✅ Conversion ignorée. Les montants originaux en **" + state.draftCurrency + "** seront utilisés.\n\n"
+                    + "Vous pouvez maintenant rappeler `insertInvoiceSupply` avec la même facture pour continuer.";
+        }
+
+        if (normalized.startsWith("oui") || normalized.equals("yes") || normalized.equals("ok") || normalized.equals("confirme")) {
+            double customRate = 0;
+            double displayRate = state.defaultRate;
+            if (normalized.contains("taux=")) {
+                try {
+                    String rateStr = normalized.substring(normalized.indexOf("taux=") + 5).trim();
+                    customRate = Double.parseDouble(rateStr);
+                    if (customRate <= 0) throw new NumberFormatException();
+                    displayRate = customRate;
+                } catch (NumberFormatException e) {
+                    return "Taux invalide. Veuillez spécifier un nombre positif, ex: `oui taux=2500`.";
+                }
+            }
+
+            state.resolved = true;
+            state.converted = true;
+            state.appliedRate = displayRate;
+            state.convertedDraft = convertStoredDraft(state.originalDraft, state.mainCurrency, customRate);
+
+            return "✅ Conversion acceptée avec un taux de 1 " + state.draftCurrency + " = " + displayRate + " " + state.mainCurrency + ".\n\n"
+                    + "Utilisez `previewConvertedInvoice(draftKey=\"" + state.draftKey + "\")` pour voir l'aperçu de la facture convertie.\n"
+                    + "Ensuite, rappelez `insertInvoiceSupply` avec la même facture pour enregistrer.";
+        }
+
+        return "Réponse non reconnue. Veuillez répondre par `oui`, `oui taux=XXXX` ou `non`.";
+    }
+
+    @Tool("Convertir explicitement une facture dans la devise principale et afficher l'aperçu. Utilisez ceci si vous savez déjà que la facture est en devise différente.")
+    public String convertAndPreviewInvoice(
+            @P("Brouillon facture à convertir") InvoiceDraft draft,
+            @P("Taux de conversion (optionnel - laissez vide pour utiliser le taux configuré)") String customRate) {
+        if (draft == null || !draft.hasLines()) {
+            return "Facture invalide ou sans lignes.";
+        }
+        String draftCurrency = tools.CurrencyConverter.normalize(invoiceCurrency(draft));
+        String mainCurrency = tools.CurrencyConverter.mainCurrency();
+        if (draftCurrency.equals(mainCurrency)) {
+            return "La facture est déjà en **" + mainCurrency + "**. Aucune conversion nécessaire.";
+        }
+        double customRateVal = 0;
+        double displayRate = tools.CurrencyConverter.rateFromUsd(draftCurrency);
+        if (customRate != null && !customRate.isBlank()) {
+            try {
+                customRateVal = Double.parseDouble(customRate.trim());
+                if (customRateVal <= 0) throw new NumberFormatException();
+                displayRate = customRateVal;
+            } catch (NumberFormatException e) {
+                return "Taux invalide. Veuillez entrer un nombre positif.";
+            }
+        }
+        InvoiceDraft converted = convertStoredDraft(draft, mainCurrency, customRateVal);
+        StringBuilder sb = new StringBuilder();
+        sb.append("### Facture convertie en ").append(mainCurrency).append("\n\n");
+        sb.append("Taux appliqué : 1 ").append(draftCurrency).append(" = ").append(displayRate).append(" ").append(mainCurrency).append("\n\n");
+        sb.append("| Produit | Qté | Prix unitaire | Total | Prix vente |\n");
+        sb.append("|---|---|---|---|---|\n");
+        double grandTotal = 0;
+        for (InvoiceLine line : converted.getLines()) {
+            double total = tools.CurrencyConverter.round(line.getTotal());
+            double salePx = line.getSalePrice() != null ? tools.CurrencyConverter.round(line.getSalePrice()) : 0;
+            sb.append("| ").append(safe(line.getProductName(), "-"))
+                    .append(" | ").append(line.getQuantity())
+                    .append(" | ").append(tools.CurrencyConverter.round(line.getPurchaseUnitPrice()))
+                    .append(" | ").append(total)
+                    .append(" | ").append(salePx).append(" |\n");
+            grandTotal += total;
+        }
+        sb.append("\n**Total : ").append(tools.CurrencyConverter.round(grandTotal))
+                .append(" ").append(mainCurrency).append("**\n\n");
+        sb.append("Si ce résultat vous convient, appelez `insertInvoiceSupply` avec les mêmes informations.");
+        return sb.toString();
+    }
+
+    @Tool("Afficher l'aperçu de la facture convertie dans la devise principale avant enregistrement")
+    public String previewConvertedInvoice(@P("Clé unique du brouillon de facture (draftKey)") String draftKey) {
+        CurrencyConversionState state = PENDING_CURRENCY_CONVERSIONS.get(normalizeToolKey(draftKey));
+        if (state == null) {
+            return "Aucune conversion en attente pour cette clé.";
+        }
+        if (!state.resolved || !state.converted) {
+            return "La conversion n'a pas encore été effectuée. Utilisez d'abord `answerInvoiceConversion`.";
+        }
+        if (state.convertedDraft == null) {
+            return "Erreur : la facture convertie est introuvable. Utilisez à nouveau `answerInvoiceConversion`.";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("### Aperçu de la facture convertie en ").append(state.mainCurrency).append("\n\n");
+        sb.append("| Produit | Qté | Prix unitaire (")
+                .append(state.mainCurrency).append(") | Total (")
+                .append(state.mainCurrency).append(") | Prix vente (")
+                .append(state.mainCurrency).append(") |\n");
+        sb.append("|---|---|---|---|---|\n");
+
+        double grandTotal = 0;
+        for (InvoiceLine line : state.convertedDraft.getLines()) {
+            double unitPrice = tools.CurrencyConverter.round(line.getPurchaseUnitPrice());
+            double total = tools.CurrencyConverter.round(line.getTotal());
+            double salePx = line.getSalePrice() != null ? tools.CurrencyConverter.round(line.getSalePrice()) : 0;
+            sb.append("| ").append(safe(line.getProductName(), "-"))
+                    .append(" | ").append(line.getQuantity())
+                    .append(" | ").append(unitPrice)
+                    .append(" | ").append(total)
+                    .append(" | ").append(salePx).append(" |\n");
+            grandTotal += total;
+        }
+
+        sb.append("\n**Total converti : ").append(tools.CurrencyConverter.round(grandTotal))
+                .append(" ").append(state.mainCurrency).append("**\n");
+        sb.append("Taux appliqué : 1 ").append(state.draftCurrency)
+                .append(" = ").append(state.appliedRate).append(" ").append(state.mainCurrency).append("\n\n");
+        sb.append("Rappelez maintenant `insertInvoiceSupply` avec la même facture pour enregistrer.");
+        return sb.toString();
+    }
+
+    private InvoiceDraft snapshotDraft(InvoiceDraft draft) {
+        InvoiceDraft copy = new InvoiceDraft();
+        copy.setSupplier(draft.getSupplier());
+        copy.setSupplierIdNat(draft.getSupplierIdNat());
+        copy.setSupplierRccm(draft.getSupplierRccm());
+        copy.setSupplierTaxNumber(draft.getSupplierTaxNumber());
+        copy.setSupplierAddress(draft.getSupplierAddress());
+        copy.setSupplierPhone(draft.getSupplierPhone());
+        copy.setReference(draft.getReference());
+        copy.setInvoiceDate(draft.getInvoiceDate());
+        copy.setCurrency(draft.getCurrency());
+        copy.setPayed(draft.getPayed());
+        copy.setReduction(draft.getReduction());
+        List<InvoiceLine> linesCopy = new ArrayList<>();
+        if (draft.getLines() != null) {
+            for (InvoiceLine line : draft.getLines()) {
+                InvoiceLine lc = new InvoiceLine();
+                lc.setProductName(line.getProductName());
+                lc.setCategory(line.getCategory());
+                lc.setQuantity(line.getQuantity());
+                lc.setPurchaseUnitPrice(line.getPurchaseUnitPrice());
+                lc.setTotal(line.getTotal());
+                lc.setSalePrice(line.getSalePrice());
+                lc.setSalePriceQmin(line.getSalePriceQmin());
+                lc.setSalePriceQmax(line.getSalePriceQmax());
+                lc.setSaleCurrency(line.getSaleCurrency());
+                lc.setMeasureName(line.getMeasureName());
+                lc.setLotNumber(line.getLotNumber());
+                lc.setExpiryDate(line.getExpiryDate());
+                linesCopy.add(lc);
+            }
+        }
+        copy.setLines(linesCopy);
+        copy.setMissingSalePrices(new ArrayList<>(draft.getMissingSalePrices()));
+        return copy;
+    }
+
+    private double convertAmount(double amount, String sourceCurrency, String targetCurrency, double customRate) {
+        if (sourceCurrency.equals(targetCurrency)) return amount;
+        double sourceToUsd;
+        if (customRate > 0) {
+            sourceToUsd = amount / customRate;
+        } else {
+            sourceToUsd = tools.CurrencyConverter.toUsd(amount, sourceCurrency);
+        }
+        return tools.CurrencyConverter.fromUsd(sourceToUsd, targetCurrency);
+    }
+
+    private InvoiceDraft convertStoredDraft(InvoiceDraft original, String targetCurrency, double customRate) {
+        if (original == null) return null;
+        String sourceCurrency = tools.CurrencyConverter.normalize(invoiceCurrency(original));
+        InvoiceDraft converted = snapshotDraft(original);
+        converted.setCurrency(targetCurrency);
+        if (converted.getPayed() != null) {
+            converted.setPayed(convertAmount(converted.getPayed(), sourceCurrency, targetCurrency, customRate));
+        }
+        if (converted.getReduction() != null) {
+            converted.setReduction(convertAmount(converted.getReduction(), sourceCurrency, targetCurrency, customRate));
+        }
+        for (InvoiceLine line : converted.getLines()) {
+            line.setPurchaseUnitPrice(convertAmount(line.getPurchaseUnitPrice(), sourceCurrency, targetCurrency, customRate));
+            line.setTotal(convertAmount(line.getTotal(), sourceCurrency, targetCurrency, customRate));
+            if (line.getSalePrice() != null) {
+                line.setSalePrice(convertAmount(line.getSalePrice(), sourceCurrency, targetCurrency, customRate));
+            }
+            if (line.getSalePriceQmin() != null) {
+                line.setSalePriceQmin(convertAmount(line.getSalePriceQmin(), sourceCurrency, targetCurrency, customRate));
+            }
+            if (line.getSalePriceQmax() != null) {
+                line.setSalePriceQmax(convertAmount(line.getSalePriceQmax(), sourceCurrency, targetCurrency, customRate));
+            }
+            line.setSaleCurrency(targetCurrency);
+        }
+        return converted;
+    }
+
+    private void applyConvertedDraft(InvoiceDraft target, InvoiceDraft converted) {
+        if (target == null || converted == null) return;
+        target.setCurrency(converted.getCurrency());
+        target.setPayed(converted.getPayed());
+        target.setReduction(converted.getReduction());
+        if (converted.getLines() != null && !converted.getLines().isEmpty()) {
+            target.setLines(converted.getLines());
+        }
     }
 
     private String invoiceReference(InvoiceDraft draft) {
@@ -4783,6 +5844,33 @@ public class JemimaTools {
     private record ProductVisibilityRepairRequest(String batchId, String query, String productUid, String reason, LocalDateTime createdAt) {
     }
 
+    private static class CurrencyConversionState {
+        private final String draftKey;
+        private final String draftCurrency;
+        private final String mainCurrency;
+        private final double defaultRate;
+        private boolean converted;
+        private boolean resolved;
+        private double appliedRate;
+        private InvoiceDraft convertedDraft;
+        private final InvoiceDraft originalDraft;
+
+        private CurrencyConversionState(String draftKey, String draftCurrency, String mainCurrency,
+                                         double defaultRate, boolean converted, boolean resolved,
+                                         double appliedRate, InvoiceDraft convertedDraft,
+                                         InvoiceDraft originalDraft) {
+            this.draftKey = draftKey;
+            this.draftCurrency = draftCurrency;
+            this.mainCurrency = mainCurrency;
+            this.defaultRate = defaultRate;
+            this.converted = converted;
+            this.resolved = resolved;
+            this.appliedRate = appliedRate;
+            this.convertedDraft = convertedDraft;
+            this.originalDraft = originalDraft;
+        }
+    }
+
     private static class InvoiceWorkflowContext {
 
         private final long createdAtMs = System.currentTimeMillis();
@@ -4804,7 +5892,7 @@ public class JemimaTools {
         private InvoiceWorkflowContext(InvoiceDraft draft) {
             this.draft = draft;
             this.reference = draft == null || draft.getReference() == null || draft.getReference().isBlank()
-                    ? "JEMIMA-" + System.currentTimeMillis()
+                    ? "GRATIEN-" + System.currentTimeMillis()
                     : draft.getReference();
             LocalDateTime parsed;
             try {
@@ -4901,11 +5989,70 @@ public class JemimaTools {
         }
     }
 
+    private static class NullFieldInfo {
+        public final String entityType;
+        public final String entityId;
+        public final String fieldName;
+        public final Class<?> fieldType;
+
+        public NullFieldInfo(String entityType, String entityId, String fieldName, Class<?> fieldType) {
+            this.entityType = entityType;
+            this.entityId = entityId;
+            this.fieldName = fieldName;
+            this.fieldType = fieldType;
+        }
+    }
+
+    private static class SyncFixWorkflowContext {
+        private final String workflowId;
+        private final long createdAtMs = System.currentTimeMillis();
+        private final List<NullFieldInfo> nullFields = new ArrayList<>();
+        private final Set<Integer> fixedFieldIndices = new HashSet<>();
+        private final int itemsPerPage = 30;
+        private int currentPage = 1;
+        private boolean scanned = false;
+        private boolean fixed = false;
+        private boolean synced = false;
+        private boolean cancelled = false;
+        private String cancelMessage = "Workflow annulé.";
+
+        private SyncFixWorkflowContext(String workflowId) {
+            this.workflowId = workflowId;
+        }
+
+        private int getTotalPages() {
+            if (nullFields.isEmpty()) return 1;
+            return (int) Math.ceil((double) nullFields.size() / itemsPerPage);
+        }
+
+        private List<NullFieldInfo> getCurrentPageItems() {
+            int fromIndex = (currentPage - 1) * itemsPerPage;
+            int toIndex = Math.min(fromIndex + itemsPerPage, nullFields.size());
+            if (fromIndex >= nullFields.size()) {
+                return new ArrayList<>();
+            }
+            return nullFields.subList(fromIndex, toIndex);
+        }
+
+        private String summary() {
+            return "workflowId=" + workflowId
+                    + ", scanned=" + scanned
+                    + ", nullFieldsCount=" + nullFields.size()
+                    + ", currentPage=" + currentPage
+                    + ", totalPages=" + getTotalPages()
+                    + ", fixed=" + fixed
+                    + ", synced=" + synced
+                    + ", cancelled=" + cancelled;
+        }
+    }
+
+    private static final Map<String, SyncFixWorkflowContext> SYNC_FIX_WORKFLOWS = new ConcurrentHashMap<>();
+
     private void syncCreate(data.BaseModel model, Tables table) {
         try {
             Util.sync(model, Constants.ACTION_CREATE, table);
         } catch (Exception ex) {
-            System.err.println("Jemima sync HTTP échouée pour " + table + ": " + ex.getMessage());
+            System.err.println("Gratien sync HTTP échouée pour " + table + ": " + ex.getMessage());
         }
     }
 
@@ -4913,7 +6060,7 @@ public class JemimaTools {
         try {
             Util.sync(model, Constants.ACTION_UPDATE, table);
         } catch (Exception ex) {
-            System.err.println("Jemima sync HTTP update échouée pour " + table + ": " + ex.getMessage());
+            System.err.println("Gratien sync HTTP update échouée pour " + table + ": " + ex.getMessage());
         }
     }
 
@@ -4921,7 +6068,661 @@ public class JemimaTools {
         try {
             Util.sync(model, Constants.ACTION_DELETE, table);
         } catch (Exception ex) {
-            System.err.println("Jemima sync HTTP delete échouée pour " + table + ": " + ex.getMessage());
+            System.err.println("Gratien sync HTTP delete échouée pour " + table + ": " + ex.getMessage());
         }
+    }
+
+    public static class NaturalLanguagePriceResult {
+        public final int index; // 0-based
+        public final double price;
+        public final String currency;
+        public final double qmin;
+        public final double qmax;
+
+        public NaturalLanguagePriceResult(int index, double price, String currency, double qmin, double qmax) {
+            this.index = index;
+            this.price = price;
+            this.currency = currency;
+            this.qmin = qmin;
+            this.qmax = qmax;
+        }
+    }
+
+    public static NaturalLanguagePriceResult parseNaturalLanguagePrice(String text) {
+        if (text == null || text.isBlank()) return null;
+        String normalized = text.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", " ");
+
+        boolean hasFrenchWord = false;
+        String[] frenchIndicators = {"c'est", "c est", "est", "produit", "premier", "deuxi", "troisi",
+                "quatri", "cinqui", "sixi", "septi", "huiti", "neuvi", "dixi",
+                "dollar", "euro", "franc", "euros", "dollars", "francs",
+                "prix", "coûte", "coute", "à", "pour", "= ", "->"};
+        for (String indicator : frenchIndicators) {
+            if (normalized.contains(indicator)) {
+                hasFrenchWord = true;
+                break;
+            }
+        }
+        if (!hasFrenchWord && !normalized.matches(".*\\d+.*")) {
+            return null;
+        }
+
+        Map<String, Integer> ordinalMap = new java.util.HashMap<>();
+        ordinalMap.put("premier", 1); ordinalMap.put("première", 1); ordinalMap.put("1er", 1); ordinalMap.put("1ère", 1);
+        ordinalMap.put("deuxième", 2); ordinalMap.put("2ème", 2); ordinalMap.put("2e", 2); ordinalMap.put("2eme", 2);
+        ordinalMap.put("troisième", 3); ordinalMap.put("3ème", 3); ordinalMap.put("3e", 3); ordinalMap.put("3eme", 3);
+        ordinalMap.put("quatrième", 4); ordinalMap.put("4ème", 4); ordinalMap.put("4e", 4); ordinalMap.put("4eme", 4);
+        ordinalMap.put("cinquième", 5); ordinalMap.put("5ème", 5); ordinalMap.put("5e", 5); ordinalMap.put("5eme", 5);
+        ordinalMap.put("sixième", 6); ordinalMap.put("6ème", 6); ordinalMap.put("6e", 6); ordinalMap.put("6eme", 6);
+        ordinalMap.put("septième", 7); ordinalMap.put("7ème", 7); ordinalMap.put("7e", 7); ordinalMap.put("7eme", 7);
+        ordinalMap.put("huitième", 8); ordinalMap.put("8ème", 8); ordinalMap.put("8e", 8); ordinalMap.put("8eme", 8);
+        ordinalMap.put("neuvième", 9); ordinalMap.put("9ème", 9); ordinalMap.put("9e", 9); ordinalMap.put("9eme", 9);
+        ordinalMap.put("dixième", 10); ordinalMap.put("10ème", 10); ordinalMap.put("10e", 10); ordinalMap.put("10eme", 10);
+
+        int idx = -1;
+        for (Map.Entry<String, Integer> entry : ordinalMap.entrySet()) {
+            if (normalized.contains(entry.getKey())) {
+                idx = entry.getValue() - 1;
+                break;
+            }
+        }
+        if (idx < 0) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("produit\\s*(\\d+)").matcher(normalized);
+            if (m.find()) {
+                idx = Integer.parseInt(m.group(1)) - 1;
+            }
+        }
+        if (idx < 0) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|\\s)(\\d+)(?:\\s|$|er|ème|e)").matcher(normalized);
+            if (m.find()) {
+                idx = Integer.parseInt(m.group(1)) - 1;
+            }
+        }
+        if (idx < 0) return null;
+
+        String currency = null;
+        String[] currencyPatterns = {"dollars?", "usd", "\\$", "francs?", "cdf", "fc", "euros?", "eur", "€"};
+        for (String pat : currencyPatterns) {
+            java.util.regex.Matcher cm = java.util.regex.Pattern.compile(pat).matcher(normalized);
+            if (cm.find()) {
+                String matched = cm.group();
+                if (matched.equals("$")) currency = "USD";
+                else if (matched.equals("€")) currency = "EUR";
+                else if (matched.matches("dollars?|usd")) currency = "USD";
+                else if (matched.matches("francs?|cdf|fc")) currency = "CDF";
+                else if (matched.matches("euros?|eur")) currency = "EUR";
+                break;
+            }
+        }
+        if (currency == null) {
+            currency = tools.CurrencyConverter.mainCurrency();
+        }
+
+        java.util.regex.Matcher priceM = java.util.regex.Pattern.compile(
+                "(?:c'est\\s*|c est\\s*|est\\s*(?:de\\s*)?|(?:de\\s*)?|=\\s*|:?\\s*|à\\s*|->\\s*)?(\\d+(?:[.,]\\d+)?)\\s*"
+        ).matcher(normalized);
+        double price = -1;
+        while (priceM.find()) {
+            String val = priceM.group(1).replace(",", ".");
+            double p = Double.parseDouble(val);
+            if (p > price) price = p;
+        }
+        if (price < 0) {
+            java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("(\\d+(?:[.,]\\d+)?)").matcher(normalized);
+            double last = -1;
+            while (m2.find()) {
+                String val = m2.group(1).replace(",", ".");
+                last = Double.parseDouble(val);
+            }
+            if (last > 0) price = last;
+        }
+        if (price < 0) return null;
+
+        return new NaturalLanguagePriceResult(idx, price, currency, 0.001, 999999);
+    }
+
+    public record ProductAmbiguity(int lineIndex, String productName, List<String> candidates) {
+        public String format() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("*").append(productName).append("*");
+            sb.append(" a plusieurs correspondances:\n");
+            for (int i = 0; i < candidates.size(); i++) {
+                sb.append(i + 1).append(". ").append(candidates.get(i)).append("\n");
+            }
+            return sb.toString();
+        }
+    }
+
+    public List<ProductAmbiguity> findAmbiguousProductNames(InvoiceDraft draft) {
+        if (draft == null || draft.getLines() == null) return List.of();
+        List<ProductAmbiguity> result = new ArrayList<>();
+        for (int i = 0; i < draft.getLines().size(); i++) {
+            String name = draft.getLines().get(i).getProductName();
+            if (name == null || name.isBlank()) continue;
+            List<Produit> exact = ProduitDelegate.findProduitByName(name.trim());
+            if (exact != null && !exact.isEmpty()) continue;
+            List<String> invoiceTokens = searchableProductTokens(name);
+            if (invoiceTokens.isEmpty()) continue;
+            List<Produit> all = ProduitDelegate.findProduits();
+            if (all == null || all.isEmpty()) continue;
+            List<String> candidates = new ArrayList<>();
+            for (Produit p : all) {
+                List<String> productTokens = searchableProductTokens(productSearchText(p));
+                if (productTokens.isEmpty()) continue;
+                int matched = countMatchedInvoiceTokens(invoiceTokens, productTokens);
+                int minRequired = requiredInvoiceTokenMatches(invoiceTokens.size());
+                if (matched >= minRequired) {
+                    candidates.add(productSearchText(p));
+                }
+            }
+            if (candidates.size() >= 2) {
+                result.add(new ProductAmbiguity(i, name, candidates));
+            }
+        }
+        return result;
+    }
+
+    private <T> void scanEntityType(List<T> entities, String entityType, Tables table, List<NullFieldInfo> nullFields) {
+        if (entities == null) return;
+        for (T entity : entities) {
+            if (entity == null) continue;
+            try {
+                String entityId = null;
+                try {
+                    java.lang.reflect.Method getUid = entity.getClass().getMethod("getUid");
+                    Object uidObj = getUid.invoke(entity);
+                    entityId = uidObj != null ? uidObj.toString() : null;
+                } catch (NoSuchMethodException e) {
+                    try {
+                        java.lang.reflect.Method getId = entity.getClass().getMethod("getId");
+                        Object idObj = getId.invoke(entity);
+                        entityId = idObj != null ? idObj.toString() : null;
+                    } catch (NoSuchMethodException e2) {
+                        try {
+                            java.lang.reflect.Field uidField = entity.getClass().getDeclaredField("uid");
+                            uidField.setAccessible(true);
+                            Object uidObj = uidField.get(entity);
+                            entityId = uidObj != null ? uidObj.toString() : null;
+                        } catch (NoSuchFieldException e3) {
+                            entityId = "unknown";
+                        }
+                    }
+                }
+
+                java.lang.reflect.Field[] fields = entity.getClass().getDeclaredFields();
+                for (java.lang.reflect.Field field : fields) {
+                    field.setAccessible(true);
+                    String fieldName = field.getName();
+                    if ("uid".equals(fieldName) || "id".equals(fieldName) || "updatedAt".equals(fieldName) || "deletedAt".equals(fieldName) || "type".equals(fieldName) || "action".equals(fieldName) || "priority".equals(fieldName) || "payload".equals(fieldName) || "from".equals(fieldName) || "count".equals(fieldName) || "counter".equals(fieldName)) {
+                        continue;
+                    }
+                    if (field.getType().isPrimitive()) {
+                        continue;
+                    }
+                    Object value = field.get(entity);
+                    if (value == null) {
+                        nullFields.add(new NullFieldInfo(entityType, entityId, fieldName, field.getType()));
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore, continue
+            }
+        }
+    }
+
+    @Tool("Démarre un workflow pour vérifier les champs null, les corriger, puis synchroniser")
+    public String startSyncFixWorkflow() {
+        return executeOnce("startSyncFixWorkflow", "sync-fix", () -> {
+            String workflowId = "sync-fix-" + DataId.generate();
+            SyncFixWorkflowContext ctx = new SyncFixWorkflowContext(workflowId);
+            SYNC_FIX_WORKFLOWS.put(workflowId, ctx);
+
+            // Step 1: Scan all entities
+            scanEntityType(CategoryDelegate.findCategories(), "Category", Tables.CATEGORY, ctx.nullFields);
+            scanEntityType(ClientDelegate.findClients(), "Client", Tables.CLIENT, ctx.nullFields);
+            scanEntityType(CompteTresorDelegate.findCompteTresors(), "CompteTresor", Tables.COMPTETRESOR, ctx.nullFields);
+            scanEntityType(DestockerDelegate.findDestockers(), "Destocker", Tables.DESTOCKER, ctx.nullFields);
+            scanEntityType(DepenseDelegate.findDepenses(), "Depense", Tables.DEPENSE, ctx.nullFields);
+            scanEntityType(FournisseurDelegate.findFournisseurs(), "Fournisseur", Tables.FOURNISSEUR, ctx.nullFields);
+            scanEntityType(LigneVenteDelegate.findLigneVentes(), "LigneVente", Tables.LIGNEVENTE, ctx.nullFields);
+            scanEntityType(LivraisonDelegate.findLivraisons(), "Livraison", Tables.LIVRAISON, ctx.nullFields);
+            scanEntityType(MesureDelegate.findMesures(), "Mesure", Tables.MESURE, ctx.nullFields);
+            scanEntityType(OperationDelegate.findOperations(), "Operation", Tables.OPERATION, ctx.nullFields);
+            scanEntityType(PrixDeVenteDelegate.findPrixDeVentes(), "PrixDeVente", Tables.PRIXDEVENTE, ctx.nullFields);
+            scanEntityType(ProduitDelegate.findProduits(), "Produit", Tables.PRODUIT, ctx.nullFields);
+            scanEntityType(RecquisitionDelegate.findRecquisitions(), "Recquisition", Tables.RECQUISITION, ctx.nullFields);
+            scanEntityType(StockerDelegate.findStockers(), "Stocker", Tables.STOCKER, ctx.nullFields);
+            scanEntityType(TraisorerieDelegate.findTraisoreries(), "Traisorerie", Tables.TRAISORERIE, ctx.nullFields);
+            scanEntityType(VenteDelegate.findVentes(), "Vente", Tables.VENTE, ctx.nullFields);
+            scanEntityType(AretirerDelegate.findAretirers(), "Aretirer", Tables.ARETIRER, ctx.nullFields);
+            scanEntityType(ClientAppartenirDelegate.findClientAppartenirs(), "ClientAppartenir", Tables.CLIENTAPPARTENIR, ctx.nullFields);
+            scanEntityType(ClientOrganisationDelegate.findClientOrganisations(), "ClientOrganisation", Tables.CLIENTORGANISATION, ctx.nullFields);
+            scanEntityType(RetourDepotDelegate.findRetourDepots(), "RetourDepot", Tables.RETOURDEPOT, ctx.nullFields);
+            scanEntityType(RetourMagasinDelegate.findRetourMagasins(), "RetourMagasin", Tables.RETOURMAGASIN, ctx.nullFields);
+            scanEntityType(DepotDelegate.findDepots(), "Depot", Tables.DEPOT, ctx.nullFields);
+            scanEntityType(InventaireDelegate.findInventaires(), "Inventaire", Tables.INVENTORY, ctx.nullFields);
+            scanEntityType(ImmobilisationDelegate.findImmobilisations(), "Immobilisation", Tables.IMMOBILISATION, ctx.nullFields);
+            scanEntityType(MatiereDelegate.findMatieres(), "Matiere", Tables.MATIERE, ctx.nullFields);
+            scanEntityType(MatiereSkuDelegate.findMatiereSkus(), "MatiereSku", Tables.MATIERESKU, ctx.nullFields);
+            scanEntityType(ProductionDelegate.findProductions(), "Production", Tables.PRODUCTION, ctx.nullFields);
+            scanEntityType(RepartirDelegate.findRepartirs(), "Repartir", Tables.REPARTIR, ctx.nullFields);
+            scanEntityType(ImputerDelegate.findImputers(), "Imputer", Tables.IMPUTER, ctx.nullFields);
+            scanEntityType(EntreposerDelegate.findEntreposers(), "Entreposer", Tables.ENTREPOSER, ctx.nullFields);
+            // Compter doesn't have a find all method, skip for now
+            // scanEntityType(CompterDelegate.findCompters(), "Compter", Tables.COMPTER, ctx.nullFields);
+            scanEntityType(PresenceDelegate.findPresences(), "Presence", Tables.PRESENCE, ctx.nullFields);
+            scanEntityType(FactureDelegate.findFactures(), "Facture", Tables.FACTURE, ctx.nullFields);
+
+            ctx.scanned = true;
+
+            if (ctx.nullFields.isEmpty()) {
+                // No null fields, start sync immediately
+                return triggerAdaptiveSync(workflowId);
+            } else {
+                // Show paginated null fields
+                return buildPaginatedNullFieldsList(ctx);
+            }
+        });
+    }
+
+    private String buildPaginatedNullFieldsList(SyncFixWorkflowContext ctx) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Champs null détectés (").append(ctx.nullFields.size()).append(" champs) - Page ")
+                .append(ctx.currentPage).append("/").append(ctx.getTotalPages()).append("\n\n");
+        sb.append("| # | Type d'entité | ID de l'entité | Nom du champ | Type de champ |\n");
+        sb.append("|---|----------------|----------------|--------------|---------------|\n");
+        
+        List<NullFieldInfo> pageItems = ctx.getCurrentPageItems();
+        int startIndex = (ctx.currentPage - 1) * ctx.itemsPerPage;
+        for (int i = 0; i < pageItems.size(); i++) {
+            NullFieldInfo nf = pageItems.get(i);
+            int globalIndex = startIndex + i + 1;
+            String fixedMarker = ctx.fixedFieldIndices.contains(globalIndex - 1) ? "[OK] " : "";
+            sb.append("| ").append(fixedMarker).append(globalIndex).append(" | ")
+                    .append(tableCell(nf.entityType)).append(" | ")
+                    .append(tableCell(nf.entityId)).append(" | ")
+                    .append(tableCell(nf.fieldName)).append(" | ")
+                    .append(tableCell(nf.fieldType.getSimpleName())).append(" |\n");
+        }
+
+        sb.append("\nActions disponibles :\n");
+        if (ctx.currentPage > 1) {
+            sb.append("- page précédente (\"page précédente\" ou \"-1\")\n");
+        }
+        if (ctx.currentPage < ctx.getTotalPages()) {
+            sb.append("- page suivante (\"page suivante\" ou \"+1\")\n");
+        }
+        sb.append("- aller à la page N (\"page N\")\n");
+        sb.append("- corriger automatiquement TOUS les champs (\"corriger tout\")\n");
+        sb.append("- corriger automatiquement la page actuelle (\"corriger page\")\n");
+        sb.append("- lancer la synchronisation (\"synchroniser\")\n");
+        sb.append("\nWorkFlow ID: ").append(ctx.workflowId);
+        return sb.toString();
+    }
+
+    @Tool("Navigue vers la page suivante du workflow de sync")
+    public String nextPage(@P("ID du workflow") String workflowId) {
+        return executeOnce("nextPage", workflowId, () -> {
+            SyncFixWorkflowContext ctx = SYNC_FIX_WORKFLOWS.get(workflowId);
+            if (ctx == null) {
+                return "Workflow introuvable. Veuillez d'abord démarrer un workflow avec startSyncFixWorkflow().";
+            }
+            if (ctx.currentPage < ctx.getTotalPages()) {
+                ctx.currentPage++;
+            }
+            return buildPaginatedNullFieldsList(ctx);
+        });
+    }
+
+    @Tool("Navigue vers la page précédente du workflow de sync")
+    public String previousPage(@P("ID du workflow") String workflowId) {
+        return executeOnce("previousPage", workflowId, () -> {
+            SyncFixWorkflowContext ctx = SYNC_FIX_WORKFLOWS.get(workflowId);
+            if (ctx == null) {
+                return "Workflow introuvable. Veuillez d'abord démarrer un workflow avec startSyncFixWorkflow().";
+            }
+            if (ctx.currentPage > 1) {
+                ctx.currentPage--;
+            }
+            return buildPaginatedNullFieldsList(ctx);
+        });
+    }
+
+    @Tool("Navigue vers une page spécifique du workflow de sync")
+    public String goToPage(@P("ID du workflow") String workflowId, @P("Numéro de page") int pageNumber) {
+        return executeOnce("goToPage", workflowId + "-" + pageNumber, () -> {
+            SyncFixWorkflowContext ctx = SYNC_FIX_WORKFLOWS.get(workflowId);
+            if (ctx == null) {
+                return "Workflow introuvable. Veuillez d'abord démarrer un workflow avec startSyncFixWorkflow().";
+            }
+            ctx.currentPage = Math.max(1, Math.min(pageNumber, ctx.getTotalPages()));
+            return buildPaginatedNullFieldsList(ctx);
+        });
+    }
+
+    @Tool("Corrige automatiquement la page actuelle du workflow de sync")
+    public String autoFixCurrentPage(@P("ID du workflow") String workflowId) {
+        return executeOnce("autoFixCurrentPage", workflowId, () -> {
+            SyncFixWorkflowContext ctx = SYNC_FIX_WORKFLOWS.get(workflowId);
+            if (ctx == null) {
+                return "Workflow introuvable. Veuillez d'abord démarrer un workflow avec startSyncFixWorkflow().";
+            }
+            if (!ctx.scanned) {
+                return "Workflow pas encore prêt. Veuillez d'abord démarrer un workflow.";
+            }
+
+            List<NullFieldInfo> pageItems = ctx.getCurrentPageItems();
+            int startIndex = (ctx.currentPage - 1) * ctx.itemsPerPage;
+            int fixedCount = 0;
+
+            for (int i = 0; i < pageItems.size(); i++) {
+                int globalIndex = startIndex + i;
+                NullFieldInfo nf = pageItems.get(i);
+                if (ctx.fixedFieldIndices.contains(globalIndex)) {
+                    continue;
+                }
+                try {
+                    Object entity = findEntityById(nf.entityType, nf.entityId);
+                    if (entity != null) {
+                        java.lang.reflect.Field field = entity.getClass().getDeclaredField(nf.fieldName);
+                        field.setAccessible(true);
+                        Object value = null;
+                        if (String.class.isAssignableFrom(nf.fieldType)) {
+                            value = "-";
+                        } else if (Number.class.isAssignableFrom(nf.fieldType)) {
+                            if (Integer.class.equals(nf.fieldType) || int.class.equals(nf.fieldType)) {
+                                value = 0;
+                            } else if (Long.class.equals(nf.fieldType) || long.class.equals(nf.fieldType)) {
+                                value = 0L;
+                            } else if (Double.class.equals(nf.fieldType) || double.class.equals(nf.fieldType)) {
+                                value = 0.0;
+                            } else if (Float.class.equals(nf.fieldType) || float.class.equals(nf.fieldType)) {
+                                value = 0.0f;
+                            } else if (Short.class.equals(nf.fieldType) || short.class.equals(nf.fieldType)) {
+                                value = (short) 0;
+                            } else if (Byte.class.equals(nf.fieldType) || byte.class.equals(nf.fieldType)) {
+                                value = (byte) 0;
+                            }
+                        }
+
+                        if (value != null) {
+                            field.set(entity, value);
+                            saveEntity(nf.entityType, entity);
+                            ctx.fixedFieldIndices.add(globalIndex);
+                            fixedCount++;
+                        }
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+
+            ctx.fixed = ctx.fixedFieldIndices.size() == ctx.nullFields.size();
+            StringBuilder sb = new StringBuilder();
+            sb.append("Page ").append(ctx.currentPage).append(" : ").append(fixedCount).append(" champs corrigés.\n\n");
+            sb.append(buildPaginatedNullFieldsList(ctx));
+            if (ctx.fixed) {
+                sb.append("\n\nTous les champs ont été corrigés ! Vous pouvez lancer la synchronisation avec \"synchroniser\".");
+            }
+            return sb.toString();
+        });
+    }
+
+    private Object findEntityById(String entityType, String entityId) {
+        try {
+            switch (entityType) {
+                case "Category": return CategoryDelegate.findCategory(entityId);
+                case "Client": return ClientDelegate.findClient(entityId);
+                case "CompteTresor": return CompteTresorDelegate.findCompteTresor(entityId);
+                case "Destocker": return DestockerDelegate.findDestocker(entityId);
+                case "Depense": return DepenseDelegate.findDepense(entityId);
+                case "Fournisseur": return FournisseurDelegate.findFournisseur(entityId);
+                case "LigneVente": 
+                    try {
+                        return LigneVenteDelegate.findLigneVente(Long.parseLong(entityId)); 
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                case "Livraison": return LivraisonDelegate.findLivraison(entityId);
+                case "Mesure": return MesureDelegate.findMesure(entityId);
+                case "Operation": return OperationDelegate.findOperation(entityId);
+                case "PrixDeVente": return PrixDeVenteDelegate.findPrixDeVente(entityId);
+                case "Produit": return ProduitDelegate.findProduit(entityId);
+                case "Recquisition": return RecquisitionDelegate.findRecquisition(entityId);
+                case "Stocker": return StockerDelegate.findStocker(entityId);
+                case "Traisorerie": return TraisorerieDelegate.findTraisorerie(entityId);
+                case "Vente": 
+                    try {
+                        return VenteDelegate.findVente(Integer.parseInt(entityId)); 
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                case "Aretirer": return AretirerDelegate.findAretirer(entityId);
+                case "ClientAppartenir": return ClientAppartenirDelegate.findClientAppartenir(entityId);
+                case "ClientOrganisation": return ClientOrganisationDelegate.findClientOrganisation(entityId);
+                case "RetourDepot": return RetourDepotDelegate.findRetourDepot(entityId);
+                case "RetourMagasin": return RetourMagasinDelegate.findRetourMagasin(entityId);
+                case "Depot": return DepotDelegate.findDepot(entityId);
+                case "Inventaire": return InventaireDelegate.findInventaire(entityId);
+                case "Immobilisation": return ImmobilisationDelegate.findImmobilisation(entityId);
+                case "Matiere": return MatiereDelegate.findMatiere(entityId);
+                case "MatiereSku": return MatiereSkuDelegate.findMatiereSku(entityId);
+                case "Production": return ProductionDelegate.findProduction(entityId);
+                case "Repartir": return RepartirDelegate.findRepartir(entityId);
+                case "Imputer": return ImputerDelegate.findImputer(entityId);
+                case "Entreposer": return EntreposerDelegate.findEntreposer(entityId);
+                // Compter skipped
+                case "Presence": return PresenceDelegate.findPresence(entityId);
+                case "Facture": return FactureDelegate.findFacture(entityId);
+                default: return null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void saveEntity(String entityType, Object entity) {
+        try {
+            switch (entityType) {
+                case "Category": CategoryDelegate.updateCategory((data.Category) entity); break;
+                case "Client": ClientDelegate.updateClient((data.Client) entity); break;
+                case "CompteTresor": CompteTresorDelegate.updateCompteTresor((data.CompteTresor) entity); break;
+                case "Destocker": DestockerDelegate.updateDestocker((data.Destocker) entity); break;
+                case "Depense": DepenseDelegate.updateDepense((data.Depense) entity); break;
+                case "Fournisseur": FournisseurDelegate.updateFournisseur((data.Fournisseur) entity); break;
+                case "LigneVente": LigneVenteDelegate.updateLigneVente((data.LigneVente) entity); break;
+                case "Livraison": LivraisonDelegate.updateLivraison((data.Livraison) entity); break;
+                case "Mesure": MesureDelegate.updateMesure((data.Mesure) entity); break;
+                case "Operation": OperationDelegate.updateOperation((data.Operation) entity); break;
+                case "PrixDeVente": PrixDeVenteDelegate.updatePrixDeVente((data.PrixDeVente) entity); break;
+                case "Produit": ProduitDelegate.updateProduit((data.Produit) entity); break;
+                case "Recquisition": RecquisitionDelegate.updateRecquisition((data.Recquisition) entity); break;
+                case "Stocker": StockerDelegate.updateStocker((data.Stocker) entity); break;
+                case "Traisorerie": TraisorerieDelegate.updateTraisorerie((data.Traisorerie) entity); break;
+                case "Vente": VenteDelegate.updateVente((data.Vente) entity); break;
+                case "Aretirer": AretirerDelegate.updateAretirer((data.Aretirer) entity); break;
+                case "ClientAppartenir": ClientAppartenirDelegate.updateClientAppartenir((data.ClientAppartenir) entity); break;
+                case "ClientOrganisation": ClientOrganisationDelegate.updateClientOrganisation((data.ClientOrganisation) entity); break;
+                case "RetourDepot": RetourDepotDelegate.updateRetourDepot((data.RetourDepot) entity); break;
+                case "RetourMagasin": RetourMagasinDelegate.updateRetourMagasin((data.RetourMagasin) entity); break;
+                case "Depot": DepotDelegate.updateDepot((data.Depot) entity); break;
+                case "Inventaire": InventaireDelegate.updateInventaire((data.Inventaire) entity); break;
+                case "Immobilisation": ImmobilisationDelegate.updateImmobilisation((data.Immobilisation) entity); break;
+                case "Matiere": MatiereDelegate.updateMatiere((data.Matiere) entity); break;
+                case "MatiereSku": MatiereSkuDelegate.updateMatiereSku((data.MatiereSku) entity); break;
+                case "Production": ProductionDelegate.updateProduction((data.Production) entity); break;
+                case "Repartir": RepartirDelegate.updateRepartir((data.Repartir) entity); break;
+                case "Imputer": ImputerDelegate.updateImputer((data.Imputer) entity); break;
+                case "Entreposer": EntreposerDelegate.updateEntreposer((data.Entreposer) entity); break;
+                // Compter skipped
+                case "Presence": PresenceDelegate.updatePresence((data.Presence) entity); break;
+                case "Facture": FactureDelegate.updateFacture((data.Facture) entity); break;
+                default: break;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    @Tool("Corrige automatiquement les champs null (String → \"-\", Number → 0) pour un workflow")
+    public String autoFixNullFields(@P("ID du workflow") String workflowId) {
+        return executeOnce("autoFixNullFields", workflowId, () -> {
+            SyncFixWorkflowContext ctx = SYNC_FIX_WORKFLOWS.get(workflowId);
+            if (ctx == null) {
+                return "Workflow introuvable. Veuillez d'abord démarrer un workflow avec startSyncFixWorkflow().";
+            }
+            if (!ctx.scanned) {
+                return "Workflow pas encore prêt. Veuillez d'abord démarrer un workflow.";
+            }
+            if (ctx.fixed) {
+                return "Champs déjà corrigés. Proceedez à la synchronisation.";
+            }
+
+            // Fix each null field
+            for (NullFieldInfo nf : ctx.nullFields) {
+                try {
+                    Object entity = null;
+                    // Find entity by type and id
+                    switch (nf.entityType) {
+                        case "Category": entity = CategoryDelegate.findCategory(nf.entityId); break;
+                        case "Client": entity = ClientDelegate.findClient(nf.entityId); break;
+                        case "CompteTresor": entity = CompteTresorDelegate.findCompteTresor(nf.entityId); break;
+                        case "Destocker": entity = DestockerDelegate.findDestocker(nf.entityId); break;
+                        case "Depense": entity = DepenseDelegate.findDepense(nf.entityId); break;
+                        case "Fournisseur": entity = FournisseurDelegate.findFournisseur(nf.entityId); break;
+                        case "LigneVente": 
+                            try {
+                                entity = LigneVenteDelegate.findLigneVente(Long.parseLong(nf.entityId)); 
+                            } catch (NumberFormatException e) {
+                                // ignore
+                            }
+                            break;
+                        case "Livraison": entity = LivraisonDelegate.findLivraison(nf.entityId); break;
+                        case "Mesure": entity = MesureDelegate.findMesure(nf.entityId); break;
+                        case "Operation": entity = OperationDelegate.findOperation(nf.entityId); break;
+                        case "PrixDeVente": entity = PrixDeVenteDelegate.findPrixDeVente(nf.entityId); break;
+                        case "Produit": entity = ProduitDelegate.findProduit(nf.entityId); break;
+                        case "Recquisition": entity = RecquisitionDelegate.findRecquisition(nf.entityId); break;
+                        case "Stocker": entity = StockerDelegate.findStocker(nf.entityId); break;
+                        case "Traisorerie": entity = TraisorerieDelegate.findTraisorerie(nf.entityId); break;
+                        case "Vente": 
+                            try {
+                                entity = VenteDelegate.findVente(Integer.parseInt(nf.entityId)); 
+                            } catch (NumberFormatException e) {
+                                // ignore
+                            }
+                            break;
+                        case "Aretirer": entity = AretirerDelegate.findAretirer(nf.entityId); break;
+                        case "ClientAppartenir": entity = ClientAppartenirDelegate.findClientAppartenir(nf.entityId); break;
+                        case "ClientOrganisation": entity = ClientOrganisationDelegate.findClientOrganisation(nf.entityId); break;
+                        case "RetourDepot": entity = RetourDepotDelegate.findRetourDepot(nf.entityId); break;
+                        case "RetourMagasin": entity = RetourMagasinDelegate.findRetourMagasin(nf.entityId); break;
+                        case "Depot": entity = DepotDelegate.findDepot(nf.entityId); break;
+                        case "Inventaire": entity = InventaireDelegate.findInventaire(nf.entityId); break;
+                        case "Immobilisation": entity = ImmobilisationDelegate.findImmobilisation(nf.entityId); break;
+                        case "Matiere": entity = MatiereDelegate.findMatiere(nf.entityId); break;
+                        case "MatiereSku": entity = MatiereSkuDelegate.findMatiereSku(nf.entityId); break;
+                        case "Production": entity = ProductionDelegate.findProduction(nf.entityId); break;
+                        case "Repartir": entity = RepartirDelegate.findRepartir(nf.entityId); break;
+                        case "Imputer": entity = ImputerDelegate.findImputer(nf.entityId); break;
+                        case "Entreposer": entity = EntreposerDelegate.findEntreposer(nf.entityId); break;
+                        // Compter skipped
+                        case "Presence": entity = PresenceDelegate.findPresence(nf.entityId); break;
+                        case "Facture": entity = FactureDelegate.findFacture(nf.entityId); break;
+                        default: break;
+                    }
+
+                    if (entity != null) {
+                        java.lang.reflect.Field field = entity.getClass().getDeclaredField(nf.fieldName);
+                        field.setAccessible(true);
+                        Object value = null;
+                        if (String.class.isAssignableFrom(nf.fieldType)) {
+                            value = "-";
+                        } else if (Number.class.isAssignableFrom(nf.fieldType)) {
+                            if (Integer.class.equals(nf.fieldType) || int.class.equals(nf.fieldType)) {
+                                value = 0;
+                            } else if (Long.class.equals(nf.fieldType) || long.class.equals(nf.fieldType)) {
+                                value = 0L;
+                            } else if (Double.class.equals(nf.fieldType) || double.class.equals(nf.fieldType)) {
+                                value = 0.0;
+                            } else if (Float.class.equals(nf.fieldType) || float.class.equals(nf.fieldType)) {
+                                value = 0.0f;
+                            } else if (Short.class.equals(nf.fieldType) || short.class.equals(nf.fieldType)) {
+                                value = (short) 0;
+                            } else if (Byte.class.equals(nf.fieldType) || byte.class.equals(nf.fieldType)) {
+                                value = (byte) 0;
+                            }
+                        }
+
+                        if (value != null) {
+                            field.set(entity, value);
+                            // Save the entity
+                            switch (nf.entityType) {
+                                case "Category": CategoryDelegate.updateCategory((data.Category) entity); break;
+                                case "Client": ClientDelegate.updateClient((data.Client) entity); break;
+                                case "CompteTresor": CompteTresorDelegate.updateCompteTresor((data.CompteTresor) entity); break;
+                                case "Destocker": DestockerDelegate.updateDestocker((data.Destocker) entity); break;
+                                case "Depense": DepenseDelegate.updateDepense((data.Depense) entity); break;
+                                case "Fournisseur": FournisseurDelegate.updateFournisseur((data.Fournisseur) entity); break;
+                                case "LigneVente": LigneVenteDelegate.updateLigneVente((data.LigneVente) entity); break;
+                                case "Livraison": LivraisonDelegate.updateLivraison((data.Livraison) entity); break;
+                                case "Mesure": MesureDelegate.updateMesure((data.Mesure) entity); break;
+                                case "Operation": OperationDelegate.updateOperation((data.Operation) entity); break;
+                                case "PrixDeVente": PrixDeVenteDelegate.updatePrixDeVente((data.PrixDeVente) entity); break;
+                                case "Produit": ProduitDelegate.updateProduit((data.Produit) entity); break;
+                                case "Recquisition": RecquisitionDelegate.updateRecquisition((data.Recquisition) entity); break;
+                                case "Stocker": StockerDelegate.updateStocker((data.Stocker) entity); break;
+                                case "Traisorerie": TraisorerieDelegate.updateTraisorerie((data.Traisorerie) entity); break;
+                                case "Vente": VenteDelegate.updateVente((data.Vente) entity); break;
+                                case "Aretirer": AretirerDelegate.updateAretirer((data.Aretirer) entity); break;
+                                case "ClientAppartenir": ClientAppartenirDelegate.updateClientAppartenir((data.ClientAppartenir) entity); break;
+                                case "ClientOrganisation": ClientOrganisationDelegate.updateClientOrganisation((data.ClientOrganisation) entity); break;
+                                case "RetourDepot": RetourDepotDelegate.updateRetourDepot((data.RetourDepot) entity); break;
+                                case "RetourMagasin": RetourMagasinDelegate.updateRetourMagasin((data.RetourMagasin) entity); break;
+                                case "Depot": DepotDelegate.updateDepot((data.Depot) entity); break;
+                                case "Inventaire": InventaireDelegate.updateInventaire((data.Inventaire) entity); break;
+                                case "Immobilisation": ImmobilisationDelegate.updateImmobilisation((data.Immobilisation) entity); break;
+                                case "Matiere": MatiereDelegate.updateMatiere((data.Matiere) entity); break;
+                                case "MatiereSku": MatiereSkuDelegate.updateMatiereSku((data.MatiereSku) entity); break;
+                                case "Production": ProductionDelegate.updateProduction((data.Production) entity); break;
+                                case "Repartir": RepartirDelegate.updateRepartir((data.Repartir) entity); break;
+                                case "Imputer": ImputerDelegate.updateImputer((data.Imputer) entity); break;
+                                case "Entreposer": EntreposerDelegate.updateEntreposer((data.Entreposer) entity); break;
+                                case "Compter": CompterDelegate.updateCompter((data.Compter) entity); break;
+                                case "Presence": PresenceDelegate.updatePresence((data.Presence) entity); break;
+                                case "Facture": FactureDelegate.updateFacture((data.Facture) entity); break;
+                                default: break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore, continue
+                }
+            }
+            ctx.fixed = true;
+            return "Champs corrigés avec succès ! Maintenant, lancez la synchronisation avec triggerAdaptiveSync(\"" + workflowId + "\").";
+        });
+    }
+
+    @Tool("Déclenche la synchronisation adaptive pour un workflow")
+    public String triggerAdaptiveSync(@P("ID du workflow (optionnel)") String workflowId) {
+        return executeOnce("triggerAdaptiveSync", workflowId != null ? workflowId : "manual", () -> {
+            SyncFixWorkflowContext ctx = workflowId != null ? SYNC_FIX_WORKFLOWS.get(workflowId) : null;
+            if (ctx != null && ctx.synced) {
+                return "Synchronisation déjà effectuée.";
+            }
+
+            // Wake up BackgroundSyncService if it's paused
+            services.BackgroundSyncService syncService = services.BackgroundSyncService.getInstance();
+            if (syncService != null) {
+                syncService.resumeSync();
+            }
+
+            if (ctx != null) {
+                ctx.synced = true;
+            }
+            return "Synchronisation adaptive déclenchée ! Les données seront envoyées progressivement.";
+        });
     }
 }

@@ -46,7 +46,7 @@ import java.util.UUID;
     @NamedQuery(name = "Entreposer.findByDevise", query = "SELECT e FROM Entreposer e WHERE e.devise = :devise"),
     @NamedQuery(name = "Entreposer.findByNiveauFabrication", query = "SELECT e FROM Entreposer e WHERE e.niveauFabrication = :niveauFabrication")})
 
-public class Entreposer implements Serializable {
+public class Entreposer extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
     @Id
