@@ -52,6 +52,21 @@ public final class SyncEpochManager {
         }
     }
 
+    /**
+     * Rectifie le stock en attente une seule fois, uniquement si une
+     * synchronisation a accumulé des rectifications non encore exécutées.
+     * Appelée depuis le refresh des données (jamais automatiquement après sync).
+     *
+     * @return true si une rectification a été exécutée
+     */
+    public static boolean flushIfSyncPending() {
+        if (pending.isEmpty()) {
+            return false;
+        }
+        flush();
+        return true;
+    }
+
     /** Discard all pending tasks without executing (e.g. on sync abort). */
     public static void discardAll() {
         pending.clear();

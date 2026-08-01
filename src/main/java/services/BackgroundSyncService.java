@@ -137,9 +137,6 @@ public class BackgroundSyncService extends Service<Void> {
                     }
 
                     try {
-                        // Clear any stale deferred rectifications from a previous interrupted cycle
-                        SyncEpochManager.discardAll();
-
                         // Correct and clean outbox data before syncing
                         SyncOutboxService.correctAndCleanOutboxData();
                         
@@ -166,9 +163,6 @@ public class BackgroundSyncService extends Service<Void> {
 
                         // Materialize downsync records
                         SyncOutboxService.materializeDownsyncRecords();
-
-                        // Flush deferred stock rectifications accumulated during downsync
-                        SyncEpochManager.flush();
 
                         // Clean up applied records
                         SyncOutboxService.cleanupAppliedRecords();

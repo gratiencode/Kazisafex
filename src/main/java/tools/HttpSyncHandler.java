@@ -128,7 +128,6 @@ public class HttpSyncHandler extends Task<Boolean> {
     protected Boolean call() throws Exception {
         try {
             long since = pref.getLong(Constants.SYNC_ELLAPSED_TIME, 0);
-            services.SyncEpochManager.discardAll();
             System.out.println(
                 "Sync du depuis le " +
                     LocalDateTime.ofInstant(
@@ -143,7 +142,6 @@ public class HttpSyncHandler extends Task<Boolean> {
                 );
                 up = failedTables.isEmpty();
                 getDataFromCloud(since, () -> {
-                    services.SyncEpochManager.flush();
                     down = failedEndpoints.isEmpty();
                     if (failedTables.isEmpty() && failedEndpoints.isEmpty()) {
                         long now = System.currentTimeMillis();

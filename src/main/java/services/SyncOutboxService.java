@@ -590,8 +590,17 @@ public class SyncOutboxService {
             try {
                 String entityType = record.getTableName();
                 String payload = record.getPayload();
+                String action = record.getAction();
                 if (payload == null || payload.isBlank()) {
-                    System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
+                    if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
+                        SyncOutboxListener.runSuppressed(() -> {
+                            applyRemoveMutation(entityType, record.getEntityId());
+                        });
+                        appliedUids.add(record.getUid());
+                        System.out.println("[DOWNSYNC] Removed " + entityType + " " + record.getEntityId());
+                    } else {
+                        System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
+                    }
                     continue;
                 }
 
@@ -646,6 +655,52 @@ public class SyncOutboxService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply downsync mutation for " + entityType, e);
         }
+    }
+
+    /**
+     * Supprime localement une entite a partir de son type et de son uid.
+     * Utilise pour les mutations REMOVE dont le payload est null (comme le JavaFX)
+     * et qui ne peuvent donc pas etre deserialisees.
+     */
+    private static void applyRemoveMutation(String entityType, String entityId) {
+        if (entityId == null || entityId.isBlank()) return;
+        Tables table;
+        try {
+            table = Tables.valueOf(entityType.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            System.err.println("[DOWNSYNC] Unknown table type: " + entityType);
+            return;
+        }
+
+        Class<?> entityClass = getEntityClass(table);
+        if (entityClass == null) return;
+
+        submitSyncWrite(em -> {
+            Object managed = findEntityById(em, entityClass, entityId);
+            if (managed != null) {
+                em.remove(managed);
+            }
+            return null;
+        });
+    }
+
+    private static Object findEntityById(EntityManager em, Class<?> entityClass, String entityId) {
+        try {
+            Object managed = em.find(entityClass, entityId);
+            if (managed != null) return managed;
+        } catch (Exception ignored) {
+        }
+        try {
+            Object managed = em.find(entityClass, Integer.valueOf(entityId));
+            if (managed != null) return managed;
+        } catch (Exception ignored) {
+        }
+        try {
+            Object managed = em.find(entityClass, Long.valueOf(entityId));
+            if (managed != null) return managed;
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /**

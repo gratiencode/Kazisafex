@@ -4754,6 +4754,14 @@ public class PosController implements Initializable {
         posItemsCache = null;
         tabPosLoaded = false;
         refreshPosUi();
+        // Rectification de stock : une seule fois après une synchronisation,
+        // déclenchée uniquement via le refresh des données (tâches accumulées
+        // lors du downsync des recquisitions / lignes de vente).
+        Thread rectThread = new Thread(
+            () -> services.SyncEpochManager.flushIfSyncPending()
+        );
+        rectThread.setDaemon(true);
+        rectThread.start();
     }
 
     @FXML
@@ -6217,11 +6225,12 @@ public class PosController implements Initializable {
                 List<LigneVente> lv = LigneVenteDelegate.findByReference(selectedCart.getUid());
                 for (LigneVente l : lv) {
                     LigneVenteDelegate.deleteLigneVente(l);
-                    // db.delete(l);
+                    Executors.newCachedThreadPool()
+                            .submit(() -> Util.sync(l, Constants.ACTION_DELETE, Tables.LIGNEVENTE));
                 }
                 VenteDelegate.deleteVente(selectedCart);
-                // db.delete(choosenVente);
-                // }
+                Executors.newCachedThreadPool()
+                        .submit(() -> Util.sync(selectedCart, Constants.ACTION_DELETE, Tables.VENTE));
 
                 savedCarts.removeAll(selectedAvedCarts);
                 selectedAvedCarts.clear();

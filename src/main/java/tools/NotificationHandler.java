@@ -40,6 +40,19 @@ public class NotificationHandler implements EventHandler {
             t.setDaemon(true);
             return t;
         });
+    private static final int MAX_RETRY_ATTEMPTS = 5;
+    private static final long[] RETRY_DELAYS_SECONDS = {5L, 15L, 30L, 60L, 120L};
+    private static final java.util.concurrent.ScheduledExecutorService retryExecutor =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "Kazisafe-SSE-Retry-Worker");
+            t.setDaemon(true);
+            return t;
+        });
+
+    private enum DownsyncStatus {
+        OK,
+        DEPENDENCY_MISSING,
+    }
 
     @Override
     public void onOpen() throws Exception {
@@ -63,61 +76,93 @@ public class NotificationHandler implements EventHandler {
         final String json = me.getData();
         final String id = me.getLastEventId();
         final String region = me.getEventName();
-        final String eid = pref.get("eUid", "");
-        final String reg = pref.get("region", "");
-        final String role = pref.get("priv", null);
         System.out.println("Reception : Ping Connected (v):" + string);
         if (
             json != null && !json.equals("Connected!") && !json.equals("ping")
         ) {
-            sseExecutor.submit(() -> {
-                try {
-                    if (id != null && id.equals(eid)) {
-                        boolean ok = false;
-                        if (
-                            Role.Trader.name().equals(role) ||
-                            (role != null &&
-                                role.contains(Role.ALL_ACCESS.name()))
-                        ) {
+            processMessage(json, id, region, 1);
+        }
+    }
+
+    private void processMessage(
+        String json,
+        String id,
+        String region,
+        int attempt
+    ) {
+        sseExecutor.submit(() -> {
+            try {
+                final String eid = pref.get("eUid", "");
+                final String reg = pref.get("region", "");
+                final String role = pref.get("priv", null);
+                if (id != null && id.equals(eid)) {
+                    boolean ok = false;
+                    if (
+                        Role.Trader.name().equals(role) ||
+                        (role != null &&
+                            role.contains(Role.ALL_ACCESS.name()))
+                    ) {
+                        ok = true;
+                    } else {
+                        if (reg.equals(region) || region.equals("*")) {
                             ok = true;
-                        } else {
-                            if (reg.equals(region) || region.equals("*")) {
-                                ok = true;
-                            }
                         }
-                        if (ok) {
-                            javafx.application.Platform.runLater(() -> {
-                                MainUI.notifySync(
-                                    "Sync",
-                                    "Un element a ete synchronise",
-                                    region
-                                );
-                            });
-                        }
-                        BaseModel obj = JsonUtil.toBaseModelObject(json);
-                        if (obj == null) {
-                            System.out.println(
-                                "Object is null or unsupported table type in JsonUtil.toBaseModelObject"
+                    }
+                    if (!ok) {
+                        SyncLogger.getInstance().log(
+                            null,
+                            "SSE downsync - message d'une autre region (ignore)",
+                            region,
+                            id
+                        );
+                        return;
+                    }
+                    if (attempt == 1) {
+                        javafx.application.Platform.runLater(() -> {
+                            MainUI.notifySync(
+                                "Sync",
+                                "Un element a ete synchronise",
+                                region
                             );
-                            return;
-                        }
-                        Tables t;
-                        try {
-                            t = Tables.valueOf(obj.getType());
-                        } catch (IllegalArgumentException e) {
-                            System.out.println(
-                                "Unknown table type received: " + obj.getType()
-                            );
-                            return;
-                        }
-                        executeDownsyncMutation(() -> {
+                        });
+                    }
+                    BaseModel obj = JsonUtil.toBaseModelObject(json);
+                    if (obj == null) {
+                        SyncLogger.getInstance().log(
+                            null,
+                            "SSE downsync - objet null ou table non supportee",
+                            null,
+                            id
+                        );
+                        return;
+                    }
+                    Tables t;
+                    try {
+                        t = Tables.valueOf(obj.getType());
+                    } catch (IllegalArgumentException e) {
+                        SyncLogger.getInstance().log(
+                            e,
+                            "SSE downsync - type de table inconnu",
+                            obj.getType(),
+                            id
+                        );
+                        return;
+                    }
+                    DownsyncStatus[] status = {DownsyncStatus.OK};
+                    boolean isDelete = obj.getAction() != null
+                        && (obj.getAction().equalsIgnoreCase("delete")
+                            || obj.getAction().equalsIgnoreCase("remove"));
+                    executeDownsyncMutation(() -> {
                             switch (t) {
                                 case Tables.PRODUIT -> {
                                     Produit product = (Produit) obj;
                                     boolean exist = CategoryDelegate.isExists(
                                         product.getCategoryId().getUid()
                                     );
-                                    if (exist) {
+                                    if (!exist) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             ProduitDelegate.isExists(
                                                 product.getUid()
@@ -168,7 +213,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exists = ProduitDelegate.isExists(
                                         measure.getProduitId().getUid()
                                     );
-                                    if (exists) {
+                                    if (!exists) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             MesureDelegate.isExists(
                                                 measure.getUid()
@@ -201,7 +249,10 @@ public class NotificationHandler implements EventHandler {
                                         FournisseurDelegate.isExists(
                                             delivery.getFournId().getUid()
                                         );
-                                    if (exists) {
+                                    if (!exists) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             LivraisonDelegate.isExists(
                                                 delivery.getUid()
@@ -235,7 +286,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist2 = ProduitDelegate.isExists(
                                         stocker.getProductId().getUid()
                                     );
-                                    if (exists && exist1 && exist2) {
+                                    if (!(exists && exist1 && exist2)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             StockerDelegate.isExists(
                                                 stocker.getUid()
@@ -263,7 +317,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist2 = ProduitDelegate.isExists(
                                         destocker.getProductId().getUid()
                                     );
-                                    if (exists && exist2) {
+                                    if (!(exists && exist2)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             DestockerDelegate.isExists(
                                                 destocker.getUid()
@@ -292,7 +349,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist1 = MesureDelegate.isExists(
                                         recquisition.getMesureId().getUid()
                                     );
-                                    if (exists && exist1) {
+                                    if (!(exists && exist1)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             RecquisitionDelegate.isExists(
                                                 recquisition.getUid()
@@ -327,7 +387,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist1 = MesureDelegate.isExists(
                                         price.getMesureId().getUid()
                                     );
-                                    if (exists && exist1) {
+                                    if (!(exists && exist1)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             PrixDeVenteDelegate.isExists(
                                                 price.getUid()
@@ -384,10 +447,36 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.VENTE -> {
                                     Vente vente = (Vente) obj;
+                                    if (isDelete) {
+                                        Integer vuid = vente.getUid();
+                                        if (vuid != null) {
+                                            Vente existingV = VenteDelegate.findVente(
+                                                vuid
+                                            );
+                                            if (existingV != null) {
+                                                for (
+                                                    LigneVente lv :
+                                                        LigneVenteDelegate.findByReference(
+                                                            existingV.getUid()
+                                                        )
+                                                ) {
+                                                    LigneVenteDelegate.deleteLigneVente(
+                                                        lv
+                                                    );
+                                                }
+                                                VenteDelegate.deleteVente(existingV);
+                                            }
+                                        }
+                                        notifySynced(vente);
+                                        return;
+                                    }
                                     boolean exists = ClientDelegate.isExists(
                                         vente.getClientId().getUid()
                                     );
-                                    if (exists) {
+                                    if (!exists) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             VenteDelegate.isExists(
                                                 vente.getUid()
@@ -408,6 +497,13 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.LIGNEVENTE -> {
                                     LigneVente saleitem = (LigneVente) obj;
+                                    if (isDelete) {
+                                        LigneVenteDelegate.deleteLigneVente(
+                                            saleitem
+                                        );
+                                        notifySynced(saleitem);
+                                        return;
+                                    }
                                     boolean exists = ProduitDelegate.isExists(
                                         saleitem.getProductId().getUid()
                                     );
@@ -417,7 +513,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist2 = VenteDelegate.isExists(
                                         saleitem.getReference().getUid()
                                     );
-                                    if (exists && exist1 && exist2) {
+                                    if (!(exists && exist1 && exist2)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             LigneVenteDelegate.isExists(
                                                 saleitem.getUid()
@@ -451,7 +550,10 @@ public class NotificationHandler implements EventHandler {
                                         CompteTresorDelegate.isExists(
                                             trans.getTresorId().getUid()
                                         );
-                                    if (exists) {
+                                    if (!exists) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             TraisorerieDelegate.isExists(
                                                 trans.getUid()
@@ -501,7 +603,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist3 = DepenseDelegate.isExists(
                                         operation.getDepenseId().getUid()
                                     );
-                                    if (exists && exist2 && exist3) {
+                                    if (!(exists && exist2 && exist3)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             OperationDelegate.isExists(
                                                 operation.getUid()
@@ -546,7 +651,10 @@ public class NotificationHandler implements EventHandler {
                                     boolean exist2 = ProduitDelegate.isExists(
                                         compter.getProductId().getUid()
                                     );
-                                    if (exists && exist1 && exist2) {
+                                    if (!(exists && exist1 && exist2)) {
+                                        status[0] =
+                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                    } else {
                                         boolean isSynced =
                                             CompterDelegate.isExists(
                                                 compter.getUid()
@@ -618,12 +726,73 @@ public class NotificationHandler implements EventHandler {
                                 }
                             }
                         });
+                    if (status[0] == DownsyncStatus.DEPENDENCY_MISSING) {
+                        scheduleRetry(json, id, region, attempt + 1, obj.getType());
+                    }
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                    SyncLogger.getInstance().log(
+                        ex,
+                        "SSE downsync - erreur",
+                        null,
+                        id
+                    );
+                    scheduleRetry(json, id, region, attempt + 1, null);
                 }
             });
+    }
+
+    private void scheduleRetry(
+        String json,
+        String id,
+        String region,
+        int attempt,
+        String type
+    ) {
+        if (attempt > MAX_RETRY_ATTEMPTS) {
+            SyncLogger.getInstance().log(
+                null,
+                "SSE downsync - abandon apres " +
+                    MAX_RETRY_ATTEMPTS +
+                    " tentatives (dependance manquante)",
+                type,
+                id
+            );
+            return;
         }
+        int idx = Math.min(attempt - 1, RETRY_DELAYS_SECONDS.length - 1);
+        long delaySeconds = RETRY_DELAYS_SECONDS[idx];
+        System.out.println(
+            "SSE downsync: dependance manquante (" +
+                type +
+                " " +
+                id +
+                "), tentative " +
+                attempt +
+                "/" +
+                MAX_RETRY_ATTEMPTS +
+                " dans " +
+                delaySeconds +
+                "s"
+        );
+        SyncLogger.getInstance().log(
+            null,
+            "SSE downsync - dependance manquante, tentative " +
+                attempt +
+                "/" +
+                MAX_RETRY_ATTEMPTS +
+                " differee de " +
+                delaySeconds +
+                "s",
+            type,
+            id
+        );
+        retryExecutor.schedule(
+            () -> processMessage(json, id, region, attempt),
+            delaySeconds,
+            java.util.concurrent.TimeUnit.SECONDS
+        );
     }
 
     private void executeDownsyncMutation(Runnable action) {
