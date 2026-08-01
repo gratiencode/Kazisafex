@@ -31,6 +31,14 @@ public class BackgroundSyncService extends Service<Void> {
     private int adaptiveBatchSize = DEFAULT_BATCH_SIZE;
     private long adaptivePauseUntilEpochMs = 0L;
 
+    /**
+     * Moniteur de réveil : permet de demander un nouveau cycle sans annuler
+     * celui en cours. Un cycle de sync (upsync + downsync) doit se terminer
+     * complètement avant que le suivant démarre.
+     */
+    private final Object wakeMonitor = new Object();
+    private boolean cycleRequested = false;
+
     public BackgroundSyncService(Kazisafe kazisafe, int pollIntervalSeconds) {
         this(kazisafe, pollIntervalSeconds, null);
     }
@@ -70,6 +78,42 @@ public class BackgroundSyncService extends Service<Void> {
 
     public synchronized boolean isPaused() {
         return isPaused;
+    }
+
+    /**
+     * Demande qu'un nouveau cycle de synchronisation démarre dès que le cycle
+     * en cours (upsync + downsync) est complètement terminé. Ne cancelle rien.
+     */
+    public void requestCycle() {
+        synchronized (wakeMonitor) {
+            cycleRequested = true;
+            wakeMonitor.notifyAll();
+        }
+    }
+
+    /**
+     * Consomme et retourne l'éventuelle demande de cycle immédiat.
+     */
+    private boolean consumeCycleRequest() {
+        synchronized (wakeMonitor) {
+            boolean requested = cycleRequested;
+            cycleRequested = false;
+            return requested;
+        }
+    }
+
+    /**
+     * Sommeil interruptible par {@link #requestCycle()} : un cycle demandé
+     * pendant l'attente démarre immédiatement au lieu d'attendre le polling.
+     */
+    private void sleepWithWake(long millis) {
+        synchronized (wakeMonitor) {
+            try {
+                wakeMonitor.wait(Math.max(1L, millis));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     @Override
@@ -175,7 +219,14 @@ public class BackgroundSyncService extends Service<Void> {
                         );
                     }
 
-                    safeSleepSeconds(pollIntervalSeconds);
+                    // Cycle terminé. Si un nouveau cycle a été demandé pendant
+                    // celui-ci, il démarre immédiatement ; sinon on attend le
+                    // prochain intervalle de polling.
+                    if (!consumeCycleRequest()) {
+                        sleepWithWake(pollIntervalSeconds * 1000L);
+                    } else {
+                        publishStatus("Synchronisation demandée - nouveau cycle...");
+                    }
                 }
                 return null;
             }

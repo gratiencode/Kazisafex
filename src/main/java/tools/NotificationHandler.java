@@ -370,11 +370,6 @@ public class NotificationHandler implements EventHandler {
                                                     recquisition
                                                 );
                                         }
-                                        services.SyncEpochManager.enqueue(
-                                            recquisition.getProductId().getUid(),
-                                            recquisition.getRegion(),
-                                            recquisition.getNumlot()
-                                        );
                                         notifySynced(result);
                                     }
                                 }
@@ -533,14 +528,6 @@ public class NotificationHandler implements EventHandler {
                                                     saleitem
                                                 );
                                         }
-                                        Vente vr = VenteDelegate.findVente(
-                                            saleitem.getReference().getUid()
-                                        );
-                                        services.SyncEpochManager.enqueue(
-                                            saleitem.getProductId().getUid(),
-                                            vr.getRegion(),
-                                            saleitem.getNumlot()
-                                        );
                                         notifySynced(result);
                                     }
                                 }

@@ -1102,12 +1102,44 @@ public class JsonUtil {
         return builder.build();
     }
 
+    /**
+     * Parse de {@code LocalDateTime} null-safe : retourne {@code null} si la
+     * propriété est absente, {@code JsonValue.NULL} ou non parsable, au lieu
+     * de lever une exception (les payloads downsync peuvent contenir
+     * {@code "deletedAt": null}, {@code "updatedAt": null}, etc.).
+     */
+    private static LocalDateTime safeLocalDateTime(JsonObject json, String name) {
+        if (json == null || json.isNull(name)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(json.getString(name));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Parse de {@code LocalDate} null-safe : retourne {@code null} si la
+     * propriété est absente, {@code JsonValue.NULL} ou non parsable.
+     */
+    private static LocalDate safeLocalDate(JsonObject json, String name) {
+        if (json == null || json.isNull(name)) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(json.getString(name));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static Object objectify(String message) {
         JsonReader reader = Json.createReader(new StringReader(message));
         JsonObject json = reader.readObject();
         
         // First, check if there's a "type" field for reliable type detection
-        if (json.containsKey("type")) {
+        if (json.containsKey("type") && !json.isNull("type")) {
             String type = json.getString("type");
             try {
                 Tables table = Tables.valueOf(type);
@@ -1295,10 +1327,7 @@ public class JsonUtil {
             ins.setRemained(json.getJsonNumber("remained").doubleValue());
             ins.setTopay(json.getJsonNumber("topay").doubleValue());
             ins.setToreceive(json.getJsonNumber("toreceive").doubleValue());
-            String s = json.getString("dateLivr");
-            if (!s.isEmpty()) {
-                ins.setDateLivr(LocalDate.parse(s));
-            }
+            ins.setDateLivr(safeLocalDate(json, "dateLivr"));
             JsonObject jso = json.getJsonObject("fournId");
             Fournisseur fssr = new Fournisseur(jso.getString("uid"));
             ins.setFournId(fssr);
@@ -1315,11 +1344,8 @@ public class JsonUtil {
             ins.setPrixAchatTotal(json.getJsonNumber("prixAchatTotal").doubleValue());
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setStockAlerte(json.getJsonNumber("stockAlerte").doubleValue());
-            if (json.containsKey("dateExpir")) {
-                String dateE = json.getString("dateExpir");
-                ins.setDateExpir(dateE == null ? null : LocalDate.parse(dateE));
-            }
-            ins.setDateStocker(LocalDateTime.parse(json.getString("dateStocker")));
+            ins.setDateExpir(safeLocalDate(json, "dateExpir"));
+            ins.setDateStocker(safeLocalDateTime(json, "dateStocker"));
             JsonObject jso1 = json.getJsonObject("livraisId");
             Livraison livr = new Livraison(jso1.getString("uid"));
             ins.setLivraisId(livr);
@@ -1341,7 +1367,7 @@ public class JsonUtil {
             ins.setRegion(json.getString("region"));
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setDestination(json.getString("destination"));
-            ins.setDateDestockage(LocalDateTime.parse(json.getString("dateDestockage")));
+            ins.setDateDestockage(safeLocalDateTime(json, "dateDestockage"));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
             mz.setUid(jso1.getString("uid"));
@@ -1359,13 +1385,8 @@ public class JsonUtil {
             ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
             ins.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
             ins.setStockAlert(json.getJsonNumber("stockAlert").doubleValue());
-            if (json.containsKey("dateExpiry")) {
-                String dateE = json.getString("dateExpiry");
-                if (!dateE.isEmpty() && !dateE.equalsIgnoreCase("null")) {
-                    ins.setDateExpiry(LocalDate.parse(dateE));
-                }
-            }
-            ins.setDate(LocalDateTime.parse(json.getString("date")));
+            ins.setDateExpiry(safeLocalDate(json, "dateExpiry"));
+            ins.setDate(safeLocalDateTime(json, "date"));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
             mz.setUid(jso1.getString("uid"));
@@ -1416,10 +1437,8 @@ public class JsonUtil {
             ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
             ins.setPayment(json.getString("payment"));
             ins.setReference(json.getString("reference"));
-            if (json.containsKey("echeance")) {
-                ins.setEcheance(LocalDate.parse(json.getString("echeance")));
-            }
-            ins.setDateVente(LocalDateTime.parse(json.getString("dateVente")));
+            ins.setEcheance(safeLocalDate(json, "echeance"));
+            ins.setDateVente(safeLocalDateTime(json, "dateVente"));
             ins.setDeviseDette(json.getString("deviseDette"));
             JsonObject jso = json.getJsonObject("clientId");
             Client clt = new Client();
@@ -1471,7 +1490,7 @@ public class JsonUtil {
             }
             ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
             ins.setReference(json.getString("reference"));
-            ins.setDate(LocalDateTime.parse(json.getString("date")));
+            ins.setDate(safeLocalDateTime(json, "date"));
             return ins;
         } else if (json.containsKey("imputation")) {
             Operation ins = new Operation();
@@ -1489,7 +1508,7 @@ public class JsonUtil {
             if (json.containsKey("depenseId")) {
                 ins.setDepenseId(new Depense(json.getJsonObject("depenseId").getString("uid")));
             }
-            ins.setDate(LocalDateTime.parse(json.getString("date")));
+            ins.setDate(safeLocalDateTime(json, "date"));
             JsonObject jso = json.getJsonObject("caisseOpId");
             Traisorerie t = new Traisorerie();
             t.setUid(jso.getString("uid"));
@@ -1500,7 +1519,7 @@ public class JsonUtil {
             t.setRegion(jso.getString("region"));
             t.setMontantUsd(jso.getJsonNumber("montantUsd").doubleValue());
             t.setReference(jso.getString("reference"));
-            t.setDate(LocalDateTime.parse(jso.getString("date")));
+            t.setDate(safeLocalDateTime(jso, "date"));
             ins.setCaisseOpId(t);
             return ins;
         } else if (json.containsKey("imageBase64")) {
@@ -1517,7 +1536,7 @@ public class JsonUtil {
             oper.setReferenceVente(json.getString("referenceVente"));
             oper.setRegion(json.getString("region"));
             oper.setStatus(json.getString("status"));
-            oper.setDate(LocalDateTime.parse(json.getString("date")));
+            oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jsoc = json.getJsonObject("clientId");
             Client clt = new Client(jsoc.getString("uid"));
             oper.setClientId(clt);
@@ -1531,7 +1550,7 @@ public class JsonUtil {
             oper.setUid(json.getString("uid"));
             oper.setRegion(json.getString("region"));
 
-            oper.setDateAppartenir(LocalDate.parse(json.getString("date")));
+            oper.setDateAppartenir(safeLocalDate(json, "date"));
 
             JsonObject jsoc = json.getJsonObject("clientId");
             Client clt = new Client(jsoc.getString("uid"));
@@ -1564,7 +1583,7 @@ public class JsonUtil {
             oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
             oper.setRegionDest(json.getString("regionDest"));
             oper.setRegionProv(json.getString("regionProv"));
-            oper.setDate(LocalDateTime.parse(json.getString("date")));
+            oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jo = json.getJsonObject("destockerId");
             oper.setDestockerId(new Destocker(jo.getString("uid")));
             JsonObject job = json.getJsonObject("recquisitionId");
@@ -1580,7 +1599,7 @@ public class JsonUtil {
             oper.setReferenceVente(json.getString("referenceVente"));
             oper.setMotif(json.getString("motif"));
             oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            oper.setDate(LocalDateTime.parse(json.getString("date")));
+            oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jo = json.getJsonObject("ligneVenteId");
             oper.setLigneVenteId(new LigneVente(jo.getJsonNumber("uid").longValue()));
             JsonObject job = json.getJsonObject("recquisitionId");
@@ -1592,7 +1611,7 @@ public class JsonUtil {
             Abonnement ab = new Abonnement();
             ab.setUid(json.getString("uid"));
 
-            ab.setDateAbonnement(LocalDateTime.parse(json.getString("dateAbonnement")));
+            ab.setDateAbonnement(safeLocalDateTime(json, "dateAbonnement"));
 
             ab.setDevise(json.getString("devise"));
             ab.setEtat(json.getString("etat"));
@@ -1604,8 +1623,8 @@ public class JsonUtil {
             Facture f = new Facture();
             f.setUid(json.getString("uid"));
 
-            f.setStartDate(LocalDate.parse(json.getString("startDate")));
-            f.setEndDate(LocalDate.parse(json.getString("endDate")));
+            f.setStartDate(safeLocalDate(json, "startDate"));
+            f.setEndDate(safeLocalDate(json, "endDate"));
 
             f.setNumero(json.getString("numero"));
             f.setOrganisId(new ClientOrganisation(json.getJsonObject("organisId").getString("uid")));

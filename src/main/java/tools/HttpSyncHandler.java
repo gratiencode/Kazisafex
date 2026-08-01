@@ -467,11 +467,6 @@ public class HttpSyncHandler extends Task<Boolean> {
                                 recquisition
                             );
                         }
-                        services.SyncEpochManager.enqueue(
-                            recquisition.getProductId().getUid(),
-                            recquisition.getRegion(),
-                            recquisition.getNumlot()
-                        );
                     }
                 }
             }
@@ -557,14 +552,6 @@ public class HttpSyncHandler extends Task<Boolean> {
                             } else {
                                 LigneVenteDelegate.updateLigneVente(saleitem);
                             }
-                            Vente vr = VenteDelegate.findVente(
-                                saleitem.getReference().getUid()
-                            );
-                            services.SyncEpochManager.enqueue(
-                                saleitem.getProductId().getUid(),
-                                vr.getRegion(),
-                                saleitem.getNumlot()
-                            );
                         }
                     } catch (jakarta.persistence.EntityNotFoundException enfe) {
                         System.err.println("[DOWNSYNC] LigneVente FK not found, skipping: " + saleitem.getUid() + " - " + enfe.getMessage());

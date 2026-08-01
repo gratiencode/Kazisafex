@@ -233,7 +233,10 @@ public class SyncEngine {
                     label.setText("Synchronisation terminée");
                 });
             });
-            backgroundSyncService.restart();
+            ensureSyncServiceStarted();
+            // Réveille la boucle : le cycle en cours (s'il y en a un) se
+            // termine complètement avant qu'un nouveau cycle démarre.
+            backgroundSyncService.requestCycle();
             System.out.println("BackgroundSyncService: Started manually.");
         } catch (Exception ex) {
             Logger.getLogger(SyncEngine.class.getName()).log(
@@ -254,10 +257,31 @@ public class SyncEngine {
                         30,
                         message -> System.out.println(message));
             }
-            backgroundSyncService.restart();
+            ensureSyncServiceStarted();
+            // Réveille la boucle : le cycle en cours se termine avant le suivant.
+            backgroundSyncService.requestCycle();
             return "finish";
         } catch (Exception e) {
             return "error : " + e.getMessage();
+        }
+    }
+
+    /**
+     * Démarre le service s'il n'est pas encore actif. Ne cancelle jamais un
+     * cycle en cours (un nouveau cycle attend la fin du précédent).
+     */
+    private void ensureSyncServiceStarted() {
+        if (backgroundSyncService == null) {
+            return;
+        }
+        Worker.State state = backgroundSyncService.getState();
+        if (state == Worker.State.READY) {
+            backgroundSyncService.start();
+        } else if (state == Worker.State.SUCCEEDED
+                || state == Worker.State.CANCELLED
+                || state == Worker.State.FAILED) {
+            backgroundSyncService.reset();
+            backgroundSyncService.start();
         }
     }
 }
