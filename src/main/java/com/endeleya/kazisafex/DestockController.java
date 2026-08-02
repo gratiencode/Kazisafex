@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
 import java.util.concurrent.Executors;
+import tools.MemoryGuard;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1034,7 +1035,7 @@ public class DestockController implements Initializable {
     }
 
     private void saveDestockerWithRetry(Destocker destocker) {
-        Executors.newSingleThreadExecutor().submit(() -> {
+        MemoryGuard.newSingleThreadExecutor("kazisafe-destock-http").submit(() -> {
             if (!Util.isInternetAndBaseApiReachable()) {
                 return;
             }

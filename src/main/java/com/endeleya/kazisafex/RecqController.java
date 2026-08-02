@@ -22,6 +22,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.concurrent.Executors;
+import tools.MemoryGuard;
 import java.util.prefs.Preferences;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -766,7 +767,7 @@ public class RecqController implements Initializable {
     CountDownLatch cx = new CountDownLatch(1);
 
     private void saveRecqusitionByHttp(Recquisition req) {
-        Executors.newSingleThreadExecutor().submit(() -> {
+        MemoryGuard.newSingleThreadExecutor("kazisafe-recq-http").submit(() -> {
             if (!Util.isInternetAndBaseApiReachable()) {
                 return;
             }
@@ -789,7 +790,7 @@ public class RecqController implements Initializable {
     }
 
     private void savePriceByHttp(PrixDeVente pv) {
-        Executors.newSingleThreadExecutor().submit(() -> {
+        MemoryGuard.newSingleThreadExecutor("kazisafe-price-http").submit(() -> {
             if (!Util.isInternetAndBaseApiReachable()) {
                 return;
             }

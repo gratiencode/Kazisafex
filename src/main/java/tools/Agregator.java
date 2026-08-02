@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import tools.MemoryGuard;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -65,14 +66,14 @@ public class Agregator {
     public void agregate() {
         // Maintient la coherence stock_agregate (par lot) en background.
 
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-agregate")
                 .submit(() -> {
                     try {
                         if (region == null) {
                             return;
                         }
                         LocalDate today = LocalDate.now();
-                        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+                        ScheduledExecutorService ses = MemoryGuard.newSingleThreadScheduledExecutor("kazisafe-agregate-scheduled");
                         ScheduledFuture<Boolean> futur = ses.schedule(() -> {
                             System.out.println("la tache de cloture lancee...");
                             return RecquisitionDelegate.cloturerStocks(region, today, today, "Journalier du " + today.toString());
@@ -91,7 +92,7 @@ public class Agregator {
         if (region == null) {
             return;
         }
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-inventorier")
                 .submit(() -> {
                     LocalDate today = LocalDate.now();
                     RecquisitionDelegate.cloturerUnProduit(produit, lot, region, today, today, "Journalier du " + today.toString());
@@ -102,7 +103,7 @@ public class Agregator {
         if (region == null) {
             return;
         }
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-inventorier-lot")
                 .submit(() -> {
                     RecquisitionDelegate.cloturerUnProduit(produit, lot, region, debut, fin, context);
                 });
@@ -113,7 +114,7 @@ public class Agregator {
             return;
         }
         List<LigneVente> lvx = new ArrayList<>(lvs);
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-inventorier-lvs")
                 .submit(() -> {
                     LocalDate today = LocalDate.now();
                     for (LigneVente lv : lvx) {
@@ -143,7 +144,7 @@ public class Agregator {
 //        });
 //        RecquisitionDelegate.cloturerStocks(region, date1, date2, "Journalier du " + date2.toString());
 //        
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-agregate-lots")
                 .submit(() -> {
                     try {
                         if (region == null) {
@@ -210,7 +211,7 @@ public class Agregator {
 
     public void reportInBackground() {
         LocalDate today = LocalDate.now();
-        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService ses = MemoryGuard.newSingleThreadScheduledExecutor("kazisafe-report-bg");
         ses.scheduleAtFixedRate(() -> {
 //            boolean finish = RepportDelegate.repportInBackground(today, today, region == null ? "%" : region);
 //            if (finish) {
@@ -237,7 +238,7 @@ public class Agregator {
     }
 
     public Future<List<Peremption>> deStockerLesExpiree(LocalDate per, List<Peremption> listAdeClasser, String region) {
-        ExecutorService ex = Executors.newSingleThreadExecutor();
+        ExecutorService ex = MemoryGuard.newSingleThreadExecutor("kazisafe-destock-expires");
         Future<List<Peremption>> result = ex.submit(() -> {
             int r = DataId.generateInt();
             Vente v = new Vente(r);

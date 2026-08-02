@@ -13,6 +13,7 @@ import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import retrofit2.Response;
+import tools.MemoryGuard;
 import tools.SyncLogger;
 import tools.Tables;
 import tools.Util;
@@ -116,6 +117,22 @@ public class BackgroundSyncService extends Service<Void> {
         }
     }
 
+    private static final java.util.concurrent.locks.ReentrantLock SYNC_CYCLE_LOCK = new java.util.concurrent.locks.ReentrantLock();
+
+    public static boolean tryAcquireSyncLock() {
+        return SYNC_CYCLE_LOCK.tryLock();
+    }
+
+    public static void acquireSyncLock() {
+        SYNC_CYCLE_LOCK.lock();
+    }
+
+    public static void releaseSyncLock() {
+        if (SYNC_CYCLE_LOCK.isHeldByCurrentThread()) {
+            SYNC_CYCLE_LOCK.unlock();
+        }
+    }
+
     @Override
     protected Task<Void> createTask() {
         return new Task<Void>() {
@@ -136,80 +153,120 @@ public class BackgroundSyncService extends Service<Void> {
                         continue;
                     }
 
-                    try {
-                        java.util.prefs.Preferences pref
-                                = java.util.prefs.Preferences.userNodeForPackage(
-                                        tools.SyncEngine.class
-                                );
-                        String enterpriseId = pref.get("eUid", null);
-                        String regionId = pref.get("region", "Goma");
-                        if (enterpriseId != null) {
-                            services.StateValidationService.ValidationResult res
-                                    = services.StateValidationService.validateState(
-                                            kazisafe,
-                                            enterpriseId,
-                                            regionId
-                                    );
-                            if (!res.isSynchronized) {
-                                publishStatus("Désynchronisation détectée. Réparation en cours...");
-                                services.FullResyncService.performFullResync(
-                                        kazisafe,
-                                        enterpriseId,
-                                        regionId,
-                                        BackgroundSyncService.this::publishStatus
-                                );
-                                safeSleepSeconds(10);
-                            }
-                        }
-                    } catch (Exception e) {
-                        SyncLogger.getInstance().log(
-                                e,
-                                "State validation failed",
-                                null,
-                                null
-                        );
+                    // Vérification mémoire avant tout traitement lourd
+                    if (!MemoryGuard.hasEnoughMemory()) {
+                        MemoryGuard.logMemoryState();
+                        publishStatus("Mémoire insuffisante – cycle de sync suspendu 10s...");
+                        safeSleepSeconds(10);
+                        continue;
                     }
 
-                    long now = System.currentTimeMillis();
-                    if (adaptivePauseUntilEpochMs > now) {
-                        long remainMs = adaptivePauseUntilEpochMs - now;
-                        publishStatus(
-                                "Server busy - slowing down sync rate..."
-                        );
-                        safeSleepMillis(Math.min(remainMs, 5000L));
+                    if (!tryAcquireSyncLock()) {
+                        requestCycle();
+                        safeSleepSeconds(1);
                         continue;
                     }
 
                     try {
-                        // Correct and clean outbox data before syncing
-                        SyncOutboxService.correctAndCleanOutboxData();
-                        
-                        boolean hasMoreOutbox = true;
-                        while (hasMoreOutbox && !isCancelled()) {
-                            List<SyncOutbox> chunk= SyncOutboxService.fetchOutboxChunk(adaptiveBatchSize);
-                            if (chunk == null || chunk.isEmpty()) {
-                                hasMoreOutbox = false;
-                                maybeIncreaseBatchSize();
-                                break;
+                        // 1. Validation d'état & Full Resync synchrone
+                        try {
+                            java.util.prefs.Preferences pref
+                                    = java.util.prefs.Preferences.userNodeForPackage(
+                                            tools.SyncEngine.class
+                                    );
+                            String enterpriseId = pref.get("eUid", pref.get("enterpriseId", pref.get("entrepriseId", null)));
+                            String regionId = pref.get("region", "Goma");
+                            if (enterpriseId != null) {
+                                services.StateValidationService.ValidationResult res
+                                        = services.StateValidationService.validateState(
+                                                kazisafe,
+                                                enterpriseId,
+                                                regionId
+                                        );
+                                if (!res.isSynchronized) {
+                                    publishStatus("Désynchronisation détectée. Réparation synchrone en cours...");
+                                    services.FullResyncService.performFullResyncSync(
+                                            kazisafe,
+                                            enterpriseId,
+                                            regionId,
+                                            BackgroundSyncService.this::publishStatus
+                                    );
+                                }
                             }
-
-                            SyncOutcome outcome = processUpsyncChunk(chunk);
-                            if (outcome.rateLimited) {
-                                handleRateLimit(outcome);
-                                break;
-                            }
-                            if (!outcome.success) {
-                                break;
-                            }
-
-                            maybeIncreaseBatchSize();
+                        } catch (Exception e) {
+                            SyncLogger.getInstance().log(
+                                    e,
+                                    "State validation failed",
+                                    null,
+                                    null
+                            );
                         }
 
-                        // Materialize downsync records
-                        SyncOutboxService.materializeDownsyncRecords();
+                        long now = System.currentTimeMillis();
+                        if (adaptivePauseUntilEpochMs > now) {
+                            long remainMs = adaptivePauseUntilEpochMs - now;
+                            publishStatus(
+                                    "Server busy - slowing down sync rate..."
+                            );
+                            safeSleepMillis(Math.min(remainMs, 5000L));
+                        } else {
+                            // 2. Nettoyage et correction outbox
+                            SyncOutboxService.correctAndCleanOutboxData();
 
-                        // Clean up applied records
-                        SyncOutboxService.cleanupAppliedRecords();
+                            // 3. Upsync complet jusqu'au dernier niveau de priorité (Level 0 à Level 5)
+                            boolean hasMoreOutbox = true;
+                            while (hasMoreOutbox && !isCancelled()) {
+                                List<SyncOutbox> pendingList = SyncOutboxService.fetchAllPendingOutbox();
+                                if (pendingList == null || pendingList.isEmpty()) {
+                                    hasMoreOutbox = false;
+                                    break;
+                                }
+
+                                // Tri hiérarchique strict : Niveau de priorité des entités (0 à 5), puis Date
+                                pendingList.sort((r1, r2) -> {
+                                    int p1 = getTablePriority(r1.getTableName());
+                                    int p2 = getTablePriority(r2.getTableName());
+                                    if (p1 != p2) {
+                                        return Integer.compare(p1, p2);
+                                    }
+                                    return r1.getCreatedAt() != null
+                                            ? r1.getCreatedAt().compareTo(r2.getCreatedAt() != null ? r2.getCreatedAt() : LocalDateTime.MIN)
+                                            : (r2.getCreatedAt() != null ? -1 : 0);
+                                });
+
+                                int total = pendingList.size();
+                                int processedCount = 0;
+                                for (int i = 0; i < total && !isCancelled(); i += adaptiveBatchSize) {
+                                    int end = Math.min(i + adaptiveBatchSize, total);
+                                    List<SyncOutbox> chunk = pendingList.subList(i, end);
+
+                                    SyncOutcome outcome = processUpsyncChunk(chunk);
+                                    if (outcome.rateLimited) {
+                                        handleRateLimit(outcome);
+                                        long pauseRemaining = adaptivePauseUntilEpochMs - System.currentTimeMillis();
+                                        if (pauseRemaining > 0) {
+                                            safeSleepMillis(pauseRemaining);
+                                        }
+                                    } else if (!outcome.success) {
+                                        hasMoreOutbox = false;
+                                        break;
+                                    } else {
+                                        maybeIncreaseBatchSize();
+                                        processedCount += chunk.size();
+                                    }
+                                }
+
+                                if (processedCount == 0) {
+                                    break;
+                                }
+                            }
+
+                            // 4. Downsync : Matérialisation complète de toutes les entités downsync jusqu'au dernier niveau
+                            SyncOutboxService.materializeDownsyncRecords();
+
+                            // 5. Nettoyage des enregistrements appliqués
+                            SyncOutboxService.cleanupAppliedRecords();
+                        }
                     } catch (Exception e) {
                         SyncLogger.getInstance().log(
                                 e,
@@ -217,11 +274,12 @@ public class BackgroundSyncService extends Service<Void> {
                                 null,
                                 null
                         );
+                    } finally {
+                        releaseSyncLock();
                     }
 
-                    // Cycle terminé. Si un nouveau cycle a été demandé pendant
-                    // celui-ci, il démarre immédiatement ; sinon on attend le
-                    // prochain intervalle de polling.
+                    // Cycle terminé. Si un nouveau cycle a été demandé pendant celui-ci,
+                    // il démarre immédiatement en séquence ; sinon on attend le prochain polling.
                     if (!consumeCycleRequest()) {
                         sleepWithWake(pollIntervalSeconds * 1000L);
                     } else {

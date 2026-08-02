@@ -6,7 +6,6 @@ import java.net.URI;
 import java.net.URL;
 
 import java.net.URLConnection;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
@@ -25,7 +24,7 @@ public class NetLoockup {
 
     public NetLoockup() {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService ses = MemoryGuard.newSingleThreadScheduledExecutor("kazisafe-net-lookup");
         ses.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {

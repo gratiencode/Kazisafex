@@ -6,6 +6,7 @@ import data.core.KazisafeServiceFactory;
 import data.network.Kazisafe;
 import java.util.List;
 import java.util.concurrent.Executors;
+import tools.MemoryGuard;
 import java.util.concurrent.Flow;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SubmissionPublisher;
@@ -82,7 +83,7 @@ public class SyncEngine {
 
     private SyncEngine() {
         publisher.subscribe(subs);
-        ses = Executors.newSingleThreadScheduledExecutor();
+        ses = MemoryGuard.newSingleThreadScheduledExecutor("kazisafe-sync-engine");
         int cpus = Runtime.getRuntime().availableProcessors();
         System.out.println("vCPUS : " + cpus);
     }
@@ -95,7 +96,7 @@ public class SyncEngine {
     }
 
     public void startChecking() {
-        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService ses = MemoryGuard.newSingleThreadScheduledExecutor("kazisafe-update-checker");
         ses.scheduleWithFixedDelay(
                 new Runnable() {
                     @Override

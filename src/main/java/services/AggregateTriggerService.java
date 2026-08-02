@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import tools.Agregator;
+import tools.MemoryGuard;
 
 public final class AggregateTriggerService {
 
@@ -27,11 +28,8 @@ public final class AggregateTriggerService {
     private static final long CASCADE_DEBOUNCE_MS = 1_200L;
     private static final AggregateTriggerService INSTANCE = new AggregateTriggerService();
 
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread thread = new Thread(r, "kazisafe-javafx-aggregate-trigger");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ScheduledExecutorService executor = MemoryGuard.newSingleThreadScheduledExecutor(
+            "kazisafe-javafx-aggregate-trigger");
     private final ConcurrentHashMap<RefreshKey, ScheduledFuture<?>> pending = new ConcurrentHashMap<>();
 
     private AggregateTriggerService() {
@@ -100,6 +98,13 @@ public final class AggregateTriggerService {
     }
 
     private void enqueueDebounced(RefreshKey key) {
+        // Ne pas planifier si la RAM est insuffisante
+        if (!MemoryGuard.hasEnoughMemory()) {
+            MemoryGuard.logMemoryState();
+            LOG.log(Level.WARNING,
+                "[AggregateTriggerService] Planification refusée (RAM insuffisante) pour la clé : " + key);
+            return;
+        }
         AtomicReference<ScheduledFuture<?>> scheduledRef = new AtomicReference<>();
         ScheduledFuture<?> scheduled = executor.schedule(
                 () -> runRefresh(key, scheduledRef.get()),
@@ -117,8 +122,8 @@ public final class AggregateTriggerService {
             return;
         }
         try {
-            String context = "Journalier du " + key.date();
-            Agregator.getInstance().agregate(key.date(), key.date(), context);
+            // La clôture des stocks est strictement réservée à PosController.refreshPos.
+            // On ne déclenche plus Agregator.getInstance().agregate(...) ici lors des mutations/matérialisations.
             ImmobilisationDelegate.agregate(key.date(), key.region());
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "Echec recalcul agregats JavaFX: " + key, ex);

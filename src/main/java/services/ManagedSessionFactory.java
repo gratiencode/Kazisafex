@@ -34,6 +34,7 @@ import org.eclipse.persistence.config.EntityManagerProperties;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import services.utils.SecurePreferences;
+import tools.MemoryGuard;
 import tools.SyncEngine;
 
 /**
@@ -402,11 +403,8 @@ public class ManagedSessionFactory {
      * de l'EntityManager après l'opération.
      */
     public static void runInBackground(Runnable action) {
-        Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            return t;
-        }).submit(() -> runWithCleanup(action));
+        MemoryGuard.newSingleThreadExecutor("kazisafe-bg-session")
+                .submit(() -> runWithCleanup(action));
     }
 
     /**
@@ -415,11 +413,7 @@ public class ManagedSessionFactory {
      * Exécute toutes les 30s, latence max de nettoyage = 30s.
      */
     private static void startLeakCleaner() {
-        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "Kazisafe-EM-LeakCleaner");
-            t.setDaemon(true);
-            return t;
-        });
+        ScheduledExecutorService cleaner = MemoryGuard.newSingleThreadScheduledExecutor("Kazisafe-EM-LeakCleaner");
         cleaner.scheduleAtFixedRate(() -> {
             try {
                 Iterator<Map.Entry<Thread, EntityManager>> it = trackedEMs.entrySet().iterator();

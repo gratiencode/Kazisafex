@@ -19,6 +19,7 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.concurrent.CopyOnWriteArrayList;
 import services.ManagedSessionFactory;
+import tools.MemoryGuard;
 
 /**
  *
@@ -35,19 +36,11 @@ public class NotificationHandler implements EventHandler {
     private static final CopyOnWriteArrayList<OnDataSyncListener> onDataSyncListeners =
         new CopyOnWriteArrayList<>();
     private static final java.util.concurrent.ExecutorService sseExecutor =
-        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "Kazisafe-SSE-Downsync-Worker");
-            t.setDaemon(true);
-            return t;
-        });
+        MemoryGuard.newSingleThreadExecutor("Kazisafe-SSE-Downsync-Worker");
     private static final int MAX_RETRY_ATTEMPTS = 5;
     private static final long[] RETRY_DELAYS_SECONDS = {5L, 15L, 30L, 60L, 120L};
     private static final java.util.concurrent.ScheduledExecutorService retryExecutor =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "Kazisafe-SSE-Retry-Worker");
-            t.setDaemon(true);
-            return t;
-        });
+        MemoryGuard.newSingleThreadScheduledExecutor("Kazisafe-SSE-Retry-Worker");
 
     private enum DownsyncStatus {
         OK,

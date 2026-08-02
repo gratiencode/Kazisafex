@@ -9,7 +9,6 @@ import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class SyncLogger {
 
@@ -27,11 +26,7 @@ public class SyncLogger {
     private final int cpuCores;
 
     private final ExecutorService logExecutor =
-        Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "SyncLogger-Thread");
-            thread.setDaemon(true);
-            return thread;
-        });
+        MemoryGuard.newSingleThreadExecutor("SyncLogger-Thread");
 
     private SyncLogger() {
         this.appVersion = Constants.APP_VERSION;

@@ -26,6 +26,23 @@ public class SyncOutboxService {
 
     private static final int MAX_RETRY_COUNT = 5;
 
+    public static List<SyncOutbox> fetchAllPendingOutbox() {
+        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED') AND (s.retryCount IS NULL OR s.retryCount < :maxRetry)";
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, SyncOutbox.class)
+                        .setParameter("maxRetry", MAX_RETRY_COUNT)
+                        .getResultList());
+            }
+            return ManagedSessionFactory.getEntityManager()
+                    .createQuery(jpql, SyncOutbox.class)
+                    .setParameter("maxRetry", MAX_RETRY_COUNT)
+                    .getResultList();
+        } catch (Exception e) {
+            return java.util.Collections.emptyList();
+        }
+    }
+
     public static List<SyncOutbox> fetchOutboxChunk(int chunkSize) {
         String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED') ORDER BY s.createdAt ASC";
         try {
@@ -579,47 +596,55 @@ public class SyncOutboxService {
     }
 
     public static void materializeDownsyncRecords() {
-        List<SyncOutbox> chunk = fetchDownsyncChunk(50);
-        if (chunk.isEmpty()) return;
-        chunk.sort((a, b) -> Integer.compare(
-                BackgroundSyncService.getTablePriority(a.getTableName()),
-                BackgroundSyncService.getTablePriority(b.getTableName())));
-
-        List<String> appliedUids = new ArrayList<>();
-        for (SyncOutbox record : chunk) {
-            try {
-                String entityType = record.getTableName();
-                String payload = record.getPayload();
-                String action = record.getAction();
-                if (payload == null || payload.isBlank()) {
-                    if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
-                        SyncOutboxListener.runSuppressed(() -> {
-                            applyRemoveMutation(entityType, record.getEntityId());
-                        });
-                        appliedUids.add(record.getUid());
-                        System.out.println("[DOWNSYNC] Removed " + entityType + " " + record.getEntityId());
-                    } else {
-                        System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
-                    }
-                    continue;
-                }
-
-                SyncOutboxListener.runSuppressed(() -> {
-                    applyDownsyncMutation(entityType, record.getAction(), payload);
-                });
-
-                appliedUids.add(record.getUid());
-                System.out.println("[DOWNSYNC] Materialized " + entityType + " " + record.getEntityId());
-            } catch (Exception e) {
-                System.err.println("[DOWNSYNC] Failed to materialize " + record.getTableName()
-                        + " " + record.getEntityId() + ": " + e.getMessage());
-                SyncLogger.getInstance().log(e, "Downsync materialization failed",
-                        record.getTableName(), record.getEntityId());
+        boolean hasMore = true;
+        while (hasMore) {
+            List<SyncOutbox> chunk = fetchDownsyncChunk(100);
+            if (chunk == null || chunk.isEmpty()) {
+                hasMore = false;
+                break;
             }
-        }
+            chunk.sort((a, b) -> Integer.compare(
+                    BackgroundSyncService.getTablePriority(a.getTableName()),
+                    BackgroundSyncService.getTablePriority(b.getTableName())));
 
-        if (!appliedUids.isEmpty()) {
-            markAsApplied(appliedUids);
+            List<String> appliedUids = new ArrayList<>();
+            for (SyncOutbox record : chunk) {
+                try {
+                    String entityType = record.getTableName();
+                    String payload = record.getPayload();
+                    String action = record.getAction();
+                    if (payload == null || payload.isBlank()) {
+                        if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
+                            SyncOutboxListener.runSuppressed(() -> {
+                                applyRemoveMutation(entityType, record.getEntityId());
+                            });
+                            appliedUids.add(record.getUid());
+                            System.out.println("[DOWNSYNC] Removed " + entityType + " " + record.getEntityId());
+                        } else {
+                            System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
+                        }
+                        continue;
+                    }
+
+                    SyncOutboxListener.runSuppressed(() -> {
+                        applyDownsyncMutation(entityType, record.getAction(), payload);
+                    });
+
+                    appliedUids.add(record.getUid());
+                    System.out.println("[DOWNSYNC] Materialized " + entityType + " " + record.getEntityId());
+                } catch (Exception e) {
+                    System.err.println("[DOWNSYNC] Failed to materialize " + record.getTableName()
+                            + " " + record.getEntityId() + ": " + e.getMessage());
+                    SyncLogger.getInstance().log(e, "Downsync materialization failed",
+                            record.getTableName(), record.getEntityId());
+                }
+            }
+
+            if (!appliedUids.isEmpty()) {
+                markAsApplied(appliedUids);
+            } else {
+                break;
+            }
         }
     }
 

@@ -75,11 +75,7 @@ public class WsClientEndpoint extends Endpoint {
     String userid;
     Session session;
     private static final java.util.concurrent.ExecutorService downsyncExecutor =
-        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "Kazisafe-Downsync-Worker");
-            t.setDaemon(true);
-            return t;
-        });
+        MemoryGuard.newSingleThreadExecutor("Kazisafe-Downsync-Worker");
 
     @Override
     public void onOpen(Session s, EndpointConfig ec) {

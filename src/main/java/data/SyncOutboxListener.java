@@ -6,6 +6,7 @@ import jakarta.persistence.PreUpdate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import services.ManagedSessionFactory;
+import tools.MemoryGuard;
 import tools.SyncLogger;
 import tools.Tables;
 
@@ -15,11 +16,7 @@ public class SyncOutboxListener {
     private static final long RETRY_DELAY_MS = 250L;
 
     private static final java.util.concurrent.ExecutorService outboxExecutor =
-        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "Kazisafe-SyncOutbox-Logger");
-            t.setDaemon(true);
-            return t;
-        });
+        MemoryGuard.newSingleThreadExecutor("Kazisafe-SyncOutbox-Logger");
 
     private static final ThreadLocal<Boolean> suppressListener =
         ThreadLocal.withInitial(() -> false);

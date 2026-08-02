@@ -49,6 +49,7 @@ import delegates.PermissionDelegate;
 import java.time.Month;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
+import tools.MemoryGuard;
 import java.util.prefs.Preferences;
 import tools.Constants;
 import tools.DataId;
@@ -3545,7 +3546,7 @@ public class RecquisitionService implements RecquisitionStorage {
     @Override
     public boolean cloturerStocks(String region, LocalDate datedebut, LocalDate datefin, String context) {
         // Cloture journaliere: produit + lot + region.
-        Executors.newSingleThreadExecutor()
+        MemoryGuard.newSingleThreadExecutor("kazisafe-cloture-stocks")
                 .submit(() -> ManagedSessionFactory.runWithCleanup(() -> {
 
                     LocalDate targetDay = datefin == null ? LocalDate.now() : datefin;
