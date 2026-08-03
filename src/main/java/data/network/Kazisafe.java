@@ -1371,10 +1371,10 @@ public interface Kazisafe {
         @Query("lt") String timestamp
     );
 
-    @GET("inventory/counts/downsync")
+    @GET("v1/inventory/counts/downsync")
     public Call<List<Compter>> syncMissedCounts(@Query("lt") String timestamp);
 
-    @GET("inventory/downsync")
+    @GET("v1/inventory/downsync")
     public Call<List<Inventaire>> syncMissedInventaires(
         @Query("lt") String timestamp
     );
@@ -1448,7 +1448,6 @@ public interface Kazisafe {
 
     @GET("sync/outbox/missed")
     Call<List<SyncOutboxDto>> getMissedMutations(
-        @Query("entrepriseId") String entrepriseId,
         @Query("since") String since
     );
 }

@@ -91,8 +91,7 @@ public class WsClientEndpoint extends Endpoint {
                     "[WS-CLIENT] Triggering catch-up sync for " + eUid
                 );
                 services.sync.DownsyncCatchupService.catchUp(
-                    SyncEngine.getInstance().getKazisafe(),
-                    eUid
+                    SyncEngine.getInstance().getKazisafe()
                 );
             } else {
                 System.err.println(

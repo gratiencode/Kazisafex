@@ -50,61 +50,28 @@ public class CategoryService implements CategoryStorage {
 
     @Override
     public Category createCategory(Category cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getDescritption() + " enregistree");
-            });
+        return ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
             return cat;
-        }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
-        return cat;
+        });
     }
 
     @Override
     public Category updateCategory(Category cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.merge(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getDescritption() + " enregistree");
-            });
-            return cat;
-        }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().merge(cat);
-        tx.commit();
-        return cat;
+        return ManagedSessionFactory.executeWrite(em -> {
+            return em.merge(cat);
+        });
     }
 
     @Override
     public void deleteCategory(Category cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getDescritption() + " supprimee");
-            });
-            return;
-        }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            Category managed = em.merge(cat);
+            if (managed != null) {
+                em.remove(managed);
+            }
+            return null;
+        });
     }
 
     @Override

@@ -500,8 +500,15 @@ public class BackgroundSyncService extends Service<Void> {
         }
     }
 
+    /**
+     * Niveau de priorité d'une entité = ordre de dépendance. Les parents (FK)
+     * sont toujours dans un niveau inférieur à leurs dépendants, afin que la
+     * matérialisation locale (downsync) insère les parents avant les enfants.
+     * Niveau 0 = racines (aucune FK obligatoire).
+     */
     static int getTablePriority(String tableName) {
         List<List<Tables>> phases = List.of(
+                // Niveau 0 — racines : aucune dépendance FK obligatoire
                 List.of(
                         Tables.CATEGORY,
                         Tables.FOURNISSEUR,
@@ -510,29 +517,61 @@ public class BackgroundSyncService extends Service<Void> {
                         Tables.MATIERE,
                         Tables.DEPOT,
                         Tables.INVENTORY,
-                        Tables.IMMOBILISATION
+                        Tables.IMMOBILISATION,
+                        Tables.TAXE,
+                        Tables.CLIENTORGANISATION,
+                        Tables.DEPENSE,
+                        Tables.PRESENCE
                 ),
+                // Niveau 1 — dépendent uniquement du niveau 0
                 List.of(
                         Tables.PRODUIT,
                         Tables.LIVRAISON,
                         Tables.VENTE,
                         Tables.TRAISORERIE,
-                        Tables.DEPENSE
+                        Tables.MATIERESKU,
+                        Tables.COMMANDE
                 ),
+                // Niveau 2 — dépendent des niveaux 0-1 (ex : Mesure -> Produit)
                 List.of(
                         Tables.MESURE,
                         Tables.STOCKER,
                         Tables.DESTOCKER,
                         Tables.RECQUISITION,
+                        Tables.PRODUCTION,
+                        Tables.COMPTER,
                         Tables.LIGNEVENTE,
                         Tables.OPERATION,
-                        Tables.MATIERESKU,
-                        Tables.PRODUCTION,
-                        Tables.COMPTER
+                        Tables.COMMANDELIST,
+                        Tables.PERIODE,
+                        Tables.TAXER,
+                        Tables.SATISFAIRE,
+                        Tables.CLIENTAPPARTENIR
                 ),
-                List.of(Tables.PRIXDEVENTE, Tables.REPARTIR),
-                List.of(Tables.IMPUTER, Tables.ENTREPOSER),
-                List.of(Tables.PRESENCE)
+                // Niveau 3 — dépendent des niveaux 0-2
+                List.of(
+                        Tables.PRIXDEVENTE,
+                        Tables.REPARTIR,
+                        Tables.ARETIRER,
+                        Tables.RETOURDEPOT,
+                        Tables.RETOURMAGASIN
+                ),
+                // Niveau 4 — dépendent des niveaux 0-3
+                List.of(
+                        Tables.IMPUTER,
+                        Tables.ENTREPOSER
+                ),
+                // Niveau 5 — dernier niveau
+                List.of(
+                        Tables.FACTURE,
+                        Tables.ABONNEMENT,
+                        Tables.BULKMODEL,
+                        Tables.REFRESH,
+                        Tables.PERMISSION,
+                        Tables.REPPORTING,
+                        Tables.IMMOBILISATION_AGREGATE,
+                        Tables.FINGERPRINTMAPPING
+                )
         );
 
         for (int i = 0; i < phases.size(); i++) {

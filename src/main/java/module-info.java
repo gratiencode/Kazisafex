@@ -67,10 +67,16 @@ module com.endeleya.kazisafex {
     opens services.dialect to org.hibernate.orm.core;
     opens data.finance to com.fasterxml.jackson.databind;
     opens data.helpers to com.fasterxml.jackson.databind;
+    opens delegates to javafx.base, com.fasterxml.jackson.databind;
+    opens styles to javafx.graphics;
+    opens guis to javafx.fxml;
 
     exports services;
     exports com.endeleya.kazisafex;
     exports tools;
+    exports delegates;
+    exports IServices;
+    exports data;
     exports data.network.dto to com.fasterxml.jackson.databind, retrofit2, retrofit2.converter.jackson;
 
     requires org.slf4j;

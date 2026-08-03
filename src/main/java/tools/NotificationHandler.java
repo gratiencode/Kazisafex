@@ -492,18 +492,14 @@ public class NotificationHandler implements EventHandler {
                                         notifySynced(saleitem);
                                         return;
                                     }
-                                    boolean exists = ProduitDelegate.isExists(
-                                        saleitem.getProductId().getUid()
-                                    );
-                                    boolean exist1 = MesureDelegate.isExists(
-                                        saleitem.getMesureId().getUid()
-                                    );
-                                    boolean exist2 = VenteDelegate.isExists(
-                                        saleitem.getReference().getUid()
-                                    );
+                                    boolean exists = saleitem.getProductId() != null && saleitem.getProductId().getUid() != null
+                                            && ProduitDelegate.isExists(saleitem.getProductId().getUid());
+                                    boolean exist1 = saleitem.getMesureId() != null && saleitem.getMesureId().getUid() != null
+                                            && MesureDelegate.isExists(saleitem.getMesureId().getUid());
+                                    boolean exist2 = saleitem.getReference() != null && saleitem.getReference().getUid() != null
+                                            && VenteDelegate.isExists(saleitem.getReference().getUid());
                                     if (!(exists && exist1 && exist2)) {
-                                        status[0] =
-                                            DownsyncStatus.DEPENDENCY_MISSING;
+                                        status[0] = DownsyncStatus.DEPENDENCY_MISSING;
                                     } else {
                                         boolean isSynced =
                                             LigneVenteDelegate.isExists(

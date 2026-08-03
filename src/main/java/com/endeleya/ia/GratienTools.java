@@ -342,6 +342,42 @@ public class GratienTools {
         });
     }
 
+    @Tool("Retourne le prix de vente actuel d'un produit: prix unitaire, devise, intervalle de quantite et unite de mesure")
+    public String getProductCurrentSalePrice(
+            @P("Nom, code-barres ou uid du produit dont on veut le prix de vente actuel") String productQuery) {
+        String query = safe(productQuery, "").trim();
+        if (query.isBlank()) {
+            return "Indiquez le nom, le code-barres ou le uid du produit dont vous voulez le prix de vente.";
+        }
+        Produit product = findProductByUidCodebarOrName(query);
+        if (product == null) {
+            return "Produit introuvable pour: " + query
+                    + ". Utilisez `searchProductsByCriteria` ou `findProductCandidates` pour trouver le produit exact.";
+        }
+        List<PrixDeVente> prices = latestSalePrices(product);
+        if (prices == null || prices.isEmpty()) {
+            return "Aucun prix de vente configure pour le produit: " + productLine(product)
+                    + ". Utilisez `diagnoseInvisibleProductInPos` pour diagnostiquer pourquoi ce produit n'a pas de prix de vente.";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("Prix de vente actuel de: ").append(productLine(product)).append("\n\n");
+        int index = 0;
+        for (PrixDeVente price : prices) {
+            if (price == null) {
+                continue;
+            }
+            String measure = price.getMesureId() == null ? "-" : safe(price.getMesureId().getDescription(), "-");
+            builder.append(++index).append(". ")
+                    .append("quantite de ").append(price.getQmin())
+                    .append(" a ").append(price.getQmax())
+                    .append(" ").append(measure)
+                    .append(" -> ").append(price.getPrixUnitaire())
+                    .append(" ").append(safe(price.getDevise(), "-"))
+                    .append(" par unite\n");
+        }
+        return builder.toString().trim();
+    }
+
     @Tool("Diagnostique pourquoi un produit n'est pas visible dans le POS/ListItemView: produit, mesures, mesure unitaire, dernière réquisition, livraison et prix de vente")
     public String diagnoseInvisibleProductInPos(
             @P("Nom, code-barres ou uid du produit invisible dans le POS") String productQuery) {

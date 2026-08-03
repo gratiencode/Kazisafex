@@ -100,14 +100,25 @@ public class Kazisafex extends Application {
             return;
         }
         Preferences preferences = Preferences.userNodeForPackage(SyncEngine.class);
-        String darkCss = Kazisafex.class.getResource("/styles/dark-theme.css").toExternalForm();
-        String lightCss = Kazisafex.class.getResource("/styles/light-theme.css").toExternalForm();
-        scene.getStylesheets().remove(darkCss);
-        scene.getStylesheets().remove(lightCss);
-        scene.getStylesheets().add(lightCss);
+        java.net.URL darkUrl = Kazisafex.class.getResource("/styles/dark-theme.css");
+        java.net.URL lightUrl = Kazisafex.class.getResource("/styles/light-theme.css");
+
+        if (darkUrl != null) {
+            scene.getStylesheets().remove(darkUrl.toExternalForm());
+        }
+        if (lightUrl != null) {
+            String lightCss = lightUrl.toExternalForm();
+            scene.getStylesheets().remove(lightCss);
+            if (!scene.getStylesheets().contains(lightCss)) {
+                scene.getStylesheets().add(lightCss);
+            }
+        }
         boolean darkEnabled = preferences.getBoolean(DARK_THEME_PREF, false);
-        if (darkEnabled) {
-            scene.getStylesheets().add(darkCss);
+        if (darkEnabled && darkUrl != null) {
+            String darkCss = darkUrl.toExternalForm();
+            if (!scene.getStylesheets().contains(darkCss)) {
+                scene.getStylesheets().add(darkCss);
+            }
         }
         ThemeStyler.apply(scene.getRoot(), darkEnabled);
     }

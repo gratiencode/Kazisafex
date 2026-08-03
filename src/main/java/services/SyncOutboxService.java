@@ -579,72 +579,109 @@ public class SyncOutboxService {
 
     // ── Downsync materialization ────────────────────────────────────────────
 
-    public static List<SyncOutbox> fetchDownsyncChunk(int chunkSize) {
-        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' ORDER BY s.createdAt ASC";
+    /**
+     * Matérialise en base locale les enregistrements downsync en respectant
+     * strictement l'ordre de dépendance entre les entités : les parents (FK)
+     * sont toujours insérés avant leurs enfants (ex. Produit avant Mesure,
+     * Vente avant LigneVente, Inventaire avant Compter). L'ordre est obtenu
+     * en traitant les enregistrements niveau de priorité par niveau
+     * (BackgroundSyncService.getTablePriority), indépendamment de leur ordre
+     * d'arrivée / createdAt. Les échecs (parent absent de l'outbox) sont
+     * retentés sur quelques passes puis laissés pour le cycle suivant.
+     */
+    public static void materializeDownsyncRecords() {
+        int maxPasses = 3;
+        for (int pass = 0; pass < maxPasses; pass++) {
+            boolean anyApplied = false;
+            List<String> appliedUids = new ArrayList<>();
+            for (int phase = 0; phase <= 5; phase++) {
+                List<SyncOutbox> phaseRecords = fetchDownsyncPhase(phase);
+                if (phaseRecords.isEmpty()) {
+                    continue;
+                }
+                // Au sein d'un même niveau, ordre FIFO (dépendances intra-niveau
+                // comme Client.parentId ou Periode.previousPeriod)
+                phaseRecords.sort((a, b) -> {
+                    LocalDateTime t1 = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
+                    LocalDateTime t2 = b.getCreatedAt() != null ? b.getCreatedAt() : LocalDateTime.MIN;
+                    return t1.compareTo(t2);
+                });
+                for (SyncOutbox record : phaseRecords) {
+                    if (applyDownsyncRecord(record)) {
+                        appliedUids.add(record.getUid());
+                        anyApplied = true;
+                    }
+                }
+            }
+            if (!appliedUids.isEmpty()) {
+                markAsApplied(appliedUids);
+            }
+            if (!anyApplied) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Récupère les enregistrements downsync d'un niveau de priorité donné
+     * (ordre de dépendance). Ne charge que les entités de ce niveau pour
+     * limiter l'empreinte mémoire.
+     */
+    private static List<SyncOutbox> fetchDownsyncPhase(int phase) {
+        List<String> tables = new ArrayList<>();
+        for (Tables t : Tables.values()) {
+            if (BackgroundSyncService.getTablePriority(t.name()) == phase) {
+                tables.add(t.name());
+            }
+        }
+        if (tables.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' AND s.tableName IN :tables";
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, SyncOutbox.class)
-                        .setMaxResults(chunkSize).getResultList());
+                        .setParameter("tables", tables)
+                        .getResultList());
             }
             return ManagedSessionFactory.getEntityManager()
                     .createQuery(jpql, SyncOutbox.class)
-                    .setMaxResults(chunkSize)
+                    .setParameter("tables", tables)
                     .getResultList();
         } catch (Exception e) {
             return java.util.Collections.emptyList();
         }
     }
 
-    public static void materializeDownsyncRecords() {
-        boolean hasMore = true;
-        while (hasMore) {
-            List<SyncOutbox> chunk = fetchDownsyncChunk(100);
-            if (chunk == null || chunk.isEmpty()) {
-                hasMore = false;
-                break;
-            }
-            chunk.sort((a, b) -> Integer.compare(
-                    BackgroundSyncService.getTablePriority(a.getTableName()),
-                    BackgroundSyncService.getTablePriority(b.getTableName())));
-
-            List<String> appliedUids = new ArrayList<>();
-            for (SyncOutbox record : chunk) {
-                try {
-                    String entityType = record.getTableName();
-                    String payload = record.getPayload();
-                    String action = record.getAction();
-                    if (payload == null || payload.isBlank()) {
-                        if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
-                            SyncOutboxListener.runSuppressed(() -> {
-                                applyRemoveMutation(entityType, record.getEntityId());
-                            });
-                            appliedUids.add(record.getUid());
-                            System.out.println("[DOWNSYNC] Removed " + entityType + " " + record.getEntityId());
-                        } else {
-                            System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
-                        }
-                        continue;
-                    }
-
+    private static boolean applyDownsyncRecord(SyncOutbox record) {
+        try {
+            String entityType = record.getTableName();
+            String payload = record.getPayload();
+            String action = record.getAction();
+            if (payload == null || payload.isBlank()) {
+                if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
                     SyncOutboxListener.runSuppressed(() -> {
-                        applyDownsyncMutation(entityType, record.getAction(), payload);
+                        applyRemoveMutation(entityType, record.getEntityId());
                     });
-
-                    appliedUids.add(record.getUid());
-                    System.out.println("[DOWNSYNC] Materialized " + entityType + " " + record.getEntityId());
-                } catch (Exception e) {
-                    System.err.println("[DOWNSYNC] Failed to materialize " + record.getTableName()
-                            + " " + record.getEntityId() + ": " + e.getMessage());
-                    SyncLogger.getInstance().log(e, "Downsync materialization failed",
-                            record.getTableName(), record.getEntityId());
+                    System.out.println("[DOWNSYNC] Removed " + entityType + " " + record.getEntityId());
+                    return true;
                 }
+                System.err.println("[DOWNSYNC] Empty payload for " + entityType + " " + record.getEntityId());
+                return false;
             }
 
-            if (!appliedUids.isEmpty()) {
-                markAsApplied(appliedUids);
-            } else {
-                break;
-            }
+            SyncOutboxListener.runSuppressed(() -> {
+                applyDownsyncMutation(entityType, record.getAction(), payload);
+            });
+
+            System.out.println("[DOWNSYNC] Materialized " + entityType + " " + record.getEntityId());
+            return true;
+        } catch (Exception e) {
+            System.err.println("[DOWNSYNC] Failed to materialize " + record.getTableName()
+                    + " " + record.getEntityId() + ": " + e.getMessage());
+            SyncLogger.getInstance().log(e, "Downsync materialization failed",
+                    record.getTableName(), record.getEntityId());
+            return false;
         }
     }
 
@@ -663,6 +700,16 @@ public class SyncOutboxService {
         try {
             Object entity = JsonUtil.objectify(payload);
             if (entity == null) return;
+
+            // Garde anti-doublon : un payload sans uid ne peut pas être rattaché à
+            // une ligne existante. merge() insérerait alors une nouvelle ligne à
+            // chaque matérialisation. On ignore donc la mutation (le payload serveur
+            // contient toujours le uid via toSafePayload).
+            Object entityUid = getEntityId(entity);
+            if (entityUid == null) {
+                System.err.println("[DOWNSYNC] Skipping " + entityType + " with null uid (merge would duplicate).");
+                return;
+            }
 
             submitSyncWrite(em -> {
                 if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
@@ -751,19 +798,42 @@ public class SyncOutboxService {
         String eUid = pref.get("eUid", null);
         String region = pref.get("region", "Goma");
 
-        SyncOutbox outbox = new SyncOutbox();
-        outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
-        outbox.setTableName(dto.entityType.toUpperCase());
-        outbox.setEntityId(dto.entityId);
-        outbox.setAction(mapMutationType(dto.mutationType));
-        outbox.setPayload(dto.payload);
-        outbox.setCreatedAt(LocalDateTime.now());
-        outbox.setUpdatedAt(LocalDateTime.now());
-        outbox.setEntrepriseId(eUid);
-        outbox.setRegion(region);
-        outbox.setStatus("DOWNSYNCED");
+        String tableName = dto.entityType.toUpperCase();
+        String entityId = dto.entityId;
 
+        // UPSERT : miroir de SyncOutboxWriter côté serveur. Aucun doublon local
+        // pour le même couple (tableName, entityId) : si un enregistrement
+        // DOWNSYNCED existe déjà (mutation re-téléchargée lors d'un full resync
+        // ou d'une fenêtre de rattrapage chevauchante), on met à jour action et
+        // payload avec l'état le plus récent au lieu d'insérer une nouvelle ligne.
         submitSyncWrite(em -> {
+            List<SyncOutbox> existing = em.createQuery(
+                    "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' AND s.tableName = :tableName AND s.entityId = :entityId",
+                    SyncOutbox.class)
+                    .setParameter("tableName", tableName)
+                    .setParameter("entityId", entityId)
+                    .setMaxResults(1)
+                    .getResultList();
+            if (!existing.isEmpty()) {
+                SyncOutbox row = existing.get(0);
+                row.setAction(mapMutationType(dto.mutationType));
+                row.setPayload(dto.payload);
+                row.setUpdatedAt(LocalDateTime.now());
+                return null;
+            }
+
+            SyncOutbox outbox = new SyncOutbox();
+            outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
+            outbox.setTableName(tableName);
+            outbox.setEntityId(entityId);
+            outbox.setAction(mapMutationType(dto.mutationType));
+            outbox.setPayload(dto.payload);
+            outbox.setCreatedAt(LocalDateTime.now());
+            outbox.setUpdatedAt(LocalDateTime.now());
+            outbox.setEntrepriseId(eUid);
+            outbox.setRegion(region);
+            outbox.setStatus("DOWNSYNCED");
+
             em.persist(outbox);
             return null;
         });

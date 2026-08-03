@@ -85,7 +85,21 @@ import java.util.prefs.Preferences;
 public class JsonUtil {
 
     public static JsonObject jsonify(Object obj) {
+        if (obj == null) {
+            return Json.createObjectBuilder().build();
+        }
+        try {
+            String json = data.core.KazisafeServiceFactory.mapper().writeValueAsString(obj);
+            try (JsonReader reader = Json.createReader(new StringReader(json))) {
+                return reader.readObject();
+            }
+        } catch (Exception e) {
+            Logger.getLogger(JsonUtil.class.getName()).log(Level.WARNING, "Erreur jsonify Jackson", e);
+            return Json.createObjectBuilder().build();
+        }
+    }
 
+    public static JsonObject jsonifyOld(Object obj) {
         JsonObjectBuilder builder = Json.createObjectBuilder();
         if (obj instanceof Category) {
             try {

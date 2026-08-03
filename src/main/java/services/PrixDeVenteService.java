@@ -50,61 +50,28 @@ public class PrixDeVenteService implements PrixDeVenteStorage {
 
     @Override
     public PrixDeVente createPrixDeVente(PrixDeVente cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element prix " + e.getPrixUnitaire() + " enregistree");
-            });
+        return ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
             return cat;
-        }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
-        return cat;
+        });
     }
 
     @Override
     public PrixDeVente updatePrixDeVente(PrixDeVente cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.merge(cat);
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element prix " + e.getPrixUnitaire() + " enregistree");
-            });
-            return cat;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().merge(cat);
-        etr.commit();
-        return cat;
+        return ManagedSessionFactory.executeWrite(em -> {
+            return em.merge(cat);
+        });
     }
 
     @Override
     public void deletePrixDeVente(PrixDeVente cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.remove(em.merge(cat));
-                return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getPrixUnitaire() + " enregistree");
-            });
-            return;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
-        etr.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            PrixDeVente managed = em.merge(cat);
+            if (managed != null) {
+                em.remove(managed);
+            }
+            return null;
+        });
     }
 
     @Override

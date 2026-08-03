@@ -6313,7 +6313,7 @@ public class PosController implements Initializable {
         treeSaleItems.clear();
         List<SaleItem> lsi = new ArrayList<>();
         for (Vente v : sold) {
-            if (v.getObservation().equals("Drafted")) {
+            if ("Drafted".equals(v.getObservation())) {
                 continue;
             }
             if (region == null) {
