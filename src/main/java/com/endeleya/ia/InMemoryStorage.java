@@ -18,7 +18,7 @@ public class InMemoryStorage {
     private final Map<String, Deque<String>> storage = new ConcurrentHashMap<>();
 
     public InMemoryStorage() {
-        this(10);
+        this(40);
     }
 
     public InMemoryStorage(int maxMessages) {

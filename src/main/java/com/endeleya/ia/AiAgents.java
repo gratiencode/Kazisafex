@@ -93,11 +93,11 @@ public final class AiAgents {
     
     public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
     /**
-     * Memoire de Gratien : on ne conserve que les 10 derniers messages. Des que la
-     * limite est atteinte, le contexte est compacte en un resume (message numero 1)
-     * suivi des derniers messages, puis la memoire repart sur une fenetre neuve.
+     * Memoire de Gratien : 40 messages maximum, applique a Redis comme au
+     * fallback InMemoryStorage. Des que la limite est atteinte, le contexte est
+     * compacte en un resume (message numero 1) suivi des derniers messages.
      */
-    private static final int MAX_MEMORY_MESSAGES = 10;
+    private static final int MAX_MEMORY_MESSAGES = 40;
     private static final int COMPACTION_THRESHOLD = 10;
     private static final int COMPACTION_TAIL = 6;
     private static final String COMPACTION_MARKER = "[Contexte compacte] ";

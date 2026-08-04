@@ -13,7 +13,7 @@ import java.util.List;
 
 public class LangChainRedisChatMemoryStore implements ChatMemoryStore {
 
-    private static final int MAX_MESSAGES = 10;
+    private static final int MAX_MESSAGES = 40;
     private final RedisMemoryStore redisMemoryStore;
 
     public LangChainRedisChatMemoryStore(RedisMemoryStore redisMemoryStore) {

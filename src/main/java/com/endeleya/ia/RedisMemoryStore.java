@@ -18,7 +18,7 @@ import java.util.logging.Logger;
 public class RedisMemoryStore {
 
     private static final Logger LOGGER = Logger.getLogger(RedisMemoryStore.class.getName());
-    private static final int DEFAULT_MAX_MESSAGES = 10;
+    private static final int DEFAULT_MAX_MESSAGES = 40;
     private static final int DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 14;
 
     private final String host;
