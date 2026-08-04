@@ -213,7 +213,8 @@ public class SyncOutboxService {
             }
 
             String action = record.getAction();
-            String keyBase = record.getTableName() + "|" + record.getEntityId();
+            String regionKey = record.getRegion() == null ? "" : record.getRegion();
+            String keyBase = record.getTableName() + "|" + record.getEntityId() + "|" + regionKey;
 
             if ("REMOVE".equalsIgnoreCase(action)) {
                 // Track that this entity has a pending deletion
@@ -476,8 +477,9 @@ public class SyncOutboxService {
         System.out.println("[BACKFILL] Scanning table: " + table.name());
 
         Set<String> existingSet = new HashSet<>(ManagedSessionFactory.executeRead(
-                em -> em.createQuery("SELECT s.entityId FROM SyncOutbox s WHERE s.tableName = :tableName", String.class)
+                em -> em.createQuery("SELECT s.entityId FROM SyncOutbox s WHERE s.tableName = :tableName AND s.region = :region", String.class)
                         .setParameter("tableName", table.name())
+                        .setParameter("region", region)
                         .getResultList()));
 
         List<String> allEntityIds = ManagedSessionFactory.executeRead(em -> {
@@ -802,16 +804,17 @@ public class SyncOutboxService {
         String entityId = dto.entityId;
 
         // UPSERT : miroir de SyncOutboxWriter côté serveur. Aucun doublon local
-        // pour le même couple (tableName, entityId) : si un enregistrement
+        // pour le triplet (tableName, entityId, region) : si un enregistrement
         // DOWNSYNCED existe déjà (mutation re-téléchargée lors d'un full resync
         // ou d'une fenêtre de rattrapage chevauchante), on met à jour action et
         // payload avec l'état le plus récent au lieu d'insérer une nouvelle ligne.
         submitSyncWrite(em -> {
             List<SyncOutbox> existing = em.createQuery(
-                    "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' AND s.tableName = :tableName AND s.entityId = :entityId",
+                    "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' AND s.tableName = :tableName AND s.entityId = :entityId AND s.region = :region",
                     SyncOutbox.class)
                     .setParameter("tableName", tableName)
                     .setParameter("entityId", entityId)
+                    .setParameter("region", region)
                     .setMaxResults(1)
                     .getResultList();
             if (!existing.isEmpty()) {

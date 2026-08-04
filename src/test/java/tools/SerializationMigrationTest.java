@@ -131,6 +131,56 @@ class SerializationMigrationTest {
         assertEquals(10.0, deserialized.getQuantite(), 0.001);
     }
 
+    @Test
+    @DisplayName("Round-trip Compter: les FK inventaire, produit et mesure survivent au JSON downsync")
+    void testCompterFkRoundTrip() throws Exception {
+        Compter c = new Compter();
+        c.setUid("comp-1");
+        c.setInventaireId(new Inventaire("inv-1"));
+        c.setProductId(new Produit("prod-1"));
+        c.setMesureId(new Mesure("mes-1"));
+        c.setQuantite(12.5);
+        c.setNumlot("LOT-A");
+        c.setRegion("Goma");
+
+        String json = mapper.writeValueAsString(c);
+
+        assertNotNull(json);
+        assertTrue(json.contains("\"inventaireId\""));
+        assertTrue(json.contains("\"productId\""));
+        assertTrue(json.contains("\"mesureId\""));
+        assertTrue(json.contains("\"uid\":\"inv-1\""), "Le JSON doit porter l'uid de l'inventaire");
+        assertTrue(json.contains("\"uid\":\"prod-1\""), "Le JSON doit porter l'uid du produit");
+        assertTrue(json.contains("\"uid\":\"mes-1\""), "Le JSON doit porter l'uid de la mesure");
+
+        Compter back = mapper.readValue(json, Compter.class);
+        assertNotNull(back);
+        assertEquals("inv-1", back.getInventaireId().getUid());
+        assertEquals("prod-1", back.getProductId().getUid());
+        assertEquals("mes-1", back.getMesureId().getUid());
+        assertEquals("LOT-A", back.getNumlot());
+        assertEquals("Goma", back.getRegion());
+    }
+
+    @Test
+    @DisplayName("jsonify(Compter) expose les FK inventaire, produit et mesure dans le JSON")
+    void testCompterFkJsonify() {
+        Compter c = new Compter();
+        c.setUid("comp-2");
+        c.setInventaireId(new Inventaire("inv-2"));
+        c.setProductId(new Produit("prod-2"));
+        c.setMesureId(new Mesure("mes-2"));
+
+        JsonObject json = JsonUtil.jsonify(c);
+
+        assertNotNull(json);
+        JsonObject inv = json.getJsonObject("inventaireId");
+        assertNotNull(inv, "inventaireId doit être présent dans le JSON");
+        assertEquals("inv-2", inv.getString("uid"));
+        assertEquals("prod-2", json.getJsonObject("productId").getString("uid"));
+        assertEquals("mes-2", json.getJsonObject("mesureId").getString("uid"));
+    }
+
     // ── 3. Les champs nuls sont exclus du JSON wire (NON_NULL) ─────────────
 
     @Test

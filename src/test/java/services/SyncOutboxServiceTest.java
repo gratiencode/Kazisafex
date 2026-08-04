@@ -46,6 +46,8 @@ class SyncOutboxServiceTest {
             assertEquals("DOWNSYNCED", row.getStatus());
             assertEquals("prod-1", row.getEntityId());
             assertEquals("PRODUIT", row.getTableName());
+            assertTrue(row.getRegion() != null && !row.getRegion().isBlank(),
+                    "Le record porte la région : la clé d'UPSERT est (tableName, entityId, region)");
         }
     }
 

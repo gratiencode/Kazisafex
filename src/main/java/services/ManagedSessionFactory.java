@@ -282,18 +282,25 @@ public class ManagedSessionFactory {
         } else {
             EntityManager em = getEntityManager();
             EntityTransaction tx = em.getTransaction();
-            tx.begin();
+            boolean started = !tx.isActive();
+            if (started) {
+                tx.begin();
+            }
             try {
                 T result = action.apply(em);
-                tx.commit();
+                if (started && tx.isActive()) {
+                    tx.commit();
+                }
                 return result;
             } catch (RuntimeException e) {
-                if (tx.isActive()) {
+                if (started && tx.isActive()) {
                     tx.rollback();
                 }
                 throw e;
             } finally {
-                closeEntityManager();
+                if (started) {
+                    closeEntityManager();
+                }
             }
         }
     }

@@ -149,9 +149,12 @@ public class NotificationHandler implements EventHandler {
                             switch (t) {
                                 case Tables.PRODUIT -> {
                                     Produit product = (Produit) obj;
-                                    boolean exist = CategoryDelegate.isExists(
-                                        product.getCategoryId().getUid()
+                                    String categoryUid = refUid(
+                                        product.getCategoryId()
                                     );
+                                    boolean exist =
+                                        categoryUid != null &&
+                                        CategoryDelegate.isExists(categoryUid);
                                     if (!exist) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -203,9 +206,12 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.MESURE -> {
                                     Mesure measure = (Mesure) obj;
-                                    boolean exists = ProduitDelegate.isExists(
-                                        measure.getProduitId().getUid()
+                                    String produitUid = refUid(
+                                        measure.getProduitId()
                                     );
+                                    boolean exists =
+                                        produitUid != null &&
+                                        ProduitDelegate.isExists(produitUid);
                                     if (!exists) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -238,9 +244,13 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.LIVRAISON -> {
                                     Livraison delivery = (Livraison) obj;
+                                    String fournisseurUid = refUid(
+                                        delivery.getFournId()
+                                    );
                                     boolean exists =
+                                        fournisseurUid != null &&
                                         FournisseurDelegate.isExists(
-                                            delivery.getFournId().getUid()
+                                            fournisseurUid
                                         );
                                     if (!exists) {
                                         status[0] =
@@ -270,15 +280,24 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.STOCKER -> {
                                     Stocker stocker = (Stocker) obj;
-                                    boolean exists = LivraisonDelegate.isExists(
-                                        stocker.getLivraisId().getUid()
+                                    String livraisonUid = refUid(
+                                        stocker.getLivraisId()
                                     );
-                                    boolean exist1 = MesureDelegate.isExists(
-                                        stocker.getMesureId().getUid()
+                                    String mesureUid = refUid(
+                                        stocker.getMesureId()
                                     );
-                                    boolean exist2 = ProduitDelegate.isExists(
-                                        stocker.getProductId().getUid()
+                                    String productUid = refUid(
+                                        stocker.getProductId()
                                     );
+                                    boolean exists =
+                                        livraisonUid != null &&
+                                        LivraisonDelegate.isExists(livraisonUid);
+                                    boolean exist1 =
+                                        mesureUid != null &&
+                                        MesureDelegate.isExists(mesureUid);
+                                    boolean exist2 =
+                                        productUid != null &&
+                                        ProduitDelegate.isExists(productUid);
                                     if (!(exists && exist1 && exist2)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -304,12 +323,18 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.DESTOCKER -> {
                                     Destocker destocker = (Destocker) obj;
-                                    boolean exists = MesureDelegate.isExists(
-                                        destocker.getMesureId().getUid()
+                                    String mesureUid = refUid(
+                                        destocker.getMesureId()
                                     );
-                                    boolean exist2 = ProduitDelegate.isExists(
-                                        destocker.getProductId().getUid()
+                                    String productUid = refUid(
+                                        destocker.getProductId()
                                     );
+                                    boolean exists =
+                                        mesureUid != null &&
+                                        MesureDelegate.isExists(mesureUid);
+                                    boolean exist2 =
+                                        productUid != null &&
+                                        ProduitDelegate.isExists(productUid);
                                     if (!(exists && exist2)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -336,12 +361,18 @@ public class NotificationHandler implements EventHandler {
                                 case Tables.RECQUISITION -> {
                                     Recquisition recquisition =
                                         (Recquisition) obj;
-                                    boolean exists = ProduitDelegate.isExists(
-                                        recquisition.getProductId().getUid()
+                                    String productUid = refUid(
+                                        recquisition.getProductId()
                                     );
-                                    boolean exist1 = MesureDelegate.isExists(
-                                        recquisition.getMesureId().getUid()
+                                    String mesureUid = refUid(
+                                        recquisition.getMesureId()
                                     );
+                                    boolean exists =
+                                        productUid != null &&
+                                        ProduitDelegate.isExists(productUid);
+                                    boolean exist1 =
+                                        mesureUid != null &&
+                                        MesureDelegate.isExists(mesureUid);
                                     if (!(exists && exist1)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -368,13 +399,20 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.PRIXDEVENTE -> {
                                     PrixDeVente price = (PrixDeVente) obj;
-                                    boolean exists =
-                                        RecquisitionDelegate.isExists(
-                                            price.getRecquisitionId().getUid()
-                                        );
-                                    boolean exist1 = MesureDelegate.isExists(
-                                        price.getMesureId().getUid()
+                                    String recquisitionUid = refUid(
+                                        price.getRecquisitionId()
                                     );
+                                    String mesureUid = refUid(
+                                        price.getMesureId()
+                                    );
+                                    boolean exists =
+                                        recquisitionUid != null &&
+                                        RecquisitionDelegate.isExists(
+                                            recquisitionUid
+                                        );
+                                    boolean exist1 =
+                                        mesureUid != null &&
+                                        MesureDelegate.isExists(mesureUid);
                                     if (!(exists && exist1)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -458,9 +496,12 @@ public class NotificationHandler implements EventHandler {
                                         notifySynced(vente);
                                         return;
                                     }
-                                    boolean exists = ClientDelegate.isExists(
-                                        vente.getClientId().getUid()
+                                    String clientUid = refUid(
+                                        vente.getClientId()
                                     );
+                                    boolean exists =
+                                        clientUid != null &&
+                                        ClientDelegate.isExists(clientUid);
                                     if (!exists) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -522,10 +563,12 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.TRAISORERIE -> {
                                     Traisorerie trans = (Traisorerie) obj;
+                                    String tresorUid = refUid(
+                                        trans.getTresorId()
+                                    );
                                     boolean exists =
-                                        CompteTresorDelegate.isExists(
-                                            trans.getTresorId().getUid()
-                                        );
+                                        tresorUid != null &&
+                                        CompteTresorDelegate.isExists(tresorUid);
                                     if (!exists) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -568,17 +611,24 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.OPERATION -> {
                                     Operation operation = (Operation) obj;
-                                    boolean exists =
-                                        CompteTresorDelegate.isExists(
-                                            operation.getTresorId().getUid()
-                                        );
-                                    boolean exist2 =
-                                        TraisorerieDelegate.isExists(
-                                            operation.getCaisseOpId().getUid()
-                                        );
-                                    boolean exist3 = DepenseDelegate.isExists(
-                                        operation.getDepenseId().getUid()
+                                    String tresorUid = refUid(
+                                        operation.getTresorId()
                                     );
+                                    String caisseUid = refUid(
+                                        operation.getCaisseOpId()
+                                    );
+                                    String depenseUid = refUid(
+                                        operation.getDepenseId()
+                                    );
+                                    boolean exists =
+                                        tresorUid != null &&
+                                        CompteTresorDelegate.isExists(tresorUid);
+                                    boolean exist2 =
+                                        caisseUid != null &&
+                                        TraisorerieDelegate.isExists(caisseUid);
+                                    boolean exist3 =
+                                        depenseUid != null &&
+                                        DepenseDelegate.isExists(depenseUid);
                                     if (!(exists && exist2 && exist3)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -617,16 +667,26 @@ public class NotificationHandler implements EventHandler {
                                 }
                                 case Tables.COMPTER -> {
                                     Compter compter = (Compter) obj;
+                                    String inventaireUid = refUid(
+                                        compter.getInventaireId()
+                                    );
+                                    String mesureUid = refUid(
+                                        compter.getMesureId()
+                                    );
+                                    String productUid = refUid(
+                                        compter.getProductId()
+                                    );
                                     boolean exists =
+                                        inventaireUid != null &&
                                         InventaireDelegate.isExists(
-                                            compter.getInventaireId().getUid()
+                                            inventaireUid
                                         );
-                                    boolean exist1 = MesureDelegate.isExists(
-                                        compter.getMesureId().getUid()
-                                    );
-                                    boolean exist2 = ProduitDelegate.isExists(
-                                        compter.getProductId().getUid()
-                                    );
+                                    boolean exist1 =
+                                        mesureUid != null &&
+                                        MesureDelegate.isExists(mesureUid);
+                                    boolean exist2 =
+                                        productUid != null &&
+                                        ProduitDelegate.isExists(productUid);
                                     if (!(exists && exist1 && exist2)) {
                                         status[0] =
                                             DownsyncStatus.DEPENDENCY_MISSING;
@@ -897,6 +957,22 @@ public class NotificationHandler implements EventHandler {
             } else {
                 javafx.application.Platform.runLater(dispatch);
             }
+        }
+    }
+
+    /**
+     * UID d'une référence entité, sans NPE si la référence (ou son uid) est
+     * absente du payload downsync.
+     */
+    static String refUid(Object reference) {
+        if (reference == null) {
+            return null;
+        }
+        try {
+            Object uid = reference.getClass().getMethod("getUid").invoke(reference);
+            return uid == null ? null : uid.toString();
+        } catch (Exception e) {
+            return null;
         }
     }
 
