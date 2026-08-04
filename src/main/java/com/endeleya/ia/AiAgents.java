@@ -1,8 +1,14 @@
 package com.endeleya.ia;
 
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.AiServices;
@@ -86,6 +92,22 @@ public final class AiAgents {
     }
     
     public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
+    /**
+     * Memoire de Gratien : on ne conserve que les 10 derniers messages. Des que la
+     * limite est atteinte, le contexte est compacte en un resume (message numero 1)
+     * suivi des derniers messages, puis la memoire repart sur une fenetre neuve.
+     */
+    private static final int MAX_MEMORY_MESSAGES = 10;
+    private static final int COMPACTION_THRESHOLD = 10;
+    private static final int COMPACTION_TAIL = 6;
+    private static final String COMPACTION_MARKER = "[Contexte compacte] ";
+    private static final String SUMMARY_SYSTEM_PROMPT = """
+            Tu es l'agent de memoire de Gratien, assistant de Kazisafe.
+            Resume en francais la conversation ci-dessous en conservant les faits importants:
+            entreprise et utilisateur, produits, prix, fournisseurs, commandes, ventes, depenses,
+            decisions et actions deja realisees, et tout detail necessaire pour poursuivre sans relire l'historique.
+            Ne reponds que par le resume, sans introduction ni commentaire.
+            """;
     private static final String MODEL_NAME = System.getProperty(
             "kazisafex.ai.model",
             System.getenv().getOrDefault("AI_MODEL", 
@@ -113,6 +135,12 @@ public final class AiAgents {
     private final ExpenseOperationAgent expenseOperationAgent;
     private final WorkflowCancellationAgent workflowCancellationAgent;
     private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicBoolean streamingActive = new AtomicBoolean(false);
+    private final AtomicBoolean compactionPending = new AtomicBoolean(false);
+    private final AtomicBoolean compacting = new AtomicBoolean(false);
+    private final Object compactionLock = new Object();
+    private volatile Consumer<String> compactionSignal;
+    private volatile ChatModel summaryModel;
     private volatile String sessionId = "anonymous";
     private volatile PendingInvoiceIntent pendingInvoiceIntent;
 
@@ -120,7 +148,8 @@ public final class AiAgents {
         // GratienTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
         this.GratienTools = new GratienTools();
         // La memoire Redis garde le contexte par entreprise/utilisateur avec fallback local.
-        this.memoryStore = new RedisMemoryStore();
+        // La meme limite est appliquee sur Redis et sur InMemoryStorage (fallback).
+        this.memoryStore = new RedisMemoryStore(MAX_MEMORY_MESSAGES);
         this.memoryProvider = memoryProvider(memoryStore);
         StreamingChatModel oschatmodel = OllamaStreamingChatModel.builder()
                 .baseUrl(OLLAMA_BASE_URL)
@@ -547,11 +576,9 @@ public final class AiAgents {
         }).onPartialThinking(thinking -> {
             String text = thinking == null ? "" : thinking.text();
             if (text != null && !text.isBlank()) {
-                appendMemory("thinking", text);
                 onProcess.accept(sanitizeToolNamesForDisplay("*Raisonnement en cours...*\n\n" + text));
             }
         }).onPartialResponse(token -> {
-            appendMemory("assistant-partial", token);
             if (toolWasStarted.get()) {
                 bufferedToolResponse.append(token);
             } else {
@@ -574,21 +601,178 @@ public final class AiAgents {
                         appendMemory("assistant", finalAnswer);
                         onToken.accept(sanitizeToolNamesForDisplay(finalAnswer));
                     }
+                    finishStreaming();
                     onComplete.run();
                 })
                 .onError(error -> {
                     appendMemory("error", throwableMessage(error));
+                    finishStreaming();
                     onError.accept(error);
-                })
-                .start();
+                });
+        streamingActive.set(true);
+        stream.start();
+    }
+
+    /**
+     * Marque la fin du streaming puis execute le compactage de memoire reporte
+     * si la limite a ete atteinte en cours de reponse.
+     */
+    private void finishStreaming() {
+        streamingActive.set(false);
+        if (compactionPending.compareAndSet(true, false)) {
+            maybeCompactMemory();
+        }
     }
 
     public void appendMemory(String role, String content) {
+        if (streamingActive.get()) {
+            // Pendant un streaming on ne bloque jamais : on reporte le compactage a la fin.
+            memoryStore.append(sessionId, role, content);
+            if (memoryAtLimit()) {
+                compactionPending.set(true);
+            }
+            return;
+        }
+        // Hors streaming : a chaque limite atteinte, la prochaine ecriture evincerait
+        // le plus ancien message. On compacte AVANT d'ajouter afin qu'aucun message ne
+        // soit perdu et que le contexte compacte reste le message numero 1.
+        if (memoryAtLimit()) {
+            maybeCompactMemory();
+        }
         memoryStore.append(sessionId, role, content);
     }
 
     public List<String> recentMemory(int limit) {
-        return memoryStore.recent(sessionId, limit);
+        return memoryStore.recent(sessionId, Math.min(limit, MAX_MEMORY_MESSAGES));
+    }
+
+    /**
+     * Branche le signal de compactage de la session courante (affiche via le
+     * canal de progression du chat). Chaque requete l'ecrase; les requetes sont
+     * serializees par le controleur, donc un seul signal actif a la fois.
+     */
+    public void setCompactionSignal(Consumer<String> signal) {
+        this.compactionSignal = signal;
+    }
+
+    /** Vrai pendant qu'un compactage de memoire est en cours (LLM de resume). */
+    public boolean isCompacting() {
+        return compacting.get();
+    }
+
+    private void emitCompactionSignal(String message) {
+        Consumer<String> signal = compactionSignal;
+        if (signal != null && message != null && !message.isBlank()) {
+            try {
+                signal.accept(message);
+            } catch (Exception ex) {
+                LOGGER.log(Level.FINE, "Signal de compactage non affichable", ex);
+            }
+        }
+    }
+
+    /**
+     * Compacte la memoire : remplace l'historique par le contexte compacte en
+     * message numero 1 suivi des derniers messages.
+     */
+    private void maybeCompactMemory() {
+        if (streamingActive.get()) {
+            return;
+        }
+        synchronized (compactionLock) {
+            try {
+                List<String> raw = memoryStore.recentRaw(sessionId, MAX_MEMORY_MESSAGES);
+                if (raw.size() < MAX_MEMORY_MESSAGES) {
+                    return;
+                }
+                compactMemory(raw);
+            } catch (Exception ex) {
+                LOGGER.log(Level.WARNING, "Compactage de memoire impossible pour " + sessionId, ex);
+            }
+        }
+    }
+
+    /**
+     * Vrai des que la memoire est pleine : la prochaine ecriture evincerait un message.
+     */
+    private boolean memoryAtLimit() {
+        return memoryStore.recentRaw(sessionId, MAX_MEMORY_MESSAGES).size() >= MAX_MEMORY_MESSAGES;
+    }
+
+    private void compactMemory(List<String> raw) {
+        compacting.set(true);
+        emitCompactionSignal(
+                "\uD83E\uDDD1\u200D\uD83D\uDCBB Gratien compacte sa mémoire pour ne garder que l'essentiel... "
+                        + "Les messages reçus pendant ce temps seront traités juste après.");
+        try {
+            String summary = summarize(raw);
+            List<String> renewed = new ArrayList<>();
+            renewed.add(RedisMemoryStore.serializePayload("system", COMPACTION_MARKER + summary));
+            int tail = Math.min(COMPACTION_TAIL, raw.size());
+            for (int i = raw.size() - tail; i < raw.size(); i++) {
+                renewed.add(raw.get(i));
+            }
+            memoryStore.replaceRaw(sessionId, renewed);
+            LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": " + renewed.size()
+                    + " messages, contexte compacte en message numero 1.");
+            emitCompactionSignal("\u2705 Mémoire compactée.");
+        } finally {
+            compacting.set(false);
+        }
+    }
+
+    private String summarize(List<String> raw) {
+        StringBuilder transcript = new StringBuilder();
+        for (String payload : raw) {
+            String[] parts = RedisMemoryStore.parsePayload(payload);
+            String role = parts[0];
+            String content = parts[1];
+            if (content == null || content.isBlank() || "system".equalsIgnoreCase(role)) {
+                continue;
+            }
+            if (content.length() > 1200) {
+                content = content.substring(0, 1200) + "...";
+            }
+            transcript.append(role).append(": ").append(content.replace("\n", " ")).append("\n");
+        }
+        if (transcript.length() > 6000) {
+            transcript.delete(0, transcript.length() - 6000);
+        }
+        String conversation = transcript.toString();
+        try {
+            ChatResponse response = summaryModel().chat(ChatRequest.builder()
+                    .messages(SystemMessage.from(SUMMARY_SYSTEM_PROMPT),
+                            UserMessage.from("Conversation a resumer:\n\n" + conversation))
+                    .build());
+            String text = response == null || response.aiMessage() == null
+                    ? "" : response.aiMessage().text();
+            if (text != null && !text.isBlank()) {
+                return text.trim();
+            }
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING, "Resume LLM indisponible, compactage deterministe: {0}",
+                    ex.getMessage());
+        }
+        return deterministicSummary(conversation);
+    }
+
+    private String deterministicSummary(String conversation) {
+        String compact = conversation.trim().replace("\n", " | ");
+        return compact.length() > 1500 ? compact.substring(0, 1500) + "..." : compact;
+    }
+
+    private ChatModel summaryModel() {
+        ChatModel model = summaryModel;
+        if (model == null) {
+            model = OllamaChatModel.builder()
+                    .baseUrl(OLLAMA_BASE_URL)
+                    .modelName(MODEL_NAME)
+                    .temperature(0.2)
+                    .timeout(Duration.ofSeconds(60))
+                    .build();
+            summaryModel = model;
+        }
+        return model;
     }
 
     private String safe(String value, String fallback) {
@@ -603,7 +787,7 @@ public final class AiAgents {
         LangChainRedisChatMemoryStore chatMemoryStore = new LangChainRedisChatMemoryStore(store);
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(40)
+                .maxMessages(MAX_MEMORY_MESSAGES)
                 .chatMemoryStore(chatMemoryStore)
                 .build();
     }

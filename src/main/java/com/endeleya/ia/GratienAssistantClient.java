@@ -67,6 +67,8 @@ public final class GratienAssistantClient {
 
     public void stream(String question, List<File> attachments,String entreprise, StreamCallback callback) {
         aiAgents.startForCurrentSession();
+        // Le compactage de memoire signale son execution via le canal de progression du chat.
+        aiAgents.setCompactionSignal(callback::onProcess);
         if (question != null && question.trim().toLowerCase(Locale.ROOT).startsWith("/kanuni ")) {
             String instruction = question.trim().substring(8).strip();
             String result = saveUserInstruction(instruction);

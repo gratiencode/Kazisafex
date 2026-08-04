@@ -3072,12 +3072,14 @@ public class MainuiController implements Initializable {
         // Si Gratien est déjà en train de traiter, on met en file d'attente.
         if (gratienIsProcessing.get()) {
             gratienMessageQueue.offer(new PendingUserMessage(question, attachments));
+            boolean compacting = AiAgents.getInstance().isCompacting();
+            String notice = compacting
+                    ? "\uD83E\uDDD1\u200D\uD83D\uDCBB Message reçu. Gratien est en train de compacter sa mémoire ; votre message sera traité juste après."
+                    : "\u23f3 Message reçu. Gratien finit sa réponse actuelle et traitera votre message ensuite.";
             Platform.runLater(() ->
                 webE.executeScript(
                     "showBotProcess(" +
-                        escapeForJS(
-                            "\u23f3 Message reçu. Gratien finit sa réponse actuelle et traitera votre message ensuite."
-                        ) +
+                        escapeForJS(notice) +
                         ")"
                 )
             );

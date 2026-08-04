@@ -8,22 +8,17 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class RedisMemoryStore {
 
     private static final Logger LOGGER = Logger.getLogger(RedisMemoryStore.class.getName());
-    private static final int DEFAULT_MAX_MESSAGES = 80;
+    private static final int DEFAULT_MAX_MESSAGES = 10;
     private static final int DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 14;
 
     private final String host;
@@ -32,16 +27,25 @@ public class RedisMemoryStore {
     private final int maxMessages;
     private final int ttlSeconds;
     private final boolean enabled;
-    private final Map<String, Deque<String>> fallback = new ConcurrentHashMap<>();
+    private final InMemoryStorage fallback;
     private volatile boolean redisAvailable;
 
     public RedisMemoryStore() {
+        this(DEFAULT_MAX_MESSAGES);
+    }
+
+    /**
+     * @param maxMessages limite de messages partagee avec le fallback : la meme
+     *                   valeur est appliquee sur Redis et sur InMemoryStorage.
+     */
+    public RedisMemoryStore(int maxMessages) {
         this.host = setting("kazisafex.redis.host", "REDIS_HOST", "127.0.0.1");
         this.port = intSetting("kazisafex.redis.port", "REDIS_PORT", 6379);
         this.timeoutMillis = intSetting("kazisafex.redis.timeout.ms", "REDIS_TIMEOUT_MS", 1500);
-        this.maxMessages = intSetting("kazisafex.redis.max.messages", "REDIS_MAX_MESSAGES", DEFAULT_MAX_MESSAGES);
+        this.maxMessages = Math.max(1, maxMessages);
         this.ttlSeconds = intSetting("kazisafex.redis.ttl.seconds", "REDIS_TTL_SECONDS", DEFAULT_TTL_SECONDS);
         this.enabled = booleanSetting("kazisafex.redis.enabled", "REDIS_ENABLED", true);
+        this.fallback = new InMemoryStorage(this.maxMessages);
         this.redisAvailable = enabled && ping();
     }
 
@@ -100,9 +104,8 @@ public class RedisMemoryStore {
                 LOGGER.log(Level.WARNING, "Lecture Redis echouee, fallback memoire locale: {0}", ex.getMessage());
             }
         }
-        Deque<String> queue = fallback.getOrDefault(key, new ArrayDeque<>());
-        List<String> messages = new ArrayList<>(queue);
-        return messages.size() <= safeLimit ? messages : messages.subList(messages.size() - safeLimit, messages.size());
+        List<String> queue = fallback.recent(key, safeLimit);
+        return new ArrayList<>(queue);
     }
 
     public void replaceRaw(String sessionId, List<String> payloads) {
@@ -125,16 +128,7 @@ public class RedisMemoryStore {
                 LOGGER.log(Level.WARNING, "Ecriture brute Redis echouee, fallback memoire locale: {0}", ex.getMessage());
             }
         }
-        Deque<String> queue = fallback.computeIfAbsent(key, ignored -> new ArrayDeque<>());
-        synchronized (queue) {
-            queue.clear();
-            for (String payload : safePayloads) {
-                queue.addLast(payload == null ? "" : payload);
-                while (queue.size() > maxMessages) {
-                    queue.removeFirst();
-                }
-            }
-        }
+        fallback.replaceRaw(key, safePayloads);
     }
 
     public List<String> recentRaw(String sessionId, int limit) {
@@ -155,7 +149,7 @@ public class RedisMemoryStore {
                 LOGGER.log(Level.WARNING, "Suppression Redis echouee, fallback memoire locale: {0}", ex.getMessage());
             }
         }
-        fallback.remove(key);
+        fallback.clear(key);
     }
 
     public boolean ping() {
@@ -172,13 +166,7 @@ public class RedisMemoryStore {
     }
 
     private void appendFallback(String key, String payload) {
-        Deque<String> queue = fallback.computeIfAbsent(key, ignored -> new ArrayDeque<>());
-        synchronized (queue) {
-            queue.addLast(payload);
-            while (queue.size() > maxMessages) {
-                queue.removeFirst();
-            }
-        }
+        fallback.append(key, payload);
     }
 
     private Object command(String... parts) throws IOException {
@@ -258,11 +246,42 @@ public class RedisMemoryStore {
     }
 
     private String serialize(String role, String content) {
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("at", Instant.now().toString());
-        payload.put("role", role == null || role.isBlank() ? "system" : role.toLowerCase(Locale.ROOT));
-        payload.put("content", content.replace("\r", " ").trim());
-        return payload.toString();
+        return serializePayload(role, content);
+    }
+
+    /**
+     * Forme canonique d'un message memoire : {@code {at=..., role=..., content=...}}.
+     * Partagee par Redis, le fallback et le compactage de contexte.
+     */
+    public static String serializePayload(String role, String content) {
+        String safeContent = content == null || content.isBlank()
+                ? ""
+                : content.replace("\r", " ").trim();
+        String safeRole = role == null || role.isBlank() ? "system" : role.toLowerCase(Locale.ROOT);
+        return "{at=" + Instant.now() + ", role=" + safeRole + ", content=" + safeContent + "}";
+    }
+
+    /**
+     * Decoupe un payload memoire en {@code [role, content]}. Retourne
+     * {@code ["", payload]} si le format n'est pas reconnu.
+     */
+    public static String[] parsePayload(String payload) {
+        if (payload == null || !payload.trim().startsWith("{")) {
+            return new String[]{"", payload == null ? "" : payload};
+        }
+        String s = payload.trim();
+        int roleIdx = s.indexOf("role=");
+        int contentIdx = roleIdx < 0 ? -1 : s.indexOf("content=", roleIdx);
+        if (roleIdx < 0 || contentIdx < 0) {
+            return new String[]{"", s};
+        }
+        String role = s.substring(roleIdx + "role=".length(), contentIdx)
+                .replace(",", "").trim();
+        String content = s.substring(contentIdx + "content=".length());
+        if (content.endsWith("}")) {
+            content = content.substring(0, content.length() - 1);
+        }
+        return new String[]{role, content};
     }
 
     private String key(String sessionId) {
