@@ -6,6 +6,10 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
+import dev.langchain4j.service.tool.ToolErrorContext;
+import dev.langchain4j.service.tool.ToolErrorHandlerResult;
+import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
@@ -38,6 +42,39 @@ import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
 public final class AiAgents {
+
+    /**
+     * Contournement du bug LangChain4j 1.5.0 : quand l'argument parsing d'un
+     * outil échoue, ToolService.executeWithErrorHandling appelle le handler
+     * avec une cause null (ToolArgumentsException(String) a une cause null),
+     * et le handler par défaut fait error.getMessage() => NullPointerException
+     * qui tue le thread de streaming. Ces handlers null-safe renvoient un
+     * message lisible à la place, et le modèle peut se corriger.
+     */
+    private static final ToolArgumentsErrorHandler NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER =
+            (error, context) -> ToolErrorHandlerResult.text(
+                    safeErrorMessage(error, "Arguments invalides fournis a l'outil: "
+                            + toolName(context)));
+    private static final ToolExecutionErrorHandler NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER =
+            (error, context) -> ToolErrorHandlerResult.text(
+                    safeErrorMessage(error, "Echec de l'execution de l'outil: "
+                            + toolName(context)));
+
+    private static String toolName(ToolErrorContext context) {
+        if (context == null || context.toolExecutionRequest() == null
+                || context.toolExecutionRequest().name() == null) {
+            return "outil";
+        }
+        return context.toolExecutionRequest().name();
+    }
+
+    private static String safeErrorMessage(Throwable error, String fallback) {
+        if (error == null) {
+            return fallback;
+        }
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? fallback : message;
+    }
 
     public static String getSpeedModel() {
        if (LocalTime.now().isAfter(LocalTime.of(17, 59))){
@@ -97,6 +134,8 @@ public final class AiAgents {
                 .streamingChatModel(oschatmodel)
                 .tools(GratienTools)
                 .chatMemoryProvider(memoryProvider)
+                .toolArgumentsErrorHandler(NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER)
+                .toolExecutionErrorHandler(NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER)
                 .build();
         this.productCreatorAgent = buildAgent(ProductCreatorAgent.class, oschatmodel);
         this.supplierDeliveryAgent = buildAgent(SupplierDeliveryAgent.class, oschatmodel);
@@ -119,6 +158,16 @@ public final class AiAgents {
 
     public GratienTools getGratienTools() {
         return GratienTools;
+    }
+
+    /**
+     * Re-teste Redis apres un bootstrap (install/demarrage) afin que la memoire
+     * de Gratien bascule sur Redis des qu'il est disponible.
+     */
+    public void recheckRedisMemory() {
+        memoryStore.recheck();
+        LOGGER.log(Level.INFO, "Memoire Gratien apres bootstrap: redis="
+                + memoryStore.isRedisAvailable());
     }
 
     public void startForCurrentSession() {
@@ -564,6 +613,8 @@ public final class AiAgents {
                 .streamingChatModel(model)
                 .tools(GratienTools)
                 .chatMemoryProvider(memoryProvider)
+                .toolArgumentsErrorHandler(NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER)
+                .toolExecutionErrorHandler(NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER)
                 .build();
     }
 
@@ -572,40 +623,51 @@ public final class AiAgents {
         StringBuilder answer = new StringBuilder();
         AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicReference<String> lastToolResult = new AtomicReference<>("");
-        appendMemory("agent-start", agentName + " lance son execution.");
-        streamSupplier.get()
-                .beforeToolExecution(tool -> {
-                    String toolName = tool.request() == null ? "outil" : tool.request().name();
-                    appendMemory(agentName + "-tool-start", "Execution outil " + toolName);
-                })
-                .onToolExecuted(tool -> {
-                    String toolName = tool.request() == null ? "outil" : tool.request().name();
-                    String result = tool.result() == null ? "" : tool.result();
-                    lastToolResult.set(result);
-                    appendMemory(agentName + "-tool-result", toolName + " => " + result);
-                })
-                .onPartialThinking(thinking -> {
-                    if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
-                        appendMemory(agentName + "-thinking", thinking.text());
-                    }
-                })
-                .onPartialResponse(answer::append)
-                .onCompleteResponse(response -> latch.countDown())
-                .onError(ex -> {
-                    error.set(ex);
-                    latch.countDown();
-                })
-                .start();
         try {
+            appendMemory("agent-start", agentName + " lance son execution.");
+            streamSupplier.get()
+                    .beforeToolExecution(tool -> {
+                        String toolName = tool.request() == null ? "outil" : tool.request().name();
+                        appendMemory(agentName + "-tool-start", "Execution outil " + toolName);
+                    })
+                    .onToolExecuted(tool -> {
+                        String toolName = tool.request() == null ? "outil" : tool.request().name();
+                        String result = tool.result() == null ? "" : tool.result();
+                        lastToolResult.set(result);
+                        appendMemory(agentName + "-tool-result", toolName + " => " + result);
+                    })
+                    .onPartialThinking(thinking -> {
+                        if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
+                            appendMemory(agentName + "-thinking", thinking.text());
+                        }
+                    })
+                    .onPartialResponse(answer::append)
+                    .onCompleteResponse(response -> latch.countDown())
+                    .onError(ex -> {
+                        error.set(ex);
+                        latch.countDown();
+                    })
+                    .start();
             if (!latch.await(5, TimeUnit.MINUTES)) {
                 throw new IllegalStateException(agentName + " n'a pas termine dans le delai attendu");
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException(agentName + " interrompu", ex);
+            LOGGER.log(Level.WARNING, agentName + " interrompu", ex);
+            return safeErrorMessage(ex, "L'agent " + agentName + " a ete interrompu.");
+        } catch (Exception ex) {
+            // Un echec d'agent ne doit jamais tuer le thread de streaming Gratien :
+            // on renvoie un message lisible a la place (le fallback reste utilisable).
+            LOGGER.log(Level.WARNING, agentName + " a echoue", ex);
+            appendMemory(agentName + "-error", safeErrorMessage(ex,
+                    "L'agent " + agentName + " a rencontre un probleme."));
+            return safeErrorMessage(ex, "L'agent " + agentName + " a rencontre un probleme.");
         }
         if (error.get() != null) {
-            throw new IllegalStateException(agentName + " a echoue", error.get());
+            LOGGER.log(Level.WARNING, agentName + " a echoue", error.get());
+            appendMemory(agentName + "-error", safeErrorMessage(error.get(),
+                    "L'agent " + agentName + " a rencontre un probleme."));
+            return safeErrorMessage(error.get(), "L'agent " + agentName + " a rencontre un probleme.");
         }
         String finalAnswer = answer.toString();
         if (asksForInternalWorkflowId(finalAnswer)) {

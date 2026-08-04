@@ -74,6 +74,18 @@ public class Kazisafex extends Application {
         MainUI.rootPath();
         stage.centerOnScreen();
         stage.show();
+
+        // Redis = memoire de Gratien. Au premier lancement, on tente de
+        // demarrer/installer un redis-server local (thread de fond, jamais bloquant).
+        Thread redisSetup = new Thread(() -> {
+            try {
+                com.endeleya.ia.RedisBootstrap.ensureRedis();
+            } catch (Throwable ex) {
+                System.err.println("[Redis] Bootstrap en echec: " + ex.getMessage());
+            }
+        }, "gratien-redis-setup");
+        redisSetup.setDaemon(true);
+        redisSetup.start();
     }
 
     /**

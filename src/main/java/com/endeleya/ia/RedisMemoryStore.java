@@ -49,6 +49,14 @@ public class RedisMemoryStore {
         return redisAvailable;
     }
 
+    /**
+     * Re-teste la disponibilite de Redis (appele apres un bootstrap/install).
+     * Permet de rebasculer sur Redis si celui-ci demarre en cours de session.
+     */
+    public void recheck() {
+        this.redisAvailable = enabled && ping();
+    }
+
     public void append(String sessionId, String role, String content) {
         if (sessionId == null || sessionId.isBlank() || content == null || content.isBlank()) {
             return;
