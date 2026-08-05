@@ -101,6 +101,8 @@ public class DownsyncCatchupService {
                         statusUpdater.accept("Matérialisation terminée.");
                     }
                 }
+                // Nettoyage: aucun enregistrement d'outbox avec payload null ne doit subsister.
+                SyncOutboxService.deleteNullPayloadRecords();
             } else {
                 System.err.println(
                     "[SYNC-CATCHUP] Server error during catch-up: " + response.code()

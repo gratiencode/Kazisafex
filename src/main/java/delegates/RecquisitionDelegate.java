@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import services.ClotureCallback;
@@ -285,22 +286,43 @@ public class RecquisitionDelegate {
 
     public static List<PrixDeVente> findLastPrices(String prodId) {
         List<PrixDeVente> ps = getStorage().findLastPrices(prodId);
-        if (ps.isEmpty()) {
+        if (ps == null || ps.isEmpty()) {
             return List.of();
         }
-        Map<String, Recquisition> recquisitionCache
-                = ps.stream()
-                        .map(p -> p.getRecquisitionId().getUid())
-                        .distinct()
-                        .collect(Collectors.toMap(
-                                uid -> uid,
-                                uid -> findRecquisition(uid)));
-        Recquisition lastRecquisition
-                = recquisitionCache.values().stream()
-                        .max(Comparator.comparing(Recquisition::getDate))
-                        .orElseThrow();
+        // Collecte des recquisitions referencées, en ignorant les orphelines:
+        // un PrixDeVente peut referencer une Recquisition supprimee (REMOVE
+        // downsync) ou absente -> on ne doit jamais lever d'exception ici.
+        Map<String, Recquisition> recquisitionCache = new HashMap<>();
+        for (PrixDeVente price : ps) {
+            if (price == null || price.getRecquisitionId() == null
+                    || price.getRecquisitionId().getUid() == null) {
+                continue;
+            }
+            String uid = price.getRecquisitionId().getUid();
+            if (recquisitionCache.containsKey(uid)) {
+                continue;
+            }
+            Recquisition req = findRecquisition(uid);
+            if (req != null) {
+                recquisitionCache.put(uid, req);
+            }
+        }
+        Recquisition lastRecquisition = null;
+        for (Recquisition req : recquisitionCache.values()) {
+            if (req == null || req.getDate() == null) {
+                continue;
+            }
+            if (lastRecquisition == null || req.getDate().isAfter(lastRecquisition.getDate())) {
+                lastRecquisition = req;
+            }
+        }
+        if (lastRecquisition == null) {
+            return List.of();
+        }
+        String lastUid = lastRecquisition.getUid();
         return ps.stream()
-                .filter(p -> p.getRecquisitionId().getUid().equals(lastRecquisition.getUid()))
+                .filter(p -> p != null && p.getRecquisitionId() != null
+                        && lastUid != null && lastUid.equals(p.getRecquisitionId().getUid()))
                 .toList();
     }
 

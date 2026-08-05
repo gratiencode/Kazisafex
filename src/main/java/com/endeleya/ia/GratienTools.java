@@ -349,33 +349,41 @@ public class GratienTools {
         if (query.isBlank()) {
             return "Indiquez le nom, le code-barres ou le uid du produit dont vous voulez le prix de vente.";
         }
-        Produit product = findProductByUidCodebarOrName(query);
-        if (product == null) {
-            return "Produit introuvable pour: " + query
-                    + ". Utilisez `searchProductsByCriteria` ou `findProductCandidates` pour trouver le produit exact.";
-        }
-        List<PrixDeVente> prices = latestSalePrices(product);
-        if (prices == null || prices.isEmpty()) {
-            return "Aucun prix de vente configure pour le produit: " + productLine(product)
-                    + ". Utilisez `diagnoseInvisibleProductInPos` pour diagnostiquer pourquoi ce produit n'a pas de prix de vente.";
-        }
-        StringBuilder builder = new StringBuilder();
-        builder.append("Prix de vente actuel de: ").append(productLine(product)).append("\n\n");
-        int index = 0;
-        for (PrixDeVente price : prices) {
-            if (price == null) {
-                continue;
+        try {
+            Produit product = findProductByUidCodebarOrName(query);
+            if (product == null) {
+                return "Produit introuvable pour: " + query
+                        + ". Utilisez `searchProductsByCriteria` ou `findProductCandidates` pour trouver le produit exact.";
             }
-            String measure = price.getMesureId() == null ? "-" : safe(price.getMesureId().getDescription(), "-");
-            builder.append(++index).append(". ")
-                    .append("quantite de ").append(price.getQmin())
-                    .append(" a ").append(price.getQmax())
-                    .append(" ").append(measure)
-                    .append(" -> ").append(price.getPrixUnitaire())
-                    .append(" ").append(safe(price.getDevise(), "-"))
-                    .append(" par unite\n");
+            List<PrixDeVente> prices = latestSalePrices(product);
+            if (prices == null || prices.isEmpty()) {
+                return "Aucun prix de vente configure pour le produit: " + productLine(product)
+                        + ". Utilisez `diagnoseInvisibleProductInPos` pour diagnostiquer pourquoi ce produit n'a pas de prix de vente.";
+            }
+            StringBuilder builder = new StringBuilder();
+            builder.append("Prix de vente actuel de: ").append(productLine(product)).append("\n\n");
+            int index = 0;
+            for (PrixDeVente price : prices) {
+                if (price == null) {
+                    continue;
+                }
+                String measure = price.getMesureId() == null ? "-" : safe(price.getMesureId().getDescription(), "-");
+                builder.append(++index).append(". ")
+                        .append("quantite de ").append(price.getQmin())
+                        .append(" a ").append(price.getQmax())
+                        .append(" ").append(measure)
+                        .append(" -> ").append(price.getPrixUnitaire())
+                        .append(" ").append(safe(price.getDevise(), "-"))
+                        .append(" par unite\n");
+            }
+            return builder.toString().trim();
+        } catch (Exception ex) {
+            // Ne jamais faire echouer l'execution de l'outil: on retourne un diagnostic lisible.
+            return "Impossible de lire le prix de vente actuel pour: " + query
+                    + " (donnees de prix/recquisition incompletes: " + safe(ex.getMessage(), ex.getClass().getSimpleName())
+                    + "). Verifiez que le produit a bien une recquisition et des prix de vente, "
+                    + "ou utilisez `diagnoseInvisibleProductInPos` pour un diagnostic complet.";
         }
-        return builder.toString().trim();
     }
 
     @Tool("Diagnostique pourquoi un produit n'est pas visible dans le POS/ListItemView: produit, mesures, mesure unitaire, dernière réquisition, livraison et prix de vente")

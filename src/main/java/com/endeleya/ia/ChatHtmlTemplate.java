@@ -532,7 +532,7 @@ public final class ChatHtmlTemplate {
         """;
         return html
                 .replace("__BODY_CLASS__", dark ? "dark" : "light")
-                .replace("__READY_TEXT__", cssText(label(lang, "xGratien.ready", "Gratien est prêt")))
+                .replace("__READY_TEXT__", cssText(label(lang, "xGratien.ready", "Bonjour, je suis Gratien, comment puis-je vous aider aujourd'hui")))
                 .replace("__REPLY_TEXT__", jsLiteralContent(label(lang, "xGratien.reply", "Répondre")))
                 .replace("__COPY_TEXT__", jsLiteralContent(label(lang, "xGratien.copy", "Copier")))
                 .replace("__COPIED_TEXT__", jsLiteralContent(label(lang, "xGratien.copied", "Texte copié")));

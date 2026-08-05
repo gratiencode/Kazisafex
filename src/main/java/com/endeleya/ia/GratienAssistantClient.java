@@ -6,11 +6,16 @@ import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,15 +26,19 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 
 public final class GratienAssistantClient {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = System.getProperty(
-            "kazisafex.ai.model",
-            System.getenv().getOrDefault("AI_MODEL", AiAgents.getSpeedModel()));
+    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
     private static final int MAX_FILE_CHARS = 18_000;
     private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
+    // Les images jointes sont compressees pour tenir sous cette taille (~700 ko):
+    // d'abord en baissant la qualite JPEG, le redimensionnement n'intervient qu'en dernier recours.
+    private static final long IMAGE_TARGET_BYTES = 700L * 1024L;
+    private static final int MIN_IMAGE_DIMENSION = 800;
+    private static final int VISION_RETRY_ATTEMPTS = 1;
     private static final GratienAssistantClient INSTANCE = new GratienAssistantClient();
     private static final String AGENT_DIR = java.nio.file.Paths.get(
             System.getProperty("user.dir"), "Media", "ia", "gratien").toString();
@@ -37,6 +46,10 @@ public final class GratienAssistantClient {
     private static final java.io.File USER_FILE = new java.io.File(AGENT_DIR, "USER.md");
 
     private final StreamingChatModel model;
+    // La vision (photos jointes) doit passer par un appel NON-streaming: le serveur
+    // Ollama distant renvoie un 500 (Internal Server Error ref:...) des qu'une image
+    // est envoyee en streaming (stream:true), alors que stream:false fonctionne.
+    private final ChatModel visionModel;
     // AiAgents orchestre les factures et expose les GratienTools partages.
     private final AiAgents aiAgents = AiAgents.getInstance();
 
@@ -59,6 +72,12 @@ public final class GratienAssistantClient {
                 .temperature(0.25)
                 .timeout(Duration.ofMinutes(5))
                 .build();
+        visionModel = OllamaChatModel.builder()
+                .baseUrl(OLLAMA_BASE_URL)
+                .modelName(MODEL_NAME)
+                .temperature(0.25)
+                .timeout(Duration.ofMinutes(5))
+                .build();
     }
 
     public static GratienAssistantClient getInstance() {
@@ -67,8 +86,9 @@ public final class GratienAssistantClient {
 
     public void stream(String question, List<File> attachments,String entreprise, StreamCallback callback) {
         aiAgents.startForCurrentSession();
-        // Le compactage de memoire signale son execution via le canal de progression du chat.
+        // Le compactage de memoire et le mode swarm (sous-agents) signalent leur execution via le canal de progression du chat.
         aiAgents.setCompactionSignal(callback::onProcess);
+        aiAgents.setProgressSignal(callback::onProcess);
         if (question != null && question.trim().toLowerCase(Locale.ROOT).startsWith("/kanuni ")) {
             String instruction = question.trim().substring(8).strip();
             String result = saveUserInstruction(instruction);
@@ -137,22 +157,35 @@ public final class GratienAssistantClient {
             return;
         }
 
-        model.chat(buildRequest(contextualized, entreprise,attachments), new StreamingChatResponseHandler() {
-            @Override
-            public void onPartialResponse(String partialResponse) {
-                callback.onToken(partialResponse);
+        ChatRequest request = buildRequest(contextualized, entreprise, attachments);
+        // La vision ne peut pas streame vers ce serveur (500 sur image en streaming):
+        // on fait un appel chat() non-streaming, avec une nouvelle tentative si le serveur echoue.
+        ChatResponse response = null;
+        Throwable lastError = null;
+        for (int attempt = 0; attempt <= VISION_RETRY_ATTEMPTS; attempt++) {
+            try {
+                response = visionModel.chat(request);
+                break;
+            } catch (Exception ex) {
+                lastError = ex;
+                if (attempt < VISION_RETRY_ATTEMPTS) {
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
-
-            @Override
-            public void onCompleteResponse(ChatResponse completeResponse) {
-                callback.onComplete();
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                callback.onError(error);
-            }
-        });
+        }
+        if (response == null || response.aiMessage() == null || response.aiMessage().text() == null) {
+            callback.onError(lastError == null
+                    ? new IllegalStateException("Reponse vide du modele de vision pour les pieces jointes.")
+                    : lastError);
+            return;
+        }
+        callback.onToken(response.aiMessage().text());
+        callback.onComplete();
     }
 
     private String tryLocalTool(String question) {
@@ -383,12 +416,96 @@ public final class GratienAssistantClient {
             if (!isImage(contentType) || Files.size(file.toPath()) > MAX_IMAGE_BYTES) {
                 return null;
             }
-            String base64 = Base64.getEncoder().encodeToString(Files.readAllBytes(file.toPath()));
-            Image image = Image.builder()
-                    .base64Data(base64)
+            Image image = loadImage(file, contentType);
+            return image == null ? null : ImageContent.from(image);
+        } catch (IOException | RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private Image loadImage(File file, String contentType) {
+        byte[] original;
+        long size;
+        try {
+            original = Files.readAllBytes(file.toPath());
+            size = original.length;
+        } catch (IOException ex) {
+            return null;
+        }
+        // Photos de smartphone souvent > 700 ko: on les compresse sous la taille cible
+        // en reduisant d'abord la qualite JPEG a resolution pleine (lisibilite des ecrits),
+        // et on ne redimensionne qu'en dernier recours, sans descendre sous 800 px.
+        if (size <= IMAGE_TARGET_BYTES) {
+            return Image.builder()
+                    .base64Data(Base64.getEncoder().encodeToString(original))
                     .mimeType(contentType)
                     .build();
-            return ImageContent.from(image);
+        }
+        try {
+            BufferedImage source = ImageIO.read(file);
+            if (source == null) {
+                return null;
+            }
+            BufferedImage current = source;
+            while (true) {
+                for (float quality = 0.9f; quality >= 0.4f; quality -= 0.1f) {
+                    byte[] encoded = encodeJpeg(current, quality);
+                    if (encoded != null && encoded.length <= IMAGE_TARGET_BYTES) {
+                        return Image.builder()
+                                .base64Data(Base64.getEncoder().encodeToString(encoded))
+                                .mimeType("image/jpeg")
+                                .build();
+                    }
+                }
+                if (current.getWidth() <= MIN_IMAGE_DIMENSION
+                        && current.getHeight() <= MIN_IMAGE_DIMENSION) {
+                    break;
+                }
+                current = resize(current,
+                        Math.max(1, current.getWidth() * 3 / 4),
+                        Math.max(1, current.getHeight() * 3 / 4));
+            }
+            // Dernier recours: on envoie l'original plutot que de bloquer l'utilisateur.
+            return Image.builder()
+                    .base64Data(Base64.getEncoder().encodeToString(original))
+                    .mimeType(contentType)
+                    .build();
+        } catch (IOException | RuntimeException ex) {
+            // Si le decodage echoue, on garde l'image originale plutot que de bloquer l'utilisateur.
+            return Image.builder()
+                    .base64Data(Base64.getEncoder().encodeToString(original))
+                    .mimeType(contentType)
+                    .build();
+        }
+    }
+
+    private BufferedImage resize(BufferedImage source, int width, int height) {
+        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resized.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.drawImage(source, 0, 0, width, height, null);
+        g.dispose();
+        return resized;
+    }
+
+    private byte[] encodeJpeg(BufferedImage image, float quality) {
+        try {
+            java.util.Iterator<javax.imageio.ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+            if (!writers.hasNext()) {
+                return null;
+            }
+            javax.imageio.ImageWriter writer = writers.next();
+            javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (javax.imageio.stream.ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+                writer.setOutput(ios);
+                writer.write(image);
+            }
+            writer.dispose();
+            return out.toByteArray();
         } catch (IOException | RuntimeException ex) {
             return null;
         }

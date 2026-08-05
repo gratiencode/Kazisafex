@@ -20,7 +20,6 @@ import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -82,16 +81,12 @@ public final class AiAgents {
         return message == null || message.isBlank() ? fallback : message;
     }
 
-    public static String getSpeedModel() {
-       if (LocalTime.now().isAfter(LocalTime.of(17, 59))){
-            return "minimax-m3:cloud";
-        }else  if (LocalTime.now().isAfter(LocalTime.of(06, 59))) {
-            return "gemma4:31b-cloud";
-        } 
-        return "gemma4:31b-cloud";
-    }
-    
     public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
+    /**
+     * Modele unique de Gratien, force en dur: gemma4:31b-cloud.
+     * Aucun override (propriete/variable d'environnement) n'est applique.
+     */
+    public static final String MODEL_NAME = "gemma4:31b-cloud";
     /**
      * Memoire de Gratien : 40 messages maximum, applique a Redis comme au
      * fallback InMemoryStorage. Des que la limite est atteinte, le contexte est
@@ -108,12 +103,6 @@ public final class AiAgents {
             decisions et actions deja realisees, et tout detail necessaire pour poursuivre sans relire l'historique.
             Ne reponds que par le resume, sans introduction ni commentaire.
             """;
-    private static final String MODEL_NAME = System.getProperty(
-            "kazisafex.ai.model",
-            System.getenv().getOrDefault("AI_MODEL", 
-                    getSpeedModel()
-//                    "minimax-m3:cloud"
-            ));
     private static final Logger LOGGER = Logger.getLogger(AiAgents.class.getName());
     private static final AiAgents INSTANCE = new AiAgents();
 
@@ -140,6 +129,7 @@ public final class AiAgents {
     private final AtomicBoolean compacting = new AtomicBoolean(false);
     private final Object compactionLock = new Object();
     private volatile Consumer<String> compactionSignal;
+    private volatile Consumer<String> progressSignal;
     private volatile ChatModel summaryModel;
     private volatile String sessionId = "anonymous";
     private volatile PendingInvoiceIntent pendingInvoiceIntent;
@@ -159,9 +149,10 @@ public final class AiAgents {
                 .timeout(Duration.ofMinutes(5))
                 .build();
         // Pattern LangChain4j demande: proxy agent + function calling via GratienTools + memoire.
+        // GratienSwarmTools (delegation vers les sous-agents) est reserve a l'assistant principal.
         this.assistant = AiServices.builder(GratienAgent.class)
                 .streamingChatModel(oschatmodel)
-                .tools(GratienTools)
+                .tools(GratienTools, new GratienSwarmTools())
                 .chatMemoryProvider(memoryProvider)
                 .toolArgumentsErrorHandler(NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER)
                 .toolExecutionErrorHandler(NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER)
@@ -374,6 +365,7 @@ public final class AiAgents {
 
     public String orchestrateWorkflowCancellation(String question) {
         startForCurrentSession();
+        emitProgress("\uD83D\uDDD1\uFE0F Délégation au sous-agent d'annulation de workflow en cours...");
         appendMemory("user", safe(question, ""));
         String state = GratienTools.pendingWorkflowCancellationState(sessionId);
         String result = runAgent("workflow_cancellation_agent",
@@ -384,6 +376,8 @@ public final class AiAgents {
 
     public String orchestrateInvoice(String question, List<File> attachments) {
         startForCurrentSession();
+        emitProgress("\uD83D\uDCC4 Lancement du workflow d'approvisionnement "
+                + "(catalogue, fournisseur/livraison, réquisitions)...");
         appendMemory("user", safe(question, "[facture jointe]"));
         String[] answer = new String[1];
         try {
@@ -431,6 +425,8 @@ public final class AiAgents {
 
     public String orchestrateSale(String question, List<File> attachments) {
         startForCurrentSession();
+        emitProgress("\uD83D\uDED2 Lancement du workflow de vente "
+                + "(création de vente, trésorerie & synchronisation)...");
         appendMemory("user", safe(question, "[sortie jointe]"));
         String answer = saleWorkflow.handle(question, attachments);
         appendMemory("assistant", answer);
@@ -439,6 +435,8 @@ public final class AiAgents {
 
     public String orchestrateExpense(String question, List<File> attachments) {
         startForCurrentSession();
+        emitProgress("\uD83D\uDCB5 Lancement du workflow de dépense "
+                + "(préparation catégorie/compte, opération de dépense)...");
         appendMemory("user", safe(question, "[reçu de dépense joint]"));
         String answer = expenseWorkflow.handle(question, attachments);
         appendMemory("assistant", answer);
@@ -449,6 +447,8 @@ public final class AiAgents {
         String workflowId = GratienTools.registerInvoiceWorkflow(draft);
         String[] finalAnswer = new String[1];
         appendMemory("invoice-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.workflowState(workflowId));
+        emitProgress("\uD83D\uDCC4 Démarrage du workflow " + workflowId + " "
+                + "(catalogue → fournisseur/livraison → réquisitions)...");
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("product_creator_agent", node_async(state -> {
@@ -488,6 +488,8 @@ public final class AiAgents {
         String workflowId = GratienTools.registerSaleWorkflow(draft);
         String[] finalAnswer = new String[1];
         appendMemory("sale-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.saleWorkflowState(workflowId));
+        emitProgress("\uD83D\uDED2 Démarrage du workflow " + workflowId + " "
+                + "(création de vente → trésorerie/synchronisation)...");
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("sale_creation_agent", node_async(state -> {
@@ -520,6 +522,8 @@ public final class AiAgents {
         String workflowId = GratienTools.registerExpenseWorkflow(draft);
         String[] finalAnswer = new String[1];
         appendMemory("expense-workflow", "Demarrage workflow " + workflowId + " : " + GratienTools.expenseWorkflowState(workflowId));
+        emitProgress("\uD83D\uDCB5 Démarrage du workflow " + workflowId + " "
+                + "(préparation catégorie/compte → opération de dépense)...");
         try {
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("expense_preparation_agent", node_async(state -> {
@@ -672,6 +676,110 @@ public final class AiAgents {
     }
 
     /**
+     * Branche le canal de progression de la session courante (raisonnement des
+     * sous-agents et avancement des workflows affiches dans le chat).
+     */
+    public void setProgressSignal(Consumer<String> signal) {
+        this.progressSignal = signal;
+    }
+
+    private void emitProgress(String message) {
+        Consumer<String> signal = progressSignal;
+        if (signal != null && message != null && !message.isBlank()) {
+            try {
+                signal.accept(message);
+            } catch (Exception ex) {
+                LOGGER.log(Level.FINE, "Progression non affichable", ex);
+            }
+        }
+    }
+
+    /**
+     * Point d'entree du mode swarm : lance la tache demandee vers le sous-agent
+     * specialise (workflow complet ou agent d'etape d'un workflow en cours).
+     */
+    public String runSwarmDelegate(String agent, String task, String workflowId) {
+        startForCurrentSession();
+        String target = normalize(agent);
+        String question = safe(task, "");
+        switch (target) {
+            case "invoice", "facture", "approvisionnement", "entree", "entrees",
+                    "entrée", "entrées", "livraison", "fournisseur" -> {
+                emitProgress("\uD83D\uDCC4 Délégation au workflow d'approvisionnement "
+                        + "(sous-agents: catalogue, fournisseur/livraison, réquisitions & prix)...");
+                return orchestrateInvoice(question, null);
+            }
+            case "sale", "vente", "sortie" -> {
+                emitProgress("\uD83D\uDED2 Délégation au workflow de vente "
+                        + "(sous-agents: création de vente, trésorerie & synchronisation)...");
+                return orchestrateSale(question, null);
+            }
+            case "expense", "depense", "dépense", "frais" -> {
+                emitProgress("\uD83D\uDCB5 Délégation au workflow de dépense "
+                        + "(sous-agents: préparation catégorie/compte, opération)...");
+                return orchestrateExpense(question, null);
+            }
+            case "product_creator_agent", "supplier_delivery_agent", "requisition_price_agent",
+                    "sale_creation_agent", "sale_treasury_agent",
+                    "expense_preparation_agent", "expense_operation_agent" -> {
+                if (workflowId == null || workflowId.isBlank()) {
+                    return "Impossible de lancer l'agent d'étape '" + target + "' sans workflowId en cours. "
+                            + "Délègue d'abord le workflow complet (invoice/sale/expense) ou fournis un workflowId.";
+                }
+                return runStepAgent(target, workflowId.trim());
+            }
+            default -> {
+                return "Sous-agent inconnu: '" + safe(agent, "") + "'. Agents disponibles: "
+                        + "invoice, sale, expense, product_creator_agent, supplier_delivery_agent, "
+                        + "requisition_price_agent, sale_creation_agent, sale_treasury_agent, "
+                        + "expense_preparation_agent, expense_operation_agent.";
+            }
+        }
+    }
+
+    private String runStepAgent(String agentName, String workflowId) {
+        switch (agentName) {
+            case "product_creator_agent":
+                return runAgent(agentName,
+                        () -> productCreatorAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
+            case "supplier_delivery_agent":
+                return runAgent(agentName,
+                        () -> supplierDeliveryAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
+            case "requisition_price_agent":
+                return runAgent(agentName,
+                        () -> requisitionPriceAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
+            case "sale_creation_agent":
+                return runAgent(agentName,
+                        () -> saleCreationAgent.execute(sessionId, workflowId, GratienTools.saleWorkflowState(workflowId)));
+            case "sale_treasury_agent":
+                return runAgent(agentName,
+                        () -> saleTreasuryAgent.execute(sessionId, workflowId, GratienTools.saleWorkflowState(workflowId)));
+            case "expense_preparation_agent":
+                return runAgent(agentName,
+                        () -> expensePreparationAgent.execute(sessionId, workflowId, GratienTools.expenseWorkflowState(workflowId)));
+            case "expense_operation_agent":
+                return runAgent(agentName,
+                        () -> expenseOperationAgent.execute(sessionId, workflowId, GratienTools.expenseWorkflowState(workflowId)));
+            default:
+                return "Agent d'étape inconnu: " + agentName;
+        }
+    }
+
+    private String friendlyAgentName(String agentName) {
+        return switch (safe(agentName, "sous-agent")) {
+            case "product_creator_agent" -> "catalogue (produits & mesures)";
+            case "supplier_delivery_agent" -> "fournisseur & livraison";
+            case "requisition_price_agent" -> "réquisitions & prix de vente";
+            case "sale_creation_agent" -> "création de vente";
+            case "sale_treasury_agent" -> "trésorerie vente & synchronisation";
+            case "expense_preparation_agent" -> "préparation de dépense";
+            case "expense_operation_agent" -> "opération de dépense";
+            case "workflow_cancellation_agent" -> "annulation de workflow";
+            default -> "sous-agent " + agentName;
+        };
+    }
+
+    /**
      * Compacte la memoire : remplace l'historique par le contexte compacte en
      * message numero 1 suivi des derniers messages.
      */
@@ -809,20 +917,26 @@ public final class AiAgents {
         AtomicReference<String> lastToolResult = new AtomicReference<>("");
         try {
             appendMemory("agent-start", agentName + " lance son execution.");
+            emitProgress("\uD83E\uDD16 Sous-agent " + friendlyAgentName(agentName) + " : analyse de la tâche...");
             streamSupplier.get()
                     .beforeToolExecution(tool -> {
                         String toolName = tool.request() == null ? "outil" : tool.request().name();
                         appendMemory(agentName + "-tool-start", "Execution outil " + toolName);
+                        emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, true)));
                     })
                     .onToolExecuted(tool -> {
                         String toolName = tool.request() == null ? "outil" : tool.request().name();
                         String result = tool.result() == null ? "" : tool.result();
                         lastToolResult.set(result);
                         appendMemory(agentName + "-tool-result", toolName + " => " + result);
+                        emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
                     })
                     .onPartialThinking(thinking -> {
                         if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
                             appendMemory(agentName + "-thinking", thinking.text());
+                            emitProgress(sanitizeToolNamesForDisplay(
+                                    "*Raisonnement du sous-agent " + friendlyAgentName(agentName) + ":*\n\n"
+                                            + thinking.text()));
                         }
                     })
                     .onPartialResponse(answer::append)

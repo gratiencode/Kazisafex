@@ -459,6 +459,9 @@ public class SyncOutboxService {
             }
         }
 
+        // Nettoyage: aucun enregistrement d'outbox avec payload null ne doit subsister.
+        deleteNullPayloadRecords();
+
         System.out.println("[BACKFILL] Backfill complete.");
     }
 
@@ -549,7 +552,15 @@ public class SyncOutboxService {
                     continue;
 
                 jakarta.json.JsonObject jsonObj = tools.JsonUtil.jsonify(entity);
-                String payload = jsonObj != null ? jsonObj.toString() : null;
+                if (jsonObj == null) {
+                    System.err.println("[BACKFILL] Skipping entity without serializable payload: " + entityId);
+                    continue;
+                }
+                String payload = jsonObj.toString();
+                if (payload.isBlank()) {
+                    System.err.println("[BACKFILL] Skipping entity with empty payload: " + entityId);
+                    continue;
+                }
 
                 SyncOutbox outbox = new SyncOutbox();
                 outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
@@ -580,6 +591,24 @@ public class SyncOutboxService {
     }
 
     // ── Downsync materialization ────────────────────────────────────────────
+
+    /**
+     * Supprime tous les enregistrements d'outbox dont le payload est null ou vide:
+     * ils ne peuvent pas etre materialises ni synchronises. Aucune exception,
+     * y compris pour les actions REMOVE/DELETE.
+     */
+    public static void deleteNullPayloadRecords() {
+        submitSyncWrite(em -> {
+            int deleted = em.createQuery(
+                    "DELETE FROM SyncOutbox s WHERE s.payload IS NULL OR s.payload = ''")
+                    .executeUpdate();
+            if (deleted > 0) {
+                System.out.println("[SYNC-OUTBOX] Removed " + deleted
+                        + " outbox record(s) with null/empty payload.");
+            }
+            return null;
+        });
+    }
 
     /**
      * Matérialise en base locale les enregistrements downsync en respectant
@@ -802,6 +831,14 @@ public class SyncOutboxService {
 
         String tableName = dto.entityType.toUpperCase();
         String entityId = dto.entityId;
+
+        // Aucun enregistrement d'outbox n'est cree avec un payload null ou vide:
+        // un tel enregistrement ne peut pas etre materialise et polluerait la file.
+        if (dto.payload == null || dto.payload.isBlank()) {
+            System.out.println("[SYNC-OUTBOX] Skipping downsync record with null/empty payload for "
+                    + tableName + " " + entityId);
+            return;
+        }
 
         // UPSERT : miroir de SyncOutboxWriter côté serveur. Aucun doublon local
         // pour le triplet (tableName, entityId, region) : si un enregistrement

@@ -24,9 +24,7 @@ import org.bsc.langgraph4j.state.Channels;
 public class GratienExpenseWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = System.getProperty(
-            "kazisafex.ai.model",
-            System.getenv().getOrDefault("AI_MODEL", AiAgents.getSpeedModel()));
+    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
 
     private final ChatModel model = OllamaChatModel.builder()
             .baseUrl(OLLAMA_BASE_URL)
