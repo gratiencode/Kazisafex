@@ -38,7 +38,7 @@ public class JpaUtil {
 //                    + "sessionVariables=sql_mode=''";
 //            properties.put(EntityManagerProperties.JDBC_USER, "root");
 //            properties.put(EntityManagerProperties.JDBC_URL, dbUrl);
-//            properties.put(EntityManagerProperties.JDBC_PASSWORD, "Admin*21");
+//            properties.put(EntityManagerProperties.JDBC_PASSWORD, "<redacted>");
 //            emf = Persistence.createEntityManagerFactory("kazisafe-jmx", properties);
 ////        } else {
 ////            String dbUrl = "jdbc:derby:" + dbPath("ksf_" + databaseName) + ";create=true";
@@ -73,7 +73,8 @@ public class JpaUtil {
                 String dbPort = String.valueOf(pref.getInt("default_mysql_port", 3306));
                 String dbHost = pref.get("default_mysql_host", "localhost");
                 String dbUrl = "jdbc:mysql://" + dbHost + ":" + dbPort + "/ksf_" + databaseName
-                        + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&"
+                        + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL="
+                        + pref.getBoolean("default_mysql_ssl", false) + "&"
                         + "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''";
                 String dbUser = resolveDbUser();
                 String dbPassword = resolveDbPassword();
@@ -126,7 +127,7 @@ public class JpaUtil {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "Admin*21");
+        return pref.get("default_mysql_password", "");
     }
 
 }

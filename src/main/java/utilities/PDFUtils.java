@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.encoding.WinAnsiEncoding;
 
 /**
  *
@@ -40,13 +41,31 @@ public class PDFUtils {
     public PDFUtils() {
     }
 
+    private static final WinAnsiEncoding WIN_ANSI = WinAnsiEncoding.INSTANCE;
+
+    /**
+     * Remplace les caractères non représentables en WinAnsi (polices standard PDF)
+     * pour éviter que showText() ne lève une exception.
+     */
+    public static String safeText(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            sb.append(WIN_ANSI.contains(c) ? c : '?');
+        }
+        return sb.toString();
+    }
+
     public void addTextLine(String text, int xPos, int yPos, PDFont font, float fontSize, Color color) {
         try {
             contentStream.beginText();
             contentStream.setFont(font, fontSize);
             contentStream.setNonStrokingColor(color); 
             contentStream.newLineAtOffset(xPos, yPos);
-            contentStream.showText(text);
+            contentStream.showText(safeText(text));
             contentStream.endText();
             contentStream.moveTo(0, 0);
            
@@ -64,7 +83,7 @@ public class PDFUtils {
             contentStream.setLeading(leading);
             contentStream.newLineAtOffset(xPos, yPos);
             for (String text : texts) {
-                contentStream.showText(text);
+                contentStream.showText(safeText(text));
                 contentStream.newLine();
             }
             contentStream.endText();
@@ -94,7 +113,7 @@ public class PDFUtils {
 
     public void addCell(String text, Color fillColor) {
         try {
-            String safeText = text == null ? "" : text;
+            String safeText = safeText(text);
             contentStream.setStrokingColor(1f);
             if (fillColor != null) {
                 contentStream.setNonStrokingColor(fillColor);

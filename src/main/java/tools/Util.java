@@ -21,14 +21,6 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import data.Entreprise;
-import com.itextpdf.kernel.geom.PageSize;
-import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfWriter;
-import com.itextpdf.layout.Document;
-import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Table;
-import com.itextpdf.layout.property.TextAlignment;
-import com.itextpdf.layout.property.UnitValue;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -70,6 +62,7 @@ import data.Client;
 import data.Destocker;
 import data.Fournisseur;
 import javafx.stage.FileChooser;
+import java.awt.Color;
 import java.awt.Desktop;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
@@ -5048,114 +5041,100 @@ public class Util {
         return null;
     }
 
+    private static final PDFont PDF_HELV = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+    private static final PDFont PDF_HELV_BOLD = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+    private static class PdfBuilder {
+
+        final PDDocument document;
+        final PDPageContentStream stream;
+        final PDFUtils pdf;
+        final boolean landscape;
+        final File file;
+        float y;
+
+        PdfBuilder(File file, boolean landscape) throws IOException {
+            this.file = file;
+            this.landscape = landscape;
+            this.document = new PDDocument();
+            PDRectangle pageRect = landscape
+                    ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth())
+                    : PDRectangle.A4;
+            this.document.addPage(new PDPage(pageRect));
+            this.stream = new PDPageContentStream(document, document.getPage(0));
+            this.pdf = new PDFUtils(document, stream);
+            this.y = landscape ? 560 : 800;
+        }
+
+        void center(String text, float size, Color color) throws IOException {
+            float width = PDF_HELV_BOLD.getStringWidth(text) / 10000 * size;
+            float x = ((landscape ? 842 : 595) - width) / 2;
+            pdf.addTextLine(text, (int) x, (int) y, PDF_HELV_BOLD, size, color);
+        }
+
+        void text(String text, float size, boolean bold, Color color) {
+            pdf.addTextLine(text, 40, (int) y, bold ? PDF_HELV_BOLD : PDF_HELV, size, color);
+        }
+
+        void tableHeader(int[] widths, String[] headers, float yPos) {
+            pdf.addTable(widths, 24, 40, (int) yPos);
+            pdf.setFont(PDF_HELV_BOLD, 12, Color.BLACK);
+            for (String h : headers) {
+                pdf.addCell(h, Color.LIGHT_GRAY);
+            }
+        }
+
+        void close() throws IOException {
+            stream.close();
+            document.save(file);
+            document.close();
+        }
+    }
+
     public static File exportPDFicheStock(List<FicheItem> datas, Mesure m, Produit p) {
         try {
             String path = MainUI.cPath("/Media/fichedestocks");
             File file = new File(path + "/ksf-fiche-stock" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
-            PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
-            Document doc = new Document(pdfDoc, PageSize.A4.rotate());
-            doc.setFontSize(20);
-            doc.setBold();
-            doc.setTextAlignment(TextAlignment.CENTER);
-            doc.add(new Paragraph("Fiche de stock"));
-            doc.add(new Paragraph("______________"));
-            doc.setTextAlignment(TextAlignment.LEFT);
-            doc.add(new Paragraph("Codebar : " + p.getCodebar()));
-            doc.add(new Paragraph("Produit  : " + p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
+            PdfBuilder b = new PdfBuilder(file, true);
+            b.center("Fiche de stock", 20, Color.BLACK);
+            b.y -= 26;
+            b.center("______________", 20, Color.BLACK);
+            b.y -= 34;
+            b.text("Codebar : " + p.getCodebar(), 12, true, Color.BLACK);
+            b.y -= 18;
+            b.text("Produit  : " + p.getNomProduit() + " " + p.getMarque() + " " + p.getModele() + " "
                     + (p.getTaille() == null ? "" : p.getTaille()) + " "
-                    + (p.getCouleur() == null ? "" : p.getCouleur())));
-            doc.add(new Paragraph("Mesure en " + (m == null ? "unité de base" : m.getDescription())
-                    + " et devise en USD "));
-            Table table = new Table(12);
-            table.setFontSize(13);
-            table.setWidth(UnitValue.createPercentValue(100f));
-            com.itextpdf.layout.element.Cell cel1 = new com.itextpdf.layout.element.Cell(1, 1);
-            cel1.add(new Paragraph("DATES"));
-            table.addHeaderCell(cel1);
-            com.itextpdf.layout.element.Cell cel2 = new com.itextpdf.layout.element.Cell(1, 1);
-            cel2.add(new Paragraph("LIBELLES"));
-            table.addHeaderCell(cel2);
-            com.itextpdf.layout.element.Cell cel3q = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3q.add(new Paragraph("Qte. Entrees"));
-            com.itextpdf.layout.element.Cell cel3pu = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3pu.add(new Paragraph("PU Entrees"));
-            com.itextpdf.layout.element.Cell cel3pt = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3pt.add(new Paragraph("PT Entrees"));
-            table.addHeaderCell(cel3q);
-            table.addHeaderCell(cel3pu);
-            table.addHeaderCell(cel3pt);
-            com.itextpdf.layout.element.Cell cel4q = new com.itextpdf.layout.element.Cell(1, 1);
-            cel4q.add(new Paragraph("Qte. Sorties"));
-            com.itextpdf.layout.element.Cell cel4pu = new com.itextpdf.layout.element.Cell(1, 1);
-            cel4pu.add(new Paragraph("CU Sorties"));
-            com.itextpdf.layout.element.Cell cel4pt = new com.itextpdf.layout.element.Cell(1, 1);
-            cel4pt.add(new Paragraph("CT Sorties"));
-            table.addHeaderCell(cel4q);
-            table.addHeaderCell(cel4pu);
-            table.addHeaderCell(cel4pt);
-            com.itextpdf.layout.element.Cell cel5q = new com.itextpdf.layout.element.Cell(1, 1);
-            cel5q.add(new Paragraph("Qte. Stock"));
-            com.itextpdf.layout.element.Cell cel5pu = new com.itextpdf.layout.element.Cell(1, 1);
-            cel5pu.add(new Paragraph("CU Stock"));
-
-            com.itextpdf.layout.element.Cell cel5pt = new com.itextpdf.layout.element.Cell(1, 1);
-            cel5pt.add(new Paragraph("CT Stock"));
-            table.addHeaderCell(cel5q);
-            table.addHeaderCell(cel5pu);
-            table.addHeaderCell(cel5pt);
-            table.addHeaderCell("DEST.");
-            int row = 1;
+                    + (p.getCouleur() == null ? "" : p.getCouleur()), 12, true, Color.BLACK);
+            b.y -= 18;
+            b.text("Mesure en " + (m == null ? "unité de base" : m.getDescription()) + " et devise en USD ", 12, true,
+                    Color.BLACK);
+            b.y -= 28;
+            int[] widths = { 75, 90, 58, 58, 58, 58, 58, 58, 55, 55, 55, 44 };
+            String[] headers = { "DATES", "LIBELLES", "Qte. Entrees", "PU Entrees", "PT Entrees", "Qte. Sorties",
+                    "CU Sorties", "CT Sorties", "Qte. Stock", "CU Stock", "CT Stock", "DEST." };
+            b.tableHeader(widths, headers, b.y);
+            b.pdf.setFont(PDF_HELV, 12, Color.BLACK);
             for (FicheItem f : datas) {
-                com.itextpdf.layout.element.Cell data1 = new com.itextpdf.layout.element.Cell(row, 1);
-                data1.add(new Paragraph(Constants.DATE_HEURE_FORMAT.format(f.getDate())));
-                table.addCell(data1);
-                com.itextpdf.layout.element.Cell data2 = new com.itextpdf.layout.element.Cell(row, 1);
-                data2.add(new Paragraph(f.getLibelles()));
-                table.addCell(data2);
-                com.itextpdf.layout.element.Cell data3 = new com.itextpdf.layout.element.Cell(row, 1);
-                double qe = f.getQuantiteEntree();
-                data3.add(new Paragraph(qe == 0 ? "" : String.valueOf(qe)));
-                table.addCell(data3);
-                com.itextpdf.layout.element.Cell data4 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cue = f.getPrixUnitEntree();
-                data4.add(new Paragraph(cue == 0 ? "" : String.valueOf(cue)));
-                table.addCell(data4);
-                com.itextpdf.layout.element.Cell data5 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cte = f.getCoutTotalEntree();
-                data5.add(new Paragraph(cte == 0 ? "" : String.valueOf(cte)));
-                table.addCell(data5);
-                com.itextpdf.layout.element.Cell data6 = new com.itextpdf.layout.element.Cell(row, 1);
-                double qs = f.getQuantiteSortie();
-                data6.add(new Paragraph(qs == 0 ? "" : String.valueOf(qs)));
-                table.addCell(data6);
-                com.itextpdf.layout.element.Cell data7 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cus = f.getCoutUnitaireSortie();
-                data7.add(new Paragraph(cus == 0 ? "" : String.valueOf(cus)));
-                table.addCell(data7);
-                com.itextpdf.layout.element.Cell data8 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cts = f.getCoutTotalSortie();
-                data8.add(new Paragraph(cts == 0 ? "" : String.valueOf(cts)));
-                table.addCell(data8);
-                com.itextpdf.layout.element.Cell data9 = new com.itextpdf.layout.element.Cell(row, 1);
-                data9.add(new Paragraph(String.valueOf(f.getQuantiteRestant())));
-                table.addCell(data9);
-                com.itextpdf.layout.element.Cell data10 = new com.itextpdf.layout.element.Cell(row, 1);
-                data10.add(new Paragraph(String.valueOf(f.getCoutUnitRestant())));
-                table.addCell(data10);
-                com.itextpdf.layout.element.Cell data11 = new com.itextpdf.layout.element.Cell(row, 1);
-                data11.add(new Paragraph(String.valueOf(f.getCoutTotalRestant())));
-                table.addCell(data11);
-                com.itextpdf.layout.element.Cell data12 = new com.itextpdf.layout.element.Cell(row, 1);
-                data12.add(new Paragraph(f.getDestination() == null ? "" : f.getDestination()));
-                table.addCell(data12);
-                row++;
+                b.pdf.addCell(Constants.DATE_HEURE_FORMAT.format(f.getDate()), null);
+                b.pdf.addCell(f.getLibelles() == null ? "" : f.getLibelles(), null);
+                b.pdf.addCell(f.getQuantiteEntree() == 0 ? "" : String.valueOf(f.getQuantiteEntree()), null);
+                b.pdf.addCell(f.getPrixUnitEntree() == 0 ? "" : String.valueOf(f.getPrixUnitEntree()), null);
+                b.pdf.addCell(f.getCoutTotalEntree() == 0 ? "" : String.valueOf(f.getCoutTotalEntree()), null);
+                b.pdf.addCell(f.getQuantiteSortie() == 0 ? "" : String.valueOf(f.getQuantiteSortie()), null);
+                b.pdf.addCell(f.getCoutUnitaireSortie() == 0 ? "" : String.valueOf(f.getCoutUnitaireSortie()), null);
+                b.pdf.addCell(f.getCoutTotalSortie() == 0 ? "" : String.valueOf(f.getCoutTotalSortie()), null);
+                b.pdf.addCell(String.valueOf(f.getQuantiteRestant()), null);
+                b.pdf.addCell(String.valueOf(f.getCoutUnitRestant()), null);
+                b.pdf.addCell(String.valueOf(f.getCoutTotalRestant()), null);
+                b.pdf.addCell(f.getDestination() == null ? "" : f.getDestination(), null);
                 System.out.println("E = " + f.getQuantiteEntree() + " S = " + f.getQuantiteSortie() + " a "
                         + f.getCoutUnitaireSortie() + " R =" + f.getQuantiteRestant());
             }
-            doc.add(table);
-            doc.close();
+            b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5215,76 +5194,34 @@ public class Util {
             String path = MainUI.cPath("/Media/autres");
             File file = new File(
                     path + "/ksf-fiche-recouvrement_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
-            PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
-            Document doc = new Document(pdfDoc, PageSize.A4.rotate());
-            doc.setFontSize(18);
-            doc.setBold();
-            doc.setTextAlignment(TextAlignment.CENTER);
-            doc.add(new Paragraph("FICHE DE RECOUVREMENT DES DETTES DE CLIENTS"));
-            doc.add(new Paragraph("______________________________________________"));
-            doc.setTextAlignment(TextAlignment.LEFT);
-            doc.add(new Paragraph());
-            doc.add(new Paragraph("Les montants sont en USD "));
-            Table table = new Table(8);
-            table.setFontSize(12);
-            table.setWidth(UnitValue.createPercentValue(95f));
-            com.itextpdf.layout.element.Cell cel1 = new com.itextpdf.layout.element.Cell(1, 1);
-            cel1.add(new Paragraph("DATES"));
-            table.addHeaderCell(cel1);
-            com.itextpdf.layout.element.Cell cel2 = new com.itextpdf.layout.element.Cell(1, 1);
-            cel2.add(new Paragraph("NOMS"));
-            table.addHeaderCell(cel2);
-            com.itextpdf.layout.element.Cell cel3q = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3q.add(new Paragraph("TELEPHONES"));
-            com.itextpdf.layout.element.Cell cel3pu = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3pu.add(new Paragraph("FACTURES"));
-            com.itextpdf.layout.element.Cell cel3pt = new com.itextpdf.layout.element.Cell(1, 1);
-            cel3pt.add(new Paragraph("MONTANT TOTAL"));
-            table.addHeaderCell(cel3q);
-            table.addHeaderCell(cel3pu);
-            table.addHeaderCell(cel3pt);
-            com.itextpdf.layout.element.Cell cel4q = new com.itextpdf.layout.element.Cell(1, 1);
-            cel4q.add(new Paragraph("MONTANT PAYES"));
-            table.addHeaderCell(cel4q);
-            com.itextpdf.layout.element.Cell cel4pu = new com.itextpdf.layout.element.Cell(1, 1);
-            cel4pu.add(new Paragraph("MONTANT RESTANT"));
-            table.addHeaderCell(cel4pu);
-            table.addHeaderCell("OBSERVATION");
-            int row = 1;
+            PdfBuilder b = new PdfBuilder(file, true);
+            b.center("FICHE DE RECOUVREMENT DES DETTES DE CLIENTS", 18, Color.BLACK);
+            b.y -= 26;
+            b.center("______________________________________________", 18, Color.BLACK);
+            b.y -= 34;
+            b.y -= 18;
+            b.text("Les montants sont en USD ", 12, true, Color.BLACK);
+            b.y -= 28;
+            int[] widths = { 90, 130, 100, 80, 90, 90, 90, 92 };
+            String[] headers = { "DATES", "NOMS", "TELEPHONES", "FACTURES", "MONTANT TOTAL", "MONTANT PAYES",
+                    "MONTANT RESTANT", "OBSERVATION" };
+            b.tableHeader(widths, headers, b.y);
+            b.pdf.setFont(PDF_HELV, 12, Color.BLACK);
             for (DebtItem item : datas) {
-                com.itextpdf.layout.element.Cell data1 = new com.itextpdf.layout.element.Cell(row, 1);
-                data1.add(new Paragraph(Constants.DATE_HEURE_FORMAT.format(item.getDate())));
-                table.addCell(data1);
-                com.itextpdf.layout.element.Cell data2 = new com.itextpdf.layout.element.Cell(row, 1);
-                data2.add(new Paragraph(item.getNomClient()));
-                table.addCell(data2);
-                com.itextpdf.layout.element.Cell data3 = new com.itextpdf.layout.element.Cell(row, 1);
-                data3.add(new Paragraph(item.getPhoneClient()));
-                table.addCell(data3);
-                com.itextpdf.layout.element.Cell data4 = new com.itextpdf.layout.element.Cell(row, 1);
-                data4.add(new Paragraph(item.getFacture()));
-                table.addCell(data4);
-                com.itextpdf.layout.element.Cell data5 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cte = item.getMontantDette();
-                data5.add(new Paragraph(cte == 0 ? "" : String.valueOf(cte)));
-                table.addCell(data5);
-                com.itextpdf.layout.element.Cell data6 = new com.itextpdf.layout.element.Cell(row, 1);
-                double qs = item.getMontantPaye();
-                data6.add(new Paragraph(qs == 0 ? "" : String.valueOf(qs)));
-                table.addCell(data6);
-                com.itextpdf.layout.element.Cell data7 = new com.itextpdf.layout.element.Cell(row, 1);
-                double cus = item.getMontantRestant();
-                data7.add(new Paragraph(cus == 0 ? "" : String.valueOf(cus)));
-                table.addCell(data7);
-                com.itextpdf.layout.element.Cell data8 = new com.itextpdf.layout.element.Cell(row, 1);
-                data8.add(new Paragraph("       "));
-                table.addCell(data8);
-                row++;
+                b.pdf.addCell(Constants.DATE_HEURE_FORMAT.format(item.getDate()), null);
+                b.pdf.addCell(item.getNomClient() == null ? "" : item.getNomClient(), null);
+                b.pdf.addCell(item.getPhoneClient() == null ? "" : item.getPhoneClient(), null);
+                b.pdf.addCell(item.getFacture() == null ? "" : item.getFacture(), null);
+                b.pdf.addCell(item.getMontantDette() == 0 ? "" : String.valueOf(item.getMontantDette()), null);
+                b.pdf.addCell(item.getMontantPaye() == 0 ? "" : String.valueOf(item.getMontantPaye()), null);
+                b.pdf.addCell(item.getMontantRestant() == 0 ? "" : String.valueOf(item.getMontantRestant()), null);
+                b.pdf.addCell("       ", null);
             }
-            doc.add(table);
-            doc.close();
+            b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5297,35 +5234,41 @@ public class Util {
             String path = MainUI.cPath("/Media/autres");
             File file = new File(
                     path + "/ksf-recu-recouvrement_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".pdf");
-            PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
-            Document doc = new Document(pdfDoc, PageSize.A4);
-            doc.setFontSize(16);
-            doc.setBold();
-            doc.setTextAlignment(TextAlignment.CENTER);
-            doc.add(new Paragraph("RECU DE REGLEMENT CLIENT"));
-            doc.add(new Paragraph("________________________________"));
-            doc.setTextAlignment(TextAlignment.LEFT);
-            doc.setFontSize(11);
-            doc.setBold();
-            doc.add(new Paragraph("Numero recu : " + (numeroRecu == null ? "-" : numeroRecu)));
-            doc.add(new Paragraph("Date : " + (datePaiement == null ? "-" : datePaiement.toString())));
-            doc.add(new Paragraph("Client : " + (client == null ? "-" : client)));
-            doc.add(new Paragraph("Reference dette : " + (referenceDette == null ? "-" : referenceDette)));
-            doc.add(new Paragraph("Compte de reception : " + (compte == null ? "-" : compte)));
-            doc.add(new Paragraph(
-                    "Montant recu (USD) : " + BigDecimal.valueOf(montantUsd).setScale(2, RoundingMode.HALF_EVEN)));
-            doc.add(new Paragraph(
-                    "Montant recu (CDF) : " + BigDecimal.valueOf(montantCdf).setScale(2, RoundingMode.HALF_EVEN)));
-            doc.add(new Paragraph("Solde restant (USD) : "
-                    + BigDecimal.valueOf(soldeRestantUsd).setScale(2, RoundingMode.HALF_EVEN)));
-            doc.add(new Paragraph(
-                    "Observation : " + (observation == null || observation.isBlank() ? "-" : observation)));
-            doc.add(new Paragraph(""));
-            doc.add(new Paragraph("Signature caisse : ___________________________"));
-            doc.add(new Paragraph("Signature client : ___________________________"));
-            doc.close();
+            PdfBuilder b = new PdfBuilder(file, false);
+            b.center("RECU DE REGLEMENT CLIENT", 16, Color.BLACK);
+            b.y -= 24;
+            b.center("________________________________", 16, Color.BLACK);
+            b.y -= 30;
+            b.text("Numero recu : " + (numeroRecu == null ? "-" : numeroRecu), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Date : " + (datePaiement == null ? "-" : datePaiement.toString()), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Client : " + (client == null ? "-" : client), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Reference dette : " + (referenceDette == null ? "-" : referenceDette), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Compte de reception : " + (compte == null ? "-" : compte), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Montant recu (USD) : "
+                    + BigDecimal.valueOf(montantUsd).setScale(2, RoundingMode.HALF_EVEN), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Montant recu (CDF) : "
+                    + BigDecimal.valueOf(montantCdf).setScale(2, RoundingMode.HALF_EVEN), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Solde restant (USD) : "
+                    + BigDecimal.valueOf(soldeRestantUsd).setScale(2, RoundingMode.HALF_EVEN), 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Observation : " + (observation == null || observation.isBlank() ? "-" : observation), 11, true,
+                    Color.BLACK);
+            b.y -= 24;
+            b.text("Signature caisse : ___________________________", 11, true, Color.BLACK);
+            b.y -= 16;
+            b.text("Signature client : ___________________________", 11, true, Color.BLACK);
+            b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5652,77 +5595,35 @@ public class Util {
             }
         } else if (type.equalsIgnoreCase("pdf")) {
             try {
-                PdfDocument pdfDoc = new PdfDocument(new PdfWriter(file));
-                Document doc = new Document(pdfDoc, PageSize.A4.rotate());
-                doc.setFontSize(20);
-                doc.setBold();
-                doc.setTextAlignment(TextAlignment.CENTER);
-
-                doc.add(new Paragraph("RELEVEE DE CONSOMMATION POUR " + entrep));
-                doc.setTextAlignment(TextAlignment.LEFT);
-
-                doc.add(new Paragraph("Date : " + Constants.DATE_HEURE_FORMAT.format(new Date())));
-                doc.add(new Paragraph("Code : " + ((int) (Math.random() * 100000))));
-                doc.add(new Paragraph("Total : " + total + " USD"));
-                Table table = new Table(8);
-                table.setFontSize(13);
-                table.setWidth(UnitValue.createPercentValue(100f));
-                com.itextpdf.layout.element.Cell cel1 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel1.add(new Paragraph("DATES"));
-                table.addHeaderCell(cel1);
-                com.itextpdf.layout.element.Cell cel2 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel2.add(new Paragraph("BONS"));
-                table.addHeaderCell(cel2);
-                com.itextpdf.layout.element.Cell cel3 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel3.add(new Paragraph("DEPENDANT"));
-                table.addHeaderCell(cel3);
-                com.itextpdf.layout.element.Cell cel4 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel4.add(new Paragraph("PRODUITS"));
-                table.addHeaderCell(cel4);
-                com.itextpdf.layout.element.Cell cel5 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel5.add(new Paragraph("QUANTITES"));
-                table.addHeaderCell(cel5);
-                com.itextpdf.layout.element.Cell cel6 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel6.add(new Paragraph("PRIX UNIT."));
-                table.addHeaderCell(cel6);
-                com.itextpdf.layout.element.Cell cel7 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel7.add(new Paragraph("TOTAUX"));
-                table.addHeaderCell(cel7);
-                com.itextpdf.layout.element.Cell cel8 = new com.itextpdf.layout.element.Cell(1, 1);
-                cel8.add(new Paragraph("AGENTS"));
-                table.addHeaderCell(cel8);
-                int row = 1;
+                PdfBuilder b = new PdfBuilder(file, true);
+                b.center("RELEVEE DE CONSOMMATION POUR " + entrep, 20, Color.BLACK);
+                b.y -= 26;
+                b.text("Date : " + Constants.DATE_HEURE_FORMAT.format(new Date()), 12, true, Color.BLACK);
+                b.y -= 18;
+                b.text("Code : " + ((int) (Math.random() * 100000)), 12, true, Color.BLACK);
+                b.y -= 18;
+                b.text("Total : " + total + " USD", 12, true, Color.BLACK);
+                b.y -= 28;
+                int[] widths = { 90, 80, 100, 130, 80, 80, 90, 112 };
+                String[] headers = { "DATES", "BONS", "DEPENDANT", "PRODUITS", "QUANTITES", "PRIX UNIT.", "TOTAUX",
+                        "AGENTS" };
+                b.tableHeader(widths, headers, b.y);
+                b.pdf.setFont(PDF_HELV, 12, Color.BLACK);
                 for (Relevee f : relevees) {
-                    com.itextpdf.layout.element.Cell data1 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data1.add(new Paragraph(Constants.DATE_HEURE_FORMAT.format(f.getDate())));
-                    table.addCell(data1);
-                    com.itextpdf.layout.element.Cell data2 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data2.add(new Paragraph(f.getNumeroBon()));
-                    table.addCell(data2);
-                    com.itextpdf.layout.element.Cell data3 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data3.add(new Paragraph(f.getNomClient()));
-                    table.addCell(data3);
-                    com.itextpdf.layout.element.Cell data4 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data4.add(new Paragraph(f.getNomProduit()));
-                    table.addCell(data4);
-                    com.itextpdf.layout.element.Cell data5 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data5.add(new Paragraph(String.valueOf(f.getQuantite())));
-                    table.addCell(data5);
-                    com.itextpdf.layout.element.Cell data6 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data6.add(new Paragraph(String.valueOf(f.getPrixunitaire())));
-                    table.addCell(data6);
-                    com.itextpdf.layout.element.Cell data7 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data7.add(new Paragraph(String.valueOf((f.getQuantite() * f.getPrixunitaire()))));
-                    table.addCell(data7);
-                    com.itextpdf.layout.element.Cell data8 = new com.itextpdf.layout.element.Cell(row, 1);
-                    data8.add(new Paragraph(f.getParent()));
-                    table.addCell(data8);
-                    row++;
+                    b.pdf.addCell(Constants.DATE_HEURE_FORMAT.format(f.getDate()), null);
+                    b.pdf.addCell(f.getNumeroBon() == null ? "" : f.getNumeroBon(), null);
+                    b.pdf.addCell(f.getNomClient() == null ? "" : f.getNomClient(), null);
+                    b.pdf.addCell(f.getNomProduit() == null ? "" : f.getNomProduit(), null);
+                    b.pdf.addCell(String.valueOf(f.getQuantite()), null);
+                    b.pdf.addCell(String.valueOf(f.getPrixunitaire()), null);
+                    b.pdf.addCell(String.valueOf((f.getQuantite() * f.getPrixunitaire())), null);
+                    b.pdf.addCell(f.getParent() == null ? "" : f.getParent(), null);
                 }
-                doc.add(table);
-                doc.close();
+                b.close();
                 return file;
             } catch (FileNotFoundException ex) {
+                Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (IOException ex) {
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             }
         }

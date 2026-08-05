@@ -53,11 +53,16 @@ public class ManagedSessionFactory {
     static {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         String databaseName = pref.get("eUid", null);
+        boolean testMode = Boolean.getBoolean("kazisafe.test.mode");
         embedded = pref.getBoolean("embedded_db", true);
         if (databaseName == null || databaseName.isBlank()) {
-            throw new IllegalStateException(
-                "eUid introuvable dans les préférences."
-            );
+            if (testMode) {
+                databaseName = "kazisafe-test";
+            } else {
+                throw new IllegalStateException(
+                    "eUid introuvable dans les préférences."
+                );
+            }
         }
         Map<String, String> properties = new HashMap<>();
         if (!embedded) {
@@ -65,6 +70,7 @@ public class ManagedSessionFactory {
                 pref.getInt("default_mysql_port", 3306)
             );
             String dbHost = pref.get("default_mysql_host", "localhost");
+            boolean useSsl = pref.getBoolean("default_mysql_ssl", false);
             String dbUrl =
                 "jdbc:mysql://" +
                 dbHost +
@@ -72,7 +78,9 @@ public class ManagedSessionFactory {
                 dbPort +
                 "/ksf_" +
                 databaseName +
-                "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&" +
+                "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=" +
+                useSsl +
+                "&" +
                 "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''" +
                 "&tcpKeepAlive=true&autoReconnect=true&connectTimeout=10000";
             String dbUser = resolveDbUser();
@@ -138,18 +146,23 @@ public class ManagedSessionFactory {
                 );
             }
 
-            emf = Persistence.createEntityManagerFactory(
-                "kazisafe-jmx",
-                properties
-            );
-            SchemaAutoUpdater.ensureCoreSchema(
-                false,
-                dbUrl,
-                dbUser,
-                dbPassword
-            );
-            AggregateTriggerService.getInstance().rebuildAtStartup();
-            threadLocal = new ThreadLocal<>();
+            if (testMode) {
+                emf = null;
+                threadLocal = new ThreadLocal<>();
+            } else {
+                emf = Persistence.createEntityManagerFactory(
+                    "kazisafe-jmx",
+                    properties
+                );
+                SchemaAutoUpdater.ensureCoreSchema(
+                    false,
+                    dbUrl,
+                    dbUser,
+                    dbPassword
+                );
+                AggregateTriggerService.getInstance().rebuildAtStartup();
+                threadLocal = new ThreadLocal<>();
+            }
         } else {
             // ---SQLite---
             String dbPath = dbPath("kazi_" + databaseName);
@@ -196,7 +209,7 @@ public class ManagedSessionFactory {
             threadLocal = null; // inutile pour sqlite
             System.out.println("-SQLite-");
         }
-        if (!embedded) {
+        if (!embedded && !testMode) {
             startLeakCleaner();
         }
     }
@@ -471,7 +484,7 @@ public class ManagedSessionFactory {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "Admin*21");
+        return pref.get("default_mysql_password", "");
     }
 
     private static String resolveLocalDbSecret(String databaseName) {

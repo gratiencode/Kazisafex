@@ -13,4 +13,8 @@ mvn_verify_out.txt
 pos_run_out.txt
 deps.txt
 *.xlsx
+*.deb
+*.mp4
+lib/*.jar
+img-test.png
 .vscode/

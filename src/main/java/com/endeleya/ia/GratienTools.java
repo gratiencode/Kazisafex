@@ -181,6 +181,7 @@ public class GratienTools {
     private static final Map<String, ToolExecutionResult> RECENT_TOOL_EXECUTIONS = new ConcurrentHashMap<>();
     private static final long TOOL_EXECUTION_TTL_MS = 120_000L;
     private static final long WORKFLOW_CANCELLATION_TTL_MS = 180_000L;
+    private static final long ACTIVE_WORKFLOW_MAX_AGE_MS = 30 * 60_000L;
     public static final String SECURE_MYSQL_PASSWORD_REQUEST = "KAZISAFE_SECURE_MYSQL_PASSWORD_REQUEST";
     private static final String SECURE_MYSQL_PASSWORD_TOKEN_PREFIX = "secure:mysql:";
 
@@ -674,6 +675,7 @@ public class GratienTools {
     }
 
     public String registerSaleWorkflow(SaleDraft draft) {
+        cleanupStaleWorkflows();
         String workflowId = "sale-" + DataId.generate();
         SALE_WORKFLOWS.put(workflowId, new SaleWorkflowContext(draft));
         return workflowId;
@@ -1037,6 +1039,7 @@ public class GratienTools {
     }
 
     public String registerExpenseWorkflow(ExpenseDraft draft) {
+        cleanupStaleWorkflows();
         String workflowId = "expense-" + DataId.generate();
         EXPENSE_WORKFLOWS.put(workflowId, new ExpenseWorkflowContext(draft));
         return workflowId;
@@ -1732,8 +1735,9 @@ public class GratienTools {
 
     private String mysqlJdbcUrl(String host, int port, String database) {
         String db = database == null || database.isBlank() ? "" : "/" + database;
+        boolean useSsl = pref.getBoolean("default_mysql_ssl", false);
         return "jdbc:mysql://" + host + ":" + port + db
-                + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                + "?useSSL=" + useSsl + "&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     }
 
     private void validateMysqlRoot(Connection connection) throws SQLException {
@@ -2885,6 +2889,7 @@ public class GratienTools {
     }
 
     public String registerInvoiceWorkflow(InvoiceDraft draft) {
+        cleanupStaleWorkflows();
         String workflowId = "invoice-" + DataId.generate();
         INVOICE_WORKFLOWS.put(workflowId, new InvoiceWorkflowContext(draft));
         return workflowId;
@@ -5715,6 +5720,22 @@ public class GratienTools {
     private void cleanupWorkflowCancellationRequests() {
         long now = System.currentTimeMillis();
         WORKFLOW_CANCELLATION_REQUESTS.entrySet().removeIf(entry -> now > entry.getValue().expiresAtMs());
+    }
+
+    private void cleanupStaleWorkflows() {
+        long now = System.currentTimeMillis();
+        INVOICE_WORKFLOWS.entrySet().removeIf(entry -> {
+            InvoiceWorkflowContext context = entry.getValue();
+            return !isActiveInvoiceWorkflow(context) || now - context.createdAtMs > ACTIVE_WORKFLOW_MAX_AGE_MS;
+        });
+        SALE_WORKFLOWS.entrySet().removeIf(entry -> {
+            SaleWorkflowContext context = entry.getValue();
+            return !isActiveSaleWorkflow(context) || now - context.createdAtMs > ACTIVE_WORKFLOW_MAX_AGE_MS;
+        });
+        EXPENSE_WORKFLOWS.entrySet().removeIf(entry -> {
+            ExpenseWorkflowContext context = entry.getValue();
+            return !isActiveExpenseWorkflow(context) || now - context.createdAtMs > ACTIVE_WORKFLOW_MAX_AGE_MS;
+        });
     }
 
     private WorkflowTarget resolveWorkflowTarget(String workflowId) {

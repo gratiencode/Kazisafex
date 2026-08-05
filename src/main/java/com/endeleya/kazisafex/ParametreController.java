@@ -27,6 +27,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Hyperlink;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -141,6 +142,15 @@ public class ParametreController implements Initializable {
 
     @FXML
     private TextField tf_port_serveur;
+
+    @FXML
+    private TextField tf_mysql_user;
+
+    @FXML
+    private PasswordField pf_mysql_password;
+
+    @FXML
+    private CheckBox cb_mysql_ssl;
 
     @FXML
     private RadioButton mm58;
@@ -474,6 +484,9 @@ public class ParametreController implements Initializable {
         String host = this.pref.get("default_mysql_host", "localhost");
         this.tf_ip_serveur.setText(host);
         this.tf_port_serveur.setText(Integer.toString(port));
+        this.tf_mysql_user.setText(this.pref.get("default_mysql_user", "root"));
+        this.pf_mysql_password.setText(this.pref.get("default_mysql_password", ""));
+        this.cb_mysql_ssl.setSelected(this.pref.getBoolean("default_mysql_ssl", false));
         this.mm80
             .selectedProperty()
             .addListener((ov, t, t1) ->
@@ -838,6 +851,20 @@ public class ParametreController implements Initializable {
                     this.pref.put(
                         "default_mysql_host",
                         this.tf_ip_serveur.getText()
+                    );
+                    this.pref.put(
+                        "default_mysql_user",
+                        this.tf_mysql_user.getText() == null
+                            ? ""
+                            : this.tf_mysql_user.getText().trim()
+                    );
+                    this.pref.put(
+                        "default_mysql_password",
+                        this.pf_mysql_password.getText()
+                    );
+                    this.pref.putBoolean(
+                        "default_mysql_ssl",
+                        this.cb_mysql_ssl.isSelected()
                     );
                     MainUI.notify(
                         null,

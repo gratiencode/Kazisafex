@@ -48,8 +48,14 @@
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
-            <version>5.0.0-alpha.14</version>
+            <version>4.12.0</version>
             <type>jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -82,17 +88,6 @@
             <version>6.6.15.Final</version>
             <type>jar</type>
         </dependency>
-                <dependency>
-            <groupId>org.hibernate.orm</groupId>
-            <artifactId>hibernate-entitymanager</artifactId>
-            <version>6.0.0.Alpha7</version>
-            <type>jar</type>
-        </dependency>
-<!--        <dependency>
-            <groupId>org.hibernate</groupId>
-            <artifactId>hibernate-core</artifactId>
-            <version>5.6.15.Final</version>
-        </dependency>-->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
@@ -141,88 +136,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>kernel</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>svg</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>layout</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>forms</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>hyph</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>sign</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>font-asian</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>io</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>pdftest</artifactId>
-            <version>7.1.16</version>
-            <type>jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
-                    <artifactId>logback-classic</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
-                    <artifactId>logback-core</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>pdfa</artifactId>
-            <version>9.1.0</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>styled-xml-parser</artifactId>
-            <version>9.1.0</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.itextpdf</groupId>
-            <artifactId>barcodes</artifactId>
-            <version>9.1.0</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
             <groupId>com.fazecast</groupId>
             <artifactId>jSerialComm</artifactId>
             <version>2.11.0</version>
@@ -235,20 +148,6 @@
             <type>jar</type>
         </dependency>
 
-
-
-        <dependency>
-            <groupId>pdfbox</groupId>
-            <artifactId>pdfbox</artifactId>
-            <version>0.7.3</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>avalon-framework</groupId>
-            <artifactId>avalon-framework-api</artifactId>
-            <version>4.3</version>
-            <type>jar</type>
-        </dependency>
 
         <dependency>
             <groupId>org.eclipse.parsson</groupId>
@@ -369,9 +268,9 @@
         </dependency>
 
         <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.0</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -395,12 +294,6 @@
             <type>jar</type>
         </dependency>
 
-        <dependency>
-            <groupId>org.hibernate</groupId>
-            <artifactId>hibernate-jpamodelgen-jakarta</artifactId>
-            <version>5.6.15.Final</version>
-            <type>jar</type>
-        </dependency>
         <dependency>
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>
@@ -597,6 +490,16 @@
                         <arg>--add-reads</arg>
                         <arg>com.endeleya.kazisafex=ALL-UNNAMED</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <kazisafe.test.mode>true</kazisafe.test.mode>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 

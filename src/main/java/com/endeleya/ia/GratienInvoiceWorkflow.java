@@ -1,19 +1,15 @@
 package com.endeleya.ia;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.Content;
-import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,6 +36,12 @@ public class GratienInvoiceWorkflow {
             .build();
     private final ObjectMapper mapper = new ObjectMapper();
     private final GratienTools tools;
+
+    {
+        // Le modele peut renvoyer des champs hors du schema JSON demande: on ne doit
+        // pas faire echouer toute l'extraction pour un champ inconnu supplementaire.
+        mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
     private final InvoiceAgentRunner invoiceAgentRunner;
     private InvoiceDraft pendingDraft;
     private boolean awaitingSaveConfirmation;
@@ -50,6 +52,7 @@ public class GratienInvoiceWorkflow {
     private boolean awaitingSalePriceCorrectionChoice;
     private boolean awaitingSalePriceCorrection;
     private boolean awaitingProductClarification;
+    private boolean salePriceCorrectionAttempted;
     private List<GratienTools.ProductAmbiguity> pendingAmbiguities;
     private int currentAmbiguityIndex;
 
@@ -68,13 +71,20 @@ public class GratienInvoiceWorkflow {
     }
 
     public boolean shouldHandle(String question, List<File> attachments) {
-        if (pendingDraft != null && (awaitingSaveConfirmation || awaitingPaymentAnswer || awaitingPaymentAmount || awaitingLotDetails
-                || awaitingProductClarification
-                || isConfirmation(question) || isCancellation(question) || looksLikePriceTable(question)
-                || looksLikeLotTable(question))) {
-            return true;
+        if (pendingDraft != null) {
+            // Une question d'information (stock, rapport, etc.) ne doit jamais etre
+            // avalee par un dialogue facture en cours: le chat generique y repond, et
+            // le dialogue reprendra au prochain oui/non/tableau.
+            if (looksLikeInfoQuery(question)) {
+                return false;
+            }
+            return awaitingSaveConfirmation || awaitingPaymentAnswer || awaitingPaymentAmount
+                    || awaitingLotDetails || awaitingProductClarification || awaitingInsertConfirmation
+                    || awaitingSalePriceCorrectionChoice || awaitingSalePriceCorrection
+                    || isConfirmation(question) || isCancellation(question) || looksLikePriceTable(question)
+                    || looksLikeLotTable(question);
         }
-        return attachments != null && attachments.stream().anyMatch(this::isImage)
+        return attachments != null && attachments.stream().anyMatch(ImageAttachment::isImage)
                 && (question == null || question.isBlank()
                 || question.toLowerCase(Locale.ROOT).contains("facture")
                 || question.toLowerCase(Locale.ROOT).contains("approvisionnement")
@@ -167,6 +177,7 @@ public class GratienInvoiceWorkflow {
         if (pendingDraft != null && awaitingSalePriceCorrection) {
             applySalePriceCorrections(question, pendingDraft);
             awaitingSalePriceCorrection = false;
+            salePriceCorrectionAttempted = true;
             return continueAfterSalePrices();
         }
         if (pendingDraft != null && looksLikePriceTable(question) && !isConfirmation(question)) {
@@ -177,12 +188,16 @@ public class GratienInvoiceWorkflow {
             }
             return continueAfterSalePrices();
         }
-        if (pendingDraft != null && awaitingInsertConfirmation && isConfirmation(question)) {
-            String result = invoiceAgentRunner.run(pendingDraft);
-            if (!result.contains("Certains produits")) {
-                clearPendingWorkflow();
+        if (pendingDraft != null && awaitingInsertConfirmation) {
+            if (isConfirmation(question)) {
+                String result = invoiceAgentRunner.run(pendingDraft);
+                if (!result.contains("Certains produits")) {
+                    clearPendingWorkflow();
+                }
+                return result;
             }
-            return result;
+            clearPendingWorkflow();
+            return "D'accord, j'annule l'insertion de la livraison et des réquisitions. Aucune donnée n'a été enregistrée.";
         }
 
         pendingDraft = runInvoiceGraph(attachments);
@@ -296,10 +311,6 @@ public class GratienInvoiceWorkflow {
                     .addEdge("requisition_agent", END)
                     .compile();
             Optional<InvoiceAgentState> d = graphs.invoke(Map.of("step", "start"));
-            
-//            for (var ignored : graphs.stream(Map.of("step", "start"))) {
-//                // Iterating executes the graph; state updates are kept in the side-effect result.
-//            }
         } catch (Exception ex) {
             result[0] = extractDraft(attachments);
         }
@@ -475,23 +486,8 @@ public class GratienInvoiceWorkflow {
         }
     }
 
-    private Content imageContent(File file) throws Exception {
-        if (file == null || !file.isFile() || !isImage(file)) {
-            return null;
-        }
-        String mime = Files.probeContentType(file.toPath());
-        String base64 = Base64.getEncoder().encodeToString(Files.readAllBytes(file.toPath()));
-        Image image = Image.builder().base64Data(base64).mimeType(mime).build();
-        return ImageContent.from(image);
-    }
-
-    private boolean isImage(File file) {
-        try {
-            String mime = Files.probeContentType(file.toPath());
-            return mime != null && mime.toLowerCase(Locale.ROOT).startsWith("image/");
-        } catch (Exception ex) {
-            return false;
-        }
+    private Content imageContent(File file) {
+        return ImageAttachment.imageContent(file);
     }
 
     private boolean isConfirmation(String question) {
@@ -506,6 +502,37 @@ public class GratienInvoiceWorkflow {
                 || value.equals("annuler")
                 || value.equals("cancel")
                 || value.equals("abandonne");
+    }
+
+    private boolean looksLikeInfoQuery(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String v = value.toLowerCase(Locale.ROOT);
+        return v.contains("combien")
+                || v.contains("liste")
+                || v.contains("montre")
+                || v.contains("affiche")
+                || v.contains("rapport")
+                || v.contains("resume")
+                || v.contains("résumé")
+                || v.contains("etat")
+                || v.contains("état")
+                || v.contains("statistique")
+                || v.contains("total des")
+                || v.contains("le plus")
+                || v.contains("la plus")
+                || v.contains("eleve")
+                || v.contains("élevé")
+                || v.contains("semaine")
+                || v.contains("du mois")
+                || v.contains("de ce mois")
+                || v.contains("de l'année")
+                || v.contains("de l'annee")
+                || v.contains("historique")
+                || v.contains("synthese")
+                || v.contains("synthèse")
+                || v.contains("bilan");
     }
 
     private boolean looksLikePriceTable(String question) {
@@ -572,11 +599,12 @@ public class GratienInvoiceWorkflow {
 
     private String continueAfterSalePrices() {
         String warnings = tools.salePriceWarnings(pendingDraft);
-        if (!warnings.isBlank()) {
+        if (!warnings.isBlank() && !salePriceCorrectionAttempted) {
             awaitingSalePriceCorrectionChoice = true;
             return warnings
                     + "\nVoulez-vous rectifier le prix de vente avant l'enregistrement ? Répondez *oui* pour corriger ou *non* pour garder ce prix.";
         }
+        salePriceCorrectionAttempted = false;
         awaitingInsertConfirmation = true;
         return "Prix de vente reçus. Répondez *oui* pour insérer la livraison et les réquisitions en base.";
     }
@@ -637,7 +665,7 @@ public class GratienInvoiceWorkflow {
                 : draft.getCurrency();
     }
 
-    private void clearPendingWorkflow() {
+    public void clearPendingWorkflow() {
         pendingDraft = null;
         awaitingSaveConfirmation = false;
         awaitingPaymentAnswer = false;
@@ -647,6 +675,7 @@ public class GratienInvoiceWorkflow {
         awaitingSalePriceCorrectionChoice = false;
         awaitingSalePriceCorrection = false;
         awaitingProductClarification = false;
+        salePriceCorrectionAttempted = false;
         pendingAmbiguities = null;
         currentAmbiguityIndex = 0;
     }

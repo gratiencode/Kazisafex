@@ -137,7 +137,7 @@
                      </children>
                   </AnchorPane>
                   <Separator layoutY="1142.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                   <AnchorPane layoutX="241.0" layoutY="1155.0" prefHeight="294.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                    <AnchorPane layoutX="241.0" layoutY="1155.0" prefHeight="330.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
                      <children>
                         <Label layoutX="57.0" layoutY="19.0" text="Mode de stockage de donnees" AnchorPane.leftAnchor="57.0" AnchorPane.topAnchor="19.0">
                            <font>
@@ -174,35 +174,40 @@
                         <TextField fx:id="tf_port_serveur" layoutX="672.0" layoutY="212.0" prefHeight="24.0" prefWidth="76.0" promptText="ex: 3306" AnchorPane.rightAnchor="10.0" AnchorPane.topAnchor="212.0" />
                         <Label layoutX="387.0" layoutY="216.0" text="Serveur :" AnchorPane.leftAnchor="387.0" />
                         <Label layoutX="630.0" layoutY="215.0" text="Port :" AnchorPane.rightAnchor="93.0" AnchorPane.topAnchor="215.0" />
-                         <Button layoutX="386.0" layoutY="254.0" mnemonicParsing="false" onAction="#saveConfigurations" style="-fx-background-color: #44cef5;" text="Enregistrer la configuration" textFill="WHITE" AnchorPane.leftAnchor="386.0">
+                        <Label layoutX="387.0" layoutY="250.0" text="Utilisateur :" AnchorPane.leftAnchor="387.0" AnchorPane.topAnchor="250.0" />
+                        <TextField fx:id="tf_mysql_user" layoutX="458.0" layoutY="250.0" prefHeight="24.0" prefWidth="120.0" promptText="ex: root" AnchorPane.leftAnchor="458.0" AnchorPane.topAnchor="250.0" />
+                        <Label layoutX="583.0" layoutY="250.0" text="Mot de passe :" AnchorPane.leftAnchor="583.0" AnchorPane.topAnchor="250.0" />
+                        <PasswordField fx:id="pf_mysql_password" layoutX="672.0" layoutY="250.0" prefHeight="24.0" prefWidth="76.0" promptText="••••••••" AnchorPane.rightAnchor="10.0" AnchorPane.topAnchor="250.0" />
+                        <CheckBox fx:id="cb_mysql_ssl" layoutX="640.0" layoutY="288.0" mnemonicParsing="false" text="Connexion SSL sécurisée" AnchorPane.rightAnchor="10.0" AnchorPane.topAnchor="288.0" />
+                         <Button layoutX="386.0" layoutY="286.0" mnemonicParsing="false" onAction="#saveConfigurations" style="-fx-background-color: #44cef5;" text="Enregistrer la configuration" textFill="WHITE" AnchorPane.leftAnchor="386.0">
                            <font>
                               <Font name="System Bold" size="13.0" />
                            </font>
                         </Button>
                      </children>
                   </AnchorPane>
-                   <Label layoutX="15.0" layoutY="1155.0" text="Parametre de stockage" />
-                   <Label layoutX="15.0" layoutY="1461.0" text="Fichier de logs" />
-                   <Separator layoutY="1449.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
-                    <AnchorPane layoutX="241.0" layoutY="1470.0" prefHeight="150.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
-                       <children>
-                          <Label text="Consultez, sauvegardez ou partagez le fichier de diagnostic" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="15.0" />
-                          <Button mnemonicParsing="false" onAction="#openLogFile" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le fichier de logs" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="45.0">
-                             <font>
-                                <Font name="System Bold" size="13.0" />
-                             </font>
-                          </Button>
-                          <Button mnemonicParsing="false" onAction="#openLogFolder" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le dossier" textFill="WHITE" AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="45.0">
-                             <font>
-                                <Font name="System Bold" size="13.0" />
-                             </font>
-                          </Button>
-                          <Button mnemonicParsing="false" onAction="#saveLogCopy" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Enregistrer une copie" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="95.0">
-                             <font>
-                                <Font name="System Bold" size="13.0" />
-                             </font>
-                          </Button>
-                          <Hyperlink fx:id="logFileHyperlink" onAction="#openLogFile" text="chargement..." AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="100.0" />
+                    <Label layoutX="15.0" layoutY="1155.0" text="Parametre de stockage" />
+                    <Label layoutX="15.0" layoutY="1497.0" text="Fichier de logs" />
+                    <Separator layoutY="1485.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                     <AnchorPane layoutX="241.0" layoutY="1506.0" prefHeight="150.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                        <children>
+                           <Label text="Consultez, sauvegardez ou partagez le fichier de diagnostic" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="51.0" />
+                           <Button mnemonicParsing="false" onAction="#openLogFile" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le fichier de logs" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="81.0">
+                              <font>
+                                 <Font name="System Bold" size="13.0" />
+                              </font>
+                           </Button>
+                           <Button mnemonicParsing="false" onAction="#openLogFolder" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Ouvrir le dossier" textFill="WHITE" AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="81.0">
+                              <font>
+                                 <Font name="System Bold" size="13.0" />
+                              </font>
+                           </Button>
+                           <Button mnemonicParsing="false" onAction="#saveLogCopy" prefHeight="33.0" prefWidth="220.0" style="-fx-background-color: #44cef5;" text="Enregistrer une copie" textFill="WHITE" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="131.0">
+                              <font>
+                                 <Font name="System Bold" size="13.0" />
+                              </font>
+                           </Button>
+                           <Hyperlink fx:id="logFileHyperlink" onAction="#openLogFile" text="chargement..." AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="136.0" />
                        </children>
                     </AnchorPane>
                 </children>

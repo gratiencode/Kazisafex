@@ -53,25 +53,20 @@ public class GratienMemoryCompactionTest {
     public void testCompactageRemplaceLeContexteParMessageNumero1() {
         InMemoryStorage storage = new InMemoryStorage(10);
         String sessionKey = "kazisafex:Gratien:memory:ent:user";
-        List<String> messages = new ArrayList<>();
         for (int i = 1; i <= 10; i++) {
             String payload = RedisMemoryStore.serializePayload(i % 2 == 0 ? "assistant" : "user",
                     "message " + i);
-            messages.add(payload);
             storage.append(sessionKey, payload);
         }
         // Limite atteinte (10 messages substantifs) : compactage.
+        // L'eviction purge toute la memoire et ne garde que le contexte compacte.
         String resume = RedisMemoryStore.serializePayload("system", "[Contexte compacte] resume du contexte");
         List<String> renewed = new ArrayList<>();
         renewed.add(resume);
-        int tail = Math.min(6, messages.size());
-        for (int i = messages.size() - tail; i < messages.size(); i++) {
-            renewed.add(messages.get(i));
-        }
         storage.replaceRaw(sessionKey, renewed);
 
         List<String> result = storage.recent(sessionKey, 10);
-        assertEquals(7, result.size());
+        assertEquals(1, result.size());
         String[] first = RedisMemoryStore.parsePayload(result.get(0));
         assertEquals("system", first[0]);
         assertTrue(first[1].startsWith("[Contexte compacte]"));

@@ -47,16 +47,7 @@ module com.endeleya.kazisafex {
     requires escpos.coffee;
     requires com.google.zxing;
     requires com.google.zxing.javase;
-
-    requires kernel;
-    requires layout;
-    requires sign;
-    requires styled.xml.parser;
-    requires hyph;
-    requires pdfa;
-    requires barcodes;
     requires controlsfx;
-    requires pdftest;
 
     requires swing.toast.notifications;
 

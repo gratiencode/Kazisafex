@@ -1,22 +1,18 @@
 package com.endeleya.ia;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.Content;
-import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +41,10 @@ public class GratienSaleWorkflow {
     private final ObjectMapper mapper = new ObjectMapper();
     private final GratienTools tools;
     private final SaleAgentRunner saleAgentRunner;
+
+    {
+        mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
     private SaleDraft pendingDraft;
     private boolean awaitingConfirmation;
     private boolean awaitingModification;
@@ -61,12 +61,17 @@ public class GratienSaleWorkflow {
 
     public boolean shouldHandle(String question, List<File> attachments) {
         if (pendingDraft != null) {
-            return true;
+            // Une question d'information pendant un dialogue vente ne doit pas etre
+            // avalee par le workflow: le chat generique repond, le dialogue reprend apres.
+            return !looksLikeInfoQuery(question);
         }
         String value = question == null ? "" : question.toLowerCase(Locale.ROOT);
+        if (looksLikeInfoQuery(value)) {
+            return false;
+        }
         boolean saleText = value.contains("vente") || value.contains("sortie") || value.contains("vendre")
                 || value.contains("client");
-        boolean saleImage = attachments != null && attachments.stream().anyMatch(this::isImage)
+        boolean saleImage = attachments != null && attachments.stream().anyMatch(ImageAttachment::isImage)
                 && (value.isBlank() || saleText);
         return saleText || saleImage;
     }
@@ -379,7 +384,7 @@ public class GratienSaleWorkflow {
 
     private SaleDraft extractDraft(String question, List<File> attachments) {
         SaleDraft draft = null;
-        if (attachments != null && attachments.stream().anyMatch(this::isImage)) {
+        if (attachments != null && attachments.stream().anyMatch(ImageAttachment::isImage)) {
             draft = extractDraftFromImages(attachments);
         }
         if (draft == null || !draft.hasLines()) {
@@ -452,6 +457,13 @@ public class GratienSaleWorkflow {
         }
     }
 
+    private static final java.util.regex.Pattern QUANTITY_MEASURE_PRODUCT = java.util.regex.Pattern.compile(
+            "(?:^|[^0-9])"
+            + "(\\d+(?:[.,]\\d+)?)\\s*"
+            + "(carton|cartons|sac|sacs|piece|pièce|paquet|paquets|bouteille|bouteilles|bidon|bidons|kg|kilogramme|litre|litres|l|boite|boîte|boites|boîtes|colis)?\\s*"
+            + "(?:de\\s+|d'|du\\s+|des\\s+)?"
+            + "([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\\-\\s/]*?)(?:[,\\;]|\\s+$|$)");
+
     private SaleDraft extractDraftFromTextFallback(String question) {
         SaleDraft draft = new SaleDraft();
         if (question == null || question.isBlank()) {
@@ -476,14 +488,29 @@ public class GratienSaleWorkflow {
                     line.setMeasureName(parts[2].trim());
                 }
             } else {
-                line.setProductName(cleaned.replace("vente", "").replace("sortie", "").replace("vendre", "").trim());
-                line.setQuantity(1d);
+                java.util.regex.Matcher matcher = QUANTITY_MEASURE_PRODUCT.matcher(cleaned);
+                if (matcher.find()) {
+                    line.setQuantity(parseQty(matcher.group(1)));
+                    line.setMeasureName(matcher.group(2));
+                    line.setProductName(matcher.group(3).trim());
+                } else {
+                    line.setProductName(cleaned.replace("vente", "").replace("sortie", "").replace("vendre", "").trim());
+                    line.setQuantity(1d);
+                }
             }
             if (line.getProductName() != null && !line.getProductName().isBlank()) {
                 draft.getLines().add(line);
             }
         }
         return draft;
+    }
+
+    private double parseQty(String value) {
+        try {
+            return Double.parseDouble(value.trim().replace(",", "."));
+        } catch (NumberFormatException ex) {
+            return 1d;
+        }
     }
 
     private SaleDraft extractDraftFromImages(List<File> attachments) {
@@ -518,7 +545,7 @@ public class GratienSaleWorkflow {
         }
     }
 
-    private void clearPendingWorkflow() {
+    public void clearPendingWorkflow() {
         pendingDraft = null;
         awaitingConfirmation = false;
         awaitingModification = false;
@@ -529,18 +556,38 @@ public class GratienSaleWorkflow {
         awaitingPartialPayment = false;
     }
 
-    private boolean isImage(File file) {
-        String name = file == null ? "" : file.getName().toLowerCase(Locale.ROOT);
-        return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp");
+    private boolean looksLikeInfoQuery(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        return value.contains("combien")
+                || value.contains("liste")
+                || value.contains("montre")
+                || value.contains("affiche")
+                || value.contains("rapport")
+                || value.contains("resume")
+                || value.contains("résumé")
+                || value.contains("etat")
+                || value.contains("état")
+                || value.contains("statistique")
+                || value.contains("total des")
+                || value.contains("le plus")
+                || value.contains("la plus")
+                || value.contains("eleve")
+                || value.contains("élevé")
+                || value.contains("semaine")
+                || value.contains("du mois")
+                || value.contains("de ce mois")
+                || value.contains("de l'année")
+                || value.contains("de l'annee")
+                || value.contains("historique")
+                || value.contains("synthese")
+                || value.contains("synthèse")
+                || value.contains("bilan");
     }
 
-    private Content imageContent(File file) throws Exception {
-        if (!isImage(file)) {
-            return null;
-        }
-        String mime = file.getName().toLowerCase(Locale.ROOT).endsWith(".png") ? "image/png" : "image/jpeg";
-        String base64 = Base64.getEncoder().encodeToString(Files.readAllBytes(file.toPath()));
-        return ImageContent.from(Image.builder().base64Data(base64).mimeType(mime).build());
+    private Content imageContent(File file) {
+        return ImageAttachment.imageContent(file);
     }
 
     private String extractJson(String answer) {

@@ -94,7 +94,6 @@ public final class AiAgents {
      */
     private static final int MAX_MEMORY_MESSAGES = 40;
     private static final int COMPACTION_THRESHOLD = 10;
-    private static final int COMPACTION_TAIL = 6;
     private static final String COMPACTION_MARKER = "[Contexte compacte] ";
     private static final String SUMMARY_SYSTEM_PROMPT = """
             Tu es l'agent de memoire de Gratien, assistant de Kazisafe.
@@ -132,6 +131,7 @@ public final class AiAgents {
     private volatile Consumer<String> progressSignal;
     private volatile ChatModel summaryModel;
     private volatile String sessionId = "anonymous";
+    private volatile String lastSessionId;
     private volatile PendingInvoiceIntent pendingInvoiceIntent;
 
     private AiAgents() {
@@ -199,13 +199,30 @@ public final class AiAgents {
     public void startForUser(String userId, String entrepriseId) {
         String user = safe(userId, "unknown-user");
         String enterprise = safe(entrepriseId, pref.get("eUid", "unknown-enterprise"));
+        String previous = lastSessionId;
         sessionId = enterprise + ":" + user;
+        if (previous != null && !previous.equals(sessionId)) {
+            // Changement d'entreprise/utilisateur: on purge les dialogues de workflow en
+            // cours pour ne jamais reprendre le contexte d'une autre session (draft facture,
+            // vente, dépense, image-produits, clarification de document).
+            invoiceWorkflow.clearPendingWorkflow();
+            saleWorkflow.clearPendingWorkflow();
+            expenseWorkflow.clearPendingWorkflow();
+            productImageWorkflow.clearPendingWorkflow();
+            pendingInvoiceIntent = null;
+        }
+        lastSessionId = sessionId;
         if (started.compareAndSet(false, true)) {
             appendMemory("system", "AiAgents demarre a " + Instant.now()
                     + ", redis=" + memoryStore.isRedisAvailable()
                     + ", entreprise=" + enterprise
                     + ", utilisateur=" + user);
         }
+    }
+
+    public boolean hasPendingWorkflowCancellationRequest() {
+        startForCurrentSession();
+        return GratienTools.hasPendingWorkflowCancellation(sessionId);
     }
 
     public boolean hasPendingInvoiceIntentClarification() {
@@ -220,7 +237,7 @@ public final class AiAgents {
             return false;
         }
         String value = normalize(question);
-        if (isSupplyIntent(value) || isSaleIntent(value) || isExpenseIntent(value)) {
+        if (isSupplyIntent(value) || isSaleIntent(value) || isExpenseIntent(value) || isProductIntent(value)) {
             return false;
         }
         return value.isBlank()
@@ -277,11 +294,14 @@ public final class AiAgents {
         if (isExpenseIntent(value)) {
             return orchestrateExpense(originalQuestion + "\nTâche: dépense.", attachments);
         }
-        pendingInvoiceIntent = pending;
-        return """
-                Je dois d'abord savoir quel workflow lancer.
-                Répondez simplement par `approvisionnement`/`entrées`, `vente`/`sortie`, ou `dépense`.
-                """;
+        if (isProductIntent(value)) {
+            return orchestrateProductImage(originalQuestion + "\nTâche: liste de produits à approvisionner.", attachments);
+        }
+        // Reponse non reconnue: on ne boucle jamais indefiniment. On libere la demande
+        // en attente et on laisse l'utilisateur reformuler avec l'un des mots attendus.
+        return "Je n'ai pas reconnu la nature du document dans votre réponse. "
+                + "Reformulez avec l'un de ces mots: `approvisionnement`/`entrées`, "
+                + "`vente`/`sortie`, `dépense`, ou `produit`/`liste`.";
     }
 
     public boolean shouldHandleInvoice(String question, List<File> attachments) {
@@ -345,6 +365,16 @@ public final class AiAgents {
                 || value.contains("recu")
                 || value.contains("reçu")
                 || value.contains("ticket");
+    }
+
+    private boolean isProductIntent(String value) {
+        return value.contains("produit")
+                || value.contains("article")
+                || value.contains("liste produit")
+                || value.contains("liste produits")
+                || value.contains("liste de produits")
+                || value.contains("approvisionnement generique")
+                || value.contains("catalogue");
     }
 
     public boolean shouldHandleWorkflowCancellation(String question) {
@@ -780,8 +810,8 @@ public final class AiAgents {
     }
 
     /**
-     * Compacte la memoire : remplace l'historique par le contexte compacte en
-     * message numero 1 suivi des derniers messages.
+     * Compacte la memoire a l'eviction : purge l'historique et ne garde que le
+     * contexte compacte en message numero 1.
      */
     private void maybeCompactMemory() {
         if (streamingActive.get()) {
@@ -814,15 +844,12 @@ public final class AiAgents {
                         + "Les messages reçus pendant ce temps seront traités juste après.");
         try {
             String summary = summarize(raw);
+            // Eviction: la memoire est entierement purgee, seul le contexte compacte subsiste.
             List<String> renewed = new ArrayList<>();
             renewed.add(RedisMemoryStore.serializePayload("system", COMPACTION_MARKER + summary));
-            int tail = Math.min(COMPACTION_TAIL, raw.size());
-            for (int i = raw.size() - tail; i < raw.size(); i++) {
-                renewed.add(raw.get(i));
-            }
             memoryStore.replaceRaw(sessionId, renewed);
-            LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": " + renewed.size()
-                    + " messages, contexte compacte en message numero 1.");
+            LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": purgee, "
+                    + renewed.size() + " message de contexte compacte en numero 1.");
             emitCompactionSignal("\u2705 Mémoire compactée.");
         } finally {
             compacting.set(false);
@@ -835,7 +862,7 @@ public final class AiAgents {
             String[] parts = RedisMemoryStore.parsePayload(payload);
             String role = parts[0];
             String content = parts[1];
-            if (content == null || content.isBlank() || "system".equalsIgnoreCase(role)) {
+            if (content == null || content.isBlank()) {
                 continue;
             }
             if (content.length() > 1200) {

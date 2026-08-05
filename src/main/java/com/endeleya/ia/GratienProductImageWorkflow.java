@@ -1,20 +1,16 @@
 package com.endeleya.ia;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.Content;
-import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,6 +31,10 @@ public class GratienProductImageWorkflow {
             .build();
     private final ObjectMapper mapper = new ObjectMapper();
     private final Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
+
+    {
+        mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
     private final GratienTools tools;
     private InvoiceDraft pendingDraft;
     private boolean awaitingQuantity;
@@ -54,17 +54,23 @@ public class GratienProductImageWorkflow {
                 || value.contains("liste")
                 || value.contains("photo")
                 || value.contains("image");
-        boolean excludedDocumentIntent = value.contains("facture")
-                || value.contains("vente")
+        boolean excludedDocumentIntent = value.contains("vente")
                 || value.contains("sortie")
                 || value.contains("depense")
                 || value.contains("dépense")
                 || value.contains("recu")
                 || value.contains("reçu");
+        if (value.contains("facture") && !productIntent) {
+            return false;
+        }
         return hasImage(attachments) && productIntent && !excludedDocumentIntent;
     }
 
     public String handle(String question, List<File> attachments) {
+        if (pendingDraft != null && isCancellation(question)) {
+            clearPendingWorkflow();
+            return "D'accord, j'annule l'enregistrement de ces produits.";
+        }
         if (pendingDraft != null && awaitingQuantity) {
             applyQuantities(question, pendingDraft);
             if (!missingQuantityLines(pendingDraft).isEmpty()) {
@@ -320,22 +326,23 @@ public class GratienProductImageWorkflow {
     }
 
     private boolean hasImage(List<File> attachments) {
-        return attachments != null && attachments.stream().anyMatch(this::isImage);
+        return attachments != null && attachments.stream().anyMatch(ImageAttachment::isImage);
     }
 
-    private boolean isImage(File file) {
-        String name = file == null ? "" : file.getName().toLowerCase(Locale.ROOT);
-        return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp") || name.endsWith(".bmp");
+    private Content imageContent(File file) {
+        return ImageAttachment.imageContent(file);
     }
 
-    private Content imageContent(File file) throws Exception {
-        if (!isImage(file)) {
-            return null;
-        }
-        String lower = file.getName().toLowerCase(Locale.ROOT);
-        String mime = lower.endsWith(".png") ? "image/png" : lower.endsWith(".webp") ? "image/webp" : "image/jpeg";
-        String base64 = Base64.getEncoder().encodeToString(Files.readAllBytes(file.toPath()));
-        return ImageContent.from(Image.builder().base64Data(base64).mimeType(mime).build());
+    private boolean isCancellation(String question) {
+        String value = normalize(question);
+        return value.equals("annule") || value.equals("annuler") || value.equals("cancel")
+                || value.equals("abandonne") || value.equals("non, annule");
+    }
+
+    public void clearPendingWorkflow() {
+        pendingDraft = null;
+        awaitingQuantity = false;
+        awaitingSalePrices = false;
     }
 
     private String extractJson(String answer) {
