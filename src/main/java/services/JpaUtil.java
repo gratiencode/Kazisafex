@@ -127,7 +127,7 @@ public class JpaUtil {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "");
+        return pref.get("default_mysql_password", "Admin*21");
     }
 
 }

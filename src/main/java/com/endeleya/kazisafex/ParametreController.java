@@ -485,7 +485,7 @@ public class ParametreController implements Initializable {
         this.tf_ip_serveur.setText(host);
         this.tf_port_serveur.setText(Integer.toString(port));
         this.tf_mysql_user.setText(this.pref.get("default_mysql_user", "root"));
-        this.pf_mysql_password.setText(this.pref.get("default_mysql_password", ""));
+        this.pf_mysql_password.setText(this.pref.get("default_mysql_password", "Admin*21"));
         this.cb_mysql_ssl.setSelected(this.pref.getBoolean("default_mysql_ssl", false));
         this.mm80
             .selectedProperty()

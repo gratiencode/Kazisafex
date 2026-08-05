@@ -484,7 +484,7 @@ public class ManagedSessionFactory {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "");
+        return pref.get("default_mysql_password", "Admin*21");
     }
 
     private static String resolveLocalDbSecret(String databaseName) {
