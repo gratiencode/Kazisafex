@@ -30,14 +30,17 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 public class GratienSaleWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
+    private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
+    private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 
     private final ChatModel model = OllamaChatModel.builder()
             .baseUrl(OLLAMA_BASE_URL)
-            .modelName(MODEL_NAME)
+            .modelName(TEXT_MODEL_NAME)
             .temperature(0.0)
             .timeout(Duration.ofMinutes(5))
             .build();
+    private final OllamaModelFallback imageModel = new OllamaModelFallback(0.0, Duration.ofMinutes(5),
+            VISION_MODEL_NAME, TEXT_MODEL_NAME);
     private final ObjectMapper mapper = new ObjectMapper();
     private final GratienTools tools;
     private final SaleAgentRunner saleAgentRunner;
@@ -79,13 +82,17 @@ public class GratienSaleWorkflow {
     public String handle(String question, List<File> attachments) {
         if (pendingDraft != null) {
             String normalizedQuestion = question == null ? "" : question.toLowerCase(Locale.ROOT).trim();
+            if (isCancellation(question)) {
+                clearPendingWorkflow();
+                return "D'accord, la vente n'est pas enregistrée.";
+            }
             if (normalizedQuestion.equals("oui") || normalizedQuestion.equals("confirmer") || normalizedQuestion.equals("ok")) {
                 if (awaitingConfirmation) {
                     String result = saleAgentRunner.run(pendingDraft);
                     clearPendingWorkflow();
                     return result;
                 }
-            } else if (normalizedQuestion.equals("non") || normalizedQuestion.equals("annuler")) {
+            } else if (normalizedQuestion.equals("non")) {
                 clearPendingWorkflow();
                 return "D'accord, la vente n'est pas enregistrée.";
             } else {
@@ -538,7 +545,7 @@ public class GratienSaleWorkflow {
                 }
             }
             ChatRequest request = ChatRequest.builder().messages(UserMessage.from(contents)).build();
-            String answer = model.chat(request).aiMessage().text();
+            String answer = imageModel.chat(request);
             return mapper.readValue(extractJson(answer), SaleDraft.class);
         } catch (Exception ex) {
             return null;
@@ -554,6 +561,28 @@ public class GratienSaleWorkflow {
         awaitingDueDate = false;
         awaitingClientInfo = false;
         awaitingPartialPayment = false;
+    }
+
+    private boolean isCancellation(String question) {
+        String value = question == null ? "" : question.trim().toLowerCase(Locale.ROOT);
+        return value.equals("non")
+                || value.equals("no")
+                || value.equals("annule")
+                || value.equals("annuler")
+                || value.equals("annuler tout")
+                || value.equals("cancel")
+                || value.equals("abandonne")
+                || value.equals("abandonner")
+                || value.equals("j'annule")
+                || value.equals("stop")
+                || value.equals("arrete")
+                || value.equals("arrête")
+                || value.equals("arret")
+                || value.equals("arrêt")
+                || value.equals("quitte")
+                || value.equals("quitter")
+                || value.contains("annul")
+                || value.contains("abandon");
     }
 
     private boolean looksLikeInfoQuery(String value) {

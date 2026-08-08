@@ -2,6 +2,8 @@ package services;
 
 import data.SyncOutbox;
 import data.network.dto.SyncOutboxDto;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -94,6 +96,9 @@ class SyncOutboxServiceTest {
                     "{\"type\":\"PRODUIT\",\"uid\":\"prod-1\",\"nomProduit\":\"Lait\"}");
             db.record("CATEGORY", "cat-1", "PERSIST",
                     "{\"type\":\"CATEGORY\",\"uid\":\"cat-1\",\"descritption\":\"Élec\"}");
+            // La catégorie de repli "Divers" existe : un produit sans catégorie
+            // l'obtient par recherche (uid déterministe), sans nouvelle ligne.
+            db.seedEntity(new data.Category(SyncOutboxService.DIVERS_CATEGORY_UID, "Divers"));
 
             SyncOutboxService.materializeDownsyncRecords();
 
@@ -167,5 +172,90 @@ class SyncOutboxServiceTest {
         d.mutationTs = ts;
         d.payload = "{\"type\":\"" + type + "\",\"uid\":\"" + entityId + "\"}";
         return d;
+    }
+
+    // ── Upsync : filtre d'ancienneté (createdAt > lastSyncTimestamp) ─────────
+
+    private static SyncOutbox addPending(
+            SyncTestDb db,
+            String uid,
+            LocalDateTime createdAt,
+            Integer retryCount
+    ) {
+        SyncOutbox r = new SyncOutbox();
+        r.setUid(uid);
+        r.setTableName("PRODUIT");
+        r.setEntityId("ent-" + uid);
+        r.setAction("PERSIST");
+        r.setPayload("{}");
+        r.setStatus(retryCount != null && retryCount > 0 ? "UNSYNCED" : "PENDING");
+        r.setCreatedAt(createdAt);
+        r.setRetryCount(retryCount);
+        db.records.put(uid, r);
+        return r;
+    }
+
+    private static void assertFiltered(List<SyncOutbox> result, String... expected) {
+        List<String> uids = result.stream()
+                .map(SyncOutbox::getUid)
+                .collect(Collectors.toList());
+        for (String uid : expected) {
+            assertTrue(uids.contains(uid), "attendu dans le résultat: " + uid + " (résultat=" + uids + ")");
+        }
+        assertEquals(expected.length, uids.size(),
+                "aucun enregistrement supplémentaire (résultat=" + uids + ")");
+    }
+
+    @Test
+    @DisplayName("fetchPendingOutboxSince (MySQL): ancienneté + retries préservés")
+    void testFetchPendingOutboxSinceFiltersMySQL() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            LocalDateTime old = LocalDateTime.now().minusDays(2).withNano(0);
+            LocalDateTime fresh = LocalDateTime.now();
+            addPending(db, "p1", old, null); // ancien, jamais tenté -> exclu
+            addPending(db, "p2", fresh, null); // récent -> inclus
+            addPending(db, "p3", old, 2); // ancien en retry -> inclus
+            addPending(db, "p4", fresh, 5); // retryCount >= max -> exclu
+            addPending(db, "p5", old, 0); // ancien, retry 0 -> exclu
+
+            long since = old.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            List<SyncOutbox> result =
+                    SyncOutboxService.fetchPendingOutboxSince(since);
+
+            assertFiltered(result, "p2", "p3");
+        }
+    }
+
+    @Test
+    @DisplayName("fetchPendingOutboxSince (SQLite): même filtre via executeRead")
+    void testFetchPendingOutboxSinceFiltersSqlite() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            db.msf.when(ManagedSessionFactory::isEmbedded).thenReturn(true);
+            LocalDateTime old = LocalDateTime.now().minusDays(2).withNano(0);
+            LocalDateTime fresh = LocalDateTime.now();
+            addPending(db, "s1", old, null);
+            addPending(db, "s2", fresh, null);
+            addPending(db, "s3", old, 3);
+
+            long since = old.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            List<SyncOutbox> result =
+                    SyncOutboxService.fetchPendingOutboxSince(since);
+
+            assertFiltered(result, "s2", "s3");
+        }
+    }
+
+    @Test
+    @DisplayName("fetchPendingOutboxSince: since=0 (full sync) retourne tout")
+    void testFetchPendingOutboxSinceFullSync() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            LocalDateTime old = LocalDateTime.now().minusDays(30).withNano(0);
+            addPending(db, "f1", old, null);
+            addPending(db, "f2", old, 1);
+
+            List<SyncOutbox> result = SyncOutboxService.fetchPendingOutboxSince(0L);
+
+            assertFiltered(result, "f1", "f2");
+        }
     }
 }

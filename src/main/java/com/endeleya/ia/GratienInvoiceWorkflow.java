@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -14,6 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.state.AgentState;
@@ -26,14 +26,12 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 public class GratienInvoiceWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
+    private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
+    private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
+    private static final Logger LOGGER = Logger.getLogger(GratienInvoiceWorkflow.class.getName());
 
-    private final ChatModel model = OllamaChatModel.builder()
-            .baseUrl(OLLAMA_BASE_URL)
-            .modelName(MODEL_NAME)
-            .temperature(0.0)
-            .timeout(Duration.ofMinutes(5))
-            .build();
+    private final OllamaModelFallback model = new OllamaModelFallback(0.0, Duration.ofMinutes(5),
+            VISION_MODEL_NAME, TEXT_MODEL_NAME);
     private final ObjectMapper mapper = new ObjectMapper();
     private final GratienTools tools;
 
@@ -102,34 +100,25 @@ public class GratienInvoiceWorkflow {
             return "D'accord, je n'insère rien en base.";
         }
         if (pendingDraft != null && awaitingProductClarification) {
-            int chosen = -1;
-            String trimmed = question == null ? "" : question.trim();
-            try {
-                chosen = Integer.parseInt(trimmed.replaceAll("[^0-9]", ""));
-            } catch (NumberFormatException ignored) {}
-            if (chosen < 1 || chosen > pendingAmbiguities.get(currentAmbiguityIndex).candidates().size()) {
-                return "Veuillez entrer un numero entre 1 et "
-                        + pendingAmbiguities.get(currentAmbiguityIndex).candidates().size()
-                        + ":\n\n" + pendingAmbiguities.get(currentAmbiguityIndex).format();
-            }
             GratienTools.ProductAmbiguity ambiguity = pendingAmbiguities.get(currentAmbiguityIndex);
-            String chosenName = ambiguity.candidates().get(chosen - 1);
-            pendingDraft.getLines().get(ambiguity.lineIndex()).setProductName(chosenName);
-            currentAmbiguityIndex++;
-            if (currentAmbiguityIndex < pendingAmbiguities.size()) {
-                return pendingAmbiguities.get(currentAmbiguityIndex).format()
-                        + "\nQuel produit voulez-vous ré-approvisionner ? (entrez le numero)";
+            String trimmed = question == null ? "" : question.trim();
+            boolean containsLetter = trimmed.chars().anyMatch(Character::isLetter);
+            int chosen = containsLetter ? -1 : parseIndex(trimmed);
+            if (chosen >= 1 && chosen <= ambiguity.candidates().size()) {
+                pendingDraft.getLines().get(ambiguity.lineIndex())
+                        .setProductName(ambiguity.candidates().get(chosen - 1));
+                return advanceAfterProductClarification();
             }
-            pendingAmbiguities = null;
-            currentAmbiguityIndex = 0;
-            awaitingProductClarification = false;
-            List<String> missing = tools.findMissingSalePrices(pendingDraft);
-            pendingDraft.setMissingSalePrices(missing);
-            awaitingSaveConfirmation = true;
-            awaitingInsertConfirmation = false;
-            return formatDraft(pendingDraft)
-                    + "\n\nVoulez-vous enregistrer cette facture comme approvisionnement dans la base de donnée ?"
-                    + "\nRépondez *oui* pour continuer ou *non* pour annuler.";
+            if (isProductSkip(question)) {
+                return advanceAfterProductClarification();
+            }
+            if (looksLikeProductName(trimmed)) {
+                pendingDraft.getLines().get(ambiguity.lineIndex()).setProductName(trimmed);
+                return advanceAfterProductClarification();
+            }
+            return "Veuillez entrer un numero entre 1 et " + ambiguity.candidates().size()
+                    + ", taper directement le nom du produit, ou *continuer* pour ignorer:\n\n"
+                    + ambiguity.format();
         }
         if (pendingDraft != null && awaitingSaveConfirmation) {
             if (!isConfirmation(question)) {
@@ -209,8 +198,7 @@ public class GratienInvoiceWorkflow {
         if (pendingAmbiguities != null && !pendingAmbiguities.isEmpty()) {
             currentAmbiguityIndex = 0;
             awaitingProductClarification = true;
-            return pendingAmbiguities.get(0).format()
-                    + "\nQuel produit voulez-vous ré-approvisionner ? (entrez le numero)";
+            return productClarificationPrompt(0);
         }
         List<String> missing = tools.findMissingSalePrices(pendingDraft);
         pendingDraft.setMissingSalePrices(missing);
@@ -247,8 +235,8 @@ public class GratienInvoiceWorkflow {
                           "quantity": 1,
                           "purchaseUnitPrice": 0,
                           "total": 0,
-                          "lotNumber": "numero de lot si visible, sinon null",
-                          "expiryDate": "date expiration yyyy-MM-dd si visible, sinon null"
+                          "lotNumber": "numero de lot si visible sur la facture, sinon null",
+                          "expiryDate": "date expiration yyyy-MM-dd si visible sur la facture, sinon null"
                         }
                       ]
                     }
@@ -259,26 +247,50 @@ public class GratienInvoiceWorkflow {
                     - purchaseUnitPrice est le prix d'achat unitaire lu sur la facture; il sera enregistre dans Recquisition.coutAchat.
                     - Si le prix d'achat unitaire n'est pas visible, calcule purchaseUnitPrice depuis total / quantité.
                     - measureName doit reprendre l'unite de la facture: carton, paquet, pièce, kg, litre, etc. Si absent, mets "Pièce".
-                    - lotNumber et expiryDate ne doivent etre renseignes que s'ils sont visibles sur la facture.
+                    - lotNumber et expiryDate ne doivent etre renseignes que s'ils sont visibles sur la facture; sinon null (ils seront demandés à l'utilisateur après la lecture si absents).
                     - Ne retourne jamais de prix de vente, de quantite minimale ou de quantite maximale: ces valeurs ne viennent pas de la facture.
                     - payed est le montant réellement payé si visible; sinon 0.
                     - reduction est la remise/réduction si visible; sinon 0.
                     - La catégorie doit être courte; si incertain, mets "Divers".
+                    - Ferme le JSON complet par "}" sans texte ni commentaire après.
                     """));
             for (File file : attachments) {
                 Content image = imageContent(file);
                 if (image != null) {
                     contents.add(image);
+                } else {
+                    LOGGER.log(Level.WARNING, "Image illisible ou non jointe pour la facture: {0}",
+                            file == null ? "null" : file.getAbsolutePath());
                 }
             }
             ChatRequest request = ChatRequest.builder()
                     .messages(UserMessage.from(contents))
                     .build();
-            String answer = model.chat(request).aiMessage().text();
-            return mapper.readValue(extractJson(answer), InvoiceDraft.class);
+            String answer = null;
+            try {
+                answer = model.chat(request);
+            } catch (Exception ex) {
+                LOGGER.log(Level.WARNING, "Appel du modele d'extraction de facture en echec", ex);
+                return null;
+            }
+            try {
+                return mapper.readValue(extractJson(answer), InvoiceDraft.class);
+            } catch (Exception ex) {
+                LOGGER.log(Level.WARNING, "Reponse du modele non parsable en facture: {0} (cause: {1})",
+                        new Object[]{loggableAnswer(answer), ex == null ? "?" : ex.getMessage()});
+                return null;
+            }
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private static String loggableAnswer(String answer) {
+        if (answer == null) {
+            return "(reponse vide)";
+        }
+        String compact = answer.replaceAll("\\s+", " ").trim();
+        return compact.length() > 800 ? compact.substring(0, 800) + "..." : compact;
     }
 
     private InvoiceDraft runInvoiceGraph(List<File> attachments) {
@@ -498,10 +510,24 @@ public class GratienInvoiceWorkflow {
     private boolean isCancellation(String question) {
         String value = question == null ? "" : question.trim().toLowerCase(Locale.ROOT);
         return value.equals("non, annule")
+                || value.equals("non, annuler")
                 || value.equals("annule")
+                || value.equals("annule tout")
                 || value.equals("annuler")
+                || value.equals("annuler tout")
                 || value.equals("cancel")
-                || value.equals("abandonne");
+                || value.equals("abandonne")
+                || value.equals("abandonner")
+                || value.equals("j'annule")
+                || value.equals("stop")
+                || value.equals("arrete")
+                || value.equals("arrête")
+                || value.equals("arret")
+                || value.equals("arrêt")
+                || value.equals("quitte")
+                || value.equals("quitter")
+                || value.contains("annul")
+                || value.contains("abandon");
     }
 
     private boolean looksLikeInfoQuery(String value) {
@@ -577,6 +603,47 @@ public class GratienInvoiceWorkflow {
                 || value.contains("pas totalement")
                 || value.contains("pas entierement")
                 || value.contains("pas entièrement") || value.contains("apana");
+    }
+
+    private String productClarificationPrompt(int index) {
+        return pendingAmbiguities.get(index).format()
+                + "\nQuel produit voulez-vous ré-approvisionner ? (entrez le numero, tapez directement le nom du produit, ou *continuer* pour ignorer)";
+    }
+
+    private String advanceAfterProductClarification() {
+        currentAmbiguityIndex++;
+        if (currentAmbiguityIndex < pendingAmbiguities.size()) {
+            return productClarificationPrompt(currentAmbiguityIndex);
+        }
+        pendingAmbiguities = null;
+        currentAmbiguityIndex = 0;
+        awaitingProductClarification = false;
+        List<String> missing = tools.findMissingSalePrices(pendingDraft);
+        pendingDraft.setMissingSalePrices(missing);
+        awaitingSaveConfirmation = true;
+        awaitingInsertConfirmation = false;
+        return formatDraft(pendingDraft)
+                + "\n\nVoulez-vous enregistrer cette facture comme approvisionnement dans la base de donnée ?"
+                + "\nRépondez *oui* pour continuer ou *non* pour annuler.";
+    }
+
+    private boolean isProductSkip(String question) {
+        String value = normalize(question);
+        return value.equals("continuer")
+                || value.equals("suivant")
+                || value.equals("passer")
+                || value.equals("passer sans assigner")
+                || value.equals("ignorer")
+                || value.equals("sauter")
+                || value.equals("skip")
+                || value.equals("next")
+                || value.equals("ne sais pas")
+                || value.equals("je ne sais pas");
+    }
+
+    private boolean looksLikeProductName(String value) {
+        return value != null && !value.isBlank()
+                && value.chars().anyMatch(Character::isLetter);
     }
 
     private String continueAfterPayment() {

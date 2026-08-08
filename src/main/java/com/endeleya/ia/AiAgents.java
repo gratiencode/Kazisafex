@@ -42,6 +42,7 @@ import org.bsc.langgraph4j.state.AgentState;
 import org.bsc.langgraph4j.state.Channel;
 import org.bsc.langgraph4j.state.Channels;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
@@ -78,7 +79,12 @@ public final class AiAgents {
             return fallback;
         }
         String message = error.getMessage();
-        return message == null || message.isBlank() ? fallback : message;
+        if (message == null || message.isBlank()) {
+            SyncLogger.getInstance().log(error, "Echec de l'outil avec message vide : " + fallback);
+            return fallback;
+        }
+        SyncLogger.getInstance().log(error, "Echec de l'outil (cause complete) : " + fallback);
+        return message;
     }
 
     public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
@@ -87,6 +93,14 @@ public final class AiAgents {
      * Aucun override (propriete/variable d'environnement) n'est applique.
      */
     public static final String MODEL_NAME = "gemma4:31b-cloud";
+    /**
+     * Modele multimodal (vision) pour les images jointes (factures, reçus,
+     * listes de produits): gemma4:31b-cloud et gpt-oss:120b-cloud renvoient une
+     * erreur HTTP 500 / "this model does not support image input" des que le
+     * corps de la requete contient une image. minimax-m3:cloud est le seul
+     * modele du serveur qui accepte les images et extrait les donnees en JSON.
+     */
+    public static final String VISION_MODEL_NAME = "minimax-m3:cloud";
     /**
      * Memoire de Gratien : 40 messages maximum, applique a Redis comme au
      * fallback InMemoryStorage. Des que la limite est atteinte, le contexte est
@@ -116,7 +130,6 @@ public final class AiAgents {
     private final GratienAgent assistant;
     private final ProductCreatorAgent productCreatorAgent;
     private final SupplierDeliveryAgent supplierDeliveryAgent;
-    private final RequisitionPriceAgent requisitionPriceAgent;
     private final SaleCreationAgent saleCreationAgent;
     private final SaleTreasuryAgent saleTreasuryAgent;
     private final ExpensePreparationAgent expensePreparationAgent;
@@ -133,6 +146,9 @@ public final class AiAgents {
     private volatile String sessionId = "anonymous";
     private volatile String lastSessionId;
     private volatile PendingInvoiceIntent pendingInvoiceIntent;
+    private final Map<String, List<File>> lastDocumentAttachments = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastDocumentTurn = new ConcurrentHashMap<>();
+    private final Map<String, Long> messageTurn = new ConcurrentHashMap<>();
 
     private AiAgents() {
         // GratienTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
@@ -159,7 +175,6 @@ public final class AiAgents {
                 .build();
         this.productCreatorAgent = buildAgent(ProductCreatorAgent.class, oschatmodel);
         this.supplierDeliveryAgent = buildAgent(SupplierDeliveryAgent.class, oschatmodel);
-        this.requisitionPriceAgent = buildAgent(RequisitionPriceAgent.class, oschatmodel);
         this.saleCreationAgent = buildAgent(SaleCreationAgent.class, oschatmodel);
         this.saleTreasuryAgent = buildAgent(SaleTreasuryAgent.class, oschatmodel);
         this.expensePreparationAgent = buildAgent(ExpensePreparationAgent.class, oschatmodel);
@@ -210,6 +225,9 @@ public final class AiAgents {
             expenseWorkflow.clearPendingWorkflow();
             productImageWorkflow.clearPendingWorkflow();
             pendingInvoiceIntent = null;
+            lastDocumentAttachments.remove(previous);
+            lastDocumentTurn.remove(previous);
+            messageTurn.remove(previous);
         }
         lastSessionId = sessionId;
         if (started.compareAndSet(false, true)) {
@@ -305,7 +323,7 @@ public final class AiAgents {
     }
 
     public boolean shouldHandleInvoice(String question, List<File> attachments) {
-        return invoiceWorkflow.shouldHandle(question, attachments);
+        return invoiceWorkflow.shouldHandle(question, resolvedDocumentAttachments(attachments));
     }
 
     public boolean shouldHandleProductImage(String question, List<File> attachments) {
@@ -313,11 +331,48 @@ public final class AiAgents {
     }
 
     public boolean shouldHandleSale(String question, List<File> attachments) {
-        return saleWorkflow.shouldHandle(question, attachments);
+        return saleWorkflow.shouldHandle(question, resolvedDocumentAttachments(attachments));
     }
 
     public boolean shouldHandleExpense(String question, List<File> attachments) {
-        return expenseWorkflow.shouldHandle(question, attachments);
+        return expenseWorkflow.shouldHandle(question, resolvedDocumentAttachments(attachments));
+    }
+
+    /**
+     * Memoire de session: chaque message incremente un compteur de tour; si le
+     * message porte une image, elle est memorisee avec le numero du tour. Ainsi le
+     * tour suivant peut reprendre ce document sans que l'utilisateur ne le re-joigne
+     * (ex: image de facture puis "Faites en un approvisionnement").
+     */
+    public void noteDocumentMessage(List<File> attachments) {
+        startForCurrentSession();
+        long turn = messageTurn.merge(sessionId, 1L, Long::sum);
+        if (hasImageAttachment(attachments)) {
+            lastDocumentAttachments.put(sessionId, new ArrayList<>(attachments));
+            lastDocumentTurn.put(sessionId, turn);
+        }
+    }
+
+    /**
+     * Resolution des pieces jointes d'un message: les pieces jointes courantes si
+     * presentes, sinon le document vu au tour precedent uniquement. La fraicheur
+     * est limitee au tour immediatement precedent pour ne jamais reprendre un
+     * document oublie dans une conversation plus longue.
+     */
+    private List<File> resolvedDocumentAttachments(List<File> current) {
+        startForCurrentSession();
+        if (hasImageAttachment(current)) {
+            return current;
+        }
+        Long currentTurn = messageTurn.get(sessionId);
+        Long docTurn = lastDocumentTurn.get(sessionId);
+        if (currentTurn != null && docTurn != null && docTurn == currentTurn - 1) {
+            List<File> cached = lastDocumentAttachments.get(sessionId);
+            if (cached != null && !cached.isEmpty()) {
+                return cached;
+            }
+        }
+        return current == null ? List.of() : current;
     }
 
     private boolean hasImageAttachment(List<File> attachments) {
@@ -409,6 +464,7 @@ public final class AiAgents {
         emitProgress("\uD83D\uDCC4 Lancement du workflow d'approvisionnement "
                 + "(catalogue, fournisseur/livraison, réquisitions)...");
         appendMemory("user", safe(question, "[facture jointe]"));
+        List<File> resolved = resolvedDocumentAttachments(attachments);
         String[] answer = new String[1];
         try {
             // Graphe general: chaque noeud represente un agent metier de la chaine facture.
@@ -425,7 +481,7 @@ public final class AiAgents {
                     }))
                     .addNode("requisition_agent", node_async(state -> {
                         // Agent recquisition: transforme chaque ligne facture en recquisition et prix de vente.
-                        answer[0] = invoiceWorkflow.handle(question, attachments);
+                        answer[0] = invoiceWorkflow.handle(question, resolved);
                         appendMemory("assistant", answer[0]);
                         return Map.of("step", "requisition_agent");
                     }))
@@ -439,7 +495,7 @@ public final class AiAgents {
         } catch (Exception ex) {
             // En cas d'echec LangGraph4j, le workflow direct garde Gratien utilisable.
             LOGGER.log(Level.WARNING, "LangGraph4j AiAgents a bascule en execution directe", ex);
-            answer[0] = invoiceWorkflow.handle(question, attachments);
+            answer[0] = invoiceWorkflow.handle(question, resolved);
             appendMemory("assistant", answer[0]);
         }
         return answer[0] == null ? "Je n'ai pas pu orchestrer cette facture." : answer[0];
@@ -448,7 +504,7 @@ public final class AiAgents {
     public String orchestrateProductImage(String question, List<File> attachments) {
         startForCurrentSession();
         appendMemory("user", safe(question, "[image de produits jointe]"));
-        String answer = productImageWorkflow.handle(question, attachments);
+        String answer = productImageWorkflow.handle(question, resolvedDocumentAttachments(attachments));
         appendMemory("assistant", answer);
         return answer;
     }
@@ -458,7 +514,7 @@ public final class AiAgents {
         emitProgress("\uD83D\uDED2 Lancement du workflow de vente "
                 + "(création de vente, trésorerie & synchronisation)...");
         appendMemory("user", safe(question, "[sortie jointe]"));
-        String answer = saleWorkflow.handle(question, attachments);
+        String answer = saleWorkflow.handle(question, resolvedDocumentAttachments(attachments));
         appendMemory("assistant", answer);
         return answer;
     }
@@ -468,7 +524,7 @@ public final class AiAgents {
         emitProgress("\uD83D\uDCB5 Lancement du workflow de dépense "
                 + "(préparation catégorie/compte, opération de dépense)...");
         appendMemory("user", safe(question, "[reçu de dépense joint]"));
-        String answer = expenseWorkflow.handle(question, attachments);
+        String answer = expenseWorkflow.handle(question, resolvedDocumentAttachments(attachments));
         appendMemory("assistant", answer);
         return answer;
     }
@@ -480,6 +536,11 @@ public final class AiAgents {
         emitProgress("\uD83D\uDCC4 Démarrage du workflow " + workflowId + " "
                 + "(catalogue → fournisseur/livraison → réquisitions)...");
         try {
+            // Les sous-agents n'interviennent que pour creer les objets parents
+            // sans dependance superieure (catalogue: categorie/produit/mesure,
+            // puis fournisseur/livraison). La chaine requisition -> prix de vente
+            // suit des dependances directes (produit -> requisition -> prix) :
+            // un seul agent (Gratien) la cree un a un, sans sous-agent.
             CompiledGraph<ServiceAgentState> graph = new StateGraph<>(ServiceAgentState.SCHEMA, ServiceAgentState::new)
                     .addNode("product_creator_agent", node_async(state -> {
                         String result = runAgent("product_creator_agent",
@@ -493,18 +554,13 @@ public final class AiAgents {
                         appendMemory("supplier_delivery_agent", result);
                         return Map.of("step", "supplier_delivery_agent");
                     }))
-                    .addNode("requisition_price_agent", node_async(state -> {
-                        finalAnswer[0] = runAgent("requisition_price_agent",
-                                () -> requisitionPriceAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
-                        appendMemory("requisition_price_agent", finalAnswer[0]);
-                        return Map.of("step", "requisition_price_agent");
-                    }))
                     .addEdge(START, "product_creator_agent")
                     .addEdge("product_creator_agent", "supplier_delivery_agent")
-                    .addEdge("supplier_delivery_agent", "requisition_price_agent")
-                    .addEdge("requisition_price_agent", END)
+                    .addEdge("supplier_delivery_agent", END)
                     .compile();
             Optional<ServiceAgentState> ignored = graph.invoke(Map.of("step", "start"));
+            finalAnswer[0] = GratienTools.createRequisitionsAndSalePrices(workflowId);
+            appendMemory("requisition_agent", finalAnswer[0]);
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "Workflow multi-agents facture en fallback direct", ex);
             finalAnswer[0] = GratienTools.insertInvoiceSupply(draft);
@@ -749,7 +805,7 @@ public final class AiAgents {
                         + "(sous-agents: préparation catégorie/compte, opération)...");
                 return orchestrateExpense(question, null);
             }
-            case "product_creator_agent", "supplier_delivery_agent", "requisition_price_agent",
+            case "product_creator_agent", "supplier_delivery_agent",
                     "sale_creation_agent", "sale_treasury_agent",
                     "expense_preparation_agent", "expense_operation_agent" -> {
                 if (workflowId == null || workflowId.isBlank()) {
@@ -761,7 +817,7 @@ public final class AiAgents {
             default -> {
                 return "Sous-agent inconnu: '" + safe(agent, "") + "'. Agents disponibles: "
                         + "invoice, sale, expense, product_creator_agent, supplier_delivery_agent, "
-                        + "requisition_price_agent, sale_creation_agent, sale_treasury_agent, "
+                        + "sale_creation_agent, sale_treasury_agent, "
                         + "expense_preparation_agent, expense_operation_agent.";
             }
         }
@@ -775,9 +831,6 @@ public final class AiAgents {
             case "supplier_delivery_agent":
                 return runAgent(agentName,
                         () -> supplierDeliveryAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
-            case "requisition_price_agent":
-                return runAgent(agentName,
-                        () -> requisitionPriceAgent.execute(sessionId, workflowId, GratienTools.workflowState(workflowId)));
             case "sale_creation_agent":
                 return runAgent(agentName,
                         () -> saleCreationAgent.execute(sessionId, workflowId, GratienTools.saleWorkflowState(workflowId)));
@@ -799,7 +852,6 @@ public final class AiAgents {
         return switch (safe(agentName, "sous-agent")) {
             case "product_creator_agent" -> "catalogue (produits & mesures)";
             case "supplier_delivery_agent" -> "fournisseur & livraison";
-            case "requisition_price_agent" -> "réquisitions & prix de vente";
             case "sale_creation_agent" -> "création de vente";
             case "sale_treasury_agent" -> "trésorerie vente & synchronisation";
             case "expense_preparation_agent" -> "préparation de dépense";
@@ -1019,11 +1071,6 @@ public final class AiAgents {
 
     private String invoiceTaskFinishedMessage(String agentName, String toolResult) {
         String result = toolResult == null ? "" : toolResult.trim();
-        if ("requisition_price_agent".equals(agentName)) {
-            return "L'enregistrement de la facture comme approvisionnement est terminé."
-                    + (result.isBlank() ? "" : "\n\n" + result)
-                    + "\n\nVeuillez vérifier maintenant dans l'application.";
-        }
         return result;
     }
 

@@ -47,10 +47,6 @@ import data.User;
 import data.Vente;
 import data.helpers.LoginWebResult;
 import data.network.Kazisafe;
-import java.awt.SystemTray;
-import java.awt.Toolkit;
-import java.awt.TrayIcon;
-import java.awt.TrayIcon.MessageType;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -94,7 +90,13 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.StringConverter;
-import raven.toast.Notifications;
+import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
+import javafx.geometry.Insets;
+import javafx.scene.control.Label;
+import javafx.scene.layout.StackPane;
+import javafx.scene.text.Font;
+import javafx.util.Duration;
 //import org.controlsfx.control.Notifications;
 import services.PlatformUtil;
 
@@ -109,6 +111,8 @@ public class MainUI {
     private static double xOffset = 0;
     private static double yOffset = 0;
     private static final int TOLERANCE_THRESHOLD = 0xFF;
+    private static final java.util.List<Stage> activeToasts =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     public static Stage mainStage;
 
     /**
@@ -226,32 +230,16 @@ public class MainUI {
         String message,
         String tooltip
     ) {
+        playSyncSound();
+        showToast("info", message, 4, Pos.BOTTOM_RIGHT);
+    }
+
+    private static void playSyncSound() {
         try {
-            if (!SystemTray.isSupported()) {
-                Toolkit.getDefaultToolkit().beep();
-                return;
+            var url = MainUI.class.getResource("/icons/notify_sound.mp3");
+            if (url != null) {
+                new AudioClip(url.toExternalForm()).play();
             }
-            SystemTray tray = SystemTray.getSystemTray();
-            java.awt.Image image = Toolkit.getDefaultToolkit().createImage(
-                MainUI.class.getResource("/icons/icone_ksf.png")
-            );
-            TrayIcon trayIcon = new TrayIcon(image, "Kazisafe");
-            trayIcon.setImageAutoSize(true);
-            trayIcon.setToolTip(tooltip);
-            tray.add(trayIcon);
-            trayIcon.displayMessage(title, message, MessageType.INFO);
-            new AudioClip(
-                MainUI.class
-                    .getResource("/icons/notify_sound.mp3")
-                    .toExternalForm()
-            ).play();
-            // Error:
-            // trayIcon.displayMessage("Hello, World", "Java Notification Demo",
-            // MessageType.ERROR);
-            // Warning:
-            // trayIcon.displayMessage("Hello, World", "Java Notification Demo",
-            // MessageType.WARNING);
-            tray.remove(trayIcon);
         } catch (Exception ex) {
             System.err.print(ex);
         }
@@ -851,37 +839,18 @@ public class MainUI {
         long duration,
         String tp
     ) {
-        Platform.runLater(
-            new Runnable() {
-                @Override
-                public void run() {
-                    Notifications instance = Notifications.getInstance();
-                    long dur = duration * 1000;
-                    if (tp.equalsIgnoreCase("warning")) {
-                        instance.show(
-                            Notifications.Type.WARNING,
-                            Notifications.Location.BOTTOM_RIGHT,
-                            dur,
-                            message
-                        );
-                    } else if (tp.equalsIgnoreCase("error")) {
-                        instance.show(
-                            Notifications.Type.ERROR,
-                            Notifications.Location.TOP_CENTER,
-                            dur,
-                            message
-                        );
-                    } else {
-                        instance.show(
-                            Notifications.Type.SUCCESS,
-                            Notifications.Location.BOTTOM_RIGHT,
-                            dur,
-                            message
-                        );
-                    }
-                }
-            }
-        );
+        // Toast 100% JavaFX : l'ancien composant Swing (raven.toast) cree des
+        // fenetres AWT dans le processus JavaFX/GTK et provoquait des crash
+        // natifs (SIGSEGV, sortie 139) sous X11 apres le login.
+        if (tp.equalsIgnoreCase("warning")) {
+            showToast("warning", message, duration, Pos.CENTER);
+        } else if (tp.equalsIgnoreCase("error")) {
+            showToast("error", message, duration, Pos.CENTER);
+        } else if (tp.equalsIgnoreCase("success")) {
+            showToast("success", message, duration, Pos.CENTER);
+        } else {
+            showToast("info", message, duration, Pos.CENTER);
+        }
     }
 
     public static void notifyConnect(
@@ -890,31 +859,104 @@ public class MainUI {
         String message,
         double duration
     ) {
-        Platform.runLater(
-            new Runnable() {
-                @Override
-                public void run() {
-                    Notifications.getInstance().show(
-                        Notifications.Type.SUCCESS,
-                        Notifications.Location.TOP_CENTER,
-                        message
-                    );
+        showToast("info", message, 4, Pos.CENTER);
+    }
 
-                    // Notifications n = Notifications.create()
-                    // .title(title)
-                    // .text(message)
-                    // .position(Pos.BOTTOM_RIGHT)
-                    // .hideAfter(Duration.seconds(duration));
-                    //
-                    // if (graph == null) {
-                    // n.showInformation();
-                    // } else {
-                    // n.graphic(graph);
-                    // n.show();
-                    // }
+    private static void showToast(
+        String type,
+        String message,
+        double durationSeconds,
+        Pos position
+    ) {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(
+                () -> showToast(type, message, durationSeconds, position)
+            );
+            return;
+        }
+        try {
+            if (System.getProperty("kazisafe.toast.disabled", "false").equalsIgnoreCase("true")) {
+                return;
+            }
+            Label label = new Label(message);
+            label.setWrapText(true);
+            label.setTextFill(Color.WHITE);
+            label.setFont(new Font("System", 13));
+            label.setPadding(new Insets(12, 18, 12, 18));
+            label.setMaxWidth(380);
+            String bg;
+            if ("error".equalsIgnoreCase(type)) {
+                bg = "#e74c3c";
+            } else if ("warning".equalsIgnoreCase(type)) {
+                bg = "#f39c12";
+            } else if ("success".equalsIgnoreCase(type)) {
+                bg = "#2ecc71";
+            } else {
+                bg = "#44cef5";
+            }
+            label.setStyle(
+                "-fx-background-color: " +
+                bg +
+                ";-fx-background-radius: 10;" +
+                "-fx-font-size: 13px;" +
+                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 20, 0.2, 0, 6);"
+            );
+            StackPane root = new StackPane(label);
+            Scene scene = new Scene(root);
+            scene.setFill(Color.TRANSPARENT);
+            Stage stage = new Stage();
+            stage.initStyle(StageStyle.TRANSPARENT);
+            stage.setScene(scene);
+            stage.setAlwaysOnTop(true);
+            root.applyCss();
+            root.autosize();
+            double w = Math.max(root.getWidth(), 1);
+            double h = Math.max(root.getHeight(), 1);
+            Rectangle2D sb = Screen.getPrimary().getVisualBounds();
+            double offset = 0;
+            for (Stage s : activeToasts) {
+                if (s.isShowing()) {
+                    offset += h + 10;
                 }
             }
-        );
+            double x, y;
+            if (position == Pos.BOTTOM_RIGHT) {
+                x = sb.getMaxX() - w - 20;
+                y = sb.getMaxY() - h - 20 - offset;
+            } else {
+                x = sb.getMinX() + (sb.getWidth() - w) / 2.0;
+                y = sb.getMinY() + (sb.getHeight() - h) / 2.0 - offset;
+            }
+            stage.setX(x);
+            stage.setY(y);
+            activeToasts.add(stage);
+            stage.show();
+            stage.setX(x);
+            stage.setY(y);
+            PauseTransition wait = new PauseTransition(
+                Duration.seconds(Math.max(1, durationSeconds))
+            );
+            wait.setOnFinished(e -> {
+                FadeTransition fade = new FadeTransition(
+                    Duration.millis(400),
+                    root
+                );
+                fade.setFromValue(1.0);
+                fade.setToValue(0.0);
+                fade.setOnFinished(f -> {
+                    activeToasts.remove(stage);
+                    stage.close();
+                });
+                fade.play();
+            });
+            wait.play();
+        } catch (Exception ex) {
+            Logger.getLogger(MainUI.class.getName()).log(
+                Level.SEVERE,
+                null,
+                ex
+            );
+        }
     }
 
     public static <T> void initAutoChooser(

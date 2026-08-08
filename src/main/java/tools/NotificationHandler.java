@@ -152,6 +152,18 @@ public class NotificationHandler implements EventHandler {
                                     String categoryUid = refUid(
                                         product.getCategoryId()
                                     );
+                                    // Produit sans catégorie : on attribue la
+                                    // catégorie par défaut "Divers" — on vérifie
+                                    // d'abord si elle existe, sinon on la crée,
+                                    // puis on l'attribue au produit.
+                                    if (categoryUid == null) {
+                                        product.setCategoryId(
+                                            findOrCreateDiversCategory()
+                                        );
+                                        categoryUid = refUid(
+                                            product.getCategoryId()
+                                        );
+                                    }
                                     boolean exist =
                                         categoryUid != null &&
                                         CategoryDelegate.isExists(categoryUid);
@@ -964,6 +976,19 @@ public class NotificationHandler implements EventHandler {
      * UID d'une référence entité, sans NPE si la référence (ou son uid) est
      * absente du payload downsync.
      */
+    /**
+     * Recherche la catégorie "Divers" ; si elle n'existe pas encore, la crée
+     * puis la retourne. Utilisée pour les produits dépourvus de catégorie.
+     */
+    private static Category findOrCreateDiversCategory() {
+        List<Category> cats = CategoryDelegate.findCategories("Divers");
+        if (!cats.isEmpty()) {
+            return cats.get(0);
+        }
+        Category created = new Category(DataId.generate(), "Divers");
+        return CategoryDelegate.saveCategory(created);
+    }
+
     static String refUid(Object reference) {
         if (reference == null) {
             return null;

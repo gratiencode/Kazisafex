@@ -137,6 +137,7 @@ import javax.print.PrintService;
 import javax.print.PrintServiceLookup;
 import javax.imageio.ImageIO;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -149,6 +150,12 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import utilities.PDFUtils;
 import utilities.Peremption;
 import tools.Rupture;
+import tools.PurchaseBySupplier;
+import tools.PurchaseByProduct;
+import tools.PurchaseByMonth;
+import tools.SaleReport;
+import tools.VenteReporter;
+import tools.ExpenseByImputation;
 import retrofit2.Response;
 import services.FinancialStatementAgregateService;
 import services.ManagedSessionFactory;
@@ -162,6 +169,8 @@ import tools.FinancialStatementRow;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import java.nio.file.Files;
 
 public class GratienTools {
 
@@ -2999,9 +3008,271 @@ public class GratienTools {
         });
     }
 
+    @Tool("Affiche dans le chat un rapport d'achats (par fournisseur, par produit ou par mois) en tableau Markdown, avec suggestion d'export Excel ou PDF")
+    public String previewPurchaseReportMarkdown(
+            @P("Type de rapport: fournisseur, produit ou mois") String rapport,
+            @P("Source des achats pour le rapport par produit: depot (Stocker) ou pdv (recquisition). Par defaut depot.") String source,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(source, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "")
+                + "|" + safe(region, "");
+        return executeOnce("previewPurchaseReportMarkdown", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolvePurchaseReportType(rapport);
+                String src = resolvePurchaseSource(source);
+                StringBuilder builder = new StringBuilder();
+                String title = "Rapport des achats " + purchaseTypeLabel(type) + purchaseSourceLabel(type, src);
+                appendReportHeader(builder, currentEntreprise(), title, usedRegion, period[0], period[1]);
+                appendPurchaseReportMarkdown(builder, type, src, period[0], period[1], usedRegion);
+                appendReportFooter(builder);
+                builder.append("\n\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ")
+                        .append("Après votre confirmation, Gratien générera un seul fichier final pour cette demande.");
+                return builder.toString();
+            } catch (Exception ex) {
+                return "Impossible d'afficher le rapport d'achats: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport d'achats demandé en fichier Excel après confirmation de l'aperçu Markdown")
+    public String generatePurchaseReportExcel(
+            @P("Type de rapport: fournisseur, produit ou mois") String rapport,
+            @P("Source des achats pour le rapport par produit: depot (Stocker) ou pdv (recquisition). Par defaut depot.") String source,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(source, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "")
+                + "|" + safe(region, "");
+        return executeOnce("generatePurchaseReportExcel", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolvePurchaseReportType(rapport);
+                String src = resolvePurchaseSource(source);
+                String title = "Rapport des achats " + purchaseTypeLabel(type) + purchaseSourceLabel(type, src)
+                        + " - " + (usedRegion.equals("%") ? "Toutes les succursales" : usedRegion)
+                        + " du " + period[0] + " au " + period[1];
+                File file;
+                switch (type) {
+                    case "fournisseur":
+                        file = Util.exportXlsPurchasesBySupplier(
+                                RepportDelegate.findPurchasesBySupplier(period[0], period[1], usedRegion), title);
+                        break;
+                    case "mois":
+                        file = Util.exportXlsPurchasesByMonth(
+                                RepportDelegate.findPurchasesByMonth(period[0], period[1], usedRegion), title);
+                        break;
+                    default:
+                        file = "pdv".equals(src)
+                                ? Util.exportXlsPurchasesByProduct(
+                                        RepportDelegate.findRequisitionPurchasesByProduct(period[0], period[1], usedRegion), title)
+                                : Util.exportXlsPurchasesByProduct(
+                                        RepportDelegate.findPurchasesByProduct(period[0], period[1], usedRegion), title);
+                        break;
+                }
+                if (file == null) {
+                    return "Échec génération Excel: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport d'achats Excel généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération Excel: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport d'achats demandé en fichier PDF après confirmation de l'aperçu Markdown")
+    public String generatePurchaseReportPdf(
+            @P("Type de rapport: fournisseur, produit ou mois") String rapport,
+            @P("Source des achats pour le rapport par produit: depot (Stocker) ou pdv (recquisition). Par defaut depot.") String source,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(source, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "")
+                + "|" + safe(region, "");
+        return executeOnce("generatePurchaseReportPdf", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolvePurchaseReportType(rapport);
+                String src = resolvePurchaseSource(source);
+                File file = exportPurchaseReportPdf(currentEntreprise(), type, src, period[0], period[1], usedRegion);
+                if (file == null) {
+                    return "Échec génération PDF: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport d'achats PDF généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération PDF: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Affiche dans le chat un rapport des ventes (par produit, par catégorie ou par client) en tableau Markdown, avec suggestion d'export Excel ou PDF")
+    public String previewSalesReportMarkdown(
+            @P("Type de rapport: produit, categorie ou client") String rapport,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("previewSalesReportMarkdown", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolveSalesReportType(rapport);
+                StringBuilder builder = new StringBuilder();
+                String title = "Rapport des ventes " + salesTypeLabel(type);
+                appendReportHeader(builder, currentEntreprise(), title, usedRegion, period[0], period[1]);
+                appendSalesReportMarkdown(builder, type, period[0], period[1], usedRegion);
+                appendReportFooter(builder);
+                builder.append("\n\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ")
+                        .append("Après votre confirmation, Gratien générera un seul fichier final pour cette demande.");
+                return builder.toString();
+            } catch (Exception ex) {
+                return "Impossible d'afficher le rapport des ventes: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport des ventes demandé en fichier Excel après confirmation de l'aperçu Markdown")
+    public String generateSalesReportExcel(
+            @P("Type de rapport: produit, categorie ou client") String rapport,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("generateSalesReportExcel", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolveSalesReportType(rapport);
+                String title = "Rapport des ventes " + salesTypeLabel(type) + " - "
+                        + reportRegionLabel(usedRegion) + " du " + period[0] + " au " + period[1];
+                File file = exportSalesReportExcel(type, period[0], period[1], usedRegion, title);
+                if (file == null) {
+                    return "Échec génération Excel: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport des ventes Excel généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération Excel: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport des ventes demandé en fichier PDF après confirmation de l'aperçu Markdown")
+    public String generateSalesReportPdf(
+            @P("Type de rapport: produit, categorie ou client") String rapport,
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(rapport, "") + "|" + safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("generateSalesReportPdf", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String type = resolveSalesReportType(rapport);
+                File file = exportSalesReportPdf(currentEntreprise(), type, period[0], period[1], usedRegion);
+                if (file == null) {
+                    return "Échec génération PDF: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport des ventes PDF généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération PDF: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Affiche dans le chat un rapport des dépenses par imputation en tableau Markdown, avec suggestion d'export Excel ou PDF")
+    public String previewExpenseReportMarkdown(
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("previewExpenseReportMarkdown", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                StringBuilder builder = new StringBuilder();
+                String title = "Rapport des dépenses par imputation";
+                appendReportHeader(builder, currentEntreprise(), title, usedRegion, period[0], period[1]);
+                appendExpenseReportMarkdown(builder, period[0], period[1], usedRegion);
+                appendReportFooter(builder);
+                builder.append("\n\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ")
+                        .append("Après votre confirmation, Gratien générera un seul fichier final pour cette demande.");
+                return builder.toString();
+            } catch (Exception ex) {
+                return "Impossible d'afficher le rapport des dépenses: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport des dépenses demandé en fichier Excel après confirmation de l'aperçu Markdown")
+    public String generateExpenseReportExcel(
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("generateExpenseReportExcel", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                String title = "Rapport des dépenses par imputation - "
+                        + reportRegionLabel(usedRegion) + " du " + period[0] + " au " + period[1];
+                List<ExpenseByImputation> items = RepportDelegate.findExpenseReportByImputation(
+                        period[0], period[1], usedRegion);
+                File file = Util.exportXlsExpenseByImputation(items, title);
+                if (file == null) {
+                    return "Échec génération Excel: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport des dépenses Excel généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération Excel: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @Tool("Génère et ouvre le rapport des dépenses demandé en fichier PDF après confirmation de l'aperçu Markdown")
+    public String generateExpenseReportPdf(
+            @P("Date début au format yyyy-MM-dd, optionnelle") String periodeDebut,
+            @P("Date fin au format yyyy-MM-dd, optionnelle") String periodeFin,
+            @P("Région optionnelle") String region) {
+        String key = safe(periodeDebut, "") + "|" + safe(periodeFin, "") + "|" + safe(region, "");
+        return executeOnce("generateExpenseReportPdf", key, () -> {
+            try {
+                LocalDate[] period = resolveReportPeriod(periodeDebut, periodeFin);
+                String usedRegion = resolveReportRegion(region);
+                File file = exportExpenseReportPdf(currentEntreprise(), period[0], period[1], usedRegion);
+                if (file == null) {
+                    return "Échec génération PDF: aucun fichier produit pour ce rapport.";
+                }
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(file);
+                }
+                return "Rapport des dépenses PDF généré: " + file.getAbsolutePath();
+            } catch (Exception ex) {
+                return "Échec génération PDF: " + safe(ex.getMessage(), ex.getClass().getSimpleName());
+            }
+        });
+    }
+
     @Tool("Recalcule à la demande les états financiers et affiche le rapport demandé en tableaux Markdown avant export")
-    public String previewFinancialStatementsMarkdown(
-            @P("Mode: periode, annuel ou trimestriel") String mode,
+    public String previewFinancialStatementsMarkdown(    @P("Mode: periode, annuel ou trimestriel") String mode,
             @P("Type: bilan, resultat, flux ou tous") String statement,
             @P("Date début yyyy-MM-dd pour mode periode") String start,
             @P("Date fin yyyy-MM-dd pour mode periode") String end,
@@ -3014,15 +3285,13 @@ public class GratienTools {
             try {
                 FinancialReportPayload payload = loadFinancialPayload(mode, statement, start, end, anchorYear, years, region);
                 StringBuilder builder = new StringBuilder();
-                builder.append("Rapport financier recalculé pour ")
-                        .append(payload.regionLabel())
-                        .append(" sur ")
-                        .append(payload.periodLabel())
-                        .append(".\n\n");
+                String title = "Rapport financier - " + payload.periodLabel();
+                appendReportHeader(builder, currentEntreprise(), title, payload.regionLabel(), null, null);
                 appendMarkdownTable(builder, "Bilan", payload.headers(), payload.bilan());
                 appendMarkdownTable(builder, "Compte de résultat", payload.headers(), payload.compteResultat());
                 appendMarkdownTable(builder, "Flux de trésorerie", payload.headers(), payload.fluxTresorerie());
-                builder.append("\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ");
+                appendReportFooter(builder);
+                builder.append("\n\nSouhaitez-vous générer ce rapport en Excel ou en PDF ? ");
                 builder.append("Après votre confirmation, Gratien générera un seul fichier final pour cette demande.");
                 return builder.toString();
             } catch (Exception ex) {
@@ -5358,8 +5627,569 @@ public class GratienTools {
         return output;
     }
 
-    private String resolveFinancialRegion(String requestedRegion) {
+    private String resolvePurchaseReportType(String rapport) {
+        String r = safe(rapport, "").toLowerCase(Locale.ROOT).trim();
+        if (r.contains("fourn")) {
+            return "fournisseur";
+        }
+        if (r.contains("mois") || r.contains("mens") || r.contains("month")) {
+            return "mois";
+        }
+        return "produit";
+    }
+
+    private String resolvePurchaseSource(String source) {
+        String s = safe(source, "").toLowerCase(Locale.ROOT).trim();
+        if (s.contains("pdv") || s.contains("point") || s.contains("vente") || s.contains("recq") || s.contains("réq")) {
+            return "pdv";
+        }
+        return "depot";
+    }
+
+    private String purchaseTypeLabel(String type) {
+        return "fournisseur".equals(type) ? "par fournisseur" : "mois".equals(type) ? "par mois" : "par produit";
+    }
+
+    private String purchaseSourceLabel(String type, String source) {
+        return "produit".equals(type) ? (" (source: " + ("pdv".equals(source) ? "Point de vente" : "Dépôt") + ")") : "";
+    }
+
+    private LocalDate[] resolveReportPeriod(String start, String end) {
+        LocalDate d1;
+        LocalDate d2;
+        try {
+            d1 = start == null || start.isBlank() ? LocalDate.now().withDayOfYear(1) : LocalDate.parse(start);
+            d2 = end == null || end.isBlank() ? LocalDate.now() : LocalDate.parse(end);
+        } catch (Exception ex) {
+            d1 = LocalDate.now().withDayOfYear(1);
+            d2 = LocalDate.now();
+        }
+        if (d1.isAfter(d2)) {
+            LocalDate tmp = d1;
+            d1 = d2;
+            d2 = tmp;
+        }
+        return new LocalDate[]{d1, d2};
+    }
+
+    private String resolveReportRegion(String requestedRegion) {
         String currentRegion = pref.get("region", null);
+        String requested = requestedRegion == null || requestedRegion.isBlank() ? null : requestedRegion.trim();
+        if (requested == null || requested.isBlank()) {
+            return "%";
+        }
+        String role = pref.get("priv", "");
+        boolean globalAccess = role != null && (role.equals("Trader") || role.contains("ALL_ACCESS"));
+        if (!globalAccess && currentRegion != null && !currentRegion.isBlank()
+                && !requested.equalsIgnoreCase(currentRegion)) {
+            throw new IllegalArgumentException("Votre rôle ne permet pas d'accéder au rapport de la région " + requested + ".");
+        }
+        return requested;
+    }
+
+    private String purchaseAmount(double value) {
+        double v = Math.round(value * 100d) / 100d;
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    private File companyLogoFile() {
+        String eUid = pref.get("eUid", "");
+        if (eUid == null || eUid.isBlank()) {
+            return null;
+        }
+        File png = FileUtils.pointFile(eUid + ".png");
+        if (png.exists() && png.length() > 0) {
+            return png;
+        }
+        File jpeg = FileUtils.pointFile(eUid + ".jpeg");
+        if (jpeg.exists() && jpeg.length() > 0) {
+            return jpeg;
+        }
+        return null;
+    }
+
+    private String reportLogoMarkdown() {
+        try {
+            File logo = companyLogoFile();
+            if (logo == null) {
+                return "";
+            }
+            byte[] bytes = Files.readAllBytes(logo.toPath());
+            if (bytes == null || bytes.length == 0) {
+                return "";
+            }
+            return "![logo](data:image/png;base64," + Base64.getEncoder().encodeToString(bytes) + ")";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String reportUserName() {
+        String name = pref.get("operator", null);
+        if (name == null || name.isBlank()) {
+            name = pref.get("uname", "Utilisateur");
+        }
+        return name;
+    }
+
+    private String reportDateLabel() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+    }
+
+    private String reportRegionLabel(String region) {
+        return (region == null || region.equals("%")) ? "Toutes les succursales" : region;
+    }
+
+    private String reportIdentityLine(Entreprise entreprise) {
+        String rccm = entreprise != null ? safe(entreprise.getIdentification(), "") : "";
+        String nif = entreprise != null ? safe(entreprise.getNumeroImpot(), "") : "";
+        String idnat = entreprise != null ? safe(entreprise.getIdNat(), "") : "";
+        List<String> parts = new ArrayList<>();
+        if (!rccm.isBlank()) {
+            parts.add("RCCM : " + markdownCell(rccm));
+        }
+        if (!nif.isBlank()) {
+            parts.add("NIF : " + markdownCell(nif));
+        }
+        if (!idnat.isBlank()) {
+            parts.add("ID-NAT : " + markdownCell(idnat));
+        }
+        return String.join("    ", parts);
+    }
+
+    private void appendReportHeader(StringBuilder builder, Entreprise entreprise, String title,
+            String region, LocalDate d1, LocalDate d2) {
+        String logo = reportLogoMarkdown();
+        String entName = entreprise != null ? safe(entreprise.getNomEntreprise(), "Kazisafe") : "Kazisafe";
+        if (!logo.isBlank()) {
+            builder.append(logo).append(" ");
+        }
+        builder.append("**").append(markdownCell(entName)).append("**\n");
+        String identity = reportIdentityLine(entreprise);
+        if (!identity.isBlank()) {
+            builder.append(identity).append("\n");
+        }
+        builder.append("Région : ").append(reportRegionLabel(region)).append("\n");
+        if (d1 != null && d2 != null) {
+            builder.append("Période : du ").append(d1).append(" au ").append(d2).append("\n");
+        }
+        builder.append("\n**").append(markdownCell(title)).append("**\n\n");
+    }
+
+    private void appendReportFooter(StringBuilder builder) {
+        builder.append("\nÉtabli par : ").append(markdownCell(reportUserName()))
+                .append("  |  Le : ").append(reportDateLabel()).append("\n\n");
+        builder.append("Signature : ______________________");
+    }
+
+    private void drawReportPdfHeader(PDDocument document, PDPageContentStream contentStream, PDFUtils pdf,
+            Entreprise entreprise, String title, String region, LocalDate d1, LocalDate d2,
+            PDFont hbold, PDFont hnormal, java.awt.Color primary, int pageW, int pageH) throws IOException {
+        File logoFile = companyLogoFile();
+        if (logoFile != null) {
+            try {
+                PDImageXObject logo = PDImageXObject.createFromFile(logoFile.getPath(), document);
+                contentStream.drawImage(logo, pageW - 110, pageH - 105, 80, 80);
+            } catch (Exception ignored) {
+            }
+        }
+        String entName = entreprise != null ? safe(entreprise.getNomEntreprise(), "Kazisafe") : "Kazisafe";
+        pdf.addTextLine(entName, 25, pageH - 38, hbold, 18, java.awt.Color.BLACK);
+        String identity = reportIdentityLine(entreprise);
+        if (!identity.isBlank()) {
+            pdf.addTextLine(identity, 25, pageH - 60, hnormal, 10, java.awt.Color.DARK_GRAY);
+        }
+        pdf.addTextLine("Région : " + reportRegionLabel(region) + "   -   Période : du " + d1 + " au " + d2,
+                25, pageH - 78, hnormal, 10, java.awt.Color.DARK_GRAY);
+        pdf.addTextLine(title, 25, pageH - 98, hbold, 14, java.awt.Color.DARK_GRAY);
+        contentStream.setStrokingColor(primary);
+        contentStream.setLineWidth(2);
+        contentStream.moveTo(25, pageH - 112);
+        contentStream.lineTo(pageW - 25, pageH - 112);
+        contentStream.stroke();
+    }
+
+    private void drawReportPdfFooter(PDPageContentStream contentStream, PDFUtils pdf, PDFont hnormal,
+            java.awt.Color primary, int pageW, int pageH) throws IOException {
+        String generated = "Établi par : " + reportUserName() + "    le " + reportDateLabel();
+        pdf.addTextLine(generated, 25, 55, hnormal, 10, java.awt.Color.DARK_GRAY);
+        contentStream.setStrokingColor(primary);
+        contentStream.setLineWidth(1);
+        contentStream.moveTo(25, 42);
+        contentStream.lineTo(300, 42);
+        contentStream.stroke();
+        pdf.addTextLine("Signature :", 25, 30, hnormal, 10, java.awt.Color.DARK_GRAY);
+    }
+
+    private void appendPurchaseReportMarkdown(StringBuilder builder, String type, String source,
+            LocalDate d1, LocalDate d2, String region) {
+        if ("fournisseur".equals(type)) {
+            List<PurchaseBySupplier> items = RepportDelegate.findPurchasesBySupplier(d1, d2, region);
+            builder.append("| Fournisseur | Adresse | Téléphone | Nb livraisons | Total achat |\n");
+            builder.append("|---|---|---:|---:|---:|\n");
+            for (PurchaseBySupplier p : items) {
+                builder.append("| ").append(markdownCell(p.nom()))
+                        .append(" | ").append(markdownCell(p.adresse()))
+                        .append(" | ").append(markdownCell(p.phone()))
+                        .append(" | ").append(p.nbLivraisons())
+                        .append(" | ").append(purchaseAmount(p.montant()))
+                        .append(" |\n");
+            }
+        } else if ("mois".equals(type)) {
+            List<PurchaseByMonth> items = RepportDelegate.findPurchasesByMonth(d1, d2, region);
+            builder.append("| Mois | Nb livraisons | Total achat |\n");
+            builder.append("|---|---:|---:|\n");
+            for (PurchaseByMonth p : items) {
+                builder.append("| ").append(markdownCell(p.periode()))
+                        .append(" | ").append(p.nbLivraisons())
+                        .append(" | ").append(purchaseAmount(p.montant()))
+                        .append(" |\n");
+            }
+        } else {
+            List<PurchaseByProduct> items = "pdv".equals(source)
+                    ? RepportDelegate.findRequisitionPurchasesByProduct(d1, d2, region)
+                    : RepportDelegate.findPurchasesByProduct(d1, d2, region);
+            builder.append("| Codebar | Produit | Quantité | Unité | Total achat |\n");
+            builder.append("|---|---|---:|---:|---:|\n");
+            for (PurchaseByProduct p : items) {
+                builder.append("| ").append(markdownCell(p.codebar()))
+                        .append(" | ").append(markdownCell(p.produit()))
+                        .append(" | ").append(purchaseAmount(p.quantite()))
+                        .append(" | ").append(markdownCell(p.unite()))
+                        .append(" | ").append(purchaseAmount(p.montant()))
+                        .append(" |\n");
+            }
+        }
+    }
+
+    private File exportPurchaseReportPdf(Entreprise entreprise, String type, String source,
+            LocalDate d1, LocalDate d2, String region) throws IOException {
+        PDDocument document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        int pageW = (int) PDRectangle.A4.getWidth();
+        int pageH = (int) PDRectangle.A4.getHeight();
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+        PDFUtils pdf = new PDFUtils(document, contentStream);
+        PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        java.awt.Color primary = new java.awt.Color(68, 206, 245);
+        java.awt.Color egray = new java.awt.Color(218, 218, 219);
+
+        String title = "Rapport des achats " + purchaseTypeLabel(type) + purchaseSourceLabel(type, source)
+                + " - " + reportRegionLabel(region) + " du " + d1 + " au " + d2;
+        drawReportPdfHeader(document, contentStream, pdf, entreprise, title, region, d1, d2,
+                hbold, hnormal, primary, pageW, pageH);
+
+        if ("fournisseur".equals(type)) {
+            int[] tableCols = {120, 140, 90, 80, 100};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{3, 4});
+            pdf.addCell("Fournisseur", primary);
+            pdf.addCell("Adresse", primary);
+            pdf.addCell("Telephone", primary);
+            pdf.addCell("Nb livraisons", primary);
+            pdf.addCell("Total achat", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{3, 4});
+            for (PurchaseBySupplier p : RepportDelegate.findPurchasesBySupplier(d1, d2, region)) {
+                pdf.addCell(markdownCell(p.nom()), egray);
+                pdf.addCell(markdownCell(p.adresse()), egray);
+                pdf.addCell(markdownCell(p.phone()), egray);
+                pdf.addCell(String.valueOf(p.nbLivraisons()), egray);
+                pdf.addCell(purchaseAmount(p.montant()), egray);
+            }
+        } else if ("mois".equals(type)) {
+            int[] tableCols = {180, 140, 160};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{1, 2});
+            pdf.addCell("Mois", primary);
+            pdf.addCell("Nb livraisons", primary);
+            pdf.addCell("Total achat", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{1, 2});
+            for (PurchaseByMonth p : RepportDelegate.findPurchasesByMonth(d1, d2, region)) {
+                pdf.addCell(markdownCell(p.periode()), egray);
+                pdf.addCell(String.valueOf(p.nbLivraisons()), egray);
+                pdf.addCell(purchaseAmount(p.montant()), egray);
+            }
+        } else {
+            List<PurchaseByProduct> items = "pdv".equals(source)
+                    ? RepportDelegate.findRequisitionPurchasesByProduct(d1, d2, region)
+                    : RepportDelegate.findPurchasesByProduct(d1, d2, region);
+            int[] tableCols = {90, 230, 70, 70, 100};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{2, 4});
+            pdf.addCell("Codebar", primary);
+            pdf.addCell("Produit", primary);
+            pdf.addCell("Quantite", primary);
+            pdf.addCell("Unite", primary);
+            pdf.addCell("Total achat", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{2, 4});
+            for (PurchaseByProduct p : items) {
+                pdf.addCell(markdownCell(p.codebar()), egray);
+                pdf.addCell(markdownCell(p.produit()), egray);
+                pdf.addCell(purchaseAmount(p.quantite()), egray);
+                pdf.addCell(markdownCell(p.unite()), egray);
+                pdf.addCell(purchaseAmount(p.montant()), egray);
+            }
+        }
+
+        drawReportPdfFooter(contentStream, pdf, hnormal, primary, pageW, pageH);
+        contentStream.close();
+        File output = FileUtils.pointFile("rapport-achats-" + safeFilePart(
+                type + "-" + source + "-" + d1 + "-" + d2 + "-" + region) + ".pdf");
+        document.save(output);
+        document.close();
+        return output;
+    }
+
+    private String resolveSalesReportType(String rapport) {
+        String r = safe(rapport, "").toLowerCase(Locale.ROOT).trim();
+        if (r.contains("categ")) {
+            return "categorie";
+        }
+        if (r.contains("client")) {
+            return "client";
+        }
+        return "produit";
+    }
+
+    private String salesTypeLabel(String type) {
+        return "categorie".equals(type) ? "par catégorie" : "client".equals(type) ? "par client" : "par produit";
+    }
+
+    private void appendSalesReportMarkdown(StringBuilder builder, String type, LocalDate d1, LocalDate d2, String region) {
+        if ("categorie".equals(type)) {
+            List<SaleReport> items = RepportDelegate.findSaleReportPerCategory(d1, d2, region);
+            builder.append("| Catégorie | Vente |\n");
+            builder.append("|---|---:|\n");
+            for (SaleReport s : items) {
+                builder.append("| ").append(markdownCell(s.category()))
+                        .append(" | ").append(purchaseAmount(s.vente()))
+                        .append(" |\n");
+            }
+        } else if ("client".equals(type)) {
+            List<VenteReporter> items = RepportDelegate.findReportSaleByClient(d1, d2, region, pref.get("mainCur", "USD"));
+            builder.append("| Téléphone | Client | Catégorie | Vente |\n");
+            builder.append("|---|---|---:|---:|\n");
+            for (VenteReporter v : items) {
+                Client c = v.getClient();
+                Category cat = v.getCategory();
+                builder.append("| ").append(markdownCell(c == null ? "-" : c.getPhone()))
+                        .append(" | ").append(markdownCell(c == null ? "-" : c.getNomClient()))
+                        .append(" | ").append(markdownCell(cat == null ? "-" : cat.getDescritption()))
+                        .append(" | ").append(purchaseAmount(v.getChiffre()))
+                        .append(" |\n");
+            }
+        } else {
+            List<SaleReport> items = RepportDelegate.findSaleReportPerProduct(d1, d2, region);
+            builder.append("| Codebar | Produit | Quantité | Unité | Vente | Marge |\n");
+            builder.append("|---|---|---:|---:|---:|---:|\n");
+            for (SaleReport s : items) {
+                builder.append("| ").append(markdownCell(s.codebar()))
+                        .append(" | ").append(markdownCell(s.produit()))
+                        .append(" | ").append(purchaseAmount(s.quantite()))
+                        .append(" | ").append(markdownCell(s.unite()))
+                        .append(" | ").append(purchaseAmount(s.vente()))
+                        .append(" | ").append(purchaseAmount(s.marge()))
+                        .append(" |\n");
+            }
+        }
+    }
+
+    private void appendExpenseReportMarkdown(StringBuilder builder, LocalDate d1, LocalDate d2, String region) {
+        List<ExpenseByImputation> items = RepportDelegate.findExpenseReportByImputation(d1, d2, region);
+        builder.append("| Imputation | Montant USD | Montant CDF |\n");
+        builder.append("|---|---:|---:|\n");
+        for (ExpenseByImputation e : items) {
+            builder.append("| ").append(markdownCell(e.imputation()))
+                    .append(" | ").append(purchaseAmount(e.montantUsd()))
+                    .append(" | ").append(purchaseAmount(e.montantCdf()))
+                    .append(" |\n");
+        }
+        if (items.isEmpty()) {
+            builder.append("| Aucune dépense sur cette période | - | - |\n");
+        }
+    }
+
+    private File exportSalesReportExcel(String type, LocalDate d1, LocalDate d2, String region, String title)
+            throws IOException {
+        String filename = "rapport-ventes-" + safeFilePart(type + "-" + d1 + "-" + d2 + "-" + region) + ".xlsx";
+        File file = FileUtils.pointFile(filename);
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream out = new FileOutputStream(file)) {
+            Sheet sheet = workbook.createSheet("Ventes " + type);
+            int rowid = 0;
+            if (title != null && !title.isBlank()) {
+                sheet.createRow(rowid++).createCell(0).setCellValue(title);
+                rowid++;
+            }
+            List<String> headers;
+            List<List<String>> rows = new ArrayList<>();
+            if ("categorie".equals(type)) {
+                headers = List.of("Catégorie", "Vente");
+                for (SaleReport s : RepportDelegate.findSaleReportPerCategory(d1, d2, region)) {
+                    rows.add(List.of(markdownCell(s.category()), purchaseAmount(s.vente())));
+                }
+            } else if ("client".equals(type)) {
+                headers = List.of("Téléphone", "Client", "Catégorie", "Vente");
+                for (VenteReporter v : RepportDelegate.findReportSaleByClient(d1, d2, region, pref.get("mainCur", "USD"))) {
+                    Client c = v.getClient();
+                    Category cat = v.getCategory();
+                    rows.add(List.of(
+                            markdownCell(c == null ? "-" : c.getPhone()),
+                            markdownCell(c == null ? "-" : c.getNomClient()),
+                            markdownCell(cat == null ? "-" : cat.getDescritption()),
+                            purchaseAmount(v.getChiffre())));
+                }
+            } else {
+                headers = List.of("Codebar", "Produit", "Quantité", "Unité", "Vente", "Marge");
+                for (SaleReport s : RepportDelegate.findSaleReportPerProduct(d1, d2, region)) {
+                    rows.add(List.of(markdownCell(s.codebar()), markdownCell(s.produit()),
+                            purchaseAmount(s.quantite()), markdownCell(s.unite()),
+                            purchaseAmount(s.vente()), purchaseAmount(s.marge())));
+                }
+            }
+            Row header = sheet.createRow(rowid++);
+            for (int c = 0; c < headers.size(); c++) {
+                header.createCell(c).setCellValue(headers.get(c));
+            }
+            for (List<String> row : rows) {
+                Row r = sheet.createRow(rowid++);
+                for (int c = 0; c < row.size(); c++) {
+                    r.createCell(c).setCellValue(row.get(c));
+                }
+            }
+            workbook.write(out);
+        }
+        return file;
+    }
+
+    private File exportSalesReportPdf(Entreprise entreprise, String type, LocalDate d1, LocalDate d2, String region)
+            throws IOException {
+        PDDocument document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        int pageW = (int) PDRectangle.A4.getWidth();
+        int pageH = (int) PDRectangle.A4.getHeight();
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+        PDFUtils pdf = new PDFUtils(document, contentStream);
+        PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        java.awt.Color primary = new java.awt.Color(68, 206, 245);
+        java.awt.Color egray = new java.awt.Color(218, 218, 219);
+        String title = "Rapport des ventes " + salesTypeLabel(type) + " - " + reportRegionLabel(region)
+                + " du " + d1 + " au " + d2;
+        drawReportPdfHeader(document, contentStream, pdf, entreprise, title, region, d1, d2,
+                hbold, hnormal, primary, pageW, pageH);
+        if ("categorie".equals(type)) {
+            int[] tableCols = {300, 180};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{1});
+            pdf.addCell("Catégorie", primary);
+            pdf.addCell("Vente", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{1});
+            for (SaleReport s : RepportDelegate.findSaleReportPerCategory(d1, d2, region)) {
+                pdf.addCell(markdownCell(s.category()), egray);
+                pdf.addCell(purchaseAmount(s.vente()), egray);
+            }
+        } else if ("client".equals(type)) {
+            int[] tableCols = {120, 180, 160, 100};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{3});
+            pdf.addCell("Téléphone", primary);
+            pdf.addCell("Client", primary);
+            pdf.addCell("Catégorie", primary);
+            pdf.addCell("Vente", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{3});
+            for (VenteReporter v : RepportDelegate.findReportSaleByClient(d1, d2, region, pref.get("mainCur", "USD"))) {
+                Client c = v.getClient();
+                Category cat = v.getCategory();
+                pdf.addCell(markdownCell(c == null ? "-" : c.getPhone()), egray);
+                pdf.addCell(markdownCell(c == null ? "-" : c.getNomClient()), egray);
+                pdf.addCell(markdownCell(cat == null ? "-" : cat.getDescritption()), egray);
+                pdf.addCell(purchaseAmount(v.getChiffre()), egray);
+            }
+        } else {
+            int[] tableCols = {90, 230, 70, 70, 100, 100};
+            pdf.addTable(tableCols, 25, 25, pageH - 145);
+            pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+            pdf.setRightAlignedColumns(new int[]{2, 4, 5});
+            pdf.addCell("Codebar", primary);
+            pdf.addCell("Produit", primary);
+            pdf.addCell("Quantite", primary);
+            pdf.addCell("Unite", primary);
+            pdf.addCell("Vente", primary);
+            pdf.addCell("Marge", primary);
+            pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+            pdf.setRightAlignedColumns(new int[]{2, 4, 5});
+            for (SaleReport s : RepportDelegate.findSaleReportPerProduct(d1, d2, region)) {
+                pdf.addCell(markdownCell(s.codebar()), egray);
+                pdf.addCell(markdownCell(s.produit()), egray);
+                pdf.addCell(purchaseAmount(s.quantite()), egray);
+                pdf.addCell(markdownCell(s.unite()), egray);
+                pdf.addCell(purchaseAmount(s.vente()), egray);
+                pdf.addCell(purchaseAmount(s.marge()), egray);
+            }
+        }
+        drawReportPdfFooter(contentStream, pdf, hnormal, primary, pageW, pageH);
+        contentStream.close();
+        File output = FileUtils.pointFile(
+                "rapport-ventes-" + safeFilePart(type + "-" + d1 + "-" + d2 + "-" + region) + ".pdf");
+        document.save(output);
+        document.close();
+        return output;
+    }
+
+    private File exportExpenseReportPdf(Entreprise entreprise, LocalDate d1, LocalDate d2, String region)
+            throws IOException {
+        PDDocument document = new PDDocument();
+        PDPage page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+        int pageW = (int) PDRectangle.A4.getWidth();
+        int pageH = (int) PDRectangle.A4.getHeight();
+        PDPageContentStream contentStream = new PDPageContentStream(document, page);
+        PDFUtils pdf = new PDFUtils(document, contentStream);
+        PDFont hnormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        PDFont hbold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        java.awt.Color primary = new java.awt.Color(68, 206, 245);
+        java.awt.Color egray = new java.awt.Color(218, 218, 219);
+        String title = "Rapport des dépenses par imputation - " + reportRegionLabel(region)
+                + " du " + d1 + " au " + d2;
+        drawReportPdfHeader(document, contentStream, pdf, entreprise, title, region, d1, d2,
+                hbold, hnormal, primary, pageW, pageH);
+        int[] tableCols = {320, 120, 120};
+        pdf.addTable(tableCols, 25, 25, pageH - 145);
+        pdf.setFont(hnormal, 10, java.awt.Color.WHITE);
+        pdf.setRightAlignedColumns(new int[]{1, 2});
+        pdf.addCell("Imputation", primary);
+        pdf.addCell("Montant USD", primary);
+        pdf.addCell("Montant CDF", primary);
+        pdf.setFont(hnormal, 9, java.awt.Color.BLACK);
+        pdf.setRightAlignedColumns(new int[]{1, 2});
+        for (ExpenseByImputation e : RepportDelegate.findExpenseReportByImputation(d1, d2, region)) {
+            pdf.addCell(markdownCell(e.imputation()), egray);
+            pdf.addCell(purchaseAmount(e.montantUsd()), egray);
+            pdf.addCell(purchaseAmount(e.montantCdf()), egray);
+        }
+        drawReportPdfFooter(contentStream, pdf, hnormal, primary, pageW, pageH);
+        contentStream.close();
+        File output = FileUtils.pointFile(
+                "rapport-depenses-" + safeFilePart(d1 + "-" + d2 + "-" + region) + ".pdf");
+        document.save(output);
+        document.close();
+        return output;
+    }
+
+    private String resolveFinancialRegion(String requestedRegion) {        String currentRegion = pref.get("region", null);
         String requested = requestedRegion == null || requestedRegion.isBlank() ? currentRegion : requestedRegion.trim();
         if (requested == null || requested.isBlank()) {
             return "%";

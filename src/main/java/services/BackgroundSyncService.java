@@ -14,6 +14,7 @@ import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import retrofit2.Response;
 import tools.MemoryGuard;
+import tools.SyncEngine;
 import tools.SyncLogger;
 import tools.Tables;
 import tools.Util;
@@ -167,6 +168,7 @@ public class BackgroundSyncService extends Service<Void> {
                         continue;
                     }
 
+                    boolean cycleCompleted = false;
                     try {
                         // 1. Validation d'état & Full Resync synchrone
                         try {
@@ -210,13 +212,18 @@ public class BackgroundSyncService extends Service<Void> {
                             );
                             safeSleepMillis(Math.min(remainMs, 5000L));
                         } else {
+                            // Timestamp de fin de la dernière synchro : l'upsync
+                            // ne remonte que les outbox créées après ce timestamp
+                            // (ancienneté), en conservant les retries en cours.
+                            long cycleSince = SyncEngine.getLastSyncTimestamp();
+
                             // 2. Nettoyage et correction outbox
                             SyncOutboxService.correctAndCleanOutboxData();
 
                             // 3. Upsync complet jusqu'au dernier niveau de priorité (Level 0 à Level 5)
                             boolean hasMoreOutbox = true;
                             while (hasMoreOutbox && !isCancelled()) {
-                                List<SyncOutbox> pendingList = SyncOutboxService.fetchAllPendingOutbox();
+                                List<SyncOutbox> pendingList = SyncOutboxService.fetchPendingOutboxSince(cycleSince);
                                 if (pendingList == null || pendingList.isEmpty()) {
                                     hasMoreOutbox = false;
                                     break;
@@ -261,11 +268,17 @@ public class BackgroundSyncService extends Service<Void> {
                                 }
                             }
 
-                            // 4. Downsync : Matérialisation complète de toutes les entités downsync jusqu'au dernier niveau
+                            // 4. Downsync : pull incrémental depuis le dernier
+                            //    timestamp de mutation reçu (ancienneté), puis
+                            //    matérialisation complète de toutes les entités
+                            //    downsync jusqu'au dernier niveau.
+                            services.sync.DownsyncCatchupService.catchUp(kazisafe);
                             SyncOutboxService.materializeDownsyncRecords();
 
                             // 5. Nettoyage des enregistrements appliqués
                             SyncOutboxService.cleanupAppliedRecords();
+
+                            cycleCompleted = true;
                         }
                     } catch (Exception e) {
                         SyncLogger.getInstance().log(
@@ -276,6 +289,15 @@ public class BackgroundSyncService extends Service<Void> {
                         );
                     } finally {
                         releaseSyncLock();
+                    }
+
+                    // Timestamp de fin de synchronisation : capturé uniquement
+                    // si le cycle s'est terminé sans exception, pour ne jamais
+                    // « vieillir » des mutations restées non synchronisées.
+                    if (cycleCompleted) {
+                        SyncEngine.setLastSyncTimestamp(
+                                System.currentTimeMillis()
+                        );
                     }
 
                     // Cycle terminé. Si un nouveau cycle a été demandé pendant celui-ci,
@@ -398,6 +420,15 @@ public class BackgroundSyncService extends Service<Void> {
                     "UPSYNC",
                     null
             );
+            // Marquer le lot comme UNSYNCED (retryCount++) pour que le retry
+            // reste actif même si le timestamp de fin de synchro avance.
+            List<String> allUids = chunk.stream()
+                    .map(SyncOutbox::getUid)
+                    .collect(Collectors.toList());
+            try {
+                SyncOutboxService.markAsUnsynced(allUids);
+            } catch (Exception ignored) {
+            }
             return SyncOutcome.failed();
         }
     }

@@ -3964,6 +3964,84 @@ public class Util {
         return null;
     }
 
+    public static File exportXlsDestockByReference(List<TreeItem<DestockItem>> listRefs, HashMap<String, String> meta) {
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(path + "/ksf-sorties-ref_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            try (Workbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+                Sheet sheet = workbook.createSheet("sorties_par_reference");
+                CellStyle headerCellStyle = workbook.createCellStyle();
+                headerCellStyle.setFillForegroundColor(
+                        new XSSFColor(new java.awt.Color(0x44, 0xce, 0xf5), new DefaultIndexedColorMap()));
+                headerCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerCellStyle.setFont(headerFont);
+
+                Row header = sheet.createRow(0);
+                String[] columns = {"Référence", "Date", "Produit/Articles", "Quantité", "Coût d'achat", "Coût total",
+                    "Destination", "Région"};
+                for (int i = 0; i < columns.length; i++) {
+                    Cell cell = header.createCell(i);
+                    cell.setCellValue(columns[i]);
+                    cell.setCellStyle(headerCellStyle);
+                }
+
+                int r = 1;
+                for (TreeItem<DestockItem> refNode : listRefs) {
+                    if (refNode == null || refNode.getValue() == null) {
+                        continue;
+                    }
+                    DestockItem ref = refNode.getValue();
+                    Row refRow = sheet.createRow(r++);
+                    refRow.createCell(0).setCellValue(ref.getReference() == null ? "" : ref.getReference());
+                    refRow.createCell(1).setCellValue(
+                            ref.getDateDestockage() == null ? "" : ref.getDateDestockage().toLocalDate().toString());
+                    refRow.createCell(2).setCellValue("SOUS-TOTAUX : " + ref.getLignes() + " ligne(s)");
+                    refRow.createCell(3).setCellValue(ref.getQuantite());
+                    refRow.createCell(4).setCellValue(ref.getCoutAchat());
+                    refRow.createCell(5).setCellValue(ref.getCoutTotal());
+                    refRow.createCell(6).setCellValue(ref.getDestination() == null ? "" : ref.getDestination());
+                    refRow.createCell(7).setCellValue(ref.getRegion() == null ? "" : ref.getRegion());
+
+                    for (TreeItem<DestockItem> lineNode : refNode.getChildren()) {
+                        if (lineNode == null || lineNode.getValue() == null) {
+                            continue;
+                        }
+                        DestockItem line = lineNode.getValue();
+                        Destocker d = line.getDestocker();
+                        Row lineRow = sheet.createRow(r++);
+                        lineRow.createCell(0).setCellValue("");
+                        lineRow.createCell(1).setCellValue(line.getDateDestockage() == null ? ""
+                                : line.getDateDestockage().format(
+                                        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+                        String prod = (d == null || d.getProductId() == null || d.getProductId().getNomProduit() == null)
+                                ? "" : d.getProductId().getNomProduit();
+                        if (line.getNumlot() != null && !line.getNumlot().isBlank()) {
+                            prod += " - " + line.getNumlot();
+                        }
+                        lineRow.createCell(2).setCellValue(prod);
+                        lineRow.createCell(3).setCellValue(line.getQuantite());
+                        lineRow.createCell(4).setCellValue(d == null ? 0d : d.getCoutAchat());
+                        lineRow.createCell(5).setCellValue(line.getCoutTotal());
+                        lineRow.createCell(6).setCellValue(line.getDestination() == null ? "" : line.getDestination());
+                        lineRow.createCell(7).setCellValue(line.getRegion() == null ? "" : line.getRegion());
+                    }
+                }
+
+                for (int i = 0; i < columns.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+                workbook.write(fos);
+            }
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public static File exportXlsReports(List<List<ChartItem>> itemss, String criteria, String time) {
 
         FileOutputStream fos;
@@ -4264,7 +4342,8 @@ public class Util {
                 double mon = item.getChiffre();
                 montant1.setCellValue(mon);
                 Cell percent1 = row0.createCell(4);
-                double pr = mon / item.getSommeTotal();
+                double totalRef = item.getSommeTotal();
+                double pr = totalRef <= 0 ? 0 : mon / totalRef;
                 double perc = BigDecimal.valueOf(pr * 100).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
                 percent1.setCellValue(perc + "%");
                 sum += item.getChiffre();
@@ -4278,6 +4357,194 @@ public class Util {
             produit1.setCellValue(" - ");
             Cell montant1 = row0.createCell(2);
             montant1.setCellValue(sum);
+            hsswb.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsPurchasesBySupplier(List<PurchaseBySupplier> items, String title) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-Rapport_achats_fournisseurs_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            fos = new FileOutputStream(file);
+            HSSFWorkbook hsswb = new HSSFWorkbook();
+            HSSFSheet feuil = hsswb.createSheet("Achats fournisseurs");
+            int rowid = 0;
+            double sum = 0;
+            long nb = 0;
+            if (title != null && !title.isBlank()) {
+                HSSFRow titleRow = feuil.createRow(rowid);
+                titleRow.createCell(0).setCellValue(title);
+                rowid += 2;
+            }
+            HSSFRow row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("Fournisseur");
+            row0.createCell(1).setCellValue("Adresse");
+            row0.createCell(2).setCellValue("Telephone");
+            row0.createCell(3).setCellValue("Nb livraisons");
+            row0.createCell(4).setCellValue("Total achat");
+            for (PurchaseBySupplier item : items) {
+                rowid++;
+                row0 = feuil.createRow(rowid);
+                row0.createCell(0).setCellValue(item.nom());
+                row0.createCell(1).setCellValue(item.adresse());
+                row0.createCell(2).setCellValue(item.phone());
+                row0.createCell(3).setCellValue(item.nbLivraisons());
+                row0.createCell(4).setCellValue(item.montant());
+                sum += item.montant();
+                nb += item.nbLivraisons();
+            }
+            rowid++;
+            rowid++;
+            row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("TOTAUX");
+            row0.createCell(3).setCellValue(nb);
+            row0.createCell(4).setCellValue(sum);
+            hsswb.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsPurchasesByProduct(List<PurchaseByProduct> items, String title) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-Rapport_achats_produits_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            fos = new FileOutputStream(file);
+            HSSFWorkbook hsswb = new HSSFWorkbook();
+            HSSFSheet feuil = hsswb.createSheet("Achats produits");
+            int rowid = 0;
+            double sum = 0;
+            double qte = 0;
+            if (title != null && !title.isBlank()) {
+                HSSFRow titleRow = feuil.createRow(rowid);
+                titleRow.createCell(0).setCellValue(title);
+                rowid += 2;
+            }
+            HSSFRow row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("Codebar");
+            row0.createCell(1).setCellValue("Produit");
+            row0.createCell(2).setCellValue("Quantite");
+            row0.createCell(3).setCellValue("Unite");
+            row0.createCell(4).setCellValue("Total achat");
+            for (PurchaseByProduct item : items) {
+                rowid++;
+                row0 = feuil.createRow(rowid);
+                row0.createCell(0).setCellValue(item.codebar());
+                row0.createCell(1).setCellValue(item.produit());
+                row0.createCell(2).setCellValue(item.quantite());
+                row0.createCell(3).setCellValue(item.unite());
+                row0.createCell(4).setCellValue(item.montant());
+                sum += item.montant();
+                qte += item.quantite();
+            }
+            rowid++;
+            rowid++;
+            row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("TOTAUX");
+            row0.createCell(2).setCellValue(qte);
+            row0.createCell(4).setCellValue(sum);
+            hsswb.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsPurchasesByMonth(List<PurchaseByMonth> items, String title) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-Rapport_achats_mois_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            fos = new FileOutputStream(file);
+            HSSFWorkbook hsswb = new HSSFWorkbook();
+            HSSFSheet feuil = hsswb.createSheet("Achats mois");
+            int rowid = 0;
+            double sum = 0;
+            long nb = 0;
+            if (title != null && !title.isBlank()) {
+                HSSFRow titleRow = feuil.createRow(rowid);
+                titleRow.createCell(0).setCellValue(title);
+                rowid += 2;
+            }
+            HSSFRow row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("Mois");
+            row0.createCell(1).setCellValue("Nb livraisons");
+            row0.createCell(2).setCellValue("Total achat");
+            for (PurchaseByMonth item : items) {
+                rowid++;
+                row0 = feuil.createRow(rowid);
+                row0.createCell(0).setCellValue(item.periode());
+                row0.createCell(1).setCellValue(item.nbLivraisons());
+                row0.createCell(2).setCellValue(item.montant());
+                sum += item.montant();
+                nb += item.nbLivraisons();
+            }
+            rowid++;
+            rowid++;
+            row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("TOTAUX");
+            row0.createCell(1).setCellValue(nb);
+            row0.createCell(2).setCellValue(sum);
+            hsswb.write(fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsExpenseByImputation(List<ExpenseByImputation> items, String title) {
+        FileOutputStream fos;
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-Rapport_depenses_imputation_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xls");
+            fos = new FileOutputStream(file);
+            HSSFWorkbook hsswb = new HSSFWorkbook();
+            HSSFSheet feuil = hsswb.createSheet("Depenses par imputation");
+            int rowid = 0;
+            double sumUsd = 0;
+            double sumCdf = 0;
+            if (title != null && !title.isBlank()) {
+                HSSFRow titleRow = feuil.createRow(rowid);
+                titleRow.createCell(0).setCellValue(title);
+                rowid += 2;
+            }
+            HSSFRow row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("Imputation");
+            row0.createCell(1).setCellValue("Montant USD");
+            row0.createCell(2).setCellValue("Montant CDF");
+            for (ExpenseByImputation item : items) {
+                rowid++;
+                row0 = feuil.createRow(rowid);
+                row0.createCell(0).setCellValue(item.imputation());
+                row0.createCell(1).setCellValue(item.montantUsd());
+                row0.createCell(2).setCellValue(item.montantCdf());
+                sumUsd += item.montantUsd();
+                sumCdf += item.montantCdf();
+            }
+            rowid++;
+            rowid++;
+            row0 = feuil.createRow(rowid);
+            row0.createCell(0).setCellValue("TOTAUX");
+            row0.createCell(1).setCellValue(sumUsd);
+            row0.createCell(2).setCellValue(sumCdf);
             hsswb.write(fos);
             fos.close();
             return file;

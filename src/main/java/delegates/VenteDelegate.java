@@ -7,6 +7,8 @@ package delegates;
 
 import IServices.VenteStorage;
 import java.util.List;
+import data.LigneVente;
+import data.SaleAgregate;
 import data.Vente;
 import tools.TopTen;
 import tools.ServiceLocator;
@@ -28,6 +30,11 @@ public class VenteDelegate {
 
     public static Vente updateVente(Vente cat) {
         return getStorage().updateVente(cat);
+    }
+
+    public static Vente saveSaleAtomically(Vente vente, List<LigneVente> lignes,
+            List<SaleAgregate> metrics, boolean updateMode, List<LigneVente> oldLines) {
+        return VenteService.saveSaleAtomically(vente, lignes, metrics, updateMode, oldLines);
     }
 
     public static void deleteVente(Vente cat) {

@@ -29,11 +29,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import services.ManagedSessionFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -70,6 +75,9 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeTableColumn;
+import javafx.scene.control.TreeTableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
@@ -100,6 +108,7 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import tools.InventoryItem;
 import tools.JsonUtil;
+import tools.DestockItem;
 import tools.MainUI;
 import tools.SyncEngine;
 import tools.Tables;
@@ -300,6 +309,39 @@ public class GoodstorageController implements Initializable {
     @FXML
     Label curent_path;
 
+    @FXML
+    private TabPane tabpane_dstk;
+    @FXML
+    private TreeTableView<DestockItem> tree_dstk_ref;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_ref;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_date;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_produits;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_quantite;
+    @FXML
+    private TreeTableColumn<DestockItem, Number> trcol_dstk_coutachat;
+    @FXML
+    private TreeTableColumn<DestockItem, Number> trcol_dstk_cout;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_destination;
+    @FXML
+    private TreeTableColumn<DestockItem, String> trcol_dstk_region;
+    @FXML
+    private DatePicker dpk_dstk_debut;
+    @FXML
+    private DatePicker dpk_dstk_fin;
+    @FXML
+    private ComboBox<String> cbx_dstk_region;
+    @FXML
+    private ComboBox<String> cbx_dstk_destination;
+    @FXML
+    private ImageView btn_export_dstk_ref;
+    @FXML
+    private Label lbl_dstk_ref_total;
+
     ObservableList<Livraison> listlivr;
     ObservableList<Fournisseur> listfourn;
     ObservableList<Stocker> list_stockers;
@@ -307,6 +349,9 @@ public class GoodstorageController implements Initializable {
     ObservableList<InventoryItem> lisinvent = FXCollections.observableArrayList();
     private FilteredList<InventoryItem> filteredDepotInventory;
     ObservableList<String> regions;
+    ObservableList<String> dstkReportRegions = FXCollections.observableArrayList();
+    ObservableList<String> dstkDestinations = FXCollections.observableArrayList();
+    private boolean dstockRefConfigured = false;
     StockDepotAgregateService stockDepotService;
     List<Produit> products;
     List<Stocker> stox;
@@ -718,6 +763,7 @@ public class GoodstorageController implements Initializable {
 
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
         RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        setupDestockRefReport();
         cbx_regions.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -735,6 +781,237 @@ public class GoodstorageController implements Initializable {
 
     public ObservableList<String> accessregion() {
         return regions;
+    }
+
+    private void setupDestockRefReport() {
+        if (!dstockRefConfigured) {
+            dstockRefConfigured = true;
+            configDestockRefTable();
+            MainUI.setPattern(dpk_dstk_debut);
+            MainUI.setPattern(dpk_dstk_fin);
+            dpk_dstk_debut.setValue(LocalDate.now().minusMonths(1));
+            dpk_dstk_fin.setValue(LocalDate.now());
+            cbx_dstk_region.setItems(dstkReportRegions);
+            cbx_dstk_destination.setItems(dstkDestinations);
+            regions.addListener((javafx.collections.ListChangeListener<String>) c -> {
+                dstkReportRegions.setAll("Tout");
+                dstkReportRegions.addAll(regions);
+            });
+            dpk_dstk_debut.valueProperty().addListener((obs, o, n) -> refreshDestockRefReport());
+            dpk_dstk_fin.valueProperty().addListener((obs, o, n) -> refreshDestockRefReport());
+            cbx_dstk_region.getSelectionModel().selectedItemProperty()
+                    .addListener((obs, o, n) -> refreshDestockRefReport());
+            cbx_dstk_destination.getSelectionModel().selectedItemProperty()
+                    .addListener((obs, o, n) -> refreshDestockRefReport());
+        }
+        dstkReportRegions.setAll("Tout");
+        dstkReportRegions.addAll(regions);
+        RegionRegistry.selectSavedRegion(pref, cbx_dstk_region);
+        populateDstkDestinations();
+        refreshDestockRefReport();
+    }
+
+    private void populateDstkDestinations() {
+        try {
+            List<Destocker> all = DestockerDelegate.findDestockers();
+            LinkedHashSet<String> dests = new LinkedHashSet<>();
+            if (all != null) {
+                for (Destocker d : all) {
+                    if (d.getDestination() != null && !d.getDestination().isBlank()) {
+                        dests.add(d.getDestination());
+                    }
+                }
+            }
+            String current = cbx_dstk_destination.getValue();
+            dstkDestinations.setAll("Tout");
+            dstkDestinations.addAll(dests);
+            cbx_dstk_destination.getSelectionModel()
+                    .select(current != null && dstkDestinations.contains(current) ? current : "Tout");
+        } catch (Exception ex) {
+            Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    private void refreshDestockRefReport() {
+        if (dpk_dstk_debut == null || dpk_dstk_fin == null) {
+            return;
+        }
+        LocalDate debut = dpk_dstk_debut.getValue();
+        LocalDate fin = dpk_dstk_fin.getValue();
+        if (debut == null || fin == null) {
+            return;
+        }
+        if (debut.isAfter(fin)) {
+            LocalDate tmp = debut;
+            debut = fin;
+            fin = tmp;
+        }
+        String reg = cbx_dstk_region.getValue();
+        String dest = cbx_dstk_destination.getValue();
+        String regionFilter = (reg == null || reg.isBlank() || "Tout".equals(reg)) ? null : reg;
+        String destFilter = (dest == null || dest.isBlank() || "Tout".equals(dest)) ? null : dest;
+        List<Destocker> destockers = DestockerDelegate.findByDateIntervale(debut, fin, regionFilter, destFilter);
+        buildDestockRefTree(destockers == null ? List.of() : destockers);
+    }
+
+    private void buildDestockRefTree(List<Destocker> destockers) {
+        TreeItem<DestockItem> root = new TreeItem<>(new DestockItem());
+        root.setExpanded(true);
+        Map<String, List<Destocker>> grouped = destockers.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(
+                        d -> d.getReference() == null || d.getReference().isBlank() ? "Sans référence" : d.getReference(),
+                        LinkedHashMap::new, Collectors.toList()));
+        double grandQte = 0, grandCout = 0;
+        int grandLignes = 0;
+        for (Map.Entry<String, List<Destocker>> e : grouped.entrySet()) {
+            List<Destocker> lines = e.getValue();
+            DestockItem agg = new DestockItem();
+            agg.setNiveau(DestockItem.Niveau.REFERENCE);
+            agg.setReference(e.getKey());
+            double qte = 0, cout = 0;
+            for (Destocker d : lines) {
+                qte += d.getQuantite();
+                cout += d.getCoutAchat() * d.getQuantite();
+            }
+            agg.setQuantite(qte);
+            agg.setCoutAchat(qte == 0 ? 0 : cout / qte);
+            agg.setCoutTotal(cout);
+            agg.setLignes(lines.size());
+            Destocker first = lines.get(0);
+            agg.setDestination(first.getDestination());
+            agg.setRegion(first.getRegion());
+            agg.setDateDestockage(first.getDateDestockage());
+            TreeItem<DestockItem> refNode = new TreeItem<>(agg);
+            refNode.setExpanded(true);
+            for (Destocker d : lines) {
+                DestockItem leaf = new DestockItem();
+                leaf.setNiveau(DestockItem.Niveau.LIGNE);
+                leaf.setDestocker(d);
+                leaf.setReference(d.getReference());
+                leaf.setDestination(d.getDestination());
+                leaf.setRegion(d.getRegion());
+                leaf.setDateDestockage(d.getDateDestockage());
+                leaf.setQuantite(d.getQuantite());
+                leaf.setCoutAchat(d.getCoutAchat());
+                leaf.setCoutTotal(d.getCoutAchat() * d.getQuantite());
+                leaf.setNumlot(d.getNumlot());
+                refNode.getChildren().add(new TreeItem<>(leaf));
+            }
+            root.getChildren().add(refNode);
+            grandQte += qte;
+            grandCout += cout;
+            grandLignes += lines.size();
+        }
+        tree_dstk_ref.setRoot(root);
+        tree_dstk_ref.setShowRoot(false);
+        String totalText = String.format(java.util.Locale.US, "%s : %.2f", bundle.getString("xtotal"), grandCout);
+        lbl_dstk_ref_total.setText(totalText + "   |   " + String.format(bundle.getString("xitems"), grandLignes)
+                + "   |   Qte : " + String.format(java.util.Locale.US, "%.2f", grandQte));
+    }
+
+    private void configDestockRefTable() {
+        trcol_dstk_ref.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            return new SimpleStringProperty(v.getNiveau() == DestockItem.Niveau.REFERENCE
+                    ? (v.getReference() == null ? "" : v.getReference()) : "");
+        });
+        trcol_dstk_date.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null || v.getDateDestockage() == null) {
+                return null;
+            }
+            DateTimeFormatter f = v.getNiveau() == DestockItem.Niveau.REFERENCE
+                    ? DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                    : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            return new SimpleStringProperty(v.getDateDestockage().format(f));
+        });
+        trcol_dstk_produits.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            if (v.getNiveau() == DestockItem.Niveau.REFERENCE) {
+                return new SimpleStringProperty(String.format(bundle.getString("xitems"), v.getLignes()));
+            }
+            Destocker d = v.getDestocker();
+            if (d == null) {
+                return null;
+            }
+            String name = d.getProductId() == null || d.getProductId().getNomProduit() == null
+                    ? "" : d.getProductId().getNomProduit();
+            if (v.getNumlot() != null && !v.getNumlot().isBlank()) {
+                name += " - " + v.getNumlot();
+            }
+            return new SimpleStringProperty(name);
+        });
+        trcol_dstk_quantite.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            if (v.getNiveau() == DestockItem.Niveau.REFERENCE) {
+                return new SimpleStringProperty(String.format(java.util.Locale.US, "%.2f", v.getQuantite()));
+            }
+            Destocker d = v.getDestocker();
+            String mes = (d != null && d.getMesureId() != null && d.getMesureId().getDescription() != null)
+                    ? d.getMesureId().getDescription() : "";
+            return new SimpleStringProperty(String.format(java.util.Locale.US, "%.2f %s", v.getQuantite(), mes));
+        });
+        trcol_dstk_coutachat.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            return new SimpleDoubleProperty(v.getCoutAchat());
+        });
+        trcol_dstk_cout.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            return new SimpleDoubleProperty(v.getCoutTotal());
+        });
+        trcol_dstk_destination.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            return new SimpleStringProperty(v.getDestination() == null ? "" : v.getDestination());
+        });
+        trcol_dstk_region.setCellValueFactory(param -> {
+            DestockItem v = param.getValue().getValue();
+            if (v == null) {
+                return null;
+            }
+            return new SimpleStringProperty(v.getRegion() == null ? "" : v.getRegion());
+        });
+    }
+
+    @FXML
+    private void exportDestockRef(MouseEvent evt) {
+        new Thread(() -> {
+            try {
+                if (tree_dstk_ref.getRoot() == null || tree_dstk_ref.getRoot().getChildren().isEmpty()) {
+                    MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "info");
+                    return;
+                }
+                HashMap<String, String> meta = new HashMap<>();
+                meta.put("entrep", pref.get("ent_name", entreprise == null ? "" : entreprise.getNomEntreprise()));
+                meta.put("region", cbx_dstk_region.getValue() == null ? "Tout" : cbx_dstk_region.getValue());
+                meta.put("debut", dpk_dstk_debut.getValue() == null ? "" : dpk_dstk_debut.getValue().toString());
+                meta.put("fin", dpk_dstk_fin.getValue() == null ? "" : dpk_dstk_fin.getValue().toString());
+                File xlsInv = Util.exportXlsDestockByReference(tree_dstk_ref.getRoot().getChildren(), meta);
+                if (xlsInv != null) {
+                    Desktop.getDesktop().open(xlsInv);
+                }
+            } catch (IOException ex) {
+                Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }).start();
     }
 
     @FXML
@@ -1117,35 +1394,32 @@ public class GoodstorageController implements Initializable {
             return null;
         }
 
+        String lotKey = aggregate.getNumlot() == null ? "" : aggregate.getNumlot();
+
         List<Stocker> filteredStockers = new ArrayList<>();
-        List<Stocker> lotStockers = StockerDelegate.findStockerByProduitLot(produit.getUid(), aggregate.getNumlot());
-        if (lotStockers != null) {
-            for (Stocker stocker : lotStockers) {
-                if (stocker != null && effectiveRegion.equals(stocker.getRegion())) {
+        List<Stocker> productStockers = StockerDelegate.findStockerByProduit(produit.getUid(), effectiveRegion);
+        if (productStockers != null) {
+            for (Stocker stocker : productStockers) {
+                if (stocker != null && lotKey.equals(stocker.getNumlot() == null ? "" : stocker.getNumlot())) {
                     filteredStockers.add(stocker);
                 }
             }
         }
 
         List<Destocker> filteredDestockers = new ArrayList<>();
-        List<Destocker> lotDestockers = DestockerDelegate.findByProduitLot(produit.getUid(), aggregate.getNumlot());
-        if (lotDestockers != null) {
-            for (Destocker destocker : lotDestockers) {
-                if (destocker != null && effectiveRegion.equals(destocker.getRegion())) {
+        List<Destocker> productDestockers = DestockerDelegate.findByProduit(produit.getUid(), effectiveRegion);
+        if (productDestockers != null) {
+            for (Destocker destocker : productDestockers) {
+                if (destocker != null && lotKey.equals(destocker.getNumlot() == null ? "" : destocker.getNumlot())) {
                     filteredDestockers.add(destocker);
                 }
             }
         }
 
-        Stocker earliestStocker = null;
         Stocker latestStocker = null;
         double totalEntriesPc = 0d;
         for (Stocker stocker : filteredStockers) {
             totalEntriesPc += toPieces(stocker);
-            if (earliestStocker == null || (stocker.getDateStocker() != null && earliestStocker.getDateStocker() != null
-                    && stocker.getDateStocker().isBefore(earliestStocker.getDateStocker()))) {
-                earliestStocker = stocker;
-            }
             if (latestStocker == null || (stocker.getDateStocker() != null && latestStocker.getDateStocker() != null
                     && stocker.getDateStocker().isAfter(latestStocker.getDateStocker()))) {
                 latestStocker = stocker;
@@ -1162,8 +1436,7 @@ public class GoodstorageController implements Initializable {
             }
         }
 
-        double stockInitialPc = earliestStocker == null ? 0d : toPieces(earliestStocker);
-        double entreesPc = Math.max(0d, totalEntriesPc - stockInitialPc);
+        double entreesPc = totalEntriesPc;
         double stockRestPc = aggregate.getQuantite();
         double valeur = aggregate.getValeurStock() > 0 ? aggregate.getValeurStock() : stockRestPc * aggregate.getCoutAchat();
         double alertPc = 0d;
@@ -1193,7 +1466,7 @@ public class GoodstorageController implements Initializable {
         item.setLastDestocker(latestDestocker);
         item.setLocalisation(latestStocker != null && latestStocker.getLocalisation() != null ? latestStocker.getLocalisation() : "");
 
-        item.setStockInitial(stockInitialPc);
+        item.setStockInitial(0d);
         item.setQuantEntreeValue(entreesPc);
         item.setQuantSortieValue(totalSortiesPc);
         item.setQuantRestValue(stockRestPc);

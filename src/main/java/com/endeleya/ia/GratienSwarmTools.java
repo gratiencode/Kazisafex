@@ -19,8 +19,11 @@ public class GratienSwarmTools {
     @Tool("Délègue une tâche à un sous-agent spécialisé (mode swarm). "
             + "agent: 'invoice' (approvisionnement/facture), 'sale' (vente/sortie) ou 'expense' (dépense) pour "
             + "lancer le workflow multi-agents complet ; ou un agent d'étape (product_creator_agent, "
-            + "supplier_delivery_agent, requisition_price_agent, sale_creation_agent, sale_treasury_agent, "
+            + "supplier_delivery_agent, sale_creation_agent, sale_treasury_agent, "
             + "expense_preparation_agent, expense_operation_agent) si un workflowId en cours est fourni. "
+            + "Les sous-agents ne servent qu'à créer les objets parents sans dépendance supérieure "
+            + "(catalogue, fournisseur/livraison) ; les éléments à dépendance directe "
+            + "(réquisitions, prix de vente) sont créés un à un directement par Gratien. "
             + "task: description détaillée de la tâche à réaliser. workflowId (optionnel): identifiant interne "
             + "d'un workflow déjà démarré. L'outil renvoie le résultat du sous-agent que tu dois présenter "
             + "à l'utilisateur.")

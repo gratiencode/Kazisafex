@@ -306,6 +306,36 @@ public class DestockerService implements DestockerStorage {
     }
 
     @Override
+    public List<Destocker> findByDateIntervale(LocalDate date1, LocalDate date2, String region, String destination) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT * FROM destocker WHERE dateDestockage BETWEEN ? AND ? ");
+            if (region != null && !region.isBlank()) {
+                sb.append("AND region = ? ");
+            }
+            if (destination != null && !destination.isBlank()) {
+                sb.append("AND destination = ? ");
+            }
+            String sql = sb.toString();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sql, Destocker.class);
+                query.setParameter(1, date1.atStartOfDay());
+                query.setParameter(2, date2.atTime(23, 59, 59));
+                int i = 3;
+                if (region != null && !region.isBlank()) {
+                    query.setParameter(i++, region);
+                }
+                if (destination != null && !destination.isBlank()) {
+                    query.setParameter(i, destination);
+                }
+                return query.getResultList();
+            });
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    @Override
     public List<Destocker> findDestockerByProduit(String uid, String region) {
         try {
             StringBuilder sb = new StringBuilder();

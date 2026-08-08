@@ -27,7 +27,6 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
-<?import javafx.scene.web.WebView?>
 
 <BorderPane prefHeight="840.0" prefWidth="1157.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.MainuiController">
    <top>
@@ -99,14 +98,14 @@
                            </cursor>
                         </ImageView>
                         <Button fx:id="btn_theme_toggle" layoutX="132.0" layoutY="10.0" mnemonicParsing="false" onAction="#toggleTheme" prefHeight="24.0" prefWidth="55.0" style="-fx-background-radius: 12; -fx-background-color: #e5e7eb;" text="%xbtn.theme.dark" AnchorPane.rightAnchor="107.0" />
-                        <HBox layoutX="4.0" layoutY="4.0" spacing="8.0" AnchorPane.leftAnchor="4.0" AnchorPane.topAnchor="6.0" AnchorPane.rightAnchor="160.0">
+                        <HBox layoutX="4.0" layoutY="4.0" spacing="8.0" AnchorPane.leftAnchor="4.0" AnchorPane.rightAnchor="160.0" AnchorPane.topAnchor="6.0">
                             <ImageView fx:id="img_company_logo" fitHeight="40.0" fitWidth="40.0" pickOnBounds="true" preserveRatio="true" visible="false" />
                             <ImageView fx:id="img_profile" fitHeight="40.0" fitWidth="40.0" pickOnBounds="true" preserveRatio="true">
                                 <image>
                                     <Image url="@../icons/Male%x20User_100px.png" />
                                 </image>
                             </ImageView>
-                            <VBox spacing="1.0" alignment="CENTER_LEFT">
+                            <VBox alignment="CENTER_LEFT" spacing="1.0">
                                 <Label fx:id="user_connected" minWidth="1.0" prefHeight="20.0" text="%xlbel.loading" wrapText="true">
                                    <font>
                                       <Font size="14.0" />
@@ -628,7 +627,7 @@
                      <children>
                         <AnchorPane prefHeight="497.0" prefWidth="228.0" style="-fx-background-color: white; -fx-border-color: rgba(68,206,245,0.45); -fx-border-radius: 18; -fx-background-radius: 18; -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.10), 22, 0.18, 0, 9);">
                            <children>
-                              <WebView fx:id="ia_webvu_chat" layoutX="7.0" layoutY="8.0" prefHeight="545.0" prefWidth="214.0" AnchorPane.bottomAnchor="7.0" AnchorPane.leftAnchor="7.0" AnchorPane.rightAnchor="7.0" AnchorPane.topAnchor="7.0" />
+                              <!-- WebView desactive pour diagnostic du crash natif (WebKit) -->
                            </children>
                         </AnchorPane>
                         <AnchorPane prefHeight="118.0" prefWidth="228.0" style="-fx-background-color: white; -fx-border-color: rgba(68,206,245,0.30); -fx-background-radius: 18; -fx-border-radius: 18; -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.08), 16, 0.16, 0, 6);">
@@ -682,8 +681,8 @@
             <ToolBar nodeOrientation="LEFT_TO_RIGHT" prefHeight="36.0" prefWidth="1355.0" style="-fx-background-color: white;" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
               <items>
                   <ProgressBar fx:id="sync_pg_bar" prefHeight="11.0" prefWidth="200.0" progress="0.0" visible="false" />
-                  <Label fx:id="sync_txt_message" prefHeight="16.0" prefWidth="207.0" text="Synchronisation de ...." visible="false" />
-                  <Separator prefHeight="26.0" prefWidth="81.0" />
+                  <Label fx:id="sync_txt_message" prefHeight="16.0" prefWidth="504.0" text="Synchronisation de ...." visible="false" />
+                  <Separator prefHeight="26.0" prefWidth="28.0" />
                   <Label fx:id="txt_states_features" alignment="CENTER_RIGHT" prefHeight="16.0" prefWidth="663.0" text="features" visible="false">
                      <font>
                         <Font size="11.0" />

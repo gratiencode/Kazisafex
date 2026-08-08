@@ -5,6 +5,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,12 +65,51 @@ public final class SyncTestDb implements AutoCloseable {
 
         TypedQuery<SyncOutbox> typedQ = mock(TypedQuery.class);
         when(em.createQuery(anyString(), eq(SyncOutbox.class))).thenReturn(typedQ);
+
+        TypedQuery<data.Category> categoryQ = mock(TypedQuery.class);
+        when(em.createQuery(anyString(), eq(data.Category.class))).thenReturn(categoryQ);
+        when(categoryQ.setParameter(anyString(), any())).thenReturn(categoryQ);
+        when(categoryQ.setMaxResults(anyInt())).thenReturn(categoryQ);
+        when(categoryQ.getResultList()).thenReturn(List.of());
         when(typedQ.setParameter(anyString(), any())).thenAnswer(inv -> {
             params.put(inv.getArgument(0), inv.getArgument(1));
             return typedQ;
         });
         when(typedQ.setMaxResults(anyInt())).thenReturn(typedQ);
         when(typedQ.getResultList()).thenAnswer(inv -> {
+            // Upsync : requête fetchPendingOutboxSince (params maxRetry + since).
+            Object maxRetryObj = params.get("maxRetry");
+            if (maxRetryObj instanceof Integer mr) {
+                LocalDateTime since = (LocalDateTime) params.getOrDefault(
+                    "since",
+                    LocalDateTime.MIN
+                );
+                return records.values().stream()
+                        .filter(r -> {
+                            String st = r.getStatus();
+                            boolean pending =
+                                "PENDING".equals(st) || "UNSYNCED".equals(st);
+                            if (!pending) {
+                                return false;
+                            }
+                            Integer rc = r.getRetryCount();
+                            if (rc != null && rc >= mr) {
+                                return false;
+                            }
+                            if (r.getCreatedAt() == null) {
+                                return true;
+                            }
+                            boolean fresh = r.getCreatedAt().isAfter(since);
+                            boolean retrying = rc != null && rc > 0;
+                            return fresh || retrying;
+                        })
+                        .sorted(Comparator.comparing(r ->
+                            r.getCreatedAt() == null
+                                ? LocalDateTime.MIN
+                                : r.getCreatedAt()
+                        ))
+                        .collect(Collectors.toList());
+            }
             Object tables = params.get("tables");
             if (tables instanceof List<?> tl) {
                 return records.values().stream()

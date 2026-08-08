@@ -1282,7 +1282,7 @@ public class PosController implements Initializable {
         }
 
         savedCarts.add(vt);
-        MainUI.notify(null, bundle.getString("success"), bundle.getString("xcartsavedsuccess"), 3, "info");
+        MainUI.notify(null, bundle.getString("success"), bundle.getString("xcartsavedsuccess"), 3, "success");
         pref.putInt("tranzit_bill", -100);
         pref.putInt("_bill_counter_", compteur);
 
@@ -6234,7 +6234,7 @@ public class PosController implements Initializable {
 
                 savedCarts.removeAll(selectedAvedCarts);
                 selectedAvedCarts.clear();
-                MainUI.notify(null, bundle.getString("success"), "Elements supprimes avec succes", 3, "info");
+                MainUI.notify(null, bundle.getString("success"), "Elements supprimes avec succes", 3, "success");
                 selectedCart = null;
             }
 

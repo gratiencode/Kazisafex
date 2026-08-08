@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -20,14 +18,11 @@ import org.bsc.langgraph4j.state.Channels;
 public class GratienExpenseWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
+    private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
+    private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 
-    private final ChatModel model = OllamaChatModel.builder()
-            .baseUrl(OLLAMA_BASE_URL)
-            .modelName(MODEL_NAME)
-            .temperature(0.0)
-            .timeout(Duration.ofMinutes(5))
-            .build();
+    private final OllamaModelFallback model = new OllamaModelFallback(0.0, Duration.ofMinutes(5),
+            VISION_MODEL_NAME, TEXT_MODEL_NAME);
     private final ObjectMapper mapper = new ObjectMapper();
     private final ExpenseAgentRunner expenseAgentRunner;
 
@@ -60,6 +55,13 @@ public class GratienExpenseWorkflow {
 
     public String handle(String question, List<File> attachments) {
         if (pendingDraft != null && awaitingConfirmation) {
+            if (isCancellation(question)) {
+                ExpenseDraft rejected = pendingDraft;
+                pendingDraft = null;
+                awaitingConfirmation = false;
+                return "Enregistrement annulé. Aucune dépense n'a été créée pour "
+                        + nullToDash(rejected.getExpenseName()) + ".";
+            }
             if (!isConfirmation(question)) {
                 // Un rejet peut porter une correction plutot qu'une annulation
                 // (ex: "non c'est 500 USD carburant"). On tente une relecture; a defaut
@@ -143,7 +145,7 @@ public class GratienExpenseWorkflow {
                 }
             }
             ChatRequest request = ChatRequest.builder().messages(UserMessage.from(contents)).build();
-            String answer = model.chat(request).aiMessage().text();
+            String answer = model.chat(request);
             return enrichDraft(mapper.readValue(extractJson(answer), ExpenseDraft.class));
         } catch (Exception ex) {
             return null;
@@ -333,6 +335,26 @@ public class GratienExpenseWorkflow {
     private boolean isConfirmation(String question) {
         String value = question == null ? "" : question.trim().toLowerCase(Locale.ROOT);
         return value.equals("oui") || value.equals("ok") || value.equals("confirme") || value.equals("valider");
+    }
+
+    private boolean isCancellation(String question) {
+        String value = question == null ? "" : question.trim().toLowerCase(Locale.ROOT);
+        return value.equals("annule")
+                || value.equals("annuler")
+                || value.equals("annuler tout")
+                || value.equals("cancel")
+                || value.equals("abandonne")
+                || value.equals("abandonner")
+                || value.equals("j'annule")
+                || value.equals("stop")
+                || value.equals("arrete")
+                || value.equals("arrête")
+                || value.equals("arret")
+                || value.equals("arrêt")
+                || value.equals("quitte")
+                || value.equals("quitter")
+                || value.contains("annul")
+                || value.contains("abandon");
     }
 
     private boolean looksLikeInfoQuery(String value) {

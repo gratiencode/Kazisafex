@@ -88,6 +88,11 @@ import tools.FinancialRowModel;
 import tools.FinancialTableBinder;
 import tools.DataCache;
 import tools.SaleReport;
+import tools.PurchaseBySupplier;
+import tools.PurchaseByProduct;
+import tools.PurchaseByMonth;
+import tools.ExpenseByImputation;
+import javafx.scene.control.RadioButton;
 
 /**
  * FXML Controller class
@@ -207,6 +212,70 @@ public class RepportController implements Initializable {
     @FXML
     TableColumn<VenteReporter, String> clt_percent;
 
+    // achats per fournisseur
+    @FXML
+    TableView<PurchaseBySupplier> tb_ach_fourn;
+    @FXML
+    TableColumn<PurchaseBySupplier, String> col_ach_fourn_nom;
+    @FXML
+    TableColumn<PurchaseBySupplier, String> col_ach_fourn_adresse;
+    @FXML
+    TableColumn<PurchaseBySupplier, String> col_ach_fourn_phone;
+    @FXML
+    TableColumn<PurchaseBySupplier, Number> col_ach_fourn_nb;
+    @FXML
+    TableColumn<PurchaseBySupplier, String> col_ach_fourn_montant;
+    @FXML
+    TextField searchAchFourn;
+    @FXML
+    Label totalAchFourn;
+
+    // achats per produit
+    @FXML
+    TableView<PurchaseByProduct> tb_ach_prod;
+    @FXML
+    TableColumn<PurchaseByProduct, String> col_ach_prod_codebar;
+    @FXML
+    TableColumn<PurchaseByProduct, String> col_ach_prod_produit;
+    @FXML
+    TableColumn<PurchaseByProduct, String> col_ach_prod_quantite;
+    @FXML
+    TableColumn<PurchaseByProduct, String> col_ach_prod_unite;
+    @FXML
+    TableColumn<PurchaseByProduct, String> col_ach_prod_montant;
+    @FXML
+    TextField searchAchProd;
+    @FXML
+    Label totalAchProd;
+
+    // achats per mois
+    @FXML
+    TableView<PurchaseByMonth> tb_ach_mois;
+    @FXML
+    TableColumn<PurchaseByMonth, String> col_ach_mois_periode;
+    @FXML
+    TableColumn<PurchaseByMonth, Number> col_ach_mois_nb;
+    @FXML
+    TableColumn<PurchaseByMonth, String> col_ach_mois_montant;
+    @FXML
+    TextField searchAchMois;
+    @FXML
+    Label totalAchMois;
+
+    // depenses par imputation
+    @FXML
+    TableView<ExpenseByImputation> tb_depenses;
+    @FXML
+    TableColumn<ExpenseByImputation, String> col_dep_imputation;
+    @FXML
+    TableColumn<ExpenseByImputation, Number> col_dep_usd;
+    @FXML
+    TableColumn<ExpenseByImputation, Number> col_dep_cdf;
+    @FXML
+    TextField searchDep;
+    @FXML
+    Label totalDepenses;
+
     double taux;
 
     ObservableList<Vente> lsventes;
@@ -215,7 +284,17 @@ public class RepportController implements Initializable {
     ObservableList<SaleReport> ventePr;
     ObservableList<SaleReport> ventePerCategory;
     ObservableList<VenteReporter> ventePerClient;
+    ObservableList<PurchaseBySupplier> achatFournisseur;
+    ObservableList<PurchaseByProduct> achatProduit;
+    ObservableList<PurchaseByMonth> achatMois;
+    ObservableList<ExpenseByImputation> depensesParImputation;
     List<List<ChartItem>> cis;
+
+    private boolean achatSourceDepot = true;
+    @FXML
+    private RadioButton rbAchDepot;
+    @FXML
+    private RadioButton rbAchPdv;
 
     ObservableList<String> regions;
     Label depense_proportion;
@@ -496,7 +575,7 @@ public class RepportController implements Initializable {
         });
         clt_percent.setCellValueFactory((TableColumn.CellDataFeatures<VenteReporter, String> param) -> {
             VenteReporter im = param.getValue();
-            double pr = Double.isNaN(im.getMarge() / im.getChiffre()) ? 0 : (im.getMarge() / im.getChiffre()) * 100;
+            double pr = im.getSommeTotal() <= 0 ? 0 : (im.getChiffre() / im.getSommeTotal()) * 100;
             return new SimpleStringProperty(
                     BigDecimal.valueOf(pr).setScale(1, RoundingMode.HALF_EVEN).doubleValue() + "%");
         });
@@ -572,6 +651,320 @@ public class RepportController implements Initializable {
                 Util.toPlain(scale(param.getValue().valeurNetteUsd(LocalDate.now()))) + " USD"));
     }
 
+    private void configTableAchats() {
+        if (col_ach_fourn_nom == null || col_ach_prod_produit == null || col_ach_mois_periode == null) {
+            return;
+        }
+        col_ach_fourn_nom.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().nom()));
+        col_ach_fourn_adresse.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().adresse()));
+        col_ach_fourn_phone.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().phone()));
+        col_ach_fourn_nb.setCellValueFactory(param -> new SimpleDoubleProperty(param.getValue().nbLivraisons()));
+        col_ach_fourn_montant.setCellValueFactory(param -> new SimpleStringProperty(
+                Util.toPlain(scale(param.getValue().montant())) + " " + devise));
+
+        col_ach_prod_codebar.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().codebar()));
+        col_ach_prod_produit.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().produit()));
+        col_ach_prod_quantite.setCellValueFactory(param -> new SimpleStringProperty(
+                Util.toPlain(scale(param.getValue().quantite())) + " " + param.getValue().unite()));
+        col_ach_prod_unite.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().unite()));
+        col_ach_prod_montant.setCellValueFactory(param -> new SimpleStringProperty(
+                Util.toPlain(scale(param.getValue().montant())) + " " + devise));
+
+        col_ach_mois_periode.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().periode()));
+        col_ach_mois_nb.setCellValueFactory(param -> new SimpleDoubleProperty(param.getValue().nbLivraisons()));
+        col_ach_mois_montant.setCellValueFactory(param -> new SimpleStringProperty(
+                Util.toPlain(scale(param.getValue().montant())) + " " + devise));
+
+        searchAchFourn.textProperty()
+                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                    if (newValue == null || newValue.isBlank()) {
+                        tb_ach_fourn.setItems(achatFournisseur);
+                        return;
+                    }
+                    ObservableList<PurchaseBySupplier> rsult = FXCollections.observableArrayList();
+                    for (PurchaseBySupplier p : achatFournisseur) {
+                        String q = p.nom() + " " + p.adresse() + " " + p.phone();
+                        if (q.toUpperCase().contains(newValue.toUpperCase())) {
+                            rsult.add(p);
+                        }
+                    }
+                    tb_ach_fourn.setItems(rsult);
+                });
+        searchAchProd.textProperty()
+                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                    if (newValue == null || newValue.isBlank()) {
+                        tb_ach_prod.setItems(achatProduit);
+                        return;
+                    }
+                    ObservableList<PurchaseByProduct> rsult = FXCollections.observableArrayList();
+                    for (PurchaseByProduct p : achatProduit) {
+                        String q = p.codebar() + " " + p.produit() + " " + p.unite();
+                        if (q.toUpperCase().contains(newValue.toUpperCase())) {
+                            rsult.add(p);
+                        }
+                    }
+                    tb_ach_prod.setItems(rsult);
+                });
+        searchAchMois.textProperty()
+                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                    if (newValue == null || newValue.isBlank()) {
+                        tb_ach_mois.setItems(achatMois);
+                        return;
+                    }
+                    ObservableList<PurchaseByMonth> rsult = FXCollections.observableArrayList();
+                    for (PurchaseByMonth p : achatMois) {
+                        String q = p.periode();
+                        if (q.toUpperCase().contains(newValue.toUpperCase())) {
+                            rsult.add(p);
+                        }
+                    }
+                    tb_ach_mois.setItems(rsult);
+                });
+
+        if (rbAchDepot != null) {
+            rbAchDepot.selectedProperty()
+                    .addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+                        achatSourceDepot = newValue != null && newValue;
+                        loadPurchaseReports();
+                    });
+        }
+    }
+
+    private void configTableDepenses() {
+        if (col_dep_imputation == null || col_dep_usd == null || col_dep_cdf == null) {
+            return;
+        }
+        col_dep_imputation.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().imputation()));
+        col_dep_usd.setCellValueFactory(param -> new SimpleDoubleProperty(param.getValue().montantUsd()));
+        col_dep_cdf.setCellValueFactory(param -> new SimpleDoubleProperty(param.getValue().montantCdf()));
+
+        if (searchDep != null) {
+            searchDep.textProperty()
+                    .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                        if (newValue == null || newValue.isBlank()) {
+                            tb_depenses.setItems(depensesParImputation);
+                            return;
+                        }
+                        ObservableList<ExpenseByImputation> rsult = FXCollections.observableArrayList();
+                        for (ExpenseByImputation d : depensesParImputation) {
+                            String q = d.imputation();
+                            if (q.toUpperCase().contains(newValue.toUpperCase())) {
+                                rsult.add(d);
+                            }
+                        }
+                        tb_depenses.setItems(rsult);
+                    });
+        }
+    }
+
+    private void loadExpenseReports() {
+        loadExpenseReports(detectRegion(role));
+    }
+
+    private void loadExpenseReports(String region) {
+        LocalDate d1 = dpk_debut_report.getValue();
+        LocalDate d2 = dpk_fin_report.getValue();
+        if (d1 == null || d2 == null) {
+            return;
+        }
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        Executors.newSingleThreadExecutor()
+                .submit(() -> {
+                    List<ExpenseByImputation> items = DataCache.getOrLoad(
+                            "report-expense-imputation-" + d1 + "-" + d2 + "-" + usedRegion,
+                            () -> RepportDelegate.findExpenseReportByImputation(d1, d2, usedRegion));
+                    Platform.runLater(() -> {
+                        if (depensesParImputation != null) {
+                            depensesParImputation.setAll(items == null ? List.of() : items);
+                        }
+                        updateExpenseTotals();
+                    });
+                });
+    }
+
+    private void updateExpenseTotals() {
+        if (totalDepenses == null) {
+            return;
+        }
+        double totalUsd = 0;
+        double totalCdf = 0;
+        for (ExpenseByImputation d : depensesParImputation) {
+            totalUsd += d.montantUsd();
+            totalCdf += d.montantCdf();
+        }
+        totalDepenses.setText("Depenses total : " + Util.toPlain(scale(totalUsd)) + " USD, "
+                + Util.toPlain(scale(totalCdf)) + " CDF");
+    }
+
+    private String expenseReportTitle(String libelle) {
+        String r = detectRegion(role).equals("%") ? "Toute succursale" : detectRegion(role);
+        LocalDate d1 = dpk_debut_report.getValue();
+        LocalDate d2 = dpk_fin_report.getValue();
+        return libelle + " - " + r + " du " + d1 + " au " + d2;
+    }
+
+    @FXML
+    public void exportExpenses(Event event) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<ExpenseByImputation> items = new ArrayList<>(tb_depenses.getItems());
+                    if (items.isEmpty()) {
+                        Platform.runLater(() -> MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "error"));
+                        return;
+                    }
+                    File xlsrep = Util.exportXlsExpenseByImputation(items,
+                            expenseReportTitle("Rapport des depenses par imputation"));
+                    if (xlsrep != null) {
+                        Desktop.getDesktop().open(xlsrep);
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }).start();
+    }
+
+    private void loadPurchaseReports() {
+        loadPurchaseReports(detectRegion(role));
+    }
+
+    private void loadPurchaseReports(String region) {
+        LocalDate d1 = dpk_debut_report.getValue();
+        LocalDate d2 = dpk_fin_report.getValue();
+        if (d1 == null || d2 == null) {
+            return;
+        }
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        Executors.newSingleThreadExecutor()
+                .submit(() -> {
+                    List<PurchaseBySupplier> fourn = DataCache.getOrLoad(
+                            "report-purchase-fourn-" + d1 + "-" + d2 + "-" + usedRegion,
+                            () -> RepportDelegate.findPurchasesBySupplier(d1, d2, usedRegion));
+                    List<PurchaseByProduct> prods = DataCache.getOrLoad(
+                            "report-purchase-prod-" + (achatSourceDepot ? "depot" : "pdv") + "-" + d1 + "-" + d2 + "-" + usedRegion,
+                            () -> achatSourceDepot
+                                    ? RepportDelegate.findPurchasesByProduct(d1, d2, usedRegion)
+                                    : RepportDelegate.findRequisitionPurchasesByProduct(d1, d2, usedRegion));
+                    List<PurchaseByMonth> mois = DataCache.getOrLoad(
+                            "report-purchase-mois-" + d1 + "-" + d2 + "-" + usedRegion,
+                            () -> RepportDelegate.findPurchasesByMonth(d1, d2, usedRegion));
+                    Platform.runLater(() -> {
+                        if (achatFournisseur != null) {
+                            achatFournisseur.setAll(fourn == null ? List.of() : fourn);
+                        }
+                        if (achatProduit != null) {
+                            achatProduit.setAll(prods == null ? List.of() : prods);
+                        }
+                        if (achatMois != null) {
+                            achatMois.setAll(mois == null ? List.of() : mois);
+                        }
+                        updatePurchaseTotals();
+                    });
+                });
+    }
+
+    private void updatePurchaseTotals() {
+        double totalFourn = 0;
+        for (PurchaseBySupplier p : achatFournisseur) {
+            totalFourn += p.montant();
+        }
+        if (totalAchFourn != null) {
+            totalAchFourn.setText("Achats total : " + Util.toPlain(scale(totalFourn)) + " " + devise);
+        }
+        double totalProd = 0;
+        for (PurchaseByProduct p : achatProduit) {
+            totalProd += p.montant();
+        }
+        if (totalAchProd != null) {
+            totalAchProd.setText("Achats total : " + Util.toPlain(scale(totalProd)) + " " + devise);
+        }
+        double totalMois = 0;
+        for (PurchaseByMonth p : achatMois) {
+            totalMois += p.montant();
+        }
+        if (totalAchMois != null) {
+            totalAchMois.setText("Achats total : " + Util.toPlain(scale(totalMois)) + " " + devise);
+        }
+    }
+
+    private String purchaseReportTitle(String libelle) {
+        String r = detectRegion(role).equals("%") ? "Toute succursale" : detectRegion(role);
+        LocalDate d1 = dpk_debut_report.getValue();
+        LocalDate d2 = dpk_fin_report.getValue();
+        return libelle + " - " + r + " du " + d1 + " au " + d2;
+    }
+
+    @FXML
+    public void exportAchFourn(Event event) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<PurchaseBySupplier> items = new ArrayList<>(tb_ach_fourn.getItems());
+                    if (items.isEmpty()) {
+                        Platform.runLater(() -> MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "error"));
+                        return;
+                    }
+                    File xlsrep = Util.exportXlsPurchasesBySupplier(items,
+                            purchaseReportTitle("Rapport des achats par fournisseur"));
+                    if (xlsrep != null) {
+                        Desktop.getDesktop().open(xlsrep);
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }).start();
+    }
+
+    @FXML
+    public void exportAchProd(Event event) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<PurchaseByProduct> items = new ArrayList<>(tb_ach_prod.getItems());
+                    if (items.isEmpty()) {
+                        Platform.runLater(() -> MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "error"));
+                        return;
+                    }
+                    File xlsrep = Util.exportXlsPurchasesByProduct(items,
+                            purchaseReportTitle("Rapport des achats par produit (" + (achatSourceDepot ? "Dépôt" : "Point de vente") + ")"));
+                    if (xlsrep != null) {
+                        Desktop.getDesktop().open(xlsrep);
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }).start();
+    }
+
+    @FXML
+    public void exportAchMois(Event event) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<PurchaseByMonth> items = new ArrayList<>(tb_ach_mois.getItems());
+                    if (items.isEmpty()) {
+                        Platform.runLater(() -> MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "error"));
+                        return;
+                    }
+                    File xlsrep = Util.exportXlsPurchasesByMonth(items,
+                            purchaseReportTitle("Rapport des achats par mois"));
+                    if (xlsrep != null) {
+                        Desktop.getDesktop().open(xlsrep);
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }).start();
+    }
+
     public void setup(Entreprise entr, Kazisafe kazi) {
         this.kazisafe = kazi;
         this.entreprise = entr;
@@ -579,6 +972,10 @@ public class RepportController implements Initializable {
         ventePr = FXCollections.observableArrayList();
         ventePerCategory = FXCollections.observableArrayList();
         ventePerClient = FXCollections.observableArrayList();
+        achatFournisseur = FXCollections.observableArrayList();
+        achatProduit = FXCollections.observableArrayList();
+        achatMois = FXCollections.observableArrayList();
+        depensesParImputation = FXCollections.observableArrayList();
         immobilisations = FXCollections.observableArrayList();
         lsoperations = FXCollections.observableArrayList();
         ltxt_result_reporterie = FXCollections.observableArrayList();
@@ -592,6 +989,20 @@ public class RepportController implements Initializable {
         tb_cat_report.setItems(ventePerCategory);
         clt_tbreport.setItems(ventePerClient);
         tb_immobilisations.setItems(immobilisations);
+        if (tb_ach_fourn != null) {
+            tb_ach_fourn.setItems(achatFournisseur);
+        }
+        if (tb_ach_prod != null) {
+            tb_ach_prod.setItems(achatProduit);
+        }
+        if (tb_ach_mois != null) {
+            tb_ach_mois.setItems(achatMois);
+        }
+        if (tb_depenses != null) {
+            tb_depenses.setItems(depensesParImputation);
+        }
+        configTableAchats();
+        configTableDepenses();
 
         searchRelv2.textProperty()
                 .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
@@ -665,15 +1076,34 @@ public class RepportController implements Initializable {
                         return;
                     }
                     region = newValue;
+                    LocalDate rDebut = dpk_debut_report.getValue();
+                    LocalDate rFin = dpk_fin_report.getValue();
                     loadFinancialStatements();
                     Executors.newSingleThreadExecutor()
                             .submit(() -> {
-                                List<SaleReport> rps = rapporterParProduit(dpk_debut_report.getValue(),
-                                        dpk_fin_report.getValue(), newValue);
+                                List<SaleReport> rps = rapporterParProduit(rDebut, rFin, newValue);
+                                List<SaleReport> rcs = DataCache.getOrLoad(
+                                        "report-sale-per-category-" + rDebut + "-" + rFin + "-" + newValue,
+                                        () -> RepportDelegate.findSaleReportPerCategory(rDebut, rFin, newValue));
+                                List<VenteReporter> rcsCli = rapporterParClient(rDebut, rFin, newValue);
+                                List<RecentSale> recents = DataCache.getOrLoad(
+                                        "report-recent-sales-" + newValue,
+                                        () -> RepportDelegate.findRecentSales(newValue));
                                 Platform.runLater(() -> {
-                                    tbreport.setItems(FXCollections.observableArrayList(rps));
+                                    ventePr.setAll(rps);
+                                    ventePerCategory.setAll(rcs);
+                                    if (rcsCli != null) {
+                                        ventePerClient.setAll(rcsCli);
+                                    } else {
+                                        ventePerClient.clear();
+                                    }
+                                     updateTotalSaleperCli();
+                                    recentSales.setItems(FXCollections.observableArrayList(recents));
                                 });
                             });
+                    loadPurchaseReports(newValue);
+                    loadExpenseReports(newValue);
+                    summarise();
                 });
         dpk_debut_report.valueProperty().addListener(
                 (ObservableValue<? extends LocalDate> observable, LocalDate oldValue, LocalDate newValue) -> {
@@ -681,6 +1111,8 @@ public class RepportController implements Initializable {
                     summarise();
                     refreshFinancialColumnHeaders();
                     loadFinancialStatements();
+                    loadPurchaseReports();
+                    loadExpenseReports();
                 });
         dpk_fin_report.valueProperty().addListener(
                 (ObservableValue<? extends LocalDate> observable, LocalDate oldValue, LocalDate newValue) -> {
@@ -688,6 +1120,8 @@ public class RepportController implements Initializable {
                     summarise();
                     refreshFinancialColumnHeaders();
                     loadFinancialStatements();
+                    loadPurchaseReports();
+                    loadExpenseReports();
                 });
         dpk_debut_report.setValue(LocalDate.now().withDayOfYear(1));
         dpk_fin_report.setValue(LocalDate.of(LocalDate.now().getYear(), 12, 31));
@@ -695,6 +1129,8 @@ public class RepportController implements Initializable {
         evaluate();
         ponctuel();
         summarise();
+        loadPurchaseReports();
+        loadExpenseReports();
         loadImmobilisations();
         loadFinancialStatements();
         if (entr == null) {
@@ -935,6 +1371,22 @@ public class RepportController implements Initializable {
                 () -> RepportDelegate.findSaleReportPerProduct(debut, fin, usedRegion));
     }
 
+    private List<VenteReporter> rapporterParClient(LocalDate debut, LocalDate fin, String region) {
+        String usedRegion = region == null ? detectRegion(role) : region;
+        return DataCache.getOrLoad(
+                "report-sale-per-client-" + debut + "-" + fin + "-" + usedRegion,
+                () -> RepportDelegate.findReportSaleByClient(debut, fin, usedRegion, devise));
+    }
+
+    private void updateTotalSaleperCli() {
+        double total = 0;
+        for (VenteReporter vpr : ventePerClient) {
+            total += vpr.getChiffre();
+        }
+        totalSaleperCli.setText(" Vente :" + Util.toPlain(BigDecimal.valueOf(total)
+                .setScale(2, RoundingMode.HALF_EVEN).doubleValue()) + " " + devise);
+    }
+
     private boolean isPeriodInList(List<Periode> listp, Periode p) {
         for (Periode periode : listp) {
             if (periode.getComment().equals(p.getComment())
@@ -966,27 +1418,38 @@ public class RepportController implements Initializable {
 
                     LocalDate date1 = dpk_debut_report.getValue();
                     LocalDate date2 = dpk_fin_report.getValue();
-                    double venteLeo = RepportDelegate.chiffreDaffaire(date1, date2, detectRegion(role));
-                    double chargeLeo = RepportDelegate.chargeVariable(date1, date2, detectRegion(role));
+                    String regionKey = detectRegion(role);
+                    double venteLeo = DataCache.getOrLoad(
+                            "report-ca-" + date1 + "-" + date2 + "-" + regionKey,
+                            () -> RepportDelegate.chiffreDaffaire(date1, date2, regionKey));
+                    double chargeLeo = DataCache.getOrLoad(
+                            "report-cv-" + date1 + "-" + date2 + "-" + regionKey,
+                            () -> RepportDelegate.chargeVariable(date1, date2, regionKey));
                     double sum = BigDecimal.valueOf(venteLeo).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
                     LocalDate[] dateCA = previousPeriodOf(date1, date2);
-                    double venteJana = RepportDelegate.chiffreDaffaire(dateCA[0], dateCA[1], detectRegion(role));
+                    double venteJana = DataCache.getOrLoad(
+                            "report-ca-" + dateCA[0] + "-" + dateCA[1] + "-" + regionKey,
+                            () -> RepportDelegate.chiffreDaffaire(dateCA[0], dateCA[1], regionKey));
                     double progres = ((venteLeo - venteJana) / venteJana) * 100;
 
-                    double chargeJana = RepportDelegate.chargeVariable(dateCA[0], dateCA[1], detectRegion(role));
+                    double chargeJana = DataCache.getOrLoad(
+                            "report-cv-" + dateCA[0] + "-" + dateCA[1] + "-" + regionKey,
+                            () -> RepportDelegate.chargeVariable(dateCA[0], dateCA[1], regionKey));
                     double progresCV = ((chargeLeo - chargeJana) / chargeJana) * 100;
 
                     double resultLeo = (venteLeo - chargeLeo);
                     double resultJana = (venteJana - chargeJana);
                     double progresLeo = ((resultLeo - resultJana) / resultJana) * 100;
 
-                    String regionKey = detectRegion(role);
                     List<SaleReport> reports = DataCache.getOrLoad(
                             "report-sale-per-product-" + date1 + "-" + date2 + "-" + regionKey,
                             () -> RepportDelegate.findSaleReportPerProduct(date1, date2, regionKey));
                     List<SaleReport> repcats = DataCache.getOrLoad(
                             "report-sale-per-category-" + date1 + "-" + date2 + "-" + regionKey,
                             () -> RepportDelegate.findSaleReportPerCategory(date1, date2, regionKey));
+                    List<VenteReporter> repclis = DataCache.getOrLoad(
+                            "report-sale-per-client-" + date1 + "-" + date2 + "-" + regionKey,
+                            () -> RepportDelegate.findReportSaleByClient(date1, date2, regionKey, devise));
 
                     Platform.runLater(() -> {
                         comment(lbl_comment_CA, img_indic_CA, progres);
@@ -994,6 +1457,12 @@ public class RepportController implements Initializable {
                         comment(lbl_comment_CV, img_indic_CV, progresCV);
                         ventePr.setAll(reports);
                         ventePerCategory.setAll(repcats);
+                        if (repclis != null) {
+                            ventePerClient.setAll(repclis);
+                        } else {
+                            ventePerClient.clear();
+                        }
+                        updateTotalSaleperCli();
                         totalSalePerPro.setText(" Vente :" + Util.toPlain(sum) + " " + devise + ","
                                 + " Cout :" + Util.toPlain(BigDecimal.valueOf(chargeLeo)
                                         .setScale(2, RoundingMode.HALF_EVEN).doubleValue())
@@ -1101,6 +1570,7 @@ public class RepportController implements Initializable {
             summarise();
             refreshFinancialColumnHeaders();
             loadFinancialStatements();
+            loadPurchaseReports();
         }
     }
 
@@ -1400,7 +1870,7 @@ public class RepportController implements Initializable {
 
     @FXML
     private void refreshFinancialStates() {
-        loadFinancialStatements();
+        loadFinancialStatements(true);
     }
 
     @FXML
@@ -1409,7 +1879,7 @@ public class RepportController implements Initializable {
         MainUI.notify(null, "Etats financiers",
                 "Recalcul des agrégats financiers lancé pour "
                 + ("%".equals(usedRegion) ? "toutes les régions autorisées" : usedRegion) + ".", 3, "info");
-        loadFinancialStatements();
+        loadFinancialStatements(true);
     }
 
     @FXML
@@ -1438,6 +1908,10 @@ public class RepportController implements Initializable {
     }
 
     private void loadFinancialStatements() {
+        loadFinancialStatements(false);
+    }
+
+    private void loadFinancialStatements(boolean force) {
         LocalDate d1 = dpk_debut_report.getValue() == null ? LocalDate.now().withDayOfMonth(1)
                 : dpk_debut_report.getValue();
         LocalDate d2 = dpk_fin_report.getValue() == null ? LocalDate.now() : dpk_fin_report.getValue();
@@ -1450,6 +1924,14 @@ public class RepportController implements Initializable {
         final LocalDate statementEnd = d2;
         String usedRegion = selectedFinancialRegion();
         int span = financialHistorySpan;
+        String cacheKey = "report-financial-" + span + "-" + statementStart + "-" + statementEnd + "-" + usedRegion;
+        if (!force) {
+            FinancialReportCache cached = DataCache.get(cacheKey);
+            if (cached != null) {
+                applyFinancialData(cached);
+                return;
+            }
+        }
         Executors.newSingleThreadExecutor().submit(() -> {
             try {
                 List<FinancialStatementRow> bilan;
@@ -1483,31 +1965,9 @@ public class RepportController implements Initializable {
                             FinancialStatementAgregateService.STATEMENT_FLUX_TRESORERIE, anchorYear, span, usedRegion);
                 }
 
-                List<FinancialStatementRow> finalBilan = bilan;
-                List<FinancialStatementRow> finalCompte = compte;
-                List<FinancialStatementRow> finalFlux = flux;
-                List<FinancialRowModel> pivotBilanRows = buildDynamicFinancialRows("Bilan", finalBilan, pivotHeaders.size());
-                List<FinancialRowModel> pivotCompteRows = buildDynamicFinancialRows("Compte de résultat", finalCompte, pivotHeaders.size());
-                List<FinancialRowModel> pivotFluxRows = buildDynamicFinancialRows("Flux de trésorerie", finalFlux, pivotHeaders.size());
-                final List<String> finalPivotHeaders = pivotHeaders;
-                final List<FinancialRowModel> finalPivotBilanRows = pivotBilanRows;
-                final List<FinancialRowModel> finalPivotCompteRows = pivotCompteRows;
-                final List<FinancialRowModel> finalPivotFluxRows = pivotFluxRows;
-
-                Platform.runLater(() -> {
-                    bilanRows.setAll(finalBilan);
-                    compteResultatRows.setAll(finalCompte);
-                    fluxRows.setAll(finalFlux);
-                    if (tb_fin_pivot_bilan != null) {
-                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_bilan, finalPivotHeaders, finalPivotBilanRows);
-                    }
-                    if (tb_fin_pivot_cr != null) {
-                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_cr, finalPivotHeaders, finalPivotCompteRows);
-                    }
-                    if (tb_fin_pivot_flux != null) {
-                        FinancialTableBinder.bindWithHeaders(tb_fin_pivot_flux, finalPivotHeaders, finalPivotFluxRows);
-                    }
-                });
+                FinancialReportCache data = new FinancialReportCache(bilan, compte, flux, pivotHeaders);
+                DataCache.put(cacheKey, data);
+                applyFinancialData(data);
             } catch (Exception ex) {
                 Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE,
                         "Erreur de chargement des états financiers", ex);
@@ -1515,6 +1975,41 @@ public class RepportController implements Initializable {
                         "Impossible de générer les états financiers sur cette période", 4, "error"));
             }
         });
+    }
+
+    private void applyFinancialData(FinancialReportCache data) {
+        List<FinancialRowModel> pivotBilanRows = buildDynamicFinancialRows("Bilan", data.bilan, data.pivotHeaders.size());
+        List<FinancialRowModel> pivotCompteRows = buildDynamicFinancialRows("Compte de résultat", data.compte, data.pivotHeaders.size());
+        List<FinancialRowModel> pivotFluxRows = buildDynamicFinancialRows("Flux de trésorerie", data.flux, data.pivotHeaders.size());
+        Platform.runLater(() -> {
+            bilanRows.setAll(data.bilan);
+            compteResultatRows.setAll(data.compte);
+            fluxRows.setAll(data.flux);
+            if (tb_fin_pivot_bilan != null) {
+                FinancialTableBinder.bindWithHeaders(tb_fin_pivot_bilan, data.pivotHeaders, pivotBilanRows);
+            }
+            if (tb_fin_pivot_cr != null) {
+                FinancialTableBinder.bindWithHeaders(tb_fin_pivot_cr, data.pivotHeaders, pivotCompteRows);
+            }
+            if (tb_fin_pivot_flux != null) {
+                FinancialTableBinder.bindWithHeaders(tb_fin_pivot_flux, data.pivotHeaders, pivotFluxRows);
+            }
+        });
+    }
+
+    private static final class FinancialReportCache {
+        final List<FinancialStatementRow> bilan;
+        final List<FinancialStatementRow> compte;
+        final List<FinancialStatementRow> flux;
+        final List<String> pivotHeaders;
+
+        FinancialReportCache(List<FinancialStatementRow> bilan, List<FinancialStatementRow> compte,
+                List<FinancialStatementRow> flux, List<String> pivotHeaders) {
+            this.bilan = bilan;
+            this.compte = compte;
+            this.flux = flux;
+            this.pivotHeaders = pivotHeaders;
+        }
     }
 
     private List<Integer> financialPivotYears(LocalDate statementEnd, int span) {

@@ -21,6 +21,7 @@ import jakarta.persistence.TemporalType;
 import data.Mesure;
 import data.Recquisition;
 import data.RetourMagasin;
+import data.SaleAgregate;
 import data.Vente;
 import delegates.RecquisitionDelegate;
 import jakarta.persistence.EntityNotFoundException;
@@ -56,6 +57,49 @@ public class VenteService implements VenteStorage {
 
     public VenteService() {
         // initializing...
+    }
+
+    /**
+     * Persiste la vente, ses lignes et les métriques (sale_agregate) dans UNE
+     * seule transaction JPA. Toute erreur provoque un rollback global : il est
+     * donc impossible qu'un agrégat de vente soit enregistré sans sa vente
+     * (ou l'inverse). Fonctionne dans les deux modes : en SQLite, la tâche est
+     * exécutée par la file d'écriture dans une transaction unique ; en MySQL,
+     * une seule transaction est ouverte sur l'EntityManager du thread.
+     *
+     * @param vente      la vente à créer ou à mettre à jour (observation déjà finalisée)
+     * @param lignes     les lignes (parts issues du lot-splitting) à insérer
+     * @param metrics    les agrégats "ventes du jour" à insérer
+     * @param updateMode true si la vente existe déjà (merge), false sinon (persist)
+     * @param oldLines   en mode mise à jour, les anciennes lignes à supprimer
+     */
+    public static Vente saveSaleAtomically(Vente vente, List<LigneVente> lignes,
+            List<SaleAgregate> metrics, boolean updateMode, List<LigneVente> oldLines) {
+        List<LigneVente> olds = oldLines == null ? Collections.emptyList() : oldLines;
+        List<LigneVente> toInsert = lignes == null ? Collections.emptyList() : lignes;
+        List<SaleAgregate> toMetric = metrics == null ? Collections.emptyList() : metrics;
+        Vente saved = ManagedSessionFactory.executeWrite(em -> {
+            Vente managed;
+            if (updateMode) {
+                managed = em.merge(vente);
+                for (LigneVente lv : olds) {
+                    em.remove(em.merge(lv));
+                }
+            } else {
+                em.persist(vente);
+                managed = vente;
+            }
+            for (LigneVente lv : toInsert) {
+                lv.setReference(managed);
+                em.persist(lv);
+            }
+            for (SaleAgregate m : toMetric) {
+                em.persist(m);
+            }
+            return managed;
+        });
+        AggregateTriggerService.getInstance().notifyVente(saved);
+        return saved;
     }
 
     @Override

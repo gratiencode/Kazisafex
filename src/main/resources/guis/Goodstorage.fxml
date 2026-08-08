@@ -16,6 +16,8 @@
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TreeTableColumn?>
+<?import javafx.scene.control.TreeTableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.effect.DropShadow?>
 <?import javafx.scene.image.Image?>
@@ -249,6 +251,10 @@
           </Tab>
           <Tab fx:id="tab_destock" text="%xstock_out">
             <content>
+              <TabPane fx:id="tabpane_dstk" style="-fx-background-color: white; -fx-background-radius: 12;" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+              <Tab text="%xdestockage_list">
+                <content>
               <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="545.0" prefWidth="1242.0">
                      <children>
                         <Pane prefHeight="543.0" prefWidth="1242.0" />
@@ -420,8 +426,67 @@
                         </AnchorPane>
                      </children>
                   </AnchorPane>
-              </content>
-            </Tab>
+                </content>
+              </Tab>
+              <Tab text="%xrapport_par_ref">
+                <content>
+                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="545.0" prefWidth="1242.0">
+                     <children>
+                        <Pane prefHeight="543.0" prefWidth="1242.0" style="-fx-background-color: white;" />
+                        <AnchorPane layoutX="1.0" layoutY="1.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+                           <children>
+                              <TreeTableView fx:id="tree_dstk_ref" layoutX="34.0" layoutY="150.0" prefHeight="300.0" prefWidth="1182.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="80.0" AnchorPane.leftAnchor="6.0" AnchorPane.rightAnchor="7.0" AnchorPane.topAnchor="150.0">
+                                 <columns>
+                                    <TreeTableColumn fx:id="trcol_dstk_ref" minWidth="0.0" prefWidth="150.0" text="%xreference" />
+                                    <TreeTableColumn fx:id="trcol_dstk_date" minWidth="0.0" prefWidth="130.0" text="%xlbl.date" />
+                                    <TreeTableColumn fx:id="trcol_dstk_produits" minWidth="3.0" prefWidth="270.0" text="%xcol.nom_produit" />
+                                    <TreeTableColumn fx:id="trcol_dstk_quantite" minWidth="3.0" prefWidth="120.0" text="%xcol.quantite" />
+                                    <TreeTableColumn fx:id="trcol_dstk_coutachat" minWidth="3.0" prefWidth="120.0" text="%xcout_achat_unitaire" />
+                                    <TreeTableColumn fx:id="trcol_dstk_cout" minWidth="3.0" prefWidth="130.0" text="%xtotal" />
+                                    <TreeTableColumn fx:id="trcol_dstk_destination" minWidth="0.0" prefWidth="150.0" text="%xlbl.destination" />
+                                    <TreeTableColumn fx:id="trcol_dstk_region" minWidth="0.0" prefWidth="150.0" text="%xregions" />
+                                 </columns>
+                                 <columnResizePolicy>
+                                    <TreeTableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                 </columnResizePolicy>
+                              </TreeTableView>
+                              <Label layoutX="400.0" layoutY="38.0" text="%xrapport_par_ref" AnchorPane.topAnchor="38.0">
+                                 <font>
+                                    <Font size="22.0" />
+                                 </font>
+                              </Label>
+                              <Separator layoutX="-1.0" layoutY="79.0" prefHeight="16.0" prefWidth="1220.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                              <Label layoutX="33.0" layoutY="110.0" text="%xdebut" />
+                              <DatePicker fx:id="dpk_dstk_debut" layoutX="82.0" layoutY="106.0" prefHeight="24.0" prefWidth="150.0" promptText="%xdebut" />
+                              <Label layoutX="247.0" layoutY="110.0" text="%xfin" />
+                              <DatePicker fx:id="dpk_dstk_fin" layoutX="286.0" layoutY="106.0" prefHeight="24.0" prefWidth="150.0" promptText="%xfin" />
+                              <Label layoutX="451.0" layoutY="110.0" text="%xregions" />
+                              <ComboBox fx:id="cbx_dstk_region" layoutX="505.0" layoutY="106.0" prefHeight="24.0" prefWidth="170.0" promptText="%xregions" />
+                              <Label layoutX="690.0" layoutY="110.0" text="%xlbl.destination" />
+                              <ComboBox fx:id="cbx_dstk_destination" layoutX="770.0" layoutY="106.0" prefHeight="24.0" prefWidth="170.0" promptText="%xlbl.destination" />
+                              <Pane layoutX="1166.0" layoutY="98.0" prefHeight="40.0" prefWidth="40.0" style="-fx-border-color: #66aaee; -fx-background-radius: 5; -fx-background-color: #ffffff;" AnchorPane.rightAnchor="36.0" AnchorPane.topAnchor="98.0">
+                                 <children>
+                                    <ImageView fx:id="btn_export_dstk_ref" fitHeight="25.0" fitWidth="32.0" layoutX="8.0" layoutY="8.0" nodeOrientation="INHERIT" onMouseClicked="#exportDestockRef" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                       <image>
+                                          <Image url="@../icons/excel.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                 </children>
+                              </Pane>
+                              <Label fx:id="lbl_dstk_ref_total" layoutX="34.0" layoutY="480.0" text="%xtotal" AnchorPane.bottomAnchor="36.0" AnchorPane.leftAnchor="34.0" />
+                           </children>
+                        </AnchorPane>
+                     </children>
+                  </AnchorPane>
+                </content>
+              </Tab>
+                </tabs>
+              </TabPane>
+            </content>
+          </Tab>
             <Tab disable="true" text="%xretour_stock">
               <content>
                 <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" />

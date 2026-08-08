@@ -105,6 +105,10 @@ public class PDFUtils {
         this.xInitPos = xPos;
     }
 
+    public int getYPos() {
+        return yPos;
+    }
+
     public void setFont(PDFont font, float fontSize, Color fontColor) {
         this.font = font;
         this.fontSize = fontSize;

@@ -6,7 +6,11 @@ package delegates;
 
 import IServices.RapportStorage;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javafx.scene.chart.XYChart;
 import tools.ServiceLocator;
 import tools.Tables;
@@ -17,6 +21,10 @@ import data.SaleAgregate;
 import tools.RecentSale;
 import tools.Metric;
 import tools.SaleReport;
+import tools.PurchaseBySupplier;
+import tools.PurchaseByProduct;
+import tools.PurchaseByMonth;
+import tools.ExpenseByImputation;
 
 /**
  *
@@ -79,6 +87,43 @@ public class RepportDelegate {
     public static List<VenteReporter> findReportSaleByClient(LocalDate date1, LocalDate date2, String region,
             String devise) {
         return getStorage().findReportSaleByClient(date1, date2, region, devise);
+    }
+
+    public static List<PurchaseBySupplier> findPurchasesBySupplier(LocalDate date1, LocalDate date2, String region) {
+        return getStorage().findPurchasesBySupplier(date1, date2, region);
+    }
+
+    public static List<PurchaseByProduct> findPurchasesByProduct(LocalDate date1, LocalDate date2, String region) {
+        return getStorage().findPurchasesByProduct(date1, date2, region);
+    }
+
+    public static List<PurchaseByProduct> findRequisitionPurchasesByProduct(LocalDate date1, LocalDate date2, String region) {
+        return getStorage().findRequisitionPurchasesByProduct(date1, date2, region);
+    }
+
+    public static List<PurchaseByMonth> findPurchasesByMonth(LocalDate date1, LocalDate date2, String region) {
+        return getStorage().findPurchasesByMonth(date1, date2, region);
+    }
+
+    public static List<ExpenseByImputation> findExpenseReportByImputation(LocalDate date1, LocalDate date2, String region) {
+        List<data.DepenseAgregate> rows = DepenseAgregateDelegate.findDepenseAgregates(date1, date2, region);
+        if (rows == null || rows.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Map<String, double[]> grouped = new LinkedHashMap<>();
+        for (data.DepenseAgregate row : rows) {
+            if (row == null) {
+                continue;
+            }
+            String imputation = row.getImputation() == null || row.getImputation().isBlank() ? "Divers" : row.getImputation();
+            double[] acc = grouped.computeIfAbsent(imputation, k -> new double[2]);
+            acc[0] += row.getMontantUsd() == null ? 0 : row.getMontantUsd();
+            acc[1] += row.getMontantCdf() == null ? 0 : row.getMontantCdf();
+        }
+        List<ExpenseByImputation> result = new ArrayList<>();
+        grouped.forEach((k, v) -> result.add(new ExpenseByImputation(k, v[0], v[1])));
+        result.sort(Comparator.comparingDouble((ExpenseByImputation e) -> e.montantUsd() + e.montantCdf()).reversed());
+        return result;
     }
 
     public static StockAgregate findCurrentStock(Produit prod, LocalDate today, LocalDate today1) {

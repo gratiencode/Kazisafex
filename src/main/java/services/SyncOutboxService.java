@@ -26,17 +26,42 @@ public class SyncOutboxService {
 
     private static final int MAX_RETRY_COUNT = 5;
 
+    /**
+     * Récupère toutes les outbox PENDING/UNSYNCED (synchronisation complète).
+     */
     public static List<SyncOutbox> fetchAllPendingOutbox() {
-        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED') AND (s.retryCount IS NULL OR s.retryCount < :maxRetry)";
+        return fetchPendingOutboxSince(0L);
+    }
+
+    /**
+     * Récupère les outbox PENDING/UNSYNCED à remonter en tenant compte de
+     * l'ancienneté : seuls les enregistrements créés après {@code sinceEpochMillis}
+     * (dernier timestamp de synchronisation) sont renvoyés. Les enregistrements
+     * déjà en cours de retry (retryCount &gt; 0) sont toujours inclus afin de ne
+     * jamais perdre une mutation rejetée par le serveur. 0 = tout synchroniser.
+     */
+    public static List<SyncOutbox> fetchPendingOutboxSince(long sinceEpochMillis) {
+        final LocalDateTime since;
+        if (sinceEpochMillis > 0) {
+            since = java.time.Instant
+                    .ofEpochMilli(sinceEpochMillis)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDateTime();
+        } else {
+            since = LocalDateTime.MIN;
+        }
+        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED') AND (s.retryCount IS NULL OR s.retryCount < :maxRetry) AND (s.createdAt IS NULL OR s.createdAt > :since OR (s.retryCount IS NOT NULL AND s.retryCount > 0)) ORDER BY s.createdAt ASC";
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, SyncOutbox.class)
                         .setParameter("maxRetry", MAX_RETRY_COUNT)
+                        .setParameter("since", since)
                         .getResultList());
             }
             return ManagedSessionFactory.getEntityManager()
                     .createQuery(jpql, SyncOutbox.class)
                     .setParameter("maxRetry", MAX_RETRY_COUNT)
+                    .setParameter("since", since)
                     .getResultList();
         } catch (Exception e) {
             return java.util.Collections.emptyList();
@@ -708,12 +733,47 @@ public class SyncOutboxService {
             System.out.println("[DOWNSYNC] Materialized " + entityType + " " + record.getEntityId());
             return true;
         } catch (Exception e) {
+            if (isMissingParentException(e)) {
+                // Parent (FK) pas encore matérialisé : condition transitoire et
+                // auto-cicatrisante. On retente au cycle suivant sans loguer
+                // d'erreur fatale en télémetrie.
+                System.out.println("[DOWNSYNC] " + record.getTableName() + " " + record.getEntityId()
+                        + " : parent non encore matérialisé, retenté au prochain cycle.");
+                return false;
+            }
             System.err.println("[DOWNSYNC] Failed to materialize " + record.getTableName()
                     + " " + record.getEntityId() + ": " + e.getMessage());
             SyncLogger.getInstance().log(e, "Downsync materialization failed",
                     record.getTableName(), record.getEntityId());
             return false;
         }
+    }
+
+    /**
+     * Indique si l'échec provient d'un parent (FK) absent ou non matérialisé
+     * localement, quel que soit le type d'entité. Hibernate lève différentes
+     * exceptions selon l'entité et la nature de la référence :
+     * <ul>
+     * <li>{@code EntityNotFoundException} / {@code ObjectNotFoundException} :
+     * référence par identifiant vers une ligne absente (merge de Mesure,
+     * Stocker, LigneVente, PrixDeVente, ...) ;</li>
+     * <li>{@code PropertyValueException} : propriété non-null référençant une
+     * valeur nulle ou transiente ;</li>
+     * <li>{@code TransientObjectException} : référence vers une instance
+     * non persistée (« unsaved transient instance »).</li>
+     * </ul>
+     * Ces conditions sont transitoires : le cycle de synchronisation suivant
+     * matérialisera le parent et l'enregistrement sera retenté.
+     */
+    private static boolean isMissingParentException(Throwable throwable) {
+        for (Throwable t = throwable; t != null; t = t.getCause()) {
+            if (t instanceof jakarta.persistence.EntityNotFoundException
+                    || t instanceof org.hibernate.PropertyValueException
+                    || t instanceof org.hibernate.TransientObjectException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void applyDownsyncMutation(String entityType, String action, String payload) {
@@ -751,6 +811,9 @@ public class SyncOutboxService {
                         em.remove(managed);
                     }
                 } else {
+                    if (entity instanceof data.Produit produit) {
+                        resolveProduitCategory(em, produit);
+                    }
                     em.merge(entity);
                 }
                 return null;
@@ -758,6 +821,49 @@ public class SyncOutboxService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply downsync mutation for " + entityType, e);
         }
+    }
+
+    /**
+     * Un produit sans catégorie se voit attribuer la catégorie par défaut
+     * "Divers" (on vérifie d'abord si elle existe ; sinon on la crée puis on
+     * l'attribue). Une catégorie *référencée* mais non encore matérialisée est
+     * laissée telle quelle : l'ordre de matérialisation (parents avant enfants)
+     * la livrera dans une passe ultérieure.
+     */
+    private static void resolveProduitCategory(EntityManager em, data.Produit produit) {
+        data.Category category = produit.getCategoryId();
+        if (category == null || category.getUid() == null || category.getUid().isBlank()) {
+            produit.setCategoryId(findOrCreateDiversCategory(em));
+        }
+    }
+
+    /** UID déterministe de la catégorie "Divers" de repli (idempotent). */
+    static final String DIVERS_CATEGORY_UID = UUID
+            .nameUUIDFromBytes("kazisafe-default-divers".getBytes())
+            .toString()
+            .replaceAll("-", "");
+
+    private static data.Category findOrCreateDiversCategory(EntityManager em) {
+        try {
+            List<data.Category> cats = em.createQuery(
+                    "SELECT c FROM Category c WHERE LOWER(c.descritption) = LOWER(:name)",
+                    data.Category.class)
+                    .setParameter("name", "Divers")
+                    .setMaxResults(1)
+                    .getResultList();
+            if (!cats.isEmpty()) {
+                return cats.get(0);
+            }
+        } catch (RuntimeException ex) {
+            // Contexte léger (EM incomplet) : on retombe sur l'uid déterministe.
+        }
+        data.Category existing = em.find(data.Category.class, DIVERS_CATEGORY_UID);
+        if (existing != null) {
+            return existing;
+        }
+        data.Category divers = new data.Category(DIVERS_CATEGORY_UID, "Divers");
+        data.Category managed = em.merge(divers);
+        return managed != null ? managed : divers;
     }
 
     /**

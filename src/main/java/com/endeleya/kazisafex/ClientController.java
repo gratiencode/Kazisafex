@@ -412,13 +412,13 @@ public class ClientController implements Initializable {
                 }
             }
         });
-        MenuItem mMerge = new MenuItem(bundle.getString("xbtn.merge_duplicates") != null ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
+        MenuItem mMerge = new MenuItem(bundle.containsKey("xbtn.merge_duplicates") ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
         cm.getItems().add(mMerge);
         mMerge.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
                 Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
-                        bundle.getString("sure2mergeduplicates") != null ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
                         ButtonType.YES, ButtonType.CANCEL);
                 alertdlg.setTitle(bundle.getString("warning"));
                 alertdlg.setHeaderText(null);
@@ -452,7 +452,7 @@ public class ClientController implements Initializable {
                                         savedOrgs.setValue(null);
                                         cbx_clients_parent.setValue(null);
                                         
-                                        String successMsg = bundle.getString("xduplicates_merged_success") != null ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
+                                        String successMsg = bundle.containsKey("xduplicates_merged_success") ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
                                         MainUI.notify(null, "Succès", successMsg + " (" + count + " fusions)", 4, "info");
                                     }
                                 });
@@ -469,7 +469,7 @@ public class ClientController implements Initializable {
                 }
             }
         });
-        MenuItem m3 = new MenuItem(bundle.getString("new") != null ? bundle.getString("new") : "Nouveau");
+        MenuItem m3 = new MenuItem(bundle.containsKey("new") ? bundle.getString("new") : "Nouveau");
         cm.getItems().add(m3);
         m3.setOnAction(new EventHandler<ActionEvent>() {
             @Override
@@ -653,7 +653,7 @@ public class ClientController implements Initializable {
             }
             if (svd != null) {
                 addClientToListSafe(svd);
-                MainUI.notify(null, bundle.getString("success"), bundle.getString("clientsaved"), 4, "info");
+                MainUI.notify(null, bundle.getString("success"), bundle.getString("clientsaved"), 4, "success");
                 // Clear fields
                 tf_adresse_client_.clear();
                 tf_email_client_.clear();
@@ -689,7 +689,7 @@ public class ClientController implements Initializable {
                 if (idx >= 0) {
                     lsclts.set(idx, choosenClient);
                 }
-                MainUI.notify(null, bundle.getString("success"), "Client modifié avec succès", 4, "info");
+                MainUI.notify(null, bundle.getString("success"), "Client modifié avec succès", 4, "success");
                 // Clear fields and selection
                 list_vu_saved_client_.getSelectionModel().clearSelection();
                 choosenClient = null;
@@ -889,14 +889,14 @@ public class ClientController implements Initializable {
         listvu_clients_debt.setItems(lsclts);
         listvu_clients_debt.setCellFactory(list_vu_saved_client_.getCellFactory());
         ContextMenu cmDebt = new ContextMenu();
-        MenuItem mMergeDebt = new MenuItem(bundle.getString("xbtn.merge_duplicates") != null ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
+        MenuItem mMergeDebt = new MenuItem(bundle.containsKey("xbtn.merge_duplicates") ? bundle.getString("xbtn.merge_duplicates") : "Fusionner tous les doublons");
         cmDebt.getItems().add(mMergeDebt);
         listvu_clients_debt.setContextMenu(cmDebt);
         mMergeDebt.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
                 Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
-                        bundle.getString("sure2mergeduplicates") != null ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
                         ButtonType.YES, ButtonType.CANCEL);
                 alertdlg.setTitle(bundle.getString("warning"));
                 alertdlg.setHeaderText(null);
@@ -930,7 +930,7 @@ public class ClientController implements Initializable {
                                         savedOrgs.setValue(null);
                                         cbx_clients_parent.setValue(null);
                                         
-                                        String successMsg = bundle.getString("xduplicates_merged_success") != null ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
+                                        String successMsg = bundle.containsKey("xduplicates_merged_success") ? bundle.getString("xduplicates_merged_success") : "Doublons fusionnés avec succès !";
                                         MainUI.notify(null, "Succès", successMsg + " (" + count + " fusions)", 4, "info");
                                     }
                                 });

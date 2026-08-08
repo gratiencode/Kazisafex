@@ -216,17 +216,32 @@ public final class ChatHtmlTemplate {
                text-align: left;
                vertical-align: top;
            }
-           .barcode-img {
-               display: block;
-               width: 180px;
-               max-width: 100%;
-               height: auto;
-               padding: 4px;
-               background: #ffffff;
-               border: 1px solid rgba(18, 32, 58, 0.12);
-               border-radius: 4px;
-           }
-           .attachment-line {
+            .barcode-img {
+                display: block;
+                width: 180px;
+                max-width: 100%;
+                height: auto;
+                padding: 4px;
+                background: #ffffff;
+                border: 1px solid rgba(18, 32, 58, 0.12);
+                border-radius: 4px;
+            }
+            .report-logo {
+                display: inline-block;
+                width: 56px;
+                height: 56px;
+                object-fit: contain;
+                padding: 2px;
+                background: #ffffff;
+                border: 1px solid rgba(18, 32, 58, 0.12);
+                border-radius: 50%;
+                vertical-align: middle;
+                margin-right: 8px;
+            }
+            body.dark .report-logo {
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+            .attachment-line {
                display: block;
                margin-top: 8px;
                color: inherit;
@@ -265,13 +280,14 @@ public final class ChatHtmlTemplate {
                });
            }
 
-           function renderInline(text) {
-               return escapeHtml(text)
+            function renderInline(text) {
+                return escapeHtml(text)
+                   .replace(/!\\[logo\\]\\((data:image\\/(?:png|jpeg|jpg);base64,[^)]+)\\)/g, '<img class="report-logo" src="$2" alt="logo">')
                    .replace(/!\\[([^\\]]*)\\]\\((data:image\\/(?:png|jpeg|jpg);base64,[^)]+)\\)/g, '<img class="barcode-img" src="$2" alt="$1">')
                    .replace(/`([^`]+)`/g, '<code>$1</code>')
                    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
                    .replace(/\\*([^*]+)\\*/g, '<strong>$1</strong>');
-           }
+            }
 
            function isSeparator(line) {
                return /^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(line);

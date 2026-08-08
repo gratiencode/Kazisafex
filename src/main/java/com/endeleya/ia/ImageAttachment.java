@@ -35,40 +35,53 @@ public final class ImageAttachment {
     public static boolean isImage(File file) {
         String name = file == null ? "" : file.getName().toLowerCase(Locale.ROOT);
         return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg")
-                || name.endsWith(".webp") || name.endsWith(".bmp");
+                || name.endsWith(".gif") || name.endsWith(".webp") || name.endsWith(".bmp");
     }
 
     /**
      * Transforme un fichier image en contenu multimodal compresse. Renvoie null
      * pour les fichiers non-images ou illisibles afin que les workflows puissent
      * ignorer proprement les pieces jointes non exploitables.
+     *
+     * Le MIME est deduit des octets reellement envoyes (et non de l'extension du
+     * fichier d'origine): quand la compression re-encode en JPEG une image
+     * PNG/WebP/BMP trop lourde, l'annoter image/png ou image/webp avec des octets
+     * JPEG fait echouer le decodeur d'image du serveur Ollama, qui ne voit alors
+     * aucune image et l'extraction de facture echoue ("Je n'ai pas pu lire...").
      */
     public static Content imageContent(File file) {
         if (!isImage(file)) {
             return null;
         }
-        String mime = mimeType(file);
         try {
             byte[] bytes = compressToTarget(Files.readAllBytes(file.toPath()));
             return ImageContent.from(Image.builder()
                     .base64Data(Base64.getEncoder().encodeToString(bytes))
-                    .mimeType(mime)
+                    .mimeType(sniffMime(bytes))
                     .build());
         } catch (IOException | RuntimeException ex) {
             return null;
         }
     }
 
-    private static String mimeType(File file) {
-        String name = file.getName().toLowerCase(Locale.ROOT);
-        if (name.endsWith(".png")) {
-            return "image/png";
-        }
-        if (name.endsWith(".webp")) {
-            return "image/webp";
-        }
-        if (name.endsWith(".bmp")) {
-            return "image/bmp";
+    /**
+     * Detecte le type MIME reel depuis les octets de signature (magic bytes)
+     * afin que le type annonce corresponde toujours aux donnees envoyees.
+     */
+    private static String sniffMime(byte[] bytes) {
+        if (bytes != null && bytes.length >= 4) {
+            if ((bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8) {
+                return "image/jpeg";
+            }
+            if ((bytes[0] & 0xFF) == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G') {
+                return "image/png";
+            }
+            if (bytes[0] == 'B' && bytes[1] == 'M') {
+                return "image/bmp";
+            }
+            if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F') {
+                return "image/webp";
+            }
         }
         return "image/jpeg";
     }
@@ -76,8 +89,11 @@ public final class ImageAttachment {
     /**
      * Comprime les octets d'une image sous la taille cible en reduisant d'abord
      * la qualite JPEG a resolution pleine (lisibilite des ecrits), puis en
-     * redimensionnant en dernier recours sans descendre sous 800 px. En cas de
-     * decodage impossible, l'original est conserve plutot que de bloquer.
+     * redimensionnant en dernier recours sans descendre sous 800 px. On renvoie
+     * toujours le plus petit encodage obtenu: si la taille cible n'est pas
+     * atteignable, on ne renvoie jamais une image plus lourde que ce que le
+     * decodeur a pu produire (sinon le serveur Ollama repondrait HTTP 413).
+     * En cas de decodage impossible, l'original est conserve plutot que de bloquer.
      */
     private static byte[] compressToTarget(byte[] original) throws IOException {
         if (original.length <= IMAGE_TARGET_BYTES) {
@@ -88,11 +104,18 @@ public final class ImageAttachment {
             return original;
         }
         BufferedImage current = source;
+        byte[] best = original;
         while (true) {
             for (float quality = 0.9f; quality >= 0.4f; quality -= 0.1f) {
                 byte[] encoded = encodeJpeg(current, quality);
-                if (encoded != null && encoded.length <= IMAGE_TARGET_BYTES) {
+                if (encoded == null) {
+                    continue;
+                }
+                if (encoded.length <= IMAGE_TARGET_BYTES) {
                     return encoded;
+                }
+                if (encoded.length < best.length) {
+                    best = encoded;
                 }
             }
             if (current.getWidth() <= MIN_IMAGE_DIMENSION
@@ -103,7 +126,7 @@ public final class ImageAttachment {
                     Math.max(1, current.getWidth() * 3 / 4),
                     Math.max(1, current.getHeight() * 3 / 4));
         }
-        return original;
+        return best;
     }
 
     private static BufferedImage resize(BufferedImage source, int width, int height) {

@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.prefs.Preferences;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -48,7 +49,8 @@ public final class FinancialStatementPdfExporter {
             PDFUtils pdf = new PDFUtils(document, contentStream);
 
             drawHeader(document, contentStream, pdf, entreprise, title, subtitle, normal, bold, primary, pageW, pageH);
-            
+            drawFooter(contentStream, pdf, normal, primary, pageW, pageH);
+
             boolean includeImmobilisationColumns = hasImmobilisationColumns(rows);
             int dataColumnCount = dataHeaders.size() + (includeImmobilisationColumns ? 3 : 0);
             int[] table = tableWidths(dataHeaders.size(), includeImmobilisationColumns);
@@ -78,6 +80,7 @@ public final class FinancialStatementPdfExporter {
                     pdf = new PDFUtils(document, contentStream);
                     drawHeader(document, contentStream, pdf, entreprise, title, subtitle, normal, bold, primary, pageW,
                             pageH);
+                    drawFooter(contentStream, pdf, normal, primary, pageW, pageH);
                     pdf.addTable(table, 30, 25, pageH - 240);
                     pdf.setFont(normal, headerFontSize, Color.WHITE);
                     pdf.setRightAlignedColumns(rightAligned);
@@ -252,6 +255,21 @@ public final class FinancialStatementPdfExporter {
             builder.append(c);
         }
         return builder + "...";
+    }
+
+    private static void drawFooter(PDPageContentStream contentStream, PDFUtils pdf, PDFont normal, Color primary,
+            int pageW, int pageH) throws IOException {
+        Preferences preferences = Preferences.userNodeForPackage(SyncEngine.class);
+        String userName = preferences.get("operator", preferences.get("uname", "Utilisateur"));
+        String generated = "Établi par : " + PDFUtils.safeText(userName == null ? "" : userName) + "    le "
+                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        pdf.addTextLine(generated, 25, 55, normal, 10, Color.DARK_GRAY);
+        contentStream.setStrokingColor(primary);
+        contentStream.setLineWidth(1);
+        contentStream.moveTo(25, 42);
+        contentStream.lineTo(300, 42);
+        contentStream.stroke();
+        pdf.addTextLine("Signature :", 25, 30, normal, 10, Color.DARK_GRAY);
     }
 
     private static String wrapText(String text, PDFont font, float fontSize, int maxWidth, int maxLines)

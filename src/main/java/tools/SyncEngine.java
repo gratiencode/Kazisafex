@@ -6,6 +6,7 @@ import data.core.KazisafeServiceFactory;
 import data.network.Kazisafe;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.prefs.Preferences;
 import tools.MemoryGuard;
 import java.util.concurrent.Flow;
 import java.util.concurrent.ScheduledExecutorService;
@@ -25,12 +26,45 @@ import services.BackgroundSyncService;
  */
 public class SyncEngine {
 
+    /**
+     * Préférence : timestamp (epoch millis) capturé à la fin de la dernière
+     * synchronisation réussie. L'upsync ne renvoie que les enregistrements
+     * d'outbox dont {@code createdAt} est strictement supérieur à ce
+     * timestamp, afin de ne pas resynchroniser à chaque cycle la même
+     * quantité de données. Valeur 0 (défaut) = synchronisation complète.
+     */
+    public static final String LAST_SYNC_TS_KEY = "lastSyncTimestamp";
+
     private Kazisafe kazisafe;
     ScheduledExecutorService ses;
     SubmissionPublisher<List> publisher = new SubmissionPublisher<>();
     private BackgroundSyncService backgroundSyncService;
 
     private static SyncEngine instance;
+
+    /**
+     * Timestamp (epoch millis) de fin de la dernière synchronisation réussie.
+     * 0 = aucune synchronisation encore réalisée (tout synchroniser).
+     */
+    public static long getLastSyncTimestamp() {
+        return Preferences.userNodeForPackage(SyncEngine.class)
+                .getLong(LAST_SYNC_TS_KEY, 0L);
+    }
+
+    /**
+     * Capture le timestamp de fin de synchronisation. La valeur est
+     * strictement croissante : on ne revient jamais en arrière.
+     */
+    public static void setLastSyncTimestamp(long epochMillis) {
+        if (epochMillis <= 0) {
+            return;
+        }
+        Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
+        long previous = pref.getLong(LAST_SYNC_TS_KEY, 0L);
+        if (epochMillis > previous) {
+            pref.putLong(LAST_SYNC_TS_KEY, epochMillis);
+        }
+    }
 
     public SyncEngine setup(String token) {
         this.kazisafe = KazisafeServiceFactory.createService(token);

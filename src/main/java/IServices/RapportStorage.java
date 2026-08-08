@@ -19,6 +19,9 @@ import java.util.HashMap;
 import java.util.List;
 import javafx.scene.chart.XYChart;
 import tools.Metric;
+import tools.PurchaseByMonth;
+import tools.PurchaseByProduct;
+import tools.PurchaseBySupplier;
 import tools.ResultStatementItem;
 import tools.SaleReport;
 import tools.VenteReporter;
@@ -141,6 +144,14 @@ public interface RapportStorage {
     public List<SaleReport> findSaleReportPerProduct(LocalDate today, LocalDate today1, String region);
 
     public List<SaleReport> findSaleReportPerCategory(LocalDate today, LocalDate today1, String region);
+
+    public List<PurchaseBySupplier> findPurchasesBySupplier(LocalDate d1, LocalDate d2, String region);
+
+    public List<PurchaseByProduct> findPurchasesByProduct(LocalDate d1, LocalDate d2, String region);
+
+    public List<PurchaseByProduct> findRequisitionPurchasesByProduct(LocalDate d1, LocalDate d2, String region);
+
+    public List<PurchaseByMonth> findPurchasesByMonth(LocalDate d1, LocalDate d2, String region);
 
     public StockAgregate findStockFor(Produit prod, LocalDate today, LocalDate otherDay, String region);
 

@@ -6,10 +6,10 @@
     <version>2.0.25-build6</version>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>22</maven.compiler.source>
-        <maven.compiler.target>22</maven.compiler.target>
-        <maven.compiler.release>22</maven.compiler.release>
-        <javafx.version>24.0.1</javafx.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
+        <javafx.version>22.0.2</javafx.version>
         <hikaricp.version>5.1.0</hikaricp.version>
     </properties>
     <dependencies>
@@ -388,6 +388,18 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>com.endeleya.kazisafex.Kazisafex</mainClass>
+                    <!-- Workaround JDK 22.0.1 : le compilateur C1 produit du code
+                    fautif dans org.jboss.jandex.Indexer.parseType (utilise par
+                    Hibernate au demarrage), entrainant un SIGSEGV (exit 139)
+                    pendant la creation du SessionFactory. On force l'interpretation
+                    de toute la classe Indexer (scan unique au demarrage). -->
+                    <options>
+                        <option>--enable-preview</option>
+                        <option>-XX:CompileCommand=exclude,org.jboss.jandex.Indexer::*</option>
+                        <!-- Debordement de pile dans SQLite natif (thread backfill)
+                        pendant la reconstruction des agregats au demarrage. -->
+                        <option>-Xss32m</option>
+                    </options>
                 </configuration>
                 <executions>
                     <execution>
@@ -401,6 +413,7 @@
                         <id>debug</id>
                         <configuration>
                             <options>
+                                <option>-XX:CompileCommand=exclude,org.jboss.jandex.Indexer::*</option>
                                 <option>-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=localhost:8000</option>
                             </options>
                         </configuration>
@@ -410,6 +423,7 @@
                         <id>ide-debug</id>
                         <configuration>
                             <options>
+                                <option>-XX:CompileCommand=exclude,org.jboss.jandex.Indexer::*</option>
                                 <option>-agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address}</option>
                             </options>
                         </configuration>
@@ -419,6 +433,7 @@
                         <id>ide-profile</id>
                         <configuration>
                             <options>
+                                <option>-XX:CompileCommand=exclude,org.jboss.jandex.Indexer::*</option>
                                 <option>${profiler.jvmargs.arg1}</option>
                                 <option>${profiler.jvmargs.arg2}</option>
                                 <option>${profiler.jvmargs.arg3}</option>
@@ -431,25 +446,39 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.4.2</version>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.2</version>
                 <configuration>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                    <archive>
-                        <manifest>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                    <filters>
+                        <!-- Le fat-jar regroupe des dizaines de bibliotheques: il ne peut pas
+                        etre un module coherent. On retire tous les module-info.class
+                        (racine et versions) pour en faire un jar classpath classique.
+                        Sinon le module-info.class d'une dependance (ex: javafx.controls)
+                        ecrase celui du projet et les classes applicatives (ex:
+                        services.BackgroundSyncService) deviennent introuvables. -->
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>module-info.class</exclude>
+                                <exclude>META-INF/versions/*/module-info.class</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                    <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                             <mainClass>com.endeleya.kazisafex.Main</mainClass>
-                        </manifest>
-                    </archive>
+                        </transformer>
+                    </transformers>
                 </configuration>
-
                 <executions>
                     <execution>
                         <id>make-assembly</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>single</goal>
+                            <goal>shade</goal>
                         </goals>
                     </execution>
                 </executions>
@@ -476,8 +505,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <source>22</source>
-                    <target>22</target>
+                    <source>25</source>
+                    <target>25</target>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>jakarta.persistence</groupId>
@@ -502,7 +531,17 @@
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <!-- Remplacez par le nom de votre classe principale réelle si différente -->
+                    <mainClass>com.endeleya.kazisafex.Kazisafex</mainClass>
+        
 
+                </configuration>
+            </plugin>
         </plugins>
 
     </build>

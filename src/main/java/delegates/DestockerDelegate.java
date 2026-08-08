@@ -77,6 +77,10 @@ public class DestockerDelegate {
         return getStorage().findByDateIntervale(date1,date2,region);
     }
 
+    public static List<Destocker> findByDateIntervale(LocalDate date1, LocalDate date2, String region, String destination) {
+        return getStorage().findByDateIntervale(date1,date2,region,destination);
+    }
+
     public static List<Destocker> findByProduit(String uid) {
         return getStorage().findDestockerByProduit(uid);
     }

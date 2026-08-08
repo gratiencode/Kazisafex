@@ -798,7 +798,7 @@ public class ProduitsController implements Initializable {
 
                 }
             }
-            MainUI.notify(null, bundle.getString("success"), bundle.getString("xsuccess_saved"), 3, "info");
+            MainUI.notify(null, bundle.getString("success"), bundle.getString("xsuccess_saved"), 3, "success");
             closeBox(e);
         }).start();
     }

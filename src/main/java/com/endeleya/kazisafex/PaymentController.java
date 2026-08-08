@@ -1425,23 +1425,28 @@ public class PaymentController
                     if (!this.clients.contains(this.client) && this.save2favorite.isSelected()) {
                         this.clients.add(this.client);
                     }
+                    List<LigneVente> saleParts = new ArrayList<>();
+                    List<SaleAgregate> saleMetrics = new ArrayList<>();
+                    Vente vent;
                     if ((vtx = VenteDelegate.findVente(this.vente4save.getUid())) == null) {
-                        Vente vent = VenteDelegate.saveVente(this.vente4save);
                         for (LigneVente ligneVente : this.venteItems) {
-                            this.saveLigneVenteWithLotSplitting(ligneVente, vent, dev, lotAvailablePiecesCache);
+                            this.buildSaleParts(ligneVente, this.vente4save, dev, lotAvailablePiecesCache, saleParts, saleMetrics);
                         }
+                        vent = VenteDelegate.saveSaleAtomically(this.vente4save, saleParts, saleMetrics, false, List.of());
                     } else {
                         List<LigneVente> lvs = LigneVenteDelegate.findByReference(this.vente4save.getUid());
                         System.out.println("Venty " + this.vente4save.getLibelle());
-                        Vente vent = VenteDelegate.updateVente(this.vente4save);
-                        if (!lvs.isEmpty()) {
-                            for (LigneVente lv : lvs) {
-                                LigneVenteDelegate.deleteLigneVente(lv);
-                            }
+                        if (lvs != null && !lvs.isEmpty()) {
                             for (LigneVente i : this.venteItems) {
-                                this.saveLigneVenteWithLotSplitting(i, vent, dev, lotAvailablePiecesCache);
+                                this.buildSaleParts(i, this.vente4save, dev, lotAvailablePiecesCache, saleParts, saleMetrics);
                             }
                         }
+                        vent = VenteDelegate.saveSaleAtomically(this.vente4save, saleParts, saleMetrics, true, lvs);
+                    }
+                    LocalDate leo = LocalDate.now();
+                    for (LigneVente part : saleParts) {
+                        RecquisitionDelegate.fixUndesiredRecqusitionOf(leo, leo, region);
+                        RecquisitionDelegate.rectifyStock(part.getProductId(), leo, leo, region, part.getNumlot());
                     }
                     System.out.println("Ventitem count : " + this.venteItems.size());
                     this.vente4save.setLigneVenteList(this.venteItems);
@@ -2017,7 +2022,7 @@ public class PaymentController
         }
     }
 
-    private void saveLigneVenteWithLotSplitting(LigneVente ligneVente, Vente vente, String dev, Map<String, Double> lotAvailablePiecesCache) {
+    private void buildSaleParts(LigneVente ligneVente, Vente vente, String dev, Map<String, Double> lotAvailablePiecesCache, List<LigneVente> saleParts, List<SaleAgregate> saleMetrics) {
         String meth = this.pref.get("meth", "fifo");
         Produit prod = ligneVente.getProductId();
         Mesure mes = ligneVente.getMesureId();
@@ -2033,7 +2038,7 @@ public class PaymentController
             Available availablePieces = getAvailablePiecesForLot(prod, priorityLot, lotAvailablePiecesCache);
             if (availablePieces.availablePiece() > 0) {
                 double takePieces = Math.min(remainingPieces, availablePieces.availablePiece());
-                recordSplittedPart(ligneVente, availablePieces.coutAchat(), vente, priorityLot, takePieces / factor, dev);
+                recordSplittedPart(ligneVente, availablePieces.coutAchat(), vente, priorityLot, takePieces / factor, dev, saleParts, saleMetrics);
                 consumeFromLotCache(prod, priorityLot, takePieces, lotAvailablePiecesCache);
                 remainingPieces -= takePieces;
             }
@@ -2065,7 +2070,7 @@ public class PaymentController
                 Available availablePieces = getAvailablePiecesForLot(prod, lot, lotAvailablePiecesCache);
                 if (availablePieces.availablePiece() > 0) {
                     double takePieces = Math.min(remainingPieces, availablePieces.availablePiece());
-                    recordSplittedPart(ligneVente, availablePieces.coutAchat(), vente, lot, takePieces / factor, dev);
+                    recordSplittedPart(ligneVente, availablePieces.coutAchat(), vente, lot, takePieces / factor, dev, saleParts, saleMetrics);
                     consumeFromLotCache(prod, lot, takePieces, lotAvailablePiecesCache);
                     remainingPieces -= takePieces;
                 }
@@ -2076,7 +2081,7 @@ public class PaymentController
                 String fallbackLot = (priorityLot != null && !priorityLot.isBlank())
                         ? priorityLot : "INCONNU";
                 double caByPiece = ligneVente.getCoutAchat() / factor;
-                recordSplittedPart(ligneVente, caByPiece, vente, fallbackLot, remainingPieces / factor, dev);
+                recordSplittedPart(ligneVente, caByPiece, vente, fallbackLot, remainingPieces / factor, dev, saleParts, saleMetrics);
             }
         }
 //    
@@ -2116,7 +2121,7 @@ public class PaymentController
         System.out.println("Stock restant lot " + lotLabel + " (" + productName + ") = " + remaining + " pieces");
     }
 
-    private void recordSplittedPart(LigneVente original, double coutAchat, Vente vente, String lot, double qty, String dev) {
+    private void recordSplittedPart(LigneVente original, double coutAchat, Vente vente, String lot, double qty, String dev, List<LigneVente> saleParts, List<SaleAgregate> saleMetrics) {
         LigneVente part = new LigneVente();
         part.setUid(DataId.generateLong());
         // Utiliser des références minimales (id uniquement) évite de propager
@@ -2143,13 +2148,8 @@ public class PaymentController
 //        } else {
         part.setCoutAchat(coutAchat);
 //        }
-        LigneVenteDelegate.saveLigneVente(part);
+        saleParts.add(part);
 
-        // Ne pas déclencher de rectification stock ici pour éviter tout effet de bord
-        // sur les entrées (recquisition) pendant l'enregistrement d'une vente.
-        LocalDate leo = LocalDate.now();
-        RecquisitionDelegate.fixUndesiredRecqusitionOf(leo, leo, region);
-        RecquisitionDelegate.rectifyStock(productRef, leo, leo, region, part.getNumlot());
         // Métrique de vente
         SaleAgregate sa = new SaleAgregate();
         sa.setUid(DataId.generate());
@@ -2163,7 +2163,7 @@ public class PaymentController
         sa.setQuantite(part.getQuantite());
         sa.setRegion(this.region);
         sa.setTotalSaleUsd(dev.equalsIgnoreCase("USD") ? part.getMontantUsd() : part.getMontantCdf());
-        RepportDelegate.createMetric(sa);
+        saleMetrics.add(sa);
     }
 
 }

@@ -1123,7 +1123,7 @@ public class JsonUtil {
      * {@code "deletedAt": null}, {@code "updatedAt": null}, etc.).
      */
     private static LocalDateTime safeLocalDateTime(JsonObject json, String name) {
-        if (json == null || json.isNull(name)) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
             return null;
         }
         try {
@@ -1138,7 +1138,7 @@ public class JsonUtil {
      * propriété est absente, {@code JsonValue.NULL} ou non parsable.
      */
     private static LocalDate safeLocalDate(JsonObject json, String name) {
-        if (json == null || json.isNull(name)) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
             return null;
         }
         try {

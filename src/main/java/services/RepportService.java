@@ -25,6 +25,8 @@ import data.LigneVente;
 import data.Mesure;
 import data.PrixDeVente;
 import data.Produit;
+import data.Livraison;
+import data.Fournisseur;
 import data.StockAgregate;
 import data.Stocker;
 import data.Traisorerie;
@@ -51,6 +53,10 @@ import tools.ResultStatementItem;
 import tools.VenteReporter;
 import tools.Metric;
 import tools.RecentSale;
+import tools.PurchaseByMonth;
+import tools.PurchaseByProduct;
+import tools.PurchaseBySupplier;
+import tools.DataCache;
 import utilities.Relevee;
 import tools.SyncEngine;
 
@@ -574,26 +580,41 @@ public class RepportService implements RapportStorage {
     @Override
     public List<VenteReporter> findReportSaleByClient(LocalDate d1, LocalDate d2, String region, String devise) {
         List<VenteReporter> result = new ArrayList<>();
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
         StringBuilder sb = new StringBuilder();
-        sb.append("SELECT v.dateVente,v.clientid_uid, CASE ")
-                .append(taux).append(" "
-                + "WHEN 'CDF' THEN "
-                + "WHEN 'USD' THEN "
-                + "END AS (SUM(COALESCE(v.montantusd,0))+(SUM(COALESCE(v.montantcdf,0))/)) as som FROM vente v, client c "
-                + "WHERE c.uid=v.clientid_uid AND v.datevente BETWEEN ? AND ? AND v.region = ? "
-                + "GROUP BY c.uid order by som desc ");
+        sb.append("SELECT v.clientId, (SUM(COALESCE(v.montantUsd,0)) + (SUM(COALESCE(v.montantCdf,0))/")
+                .append(taux)
+                .append(")) AS som FROM vente v, client c ")
+                .append("WHERE c.uid = v.clientId AND v.dateVente BETWEEN ? AND ? AND v.region LIKE ? ")
+                .append("AND v.observation != ? AND v.clientId != ? ")
+                .append("GROUP BY v.clientId ORDER BY som DESC ");
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString());
                     query.setParameter(1, d1.atStartOfDay())
-                            .setParameter(2, d2.atStartOfDay())
-                            .setParameter(3, region);
+                            .setParameter(2, d2.atTime(23, 59, 59))
+                            .setParameter(3, usedRegion)
+                            .setParameter(4, "Drafted")
+                            .setParameter(5, "RABBISH");
                     List<Object[]> lis = query.getResultList();
+                    double grandTotal = 0;
                     for (Object[] li : lis) {
+                        if (li[0] != null && li[1] != null) {
+                            grandTotal += Double.parseDouble(String.valueOf(li[1]));
+                        }
+                    }
+                    for (Object[] li : lis) {
+                        if (li[0] == null || li[1] == null) {
+                            continue;
+                        }
+                        Client client = ClientDelegate.findClient(String.valueOf(li[0]));
+                        if (client == null) {
+                            continue;
+                        }
                         VenteReporter vi = new VenteReporter();
-                        vi.setChiffre(Double.parseDouble(String.valueOf(li[2])));
-                        Client client = ClientDelegate.findClient(String.valueOf(li[1]));
+                        vi.setChiffre(Double.parseDouble(String.valueOf(li[1])));
+                        vi.setSommeTotal(grandTotal);
                         vi.setClient(client);
                         result.add(vi);
                     }
@@ -602,13 +623,28 @@ public class RepportService implements RapportStorage {
             }
             Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
             query.setParameter(1, d1.atStartOfDay())
-                    .setParameter(2, d2.atStartOfDay())
-                    .setParameter(3, region);
+                    .setParameter(2, d2.atTime(23, 59, 59))
+                    .setParameter(3, usedRegion)
+                    .setParameter(4, "Drafted")
+                    .setParameter(5, "RABBISH");
             List<Object[]> lis = query.getResultList();
+            double grandTotal = 0;
             for (Object[] li : lis) {
+                if (li[0] != null && li[1] != null) {
+                    grandTotal += Double.parseDouble(String.valueOf(li[1]));
+                }
+            }
+            for (Object[] li : lis) {
+                if (li[0] == null || li[1] == null) {
+                    continue;
+                }
+                Client client = ClientDelegate.findClient(String.valueOf(li[0]));
+                if (client == null) {
+                    continue;
+                }
                 VenteReporter vi = new VenteReporter();
-                vi.setChiffre(Double.parseDouble(String.valueOf(li[2])));
-                Client client = ClientDelegate.findClient(String.valueOf(li[1]));
+                vi.setChiffre(Double.parseDouble(String.valueOf(li[1])));
+                vi.setSommeTotal(grandTotal);
                 vi.setClient(client);
                 result.add(vi);
             }
@@ -2193,12 +2229,11 @@ public class RepportService implements RapportStorage {
             LocalDate d2, String role, String region, String periodName) {
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    List<Metric> kpis;
-                    if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
-                        kpis = kpi(d1, d2, "%", periodName);
-                    } else {
-                        kpis = kpi(d1, d2, region, periodName);
-                    }
+                    String chartRegion = role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())
+                            ? "%" : region;
+                    List<Metric> kpis = DataCache.getOrLoad(
+                            "report-chart-kpi-" + d1 + "-" + d2 + "-" + chartRegion + "-" + periodName,
+                            () -> kpi(d1, d2, chartRegion, periodName));
                     Platform.runLater(() -> {
                         venteChart.setLegendVisible(true);
                         venteChart.getData().clear();
@@ -3027,6 +3062,208 @@ public class RepportService implements RapportStorage {
             double total = Double.parseDouble(String.valueOf(obj[4]));
             RecentSale rs = new RecentSale(ref, prod, quantite, unite, total);
             result.add(rs);
+        }
+        return result;
+    }
+
+    @Override
+    public List<PurchaseBySupplier> findPurchasesBySupplier(LocalDate d1, LocalDate d2, String region) {
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT f.uid, COALESCE(f.nom_fourn,''), COALESCE(f.adresse,''), COALESCE(f.phone,''),")
+                .append(" COUNT(l.uid), SUM(COALESCE(l.topay,0)) ")
+                .append(" FROM livraison l JOIN fournisseur f ON f.uid = l.fournId_uid")
+                .append(" WHERE l.dateLivr BETWEEN ? AND ? AND l.region LIKE ? AND l.deleted_at IS NULL ")
+                .append("GROUP BY f.uid, f.nom_fourn, f.adresse, f.phone ")
+                .append("ORDER BY SUM(COALESCE(l.topay,0)) DESC ");
+        List<PurchaseBySupplier> result = new ArrayList<>();
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter(1, d1)
+                        .setParameter(2, d2)
+                        .setParameter(3, usedRegion);
+                List<Object[]> objs = query.getResultList();
+                for (Object[] obj : objs) {
+                    if (obj[0] == null) {
+                        continue;
+                    }
+                    String nom = obj[1] == null ? "" : String.valueOf(obj[1]);
+                    String adresse = obj[2] == null ? "" : String.valueOf(obj[2]);
+                    String phone = obj[3] == null ? "" : String.valueOf(obj[3]);
+                    long nb = obj[4] == null ? 0L : Long.parseLong(String.valueOf(obj[4]));
+                    double montant = obj[5] == null ? 0d : Double.parseDouble(String.valueOf(obj[5]));
+                    result.add(new PurchaseBySupplier(nom, adresse, phone, nb, montant));
+                }
+                return result;
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter(1, d1)
+                .setParameter(2, d2)
+                .setParameter(3, usedRegion);
+        List<Object[]> objs = query.getResultList();
+        for (Object[] obj : objs) {
+            if (obj[0] == null) {
+                continue;
+            }
+            String nom = obj[1] == null ? "" : String.valueOf(obj[1]);
+            String adresse = obj[2] == null ? "" : String.valueOf(obj[2]);
+            String phone = obj[3] == null ? "" : String.valueOf(obj[3]);
+            long nb = obj[4] == null ? 0L : Long.parseLong(String.valueOf(obj[4]));
+            double montant = obj[5] == null ? 0d : Double.parseDouble(String.valueOf(obj[5]));
+            result.add(new PurchaseBySupplier(nom, adresse, phone, nb, montant));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PurchaseByProduct> findPurchasesByProduct(LocalDate d1, LocalDate d2, String region) {
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT p.codebar,CONCAT(p.nomProduit,' ',COALESCE(p.modele,''),' ',COALESCE(p.taille,'')) as prod,")
+                .append(" COALESCE(m.description,'') as unite, SUM(COALESCE(s.quantite,0)), SUM(COALESCE(s.prixAchatTotal,0)) ")
+                .append(" FROM stocker s JOIN produit p ON p.uid = s.product_id ")
+                .append(" LEFT JOIN mesure m ON m.uid = s.mesure_id ")
+                .append("WHERE s.dateStocker BETWEEN ? AND ? AND s.region LIKE ? AND s.deleted_at IS NULL ")
+                .append("GROUP BY p.codebar, prod, unite ")
+                .append("ORDER BY SUM(COALESCE(s.prixAchatTotal,0)) DESC ");
+        List<PurchaseByProduct> result = new ArrayList<>();
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter(1, d1.atStartOfDay())
+                        .setParameter(2, d2.atTime(23, 59, 59))
+                        .setParameter(3, usedRegion);
+                List<Object[]> objs = query.getResultList();
+                for (Object[] obj : objs) {
+                    if (obj[0] == null) {
+                        continue;
+                    }
+                    String codebar = String.valueOf(obj[0]);
+                    String produit = obj[1] == null ? "" : String.valueOf(obj[1]);
+                    String unite = obj[2] == null ? "" : String.valueOf(obj[2]);
+                    double quantite = obj[3] == null ? 0d : Double.parseDouble(String.valueOf(obj[3]));
+                    double montant = obj[4] == null ? 0d : Double.parseDouble(String.valueOf(obj[4]));
+                    result.add(new PurchaseByProduct(codebar, produit, unite, quantite, montant));
+                }
+                return result;
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter(1, d1.atStartOfDay())
+                .setParameter(2, d2.atTime(23, 59, 59))
+                .setParameter(3, usedRegion);
+        List<Object[]> objs = query.getResultList();
+        for (Object[] obj : objs) {
+            if (obj[0] == null) {
+                continue;
+            }
+            String codebar = String.valueOf(obj[0]);
+            String produit = obj[1] == null ? "" : String.valueOf(obj[1]);
+            String unite = obj[2] == null ? "" : String.valueOf(obj[2]);
+            double quantite = obj[3] == null ? 0d : Double.parseDouble(String.valueOf(obj[3]));
+            double montant = obj[4] == null ? 0d : Double.parseDouble(String.valueOf(obj[4]));
+            result.add(new PurchaseByProduct(codebar, produit, unite, quantite, montant));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PurchaseByProduct> findRequisitionPurchasesByProduct(LocalDate d1, LocalDate d2, String region) {
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT p.codebar,CONCAT(p.nomProduit,' ',COALESCE(p.modele,''),' ',COALESCE(p.taille,'')) as prod,")
+                .append(" COALESCE(m.description,'') as unite, SUM(COALESCE(r.quantite,0)),")
+                .append(" SUM(COALESCE(r.quantite,0) * COALESCE(r.coutAchat,0)) ")
+                .append(" FROM recquisition r JOIN produit p ON p.uid = r.product_id ")
+                .append(" LEFT JOIN mesure m ON m.uid = r.mesure_id ")
+                .append("WHERE r.date BETWEEN ? AND ? AND r.region LIKE ? AND r.deleted_at IS NULL ")
+                .append("GROUP BY p.codebar, prod, unite ")
+                .append("ORDER BY SUM(COALESCE(r.quantite,0) * COALESCE(r.coutAchat,0)) DESC ");
+        List<PurchaseByProduct> result = new ArrayList<>();
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter(1, d1.atStartOfDay())
+                        .setParameter(2, d2.atTime(23, 59, 59))
+                        .setParameter(3, usedRegion);
+                List<Object[]> objs = query.getResultList();
+                for (Object[] obj : objs) {
+                    if (obj[0] == null) {
+                        continue;
+                    }
+                    String codebar = String.valueOf(obj[0]);
+                    String produit = obj[1] == null ? "" : String.valueOf(obj[1]);
+                    String unite = obj[2] == null ? "" : String.valueOf(obj[2]);
+                    double quantite = obj[3] == null ? 0d : Double.parseDouble(String.valueOf(obj[3]));
+                    double montant = obj[4] == null ? 0d : Double.parseDouble(String.valueOf(obj[4]));
+                    result.add(new PurchaseByProduct(codebar, produit, unite, quantite, montant));
+                }
+                return result;
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter(1, d1.atStartOfDay())
+                .setParameter(2, d2.atTime(23, 59, 59))
+                .setParameter(3, usedRegion);
+        List<Object[]> objs = query.getResultList();
+        for (Object[] obj : objs) {
+            if (obj[0] == null) {
+                continue;
+            }
+            String codebar = String.valueOf(obj[0]);
+            String produit = obj[1] == null ? "" : String.valueOf(obj[1]);
+            String unite = obj[2] == null ? "" : String.valueOf(obj[2]);
+            double quantite = obj[3] == null ? 0d : Double.parseDouble(String.valueOf(obj[3]));
+            double montant = obj[4] == null ? 0d : Double.parseDouble(String.valueOf(obj[4]));
+            result.add(new PurchaseByProduct(codebar, produit, unite, quantite, montant));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PurchaseByMonth> findPurchasesByMonth(LocalDate d1, LocalDate d2, String region) {
+        String usedRegion = (region == null || region.isBlank()) ? "%" : region;
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM livraison l ")
+                .append("WHERE l.dateLivr BETWEEN ? AND ? AND l.region LIKE ? AND l.deleted_at IS NULL ")
+                .append("ORDER BY l.dateLivr ASC ");
+        List<PurchaseByMonth> result = new ArrayList<>();
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Livraison.class);
+                query.setParameter(1, d1)
+                        .setParameter(2, d2)
+                        .setParameter(3, usedRegion);
+                List<Livraison> livs = query.getResultList();
+                return groupByMonth(livs);
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Livraison.class);
+        query.setParameter(1, d1)
+                .setParameter(2, d2)
+                .setParameter(3, usedRegion);
+        List<Livraison> livs = query.getResultList();
+        return groupByMonth(livs);
+    }
+
+    private List<PurchaseByMonth> groupByMonth(List<Livraison> livs) {
+        java.util.Map<String, long[]> grouped = new java.util.LinkedHashMap<>();
+        for (Livraison l : livs) {
+            if (l.getDateLivr() == null) {
+                continue;
+            }
+            String periode = l.getDateLivr().getYear() + "-"
+                    + String.format("%02d", l.getDateLivr().getMonthValue());
+            long[] acc = grouped.computeIfAbsent(periode, k -> new long[2]);
+            acc[0]++;
+            double montant = l.getTopay() == null ? 0d : l.getTopay();
+            acc[1] += Math.round(montant * 100d);
+        }
+        List<PurchaseByMonth> result = new ArrayList<>();
+        for (java.util.Map.Entry<String, long[]> e : grouped.entrySet()) {
+            result.add(new PurchaseByMonth(e.getKey(), e.getValue()[0], e.getValue()[1] / 100d));
         }
         return result;
     }

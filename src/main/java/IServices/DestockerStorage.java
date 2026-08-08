@@ -33,6 +33,8 @@ public interface DestockerStorage {
 
     public List<Destocker> findByDateIntervale(LocalDate date1, LocalDate date2, String region);
 
+    public List<Destocker> findByDateIntervale(LocalDate date1, LocalDate date2, String region, String destination);
+
     public List<Destocker> findDestockerByProduit(String uid, String region);
 
     public List<Destocker> findByProduitLot(String uid, String nlot);

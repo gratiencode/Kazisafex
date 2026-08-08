@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -21,14 +19,11 @@ import tools.SyncEngine;
 public class GratienProductImageWorkflow {
 
     private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
-    private static final String MODEL_NAME = AiAgents.MODEL_NAME;
+    private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
+    private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 
-    private final ChatModel model = OllamaChatModel.builder()
-            .baseUrl(OLLAMA_BASE_URL)
-            .modelName(MODEL_NAME)
-            .temperature(0.0)
-            .timeout(Duration.ofMinutes(5))
-            .build();
+    private final OllamaModelFallback model = new OllamaModelFallback(0.0, Duration.ofMinutes(5),
+            VISION_MODEL_NAME, TEXT_MODEL_NAME);
     private final ObjectMapper mapper = new ObjectMapper();
     private final Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
 
@@ -59,7 +54,16 @@ public class GratienProductImageWorkflow {
                 || value.contains("depense")
                 || value.contains("dépense")
                 || value.contains("recu")
-                || value.contains("reçu");
+                || value.contains("reçu")
+                || value.contains("approvisionnement")
+                || value.contains("approvisionner")
+                || value.contains("entree")
+                || value.contains("entrées")
+                || value.contains("entrée")
+                || value.contains("fournisseur")
+                || value.contains("livraison")
+                || value.contains("requisition")
+                || value.contains("réquisition");
         if (value.contains("facture") && !productIntent) {
             return false;
         }
@@ -136,7 +140,7 @@ public class GratienProductImageWorkflow {
                 }
             }
             ChatRequest request = ChatRequest.builder().messages(UserMessage.from(contents)).build();
-            String answer = model.chat(request).aiMessage().text();
+            String answer = model.chat(request);
             return mapper.readValue(extractJson(answer), InvoiceDraft.class);
         } catch (Exception ex) {
             return null;
@@ -335,8 +339,24 @@ public class GratienProductImageWorkflow {
 
     private boolean isCancellation(String question) {
         String value = normalize(question);
-        return value.equals("annule") || value.equals("annuler") || value.equals("cancel")
-                || value.equals("abandonne") || value.equals("non, annule");
+        return value.equals("non")
+                || value.equals("no")
+                || value.equals("annule")
+                || value.equals("annuler")
+                || value.equals("annuler tout")
+                || value.equals("cancel")
+                || value.equals("abandonne")
+                || value.equals("abandonner")
+                || value.equals("j'annule")
+                || value.equals("stop")
+                || value.equals("arrete")
+                || value.equals("arrête")
+                || value.equals("arret")
+                || value.equals("arrêt")
+                || value.equals("quitte")
+                || value.equals("quitter")
+                || value.contains("annul")
+                || value.contains("abandon");
     }
 
     public void clearPendingWorkflow() {

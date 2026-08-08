@@ -4,11 +4,8 @@ import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import java.io.File;
 import java.io.IOException;
@@ -36,7 +33,9 @@ public final class GratienAssistantClient {
     // La vision (photos jointes) doit passer par un appel NON-streaming: le serveur
     // Ollama distant renvoie un 500 (Internal Server Error ref:...) des qu'une image
     // est envoyee en streaming (stream:true), alors que stream:false fonctionne.
-    private final ChatModel visionModel;
+    // Plusieurs modeles sont essayes dans l'ordre: gemma4:31b-cloud ne supporte pas
+    // les images (HTTP 500), minimax-m3:cloud les accepte.
+    private final OllamaModelFallback visionModel;
     // AiAgents orchestre les factures et expose les GratienTools partages.
     private final AiAgents aiAgents = AiAgents.getInstance();
 
@@ -59,12 +58,8 @@ public final class GratienAssistantClient {
                 .temperature(0.25)
                 .timeout(Duration.ofMinutes(5))
                 .build();
-        visionModel = OllamaChatModel.builder()
-                .baseUrl(OLLAMA_BASE_URL)
-                .modelName(MODEL_NAME)
-                .temperature(0.25)
-                .timeout(Duration.ofMinutes(5))
-                .build();
+        visionModel = new OllamaModelFallback(0.25, Duration.ofMinutes(5),
+                AiAgents.VISION_MODEL_NAME, AiAgents.MODEL_NAME);
     }
 
     public static GratienAssistantClient getInstance() {
@@ -76,6 +71,9 @@ public final class GratienAssistantClient {
         // Le compactage de memoire et le mode swarm (sous-agents) signalent leur execution via le canal de progression du chat.
         aiAgents.setCompactionSignal(callback::onProcess);
         aiAgents.setProgressSignal(callback::onProcess);
+        // Memoire de session: on note le tour courant et le document joint, pour que le
+        // message suivant ("fais-en un approvisionnement") reprenne la photo sans la re-joindre.
+        aiAgents.noteDocumentMessage(attachments);
         if (question != null && question.trim().toLowerCase(Locale.ROOT).startsWith("/kanuni ")) {
             String instruction = question.trim().substring(8).strip();
             String result = saveUserInstruction(instruction);
@@ -154,11 +152,12 @@ public final class GratienAssistantClient {
         ChatRequest request = buildRequest(contextualized, entreprise, attachments);
         // La vision ne peut pas streame vers ce serveur (500 sur image en streaming):
         // on fait un appel chat() non-streaming, avec une nouvelle tentative si le serveur echoue.
-        ChatResponse response = null;
+        // En cas d'echec d'un modele, OllamaModelFallback bascule sur le modele suivant.
+        String visionAnswer = null;
         Throwable lastError = null;
         for (int attempt = 0; attempt <= VISION_RETRY_ATTEMPTS; attempt++) {
             try {
-                response = visionModel.chat(request);
+                visionAnswer = visionModel.chat(request);
                 break;
             } catch (Exception ex) {
                 lastError = ex;
@@ -172,7 +171,7 @@ public final class GratienAssistantClient {
                 }
             }
         }
-        if (response == null || response.aiMessage() == null || response.aiMessage().text() == null) {
+        if (visionAnswer == null) {
             callback.onError(lastError == null
                     ? new IllegalStateException("Reponse vide du modele de vision pour les pieces jointes.")
                     : lastError);
@@ -180,8 +179,8 @@ public final class GratienAssistantClient {
         }
         aiAgents.appendMemory("user",
                 question == null || question.isBlank() ? "[pièce jointe]" : question);
-        aiAgents.appendMemory("assistant", response.aiMessage().text());
-        callback.onToken(response.aiMessage().text());
+        aiAgents.appendMemory("assistant", visionAnswer);
+        callback.onToken(visionAnswer);
         callback.onComplete();
     }
 

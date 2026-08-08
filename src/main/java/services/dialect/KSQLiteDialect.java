@@ -15,14 +15,16 @@ import org.hibernate.dialect.Dialect;
 
 import java.sql.Types;
 import org.hibernate.dialect.pagination.LimitHandler;
-import org.hibernate.dialect.pagination.LimitOffsetLimitHandler;
+import org.hibernate.dialect.pagination.LimitLimitHandler;
 import org.hibernate.query.spi.QueryEngine;
 import org.hibernate.query.sqm.function.SqmFunctionRegistry;
 import org.hibernate.query.sqm.produce.function.StandardFunctionReturnTypeResolvers;
 import org.hibernate.type.StandardBasicTypes;
 
 public class KSQLiteDialect extends Dialect {
-      private final LimitHandler limitHandler = new LimitOffsetLimitHandler();
+      // SQLite supporte "limit n" et "limit offset, n" : c'est le handler
+      // MySQL-style, PAS le ANSI "fetch first n rows only" que SQLite rejette.
+      private final LimitHandler limitHandler = LimitLimitHandler.INSTANCE;
     public KSQLiteDialect() {
         super();
     }

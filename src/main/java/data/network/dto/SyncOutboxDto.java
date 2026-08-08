@@ -6,6 +6,7 @@ public class SyncOutboxDto {
     public String payload;
     public String mutationType;
     public long mutationTs;
+    public Integer priority;
 
     public SyncOutboxDto() {}
 }

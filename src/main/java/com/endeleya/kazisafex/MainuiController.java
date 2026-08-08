@@ -529,6 +529,9 @@ public class MainuiController implements Initializable {
     }
 
     public void initializeAi() {
+        if (ia_webvu_chat == null) {
+            return;
+        }
         webE = ia_webvu_chat.getEngine();
         installChatBridge();
         installChatReplyFallback();

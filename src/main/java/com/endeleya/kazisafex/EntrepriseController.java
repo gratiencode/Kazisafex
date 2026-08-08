@@ -346,7 +346,7 @@ public class EntrepriseController implements Initializable {
                     public void onResponse(Call<Entreprise> call, Response<Entreprise> rspns) {
                         System.out.println("Creqtion en trep result " + rspns.message());
                         if (rspns.isSuccessful()) {
-                            MainUI.notify(null, bundle.getString("success"), bundle.getString("newcompsaved"), 4, "Info");
+                            MainUI.notify(null, bundle.getString("success"), bundle.getString("newcompsaved"), 4, "success");
                         }
                         if (rspns.code() == 409) {
                             MainUI.notify(null, bundle.getString("error"), bundle.getString("compexist"), 4, "error");
@@ -387,7 +387,7 @@ public class EntrepriseController implements Initializable {
                         pane_progress.setVisible(false);
                         System.out.println("Update eze result " + rspns.message());
                         if (rspns.isSuccessful()) {
-                            MainUI.notify(null, bundle.getString("success"), bundle.getString("compupdated"), 4, "INFO");
+                            MainUI.notify(null, bundle.getString("success"), bundle.getString("compupdated"), 4, "success");
                         }
                     }
 
