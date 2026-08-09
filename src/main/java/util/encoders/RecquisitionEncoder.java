@@ -41,17 +41,17 @@ public class RecquisitionEncoder implements Encoder.Text<Recquisition> {
                 .add("priority", ins.getPriority())
                 .add("counter", ins.getCounter())
                 .add("observation", ins.getObservation() == null ? "" : ins.getObservation())
-                .add("numlot", ins.getNumlot() == null ? Constants.TIMESTAMPED_FORMAT.format(ins.getDate()) : ins.getNumlot())
+                .add("numlot", ins.getNumlot() == null ? Constants.TIMESTAMPED_FORMATTER.format(ins.getDate()) : ins.getNumlot())
                 .add("region", ins.getRegion())
                 .add("quantite", ins.getQuantite())
                 .add("stockAlert", ins.getStockAlert() == null ? 0 : ins.getStockAlert())
-                .add("date", Constants.DATE_HEURE_FORMAT.format(ins.getDate()))
+                .add("date", Constants.DATE_HEURE_FORMATTER.format(ins.getDate()))
                 .add("mesureId", Json.createObjectBuilder()
                         .add("uid", ins.getMesureId().getUid()).build())
                 .add("productId", Json.createObjectBuilder()
                         .add("uid", ins.getProductId().getUid()).build());
         if (ins.getDateExpiry() != null) {
-            builder.add("dateExpiry", Constants.DATE_ONLY_FORMAT.format(ins.getDateExpiry()));
+            builder.add("dateExpiry", Constants.DATE_ONLY_FORMATTER.format(ins.getDateExpiry()));
         }
         StringWriter sw = new StringWriter();
         Json.createWriter(sw).writeObject(builder.build());

@@ -839,7 +839,7 @@ public class StoreformController implements Initializable {
             @Field("productId") String productId,
             @Field("numlot") String numlot
          */
-        ksf.syncDestocker(ds.getUid(), Constants.DATE_HEURE_FORMAT.format(ds.getDateDestockage()),ds.getReference(),
+        ksf.syncDestocker(ds.getUid(), Constants.DATE_HEURE_FORMATTER.format(ds.getDateDestockage()),ds.getReference(),
                 ds.getDestination(), ds.getRegion(), Double.toString(ds.getCoutAchat()), Double.toString(ds.getQuantite()),
                 ds.getLibelle(), ds.getObservation(), ds.getMesureId().getUid(), ds.getProductId().getUid(), ds.getNumlot())
                 .enqueue(new Callback<Destocker>() {
@@ -873,9 +873,15 @@ public class StoreformController implements Initializable {
             @Field("region") String region,
             @Field("numlot") String numlot
          */
-        ksf.syncRecquisition(req.getUid(), Constants.DATE_HEURE_FORMAT.format(req.getDate()), req.getObservation(),
+        String dateReq = req.getDate() != null
+                ? Constants.DATE_HEURE_FORMATTER.format(req.getDate())
+                : "";
+        String dateExp = req.getDateExpiry() != null
+                ? Constants.DATE_ONLY_FORMATTER.format(req.getDateExpiry())
+                : "";
+        ksf.syncRecquisition(req.getUid(), dateReq, req.getObservation(),
                 req.getReference(), Double.toString(req.getQuantite()), Double.toString(req.getCoutAchat()),
-                Constants.DATE_ONLY_FORMAT.format(req.getDateExpiry()), Double.toString(req.getStockAlert()), 
+                dateExp, Double.toString(req.getStockAlert()), 
                 req.getMesureId().getUid(), req.getProductId().getUid(), req.getRegion(), req.getNumlot())
                 .enqueue(new Callback<Recquisition>() {
             @Override

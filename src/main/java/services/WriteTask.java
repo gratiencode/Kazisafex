@@ -16,10 +16,12 @@ public class WriteTask<T> {
 
     private final Function<EntityManager, T> action;
     private final CompletableFuture<T> future;
+    private final boolean suppressed;
 
-    public WriteTask(Function<EntityManager, T> action, CompletableFuture<T> future) {
+    public WriteTask(Function<EntityManager, T> action, CompletableFuture<T> future, boolean suppressed) {
         this.action = action;
         this.future = future;
+        this.suppressed = suppressed;
     }
 
     public Function<EntityManager, T> getAction() {
@@ -28,6 +30,10 @@ public class WriteTask<T> {
 
     public CompletableFuture<T> getFuture() {
         return future;
+    }
+
+    public boolean isSuppressed() {
+        return suppressed;
     }
 }
 

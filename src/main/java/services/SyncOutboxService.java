@@ -24,44 +24,36 @@ import tools.Tables;
 
 public class SyncOutboxService {
 
-    private static final int MAX_RETRY_COUNT = 5;
+    /**
+     * Rétention des enregistrements APPLIED : un enregistrement appliqué n'est
+     * supprimé qu'après ce nombre de jours. En dessous de ce seuil, l'historique
+     * APPLIED est conservé (utile pour le diagnostic et pour que le backfill ne
+     * recrée pas des mutations déjà envoyées). Un APPLIED n'est jamais re-sélectionné
+     * par l'upsync (seuls PENDING/UNSYNCED le sont), la rétention n'alourdit donc
+     * pas les batches envoyés.
+     */
+    public static final int APPLIED_RETENTION_DAYS = 10;
 
     /**
-     * Récupère toutes les outbox PENDING/UNSYNCED (synchronisation complète).
+     * Récupère toutes les outbox PENDING/UNSYNCED à remonter (synchronisation
+     * complète et cycle de fond). Aucun filtre d'ancienneté ni de plafond de
+     * retries : un enregistrement rejeté par le serveur n'est jamais abandonné
+     * définitivement — il repasse {@code UNSYNCED} (compteur incrémenté) et reste
+     * éligible aux cycles suivants. Les {@code FAILED} résiduels (ancien
+     * plafond) sont re-inclus pour être retentés une dernière fois. La
+     * terminaison de chaque cycle est garantie par la déduplication des UID déjà
+     * tentés dans {@code BackgroundSyncService} et par le recul (backoff) quand
+     * aucun enregistrement ne progresse.
      */
     public static List<SyncOutbox> fetchAllPendingOutbox() {
-        return fetchPendingOutboxSince(0L);
-    }
-
-    /**
-     * Récupère les outbox PENDING/UNSYNCED à remonter en tenant compte de
-     * l'ancienneté : seuls les enregistrements créés après {@code sinceEpochMillis}
-     * (dernier timestamp de synchronisation) sont renvoyés. Les enregistrements
-     * déjà en cours de retry (retryCount &gt; 0) sont toujours inclus afin de ne
-     * jamais perdre une mutation rejetée par le serveur. 0 = tout synchroniser.
-     */
-    public static List<SyncOutbox> fetchPendingOutboxSince(long sinceEpochMillis) {
-        final LocalDateTime since;
-        if (sinceEpochMillis > 0) {
-            since = java.time.Instant
-                    .ofEpochMilli(sinceEpochMillis)
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toLocalDateTime();
-        } else {
-            since = LocalDateTime.MIN;
-        }
-        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED') AND (s.retryCount IS NULL OR s.retryCount < :maxRetry) AND (s.createdAt IS NULL OR s.createdAt > :since OR (s.retryCount IS NOT NULL AND s.retryCount > 0)) ORDER BY s.createdAt ASC";
+        String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt ASC";
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, SyncOutbox.class)
-                        .setParameter("maxRetry", MAX_RETRY_COUNT)
-                        .setParameter("since", since)
                         .getResultList());
             }
             return ManagedSessionFactory.getEntityManager()
                     .createQuery(jpql, SyncOutbox.class)
-                    .setParameter("maxRetry", MAX_RETRY_COUNT)
-                    .setParameter("since", since)
                     .getResultList();
         } catch (Exception e) {
             return java.util.Collections.emptyList();
@@ -111,21 +103,42 @@ public class SyncOutboxService {
         });
     }
 
+    /**
+     * Marque un enregistrement comme {@code UNSYNCED} pour nouvel essai. Le
+     * compteur {@code retryCount} est incrémenté à titre informatif (utile au
+     * diagnostic) mais n'entraîne <strong>jamais</strong> de passage en
+     * {@code FAILED} : une mutation rejetée par le serveur reste éligible aux
+     * cycles suivants jusqu'à être acceptée.
+     */
     public static void markAsUnsynced(List<String> uids) {
         if (uids == null || uids.isEmpty()) return;
         submitSyncWrite(em -> {
             for (String uid : uids) {
                 SyncOutbox record = em.find(SyncOutbox.class, uid);
                 if (record != null) {
-                    int retry = record.getRetryCount() + 1;
-                    record.setRetryCount(retry);
-                    if (retry >= MAX_RETRY_COUNT) {
-                        record.setStatus("FAILED");
-                    } else {
-                        record.setStatus("UNSYNCED");
-                    }
+                    record.setRetryCount(record.getRetryCount() + 1);
+                    record.setStatus("UNSYNCED");
                 }
             }
+            return null;
+        });
+    }
+
+    /**
+     * Remet toute l'outbox en état de re-synchronisation complète (bouton
+     * « Réinitialiser la synchronisation ») : les mutations déjà appliquées ou
+     * en échec repassent {@code UNSYNCED} avec un compteur de tentatives vierge,
+     * pour être re-téléversées depuis le début. Les enregistrements
+     * {@code DOWNSYNCED} (provenance serveur) ne sont volontairement pas
+     * remontés : le rattrapage {@code since=0} les re-téléchargera de toute façon.
+     */
+    public static void resetForFullResync() {
+        submitSyncWrite(em -> {
+            int updated = em.createQuery(
+                    "UPDATE SyncOutbox s SET s.status = 'UNSYNCED', s.retryCount = 0 "
+                            + "WHERE s.status IN ('APPLIED','FAILED')")
+                    .executeUpdate();
+            System.out.println("[SYNC-OUTBOX] Reinitialisation pour full resync : " + updated + " enregistrement(s) a re-televerser.");
             return null;
         });
     }
@@ -145,9 +158,16 @@ public class SyncOutboxService {
         });
     }
 
+    /**
+     * Supprime les enregistrements APPLIED de plus de
+     * {@link #APPLIED_RETENTION_DAYS} jours : la suppression n'intervient que
+     * sur les données de rétention, les APPLIED récents restent conservés.
+     */
     public static void cleanupAppliedRecords() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(APPLIED_RETENTION_DAYS);
         submitSyncWrite(em -> {
-            em.createQuery("DELETE FROM SyncOutbox s WHERE s.status = 'APPLIED'")
+            em.createQuery("DELETE FROM SyncOutbox s WHERE s.status = 'APPLIED' AND s.createdAt < :cutoff")
+                    .setParameter("cutoff", cutoff)
                     .executeUpdate();
             return null;
         });
@@ -172,8 +192,15 @@ public class SyncOutboxService {
         if (ManagedSessionFactory.isEmbedded()) {
             try {
                 return ManagedSessionFactory.submitWrite(action).get();
-            } catch (Exception e) {
-                throw new RuntimeException("SyncOutbox write failed", e);
+            } catch (java.util.concurrent.ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException) {
+                    throw (RuntimeException) cause;
+                }
+                throw new RuntimeException("SyncOutbox write failed", cause);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("SyncOutbox write interrupted", e);
             }
         }
         return ManagedSessionFactory.executeWrite(action);
@@ -457,7 +484,12 @@ public class SyncOutboxService {
             System.err.println("[BACKFILL] eUid not set, skipping backfill.");
             return;
         }
-        System.out.println("[BACKFILL] Scanning all tables for missing outbox records (eUid=" + eUid + ")...");
+        // Le backfill est une réconciliation idempotente : pour chaque entité, on
+        // compare le payload stocké dans l'outbox avec l'objet réel (tous champs,
+        // y compris les dates) et on ne crée/met à jour l'outbox que lorsque
+        // l'objet a vraiment muté. Aucun enregistrement n'est recréé pour des
+        // données inchangées : le timestamp « since » reste donc opérant.
+        System.out.println("[BACKFILL] Scanning all tables for missing or stale outbox records (eUid=" + eUid + ")...");
 
         List<List<Tables>> phases = List.of(
                 List.of(Tables.CATEGORY, Tables.FOURNISSEUR, Tables.CLIENT, Tables.COMPTETRESOR, Tables.MATIERE,
@@ -504,11 +536,45 @@ public class SyncOutboxService {
     private static void backfillTable(Tables table, Class<?> entityClass, String eUid, String region) {
         System.out.println("[BACKFILL] Scanning table: " + table.name());
 
-        Set<String> existingSet = new HashSet<>(ManagedSessionFactory.executeRead(
-                em -> em.createQuery("SELECT s.entityId FROM SyncOutbox s WHERE s.tableName = :tableName AND s.region = :region", String.class)
-                        .setParameter("tableName", table.name())
-                        .setParameter("region", region)
-                        .getResultList()));
+        // Charger en une seule requête les enregistrements d'outbox du table+region.
+        // On retient par entité le dernier enregistrement upsync (PENDING/UNSYNCED/
+        // APPLIED/FAILED) pour comparer son payload avec l'objet réel, et on
+        // mémorise les entités couvertes UNIQUEMENT par du downsync (elles viennent
+        // du serveur : rien à remonter tant qu'elles ne sont pas modifiées).
+        Map<String, SyncOutbox> latestByEntity = new HashMap<>();
+        Set<String> downsyncOnlyEntities = new HashSet<>();
+        try {
+            List<SyncOutbox> existing = ManagedSessionFactory.executeRead(em -> em
+                    .createQuery("SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.region = :region",
+                            SyncOutbox.class)
+                    .setParameter("tableName", table.name())
+                    .setParameter("region", region)
+                    .getResultList());
+            Map<String, Boolean> hasUpsync = new HashMap<>();
+            Map<String, Boolean> hasDownsync = new HashMap<>();
+            for (SyncOutbox record : existing) {
+                String entityId = record.getEntityId();
+                if (entityId == null || entityId.isBlank()) {
+                    continue;
+                }
+                if ("DOWNSYNCED".equals(record.getStatus())) {
+                    hasDownsync.put(entityId, true);
+                } else {
+                    hasUpsync.put(entityId, true);
+                    SyncOutbox prev = latestByEntity.get(entityId);
+                    if (prev == null || isNewer(record, prev)) {
+                        latestByEntity.put(entityId, record);
+                    }
+                }
+            }
+            for (String entityId : hasDownsync.keySet()) {
+                if (!hasUpsync.containsKey(entityId)) {
+                    downsyncOnlyEntities.add(entityId);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[BACKFILL] Failed to load existing outbox for " + table.name() + ": " + e.getMessage());
+        }
 
         List<String> allEntityIds = ManagedSessionFactory.executeRead(em -> {
             try {
@@ -526,27 +592,17 @@ public class SyncOutboxService {
             }
         });
 
-        List<String> missingIds = new ArrayList<>();
-        for (String id : allEntityIds) {
-            if (id != null && !existingSet.contains(id)) {
-                missingIds.add(id);
-            }
-        }
-
-        if (missingIds.isEmpty()) {
-            System.out.println("[BACKFILL] Table " + table.name() + ": up to date.");
-            return;
-        }
-
-        System.out.println("[BACKFILL] Table " + table.name() + ": " + missingIds.size()
-                + " missing records. Creating mutations...");
-
         int batchSize = 100;
-        for (int i = 0; i < missingIds.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, missingIds.size());
-            List<String> batch = missingIds.subList(i, end);
+        int created = 0;
+        int updated = 0;
+        for (int i = 0; i < allEntityIds.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, allEntityIds.size());
+            List<String> batch = allEntityIds.subList(i, end);
             try {
-                backfillBatch(table, entityClass, batch, eUid, region);
+                int[] counts = backfillBatch(table, entityClass, batch, eUid, region,
+                        latestByEntity, downsyncOnlyEntities);
+                created += counts[0];
+                updated += counts[1];
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -556,20 +612,83 @@ public class SyncOutboxService {
             }
         }
 
-        System.out.println("[BACKFILL] Table " + table.name() + ": done.");
+        System.out.println("[BACKFILL] Table " + table.name() + ": done (" + created + " created, " + updated
+                + " updated, " + allEntityIds.size() + " total).");
     }
 
-    private static void backfillBatch(Tables table, Class<?> entityClass, List<String> idsToBackfill, String eUid,
-            String region) {
+    /**
+     * Compare deux enregistrements d'outbox : le plus récent est celui dont le
+     * {@code createdAt} est le plus grand.
+     */
+    private static boolean isNewer(SyncOutbox candidate, SyncOutbox current) {
+        LocalDateTime c1 = candidate.getCreatedAt();
+        LocalDateTime c2 = current.getCreatedAt();
+        if (c1 == null) {
+            return false;
+        }
+        if (c2 == null) {
+            return true;
+        }
+        return c1.isAfter(c2);
+    }
+
+    /**
+     * Détermine si l'objet a vraiment muté par rapport à l'enregistrement
+     * d'outbox stocké :
+     * <ul>
+     * <li>payload stocké nul/vide : toujours considéré comme muté ;</li>
+     * <li>le createdAt/updatedAt de l'outbox est comparé à l'updatedAt de
+     * l'objet : si l'objet a été modifié après la création/dernière mise à jour
+     * de l'outbox, le payload stocké est périmé ;</li>
+     * <li>comparaison de tous les champs : payload complet du stocké vs celui de
+     * l'objet actuel.</li>
+     * </ul>
+     */
+    private static boolean hasMutated(SyncOutbox record, String currentPayload, Object entity) {
+        String storedPayload = record.getPayload();
+        if (storedPayload == null || storedPayload.isBlank()) {
+            return true;
+        }
+        LocalDateTime objUpdatedAt = getRealUpdatedAt(entity);
+        if (objUpdatedAt != null) {
+            LocalDateTime recUpdatedAt = record.getUpdatedAt();
+            if (recUpdatedAt == null || objUpdatedAt.isAfter(recUpdatedAt)) {
+                return true;
+            }
+            LocalDateTime recCreatedAt = record.getCreatedAt();
+            if (recCreatedAt != null && objUpdatedAt.isAfter(recCreatedAt)) {
+                return true;
+            }
+        }
+        return !storedPayload.equals(currentPayload);
+    }
+
+    private static LocalDateTime getRealUpdatedAt(Object entity) {
+        try {
+            Method m = entity.getClass().getMethod("getUpdatedAt");
+            Object res = m.invoke(entity);
+            if (res instanceof LocalDateTime) {
+                return (LocalDateTime) res;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static int[] backfillBatch(Tables table, Class<?> entityClass, List<String> idsToBackfill, String eUid,
+            String region, Map<String, SyncOutbox> latestByEntity, Set<String> downsyncOnlyEntities) {
         List<?> entities = ManagedSessionFactory.executeRead(em -> em
                 .createQuery("SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e.uid IN :ids", entityClass)
                 .setParameter("ids", idsToBackfill)
                 .getResultList());
 
         if (entities == null || entities.isEmpty())
-            return;
+            return new int[] { 0, 0 };
 
-        List<SyncOutbox> outboxRecords = new ArrayList<>();
+        List<SyncOutbox> toCreate = new ArrayList<>();
+        List<SyncOutbox> toUpdate = new ArrayList<>();
+        int created = 0;
+        int updated = 0;
         for (Object entity : entities) {
             try {
                 String entityId = getEntityId(entity);
@@ -587,32 +706,59 @@ public class SyncOutboxService {
                     continue;
                 }
 
-                SyncOutbox outbox = new SyncOutbox();
-                outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
-                outbox.setTableName(table.name());
-                outbox.setEntityId(entityId);
-                outbox.setAction("PERSIST");
-                outbox.setPayload(payload);
-                outbox.setCreatedAt(LocalDateTime.now());
-                outbox.setUpdatedAt(getUpdatedAt(entity));
-                outbox.setEntrepriseId(eUid);
-                outbox.setRegion(region);
-                outbox.setStatus("PENDING");
-                outboxRecords.add(outbox);
+                SyncOutbox existing = latestByEntity.get(entityId);
+                if (existing == null) {
+                    // Entité couverte uniquement par du downsync : elle vient du
+                    // serveur, rien à remonter tant qu'elle n'est pas modifiée.
+                    if (downsyncOnlyEntities.contains(entityId)) {
+                        continue;
+                    }
+                    // Aucun enregistrement d'outbox : création directe.
+                    SyncOutbox outbox = new SyncOutbox();
+                    outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
+                    outbox.setTableName(table.name());
+                    outbox.setEntityId(entityId);
+                    outbox.setAction("PERSIST");
+                    outbox.setPayload(payload);
+                    outbox.setCreatedAt(LocalDateTime.now());
+                    outbox.setUpdatedAt(getUpdatedAt(entity));
+                    outbox.setEntrepriseId(eUid);
+                    outbox.setRegion(region);
+                    outbox.setStatus("PENDING");
+                    toCreate.add(outbox);
+                    created++;
+                } else if (hasMutated(existing, payload, entity)) {
+                    // L'objet a vraiment muté : on rafraîchit l'enregistrement
+                    // existant (payload + updatedAt) au lieu d'en créer un doublon.
+                    existing.setPayload(payload);
+                    existing.setUpdatedAt(getUpdatedAt(entity));
+                    if ("APPLIED".equals(existing.getStatus()) || "FAILED".equals(existing.getStatus())) {
+                        existing.setStatus("PENDING");
+                    }
+                    if ("REMOVE".equalsIgnoreCase(existing.getAction())) {
+                        existing.setAction("PERSIST");
+                    }
+                    toUpdate.add(existing);
+                    updated++;
+                }
+                // sinon : payload identique et dates cohérentes, rien à faire.
             } catch (Exception e) {
-                System.err.println("[BACKFILL] Failed to create outbox record: " + e.getMessage());
+                System.err.println("[BACKFILL] Failed to process entity: " + e.getMessage());
             }
         }
 
-        if (outboxRecords.isEmpty())
-            return;
-
-        submitSyncWrite(em -> {
-            for (SyncOutbox outbox : outboxRecords) {
-                em.persist(outbox);
-            }
-            return null;
-        });
+        if (!toCreate.isEmpty() || !toUpdate.isEmpty()) {
+            submitSyncWrite(em -> {
+                for (SyncOutbox outbox : toCreate) {
+                    em.persist(outbox);
+                }
+                for (SyncOutbox outbox : toUpdate) {
+                    em.merge(outbox);
+                }
+                return null;
+            });
+        }
+        return new int[] { created, updated };
     }
 
     // ── Downsync materialization ────────────────────────────────────────────
@@ -849,7 +995,6 @@ public class SyncOutboxService {
                     "SELECT c FROM Category c WHERE LOWER(c.descritption) = LOWER(:name)",
                     data.Category.class)
                     .setParameter("name", "Divers")
-                    .setMaxResults(1)
                     .getResultList();
             if (!cats.isEmpty()) {
                 return cats.get(0);
@@ -952,13 +1097,16 @@ public class SyncOutboxService {
         // ou d'une fenêtre de rattrapage chevauchante), on met à jour action et
         // payload avec l'état le plus récent au lieu d'insérer une nouvelle ligne.
         submitSyncWrite(em -> {
+            // Pas de setMaxResults : le triplet (tableName, entityId, region)
+            // est unique pour le statut DOWNSYNCED (upsert), et SQLite ne gère
+            // pas la syntaxe ANSI "fetch first ? rows only" générée par le
+            // dialecte générique de Hibernate.
             List<SyncOutbox> existing = em.createQuery(
                     "SELECT s FROM SyncOutbox s WHERE s.status = 'DOWNSYNCED' AND s.tableName = :tableName AND s.entityId = :entityId AND s.region = :region",
                     SyncOutbox.class)
                     .setParameter("tableName", tableName)
                     .setParameter("entityId", entityId)
                     .setParameter("region", region)
-                    .setMaxResults(1)
                     .getResultList();
             if (!existing.isEmpty()) {
                 SyncOutbox row = existing.get(0);

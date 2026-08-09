@@ -48,7 +48,7 @@ public class OperationEncoder implements Encoder.Text<Operation> {
                 .add("depenseId", Json.createObjectBuilder().add("uid", ins.getDepenseId() == null ? "" : ins.getDepenseId().getUid()))
                 .add("montantUsd", ins.getMontantUsd())
                 .add("referenceOp", ins.getReferenceOp())
-                .add("date", Constants.DATE_HEURE_FORMAT.format(ins.getDate()))
+                .add("date", Constants.DATE_HEURE_FORMATTER.format(ins.getDate()))
                 .add("caisseOpId", Json.createObjectBuilder()
                         .add("uid", ins.getCaisseOpId().getUid())
                         .add("libelle", ins.getCaisseOpId().getLibelle())
@@ -58,7 +58,7 @@ public class OperationEncoder implements Encoder.Text<Operation> {
                         .add("region", ins.getCaisseOpId().getRegion())
                         .add("montantUsd", ins.getCaisseOpId().getMontantUsd())
                         .add("reference", ins.getCaisseOpId().getReference())
-                        .add("date", Constants.DATE_HEURE_FORMAT.format(ins.getCaisseOpId().getDate())).build());
+                        .add("date", Constants.DATE_HEURE_FORMATTER.format(ins.getCaisseOpId().getDate())).build());
 
         StringWriter sw = new StringWriter();
         Json.createWriter(sw).writeObject(builder.build());

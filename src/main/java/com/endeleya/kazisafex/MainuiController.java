@@ -1008,7 +1008,7 @@ public class MainuiController implements Initializable {
         List<Operation> vts = OperationDelegate.findOperations(region); // db.findAllByRegion(Operation.class, region);
         if (vts != null) {
             for (Operation vt : vts) {
-                String dv = tools.Constants.YEAR_AND_MONTH_FORMAT.format(
+                String dv = tools.Constants.YEAR_AND_MONTH_FORMATTER.format(
                     vt.getDate()
                 );
                 if (

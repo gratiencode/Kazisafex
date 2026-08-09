@@ -959,7 +959,7 @@ public class Util {
             if (t instanceof Operation) {
                 Operation o = (Operation) t;
                 ChartItem ci = new ChartItem();
-                ci.setAbsices(Constants.DATE_HEURE_FORMAT.format(o.getDate()));
+                ci.setAbsices(Constants.DATE_HEURE_FORMATTER.format(o.getDate()));
                 ci.setAmmount((o.getMontantCdf() / tx) + o.getMontantUsd());
                 ci.setDate(o.getDate().toLocalDate());
                 ci.setSerieName(o.getImputation());
@@ -1088,7 +1088,7 @@ public class Util {
             case "Par jours":
                 System.out.println("lci list " + lci.size());
                 for (ChartItem item : lci) {
-                    String day = Constants.DATE_ONLY_FORMAT.format(item.getDate());
+                    String day = Constants.DATE_ONLY_FORMATTER.format(item.getDate());
                     ChartItem dailly = getDailly(lci, day);
                     if (findItemByAbsice(result, dailly.getAbsices()) == null) {
                         result.add(dailly);
@@ -1097,7 +1097,7 @@ public class Util {
                 return result;
             case "Par mois":
                 for (ChartItem item : lci) {
-                    String month = Constants.YEAR_AND_MONTH_FORMAT.format(item.getDate());
+                    String month = Constants.YEAR_AND_MONTH_FORMATTER.format(item.getDate());
                     ChartItem monthly = getMonthly(lci, month);
                     if (findItemByAbsice(result, monthly.getAbsices()) == null) {
                         result.add(monthly);
@@ -1106,7 +1106,7 @@ public class Util {
                 return result;
             case "Par année":
                 for (ChartItem item : lci) {
-                    String year = Constants.YEAR_ONLY_FORMAT.format(item.getDate());
+                    String year = Constants.YEAR_ONLY_FORMATTER.format(item.getDate());
                     ChartItem yearly = getAnnually(lci, year);
                     if (findItemByAbsice(result, yearly.getAbsices()) == null) {
                         result.add(yearly);
@@ -1123,7 +1123,7 @@ public class Util {
         ChartItem ci = new ChartItem();
         double sum = 0;
         for (ChartItem objs : lci) {
-            String day = Constants.DATE_ONLY_FORMAT.format(objs.getDate());
+            String day = Constants.DATE_ONLY_FORMATTER.format(objs.getDate());
             if (day.equals(date)) {
                 ci.setAbsices(day);
                 ci.setDate(objs.getDate());
@@ -1139,7 +1139,7 @@ public class Util {
         ChartItem ci = new ChartItem();
         double sum = 0;
         for (ChartItem objs : lci) {
-            String month = Constants.YEAR_AND_MONTH_FORMAT.format(objs.getDate());
+            String month = Constants.YEAR_AND_MONTH_FORMATTER.format(objs.getDate());
             if (month.equals(mois)) {
                 ci.setDate(objs.getDate());
                 ci.setAbsices(month);
@@ -1155,7 +1155,7 @@ public class Util {
         ChartItem ci = new ChartItem();
         double sum = 0;
         for (ChartItem objs : lci) {
-            String year = Constants.YEAR_ONLY_FORMAT.format(objs.getDate());
+            String year = Constants.YEAR_ONLY_FORMATTER.format(objs.getDate());
             if (year.equals(annee)) {
                 ci.setDate(objs.getDate());
                 ci.setAbsices(year);
@@ -5475,7 +5475,7 @@ public class Util {
             b.tableHeader(widths, headers, b.y);
             b.pdf.setFont(PDF_HELV, 12, Color.BLACK);
             for (DebtItem item : datas) {
-                b.pdf.addCell(Constants.DATE_HEURE_FORMAT.format(item.getDate()), null);
+                b.pdf.addCell(Constants.DATE_ONLY_FORMATTER.format(item.getDate()), null);
                 b.pdf.addCell(item.getNomClient() == null ? "" : item.getNomClient(), null);
                 b.pdf.addCell(item.getPhoneClient() == null ? "" : item.getPhoneClient(), null);
                 b.pdf.addCell(item.getFacture() == null ? "" : item.getFacture(), null);

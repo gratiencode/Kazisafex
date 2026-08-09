@@ -64,6 +64,24 @@ public class Constants {
         new SimpleDateFormat("yyyy");
     public static final SimpleDateFormat TIMESTAMPED_FORMAT =
         new SimpleDateFormat("yyyyMMddHHmmss");
+
+    /**
+     * Formateurs pour les types java.time (LocalDateTime/LocalDate). Les
+     * instances SimpleDateFormat ci-dessus ne savent formater que des
+     * {@code java.util.Date} : tout appel avec une LocalDateTime/LocalDate
+     * jetait « Cannot format given Object as a Date ». Ces formateurs
+     * remplacent l'ancien code aux points d'utilisation.
+     */
+    public static final DateTimeFormatter DATE_HEURE_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    public static final DateTimeFormatter DATE_ONLY_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    public static final DateTimeFormatter YEAR_AND_MONTH_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy-MM");
+    public static final DateTimeFormatter YEAR_ONLY_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy");
+    public static final DateTimeFormatter TIMESTAMPED_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     public static final Calendar Calendrier = Calendar.getInstance();
     public static final long MILLSECONDS_JOURN = 86400000;
 

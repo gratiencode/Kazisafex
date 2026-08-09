@@ -21,12 +21,21 @@ public class SyncOutboxListener {
     private static final ThreadLocal<Boolean> suppressListener =
         ThreadLocal.withInitial(() -> false);
 
+    public static boolean isSuppressed() {
+        return suppressListener.get();
+    }
+
+    public static void setSuppressed(boolean value) {
+        suppressListener.set(value);
+    }
+
     public static void runSuppressed(Runnable action) {
+        boolean previous = suppressListener.get();
         suppressListener.set(true);
         try {
             action.run();
         } finally {
-            suppressListener.set(false);
+            suppressListener.set(previous);
         }
     }
 

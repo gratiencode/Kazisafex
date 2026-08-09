@@ -39,8 +39,9 @@ public class WriteQueueManager {
      * Soumettre une écriture en base.
      */
     public <T> CompletableFuture<T> submit(Function<EntityManager, T> action) {
+        boolean suppressed = data.SyncOutboxListener.isSuppressed();
         CompletableFuture<T> future = new CompletableFuture<>();
-        queue.add(new WriteTask<>(action, future));
+        queue.add(new WriteTask<>(action, future, suppressed));
         return future;
     }
 
@@ -61,22 +62,28 @@ public class WriteQueueManager {
     }
 
     private <T> void executeTask(WriteTask<T> task) {
-        EntityManager em = null;
+        boolean previous = data.SyncOutboxListener.isSuppressed();
         try {
-            em = emf.createEntityManager();
-            em.getTransaction().begin();
-            T result = task.getAction().apply(em);
-            em.getTransaction().commit();
-            task.getFuture().complete(result);
-        } catch (Exception ex) {
-            if (em != null && em.getTransaction().isActive()) {
-                em.getTransaction().rollback();
+            data.SyncOutboxListener.setSuppressed(task.isSuppressed());
+            EntityManager em = null;
+            try {
+                em = emf.createEntityManager();
+                em.getTransaction().begin();
+                T result = task.getAction().apply(em);
+                em.getTransaction().commit();
+                task.getFuture().complete(result);
+            } catch (Exception ex) {
+                if (em != null && em.getTransaction().isActive()) {
+                    em.getTransaction().rollback();
+                }
+                task.getFuture().completeExceptionally(ex);
+            } finally {
+                if (em != null) {
+                    em.close();
+                }
             }
-            task.getFuture().completeExceptionally(ex);
         } finally {
-            if (em != null) {
-                em.close();
-            }
+            data.SyncOutboxListener.setSuppressed(previous);
         }
     }
 

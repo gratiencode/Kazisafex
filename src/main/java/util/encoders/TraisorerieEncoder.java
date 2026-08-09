@@ -45,7 +45,7 @@ public class TraisorerieEncoder implements Encoder.Text<Traisorerie> {
                 .add("priority", ins.getPriority())
                 .add("counter", ins.getCounter())
                 .add("tresorId", Json.createObjectBuilder().add("uid", ins.getTresorId() == null ? "" : ins.getTresorId().getUid()))
-                .add("date", Constants.DATE_HEURE_FORMAT.format(ins.getDate()));
+                .add("date", Constants.DATE_HEURE_FORMATTER.format(ins.getDate()));
 
         StringWriter sw = new StringWriter();
         Json.createWriter(sw).writeObject(builder.build());

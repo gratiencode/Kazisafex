@@ -5,7 +5,9 @@ import data.network.Kazisafe;
 import data.network.dto.BatchMutationDto;
 import data.network.dto.BatchResultDto;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -34,6 +36,28 @@ public class BackgroundSyncService extends Service<Void> {
     private long adaptivePauseUntilEpochMs = 0L;
 
     /**
+     * Garde-fou anti-à-vide : si plusieurs cycles consécutifs ne font appliquer
+     * aucun enregistrement, on recule le prochain cycle pour ne pas marteler le
+     * serveur sur des données qui ne progressent pas (boucle sur les mêmes
+     * données, ex. un Vente rejeté en permanence).
+     */
+    private static final int NO_PROGRESS_BACKOFF_THRESHOLD = 3;
+    private static final long MAX_BACKOFF_MILLIS = 5 * 60 * 1000L;
+    private int consecutiveNoProgressCycles = 0;
+
+    /**
+     * Garde-fou anti-resync-complet-perpétuel : le full resync (backfill +
+     * upsync complet + catchUp complet) est très coûteux et n'est lancé qu'au
+     * plus une fois par fenêtre. Sans cela, une validation d'état qui échoue
+     * durablement (hash local/serveur instable) relance le backfill à CHAQUE
+     * cycle, recrée l'outbox de toutes les entités avec des createdAt neufs et
+     * rend le timestamp « since » inopérant : on dirait que la synchro est
+     * bloquée sur les mêmes données à since=0.
+     */
+    private static final long FULL_RESYNC_MIN_INTERVAL_MILLIS = 10 * 60 * 1000L;
+    private long lastFullResyncEpochMs = 0L;
+
+    /**
      * Moniteur de réveil : permet de demander un nouveau cycle sans annuler
      * celui en cours. Un cycle de sync (upsync + downsync) doit se terminer
      * complètement avant que le suivant démarre.
@@ -60,11 +84,32 @@ public class BackgroundSyncService extends Service<Void> {
         return instance;
     }
 
+    /**
+     * Intervalle effectif entre deux cycles, lu dynamiquement dans le pref
+     * « sync-freq » (réglé par le combobox de synchronisation dans les
+     * Paramètres). Relu à chaque fin de cycle : un changement s'applique donc
+     * sans redémarrer le service. Repli sur l'intervalle de construction (30s)
+     * si la préférence est absente ou invalide.
+     */
+    private int effectivePollIntervalSeconds() {
+        try {
+            int prefValue = java.util.prefs.Preferences
+                    .userNodeForPackage(SyncEngine.class)
+                    .getInt("sync-freq", pollIntervalSeconds);
+            return prefValue > 0 ? prefValue : pollIntervalSeconds;
+        } catch (Exception e) {
+            return pollIntervalSeconds;
+        }
+    }
+
     public synchronized void pauseSync() {
         if (!isPaused) {
             isPaused = true;
             System.out.println(
                     "BackgroundSyncService: Paused due to network/connectivity changes."
+            );
+            publishStatus(
+                    "Synchronisation en pause - connexion perdue, en attente de reconnexion..."
             );
         }
     }
@@ -74,6 +119,9 @@ public class BackgroundSyncService extends Service<Void> {
             isPaused = false;
             System.out.println(
                     "BackgroundSyncService: Resumed sync operations."
+            );
+            publishStatus(
+                    "Synchronisation reprise - connexion restaurée."
             );
         }
     }
@@ -169,6 +217,7 @@ public class BackgroundSyncService extends Service<Void> {
                     }
 
                     boolean cycleCompleted = false;
+                    int cycleApplied = 0;
                     try {
                         // 1. Validation d'état & Full Resync synchrone
                         try {
@@ -186,13 +235,26 @@ public class BackgroundSyncService extends Service<Void> {
                                                 regionId
                                         );
                                 if (!res.isSynchronized) {
-                                    publishStatus("Désynchronisation détectée. Réparation synchrone en cours...");
-                                    services.FullResyncService.performFullResyncSync(
-                                            kazisafe,
-                                            enterpriseId,
-                                            regionId,
-                                            BackgroundSyncService.this::publishStatus
-                                    );
+                                    long nowMs = System.currentTimeMillis();
+                                    if (nowMs - lastFullResyncEpochMs >= FULL_RESYNC_MIN_INTERVAL_MILLIS) {
+                                        lastFullResyncEpochMs = nowMs;
+                                        publishStatus("Désynchronisation détectée. Réparation synchrone en cours...");
+                                        services.FullResyncService.performFullResyncSync(
+                                                kazisafe,
+                                                enterpriseId,
+                                                regionId,
+                                                BackgroundSyncService.this::publishStatus
+                                        );
+                                    } else {
+                                        // Désynchronisation persistante : on ne relance pas un
+                                        // resync complet à chaque cycle (coûteux, il recrée
+                                        // l'outbox de toutes les entités). Le rattrapage
+                                        // incrémental du downsync, exécuté à chaque cycle,
+                                        // suffit entre deux resyncs complets.
+                                        publishStatus(
+                                                "Désynchronisation détectée - resync complet récent, rattrapage incrémental..."
+                                        );
+                                    }
                                 }
                             }
                         } catch (Exception e) {
@@ -212,19 +274,26 @@ public class BackgroundSyncService extends Service<Void> {
                             );
                             safeSleepMillis(Math.min(remainMs, 5000L));
                         } else {
-                            // Timestamp de fin de la dernière synchro : l'upsync
-                            // ne remonte que les outbox créées après ce timestamp
-                            // (ancienneté), en conservant les retries en cours.
-                            long cycleSince = SyncEngine.getLastSyncTimestamp();
-
                             // 2. Nettoyage et correction outbox
                             SyncOutboxService.correctAndCleanOutboxData();
 
-                            // 3. Upsync complet jusqu'au dernier niveau de priorité (Level 0 à Level 5)
+                            // 3. Upsync complet jusqu'au dernier niveau de priorité (Level 0 à Level 5).
+                            //    Garantie de progression : chaque enregistrement est tenté AU PLUS UNE FOIS
+                            //    PAR CYCLE (déduplication par UID dans attemptedThisCycle). Un enregistrement
+                            //    rejeté repasse UNSYNCED et sera retenté au cycle suivant (jamais abandonné),
+                            //    et une nouvelle passe ne démarre que si la passe précédente a réellement
+                            //    fait appliquer au moins un enregistrement. Sans cela, la re-sélection des
+                            //    UNSYNCED à chaque passe rebouclerait sur les mêmes données à l'infini.
                             boolean hasMoreOutbox = true;
+                            Set<String> attemptedThisCycle = new HashSet<>();
                             while (hasMoreOutbox && !isCancelled()) {
-                                List<SyncOutbox> pendingList = SyncOutboxService.fetchPendingOutboxSince(cycleSince);
+                                List<SyncOutbox> pendingList = SyncOutboxService.fetchAllPendingOutbox();
                                 if (pendingList == null || pendingList.isEmpty()) {
+                                    hasMoreOutbox = false;
+                                    break;
+                                }
+                                pendingList.removeIf(r -> r.getUid() == null || attemptedThisCycle.contains(r.getUid()));
+                                if (pendingList.isEmpty()) {
                                     hasMoreOutbox = false;
                                     break;
                                 }
@@ -242,10 +311,13 @@ public class BackgroundSyncService extends Service<Void> {
                                 });
 
                                 int total = pendingList.size();
-                                int processedCount = 0;
+                                int appliedThisPass = 0;
                                 for (int i = 0; i < total && !isCancelled(); i += adaptiveBatchSize) {
                                     int end = Math.min(i + adaptiveBatchSize, total);
                                     List<SyncOutbox> chunk = pendingList.subList(i, end);
+                                    for (SyncOutbox r : chunk) {
+                                        attemptedThisCycle.add(r.getUid());
+                                    }
 
                                     SyncOutcome outcome = processUpsyncChunk(chunk);
                                     if (outcome.rateLimited) {
@@ -254,17 +326,20 @@ public class BackgroundSyncService extends Service<Void> {
                                         if (pauseRemaining > 0) {
                                             safeSleepMillis(pauseRemaining);
                                         }
-                                    } else if (!outcome.success) {
-                                        hasMoreOutbox = false;
-                                        break;
-                                    } else {
+                                    } else if (outcome.success) {
                                         maybeIncreaseBatchSize();
-                                        processedCount += chunk.size();
+                                        appliedThisPass += outcome.appliedCount;
+                                    } else {
+                                        System.err.println("[SYNC-UPSYNC] Chunk failed; continuing with the rest of the queue.");
                                     }
                                 }
 
-                                if (processedCount == 0) {
-                                    break;
+                                cycleApplied += appliedThisPass;
+
+                                // Aucun progrès sur cette passe : tous les lots restants ont échoué ou
+                                // ont été limités. Arrêter évite de renvoyer en boucle les mêmes données.
+                                if (appliedThisPass == 0) {
+                                    hasMoreOutbox = false;
                                 }
                             }
 
@@ -300,10 +375,28 @@ public class BackgroundSyncService extends Service<Void> {
                         );
                     }
 
+                    // Garde-fou anti-à-vide : cycle sans aucun enregistrement
+                    // appliqué → recul exponentiel (plafonné) du prochain cycle.
+                    long nextWaitMillis = effectivePollIntervalSeconds() * 1000L;
+                    if (cycleCompleted && cycleApplied == 0) {
+                        consecutiveNoProgressCycles++;
+                    } else if (cycleCompleted) {
+                        consecutiveNoProgressCycles = 0;
+                    }
+                    if (consecutiveNoProgressCycles >= NO_PROGRESS_BACKOFF_THRESHOLD) {
+                        long backoff = (1L << Math.min(consecutiveNoProgressCycles, 5))
+                                * effectivePollIntervalSeconds() * 1000L;
+                        nextWaitMillis = Math.min(backoff, MAX_BACKOFF_MILLIS);
+                        publishStatus(
+                                "Synchronisation sans progression - pause allongée ("
+                                + nextWaitMillis / 1000 + "s)"
+                        );
+                    }
+
                     // Cycle terminé. Si un nouveau cycle a été demandé pendant celui-ci,
                     // il démarre immédiatement en séquence ; sinon on attend le prochain polling.
                     if (!consumeCycleRequest()) {
-                        sleepWithWake(pollIntervalSeconds * 1000L);
+                        sleepWithWake(nextWaitMillis);
                     } else {
                         publishStatus("Synchronisation demandée - nouveau cycle...");
                     }
@@ -343,7 +436,7 @@ public class BackgroundSyncService extends Service<Void> {
                 .collect(Collectors.toList());
 
         if (mutations.isEmpty()) {
-            return SyncOutcome.success();
+            return SyncOutcome.success(0);
         }
 
         try {
@@ -355,18 +448,23 @@ public class BackgroundSyncService extends Service<Void> {
             if (response.isSuccessful() && response.body() != null) {
                 BatchResultDto result = response.body();
 
+                Set<String> acknowledgedUids = new HashSet<>();
+                int appliedCount = 0;
+
                 // Handle Successes
                 if (result.successes != null) {
                     List<String> successUids = chunk
                             .stream()
-                            .filter(r-> result.successes.stream().anyMatch(s-> s.entityId.equals(r.getEntityId())
-                                            && s.entityType.equals(r.getTableName())))
+                            .filter(r-> result.successes.stream().anyMatch(s-> s.entityId != null && s.entityId.equals(r.getEntityId())
+                                            && s.entityType != null && s.entityType.equalsIgnoreCase(r.getTableName())))
                             .map(SyncOutbox::getUid)
                             .collect(Collectors.toList());
 
                     if (!successUids.isEmpty()) {
                         System.out.println("[SYNC-UPSYNC] Successfully synced "+ successUids.size()+ "/"+mutations.size()+" records.");
                         SyncOutboxService.markAsApplied(successUids);
+                        acknowledgedUids.addAll(successUids);
+                        appliedCount = successUids.size();
                     }
                 }
 
@@ -374,18 +472,34 @@ public class BackgroundSyncService extends Service<Void> {
                 if (result.failures != null) {
                     List<String> failedUids = chunk
                             .stream()
-                            .filter(r-> result.failures.stream().anyMatch(s-> s.entityId.equals(r.getEntityId())
-                                            && s.entityType.equals(r.getTableName())))
+                            .filter(r-> result.failures.stream().anyMatch(s-> s.entityId != null && s.entityId.equals(r.getEntityId())
+                                            && s.entityType != null && s.entityType.equalsIgnoreCase(r.getTableName())))
                             .map(SyncOutbox::getUid)
                             .collect(Collectors.toList());
 
                     if (!failedUids.isEmpty()) {
                         System.out.println("[SYNC-UPSYNC] "+ failedUids.size()+ " mutations failed, marking as UNSYNCED for retry.");
                         SyncOutboxService.markAsUnsynced(failedUids);
+                        acknowledgedUids.addAll(failedUids);
                     }
                 }
 
-                return SyncOutcome.success();
+                // Enregistrements non reconnus (ni succès ni échec) : on les marque
+                // UNSYNCED pour borner les retries. Sans cela, un enregistrement
+                // ignoré par le serveur (ex. un Vente) resterait PENDING et serait
+                // renvoyé à chaque passe : boucle infinie sur les mêmes données.
+                List<String> unhandledUids = chunk
+                        .stream()
+                        .filter(r -> !acknowledgedUids.contains(r.getUid()))
+                        .map(SyncOutbox::getUid)
+                        .collect(Collectors.toList());
+                if (!unhandledUids.isEmpty()) {
+                    System.out.println("[SYNC-UPSYNC] "+ unhandledUids.size()
+                            + " mutations not acknowledged by server, marking as UNSYNCED for retry.");
+                    SyncOutboxService.markAsUnsynced(unhandledUids);
+                }
+
+                return SyncOutcome.success(appliedCount);
             } else if (response.code() == 429) {
                 String retryBatchHeader = response.headers().get("Retry-With-Batch-Size"); 
                 String retryAfterHeader = response.headers().get("Retry-After"); 
@@ -497,25 +611,28 @@ public class BackgroundSyncService extends Service<Void> {
         private final boolean rateLimited;
         private final int suggestedBatchSize;
         private final int retryAfterSeconds;
+        private final int appliedCount;
 
         private SyncOutcome(
                 boolean success,
                 boolean rateLimited,
                 int suggestedBatchSize,
-                int retryAfterSeconds
+                int retryAfterSeconds,
+                int appliedCount
         ) {
             this.success = success;
             this.rateLimited = rateLimited;
             this.suggestedBatchSize = suggestedBatchSize;
             this.retryAfterSeconds = retryAfterSeconds;
+            this.appliedCount = appliedCount;
         }
 
-        private static SyncOutcome success() {
-            return new SyncOutcome(true, false, 0, 0);
+        private static SyncOutcome success(int appliedCount) {
+            return new SyncOutcome(true, false, 0, 0, appliedCount);
         }
 
         private static SyncOutcome failed() {
-            return new SyncOutcome(false, false, 0, 0);
+            return new SyncOutcome(false, false, 0, 0, 0);
         }
 
         private static SyncOutcome rateLimited(
@@ -526,7 +643,8 @@ public class BackgroundSyncService extends Service<Void> {
                     false,
                     true,
                     suggestedBatchSize,
-                    retryAfterSeconds
+                    retryAfterSeconds,
+                    0
             );
         }
     }

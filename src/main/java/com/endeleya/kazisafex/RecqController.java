@@ -824,9 +824,15 @@ public class RecqController implements Initializable {
     }
 
     private boolean trySaveRecquis(Recquisition req) throws IOException {
-        Response<Recquisition> rool = ksf.syncRecquisition(req.getUid(), Constants.DATE_HEURE_FORMAT.format(req.getDate()), req.getObservation(),
+        String dateReq = req.getDate() != null
+                ? Constants.DATE_HEURE_FORMATTER.format(req.getDate())
+                : "";
+        String dateExp = req.getDateExpiry() != null
+                ? Constants.DATE_ONLY_FORMATTER.format(req.getDateExpiry())
+                : "";
+        Response<Recquisition> rool = ksf.syncRecquisition(req.getUid(), dateReq, req.getObservation(),
                 req.getReference(), Double.toString(req.getQuantite()), Double.toString(req.getCoutAchat()),
-                req.getDateExpiry().toString(), Double.toString(req.getStockAlert()),
+                dateExp, Double.toString(req.getStockAlert()),
                 req.getMesureId().getUid(), req.getProductId().getUid(), req.getRegion(), req.getNumlot()).execute();
         return rool.code() == 200;
     }

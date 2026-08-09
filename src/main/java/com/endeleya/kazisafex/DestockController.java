@@ -964,7 +964,7 @@ public class DestockController implements Initializable {
             List<Stocker> lsks = meth.equals("ppps") ? StockerDelegate.toFefoOrdering(choosenProduct.getUid()) : (meth.equals("fifo") ? StockerDelegate.toFifoOrdering(choosenProduct.getUid()) : StockerDelegate.toLifoOrdering(choosenProduct.getUid()));
             for (Stocker lsk : lsks) {
                 if (lsk.getNumlot() == null) {
-                    lsk.setNumlot("Lot:" + Constants.TIMESTAMPED_FORMAT.format(lsk.getDateStocker()));
+                    lsk.setNumlot("Lot:" + Constants.TIMESTAMPED_FORMATTER.format(lsk.getDateStocker()));
                 }
                 lisstocker.add(lsk);
             }

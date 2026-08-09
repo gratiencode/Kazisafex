@@ -69,9 +69,10 @@ public class SyncEngine {
     public SyncEngine setup(String token) {
         this.kazisafe = KazisafeServiceFactory.createService(token);
 
-        // Purge old outbox records (older than 30 days) to preserve storage
+        // Purge APPLIED outbox records older than the retention window (10 days)
         try {
-            services.SyncOutboxService.purgeOldRecords(30);
+            services.SyncOutboxService.purgeOldRecords(
+                    services.SyncOutboxService.APPLIED_RETENTION_DAYS);
             System.out.println("SyncEngine: Old outbox records purged.");
         } catch (Exception e) {
             System.err.println(

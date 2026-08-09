@@ -280,8 +280,8 @@ public class ReleveeController implements Initializable {
         /// factures
         cperiode.setCellValueFactory((TableColumn.CellDataFeatures<Facture, String> param) -> {
             Facture im = param.getValue();
-            String d1 = Constants.DATE_ONLY_FORMAT.format(im.getStartDate());
-            String d2 = Constants.DATE_ONLY_FORMAT.format(im.getEndDate());
+            String d1 = Constants.DATE_ONLY_FORMATTER.format(im.getStartDate());
+            String d2 = Constants.DATE_ONLY_FORMATTER.format(im.getEndDate());
             return new SimpleStringProperty(d1 + " - " + d2);
         });
         cnumero.setCellValueFactory((TableColumn.CellDataFeatures<Facture, String> param) -> {

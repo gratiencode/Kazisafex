@@ -46,10 +46,10 @@ public class FactureEncoder implements Encoder.Text<Facture> {
                 .add("totalamount", bill.getTotalamount())
                 .add("organisId", Json.createObjectBuilder().add("uid", bill.getOrganisId().getUid()).build());
         if (bill.getStartDate() != null) {
-            builder.add("startDate", Constants.DATE_ONLY_FORMAT.format(bill.getStartDate()));
+            builder.add("startDate", Constants.DATE_ONLY_FORMATTER.format(bill.getStartDate()));
         }
         if (bill.getEndDate() != null) {
-            builder.add("endDate", Constants.DATE_ONLY_FORMAT.format(bill.getEndDate()));
+            builder.add("endDate", Constants.DATE_ONLY_FORMATTER.format(bill.getEndDate()));
         }
         StringWriter sw = new StringWriter();
         Json.createWriter(sw).writeObject(builder.build());

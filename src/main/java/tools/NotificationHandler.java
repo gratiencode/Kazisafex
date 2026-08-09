@@ -145,7 +145,7 @@ public class NotificationHandler implements EventHandler {
                     boolean isDelete = obj.getAction() != null
                         && (obj.getAction().equalsIgnoreCase("delete")
                             || obj.getAction().equalsIgnoreCase("remove"));
-                    executeDownsyncMutation(() -> {
+                    SyncOutboxListener.runSuppressed(() -> executeDownsyncMutation(() -> {
                             switch (t) {
                                 case Tables.PRODUIT -> {
                                     Produit product = (Produit) obj;
@@ -773,7 +773,7 @@ public class NotificationHandler implements EventHandler {
                                 default -> {
                                 }
                             }
-                        });
+                        }));
                     if (status[0] == DownsyncStatus.DEPENDENCY_MISSING) {
                         scheduleRetry(json, id, region, attempt + 1, obj.getType());
                     }

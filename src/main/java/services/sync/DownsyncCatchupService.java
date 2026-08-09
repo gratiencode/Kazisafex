@@ -36,6 +36,21 @@ public class DownsyncCatchupService {
     }
 
     /**
+     * Remet le curseur de rattrapage (« Page since=… ») à zéro : le prochain
+     * cycle de synchronisation re-téléchargera toutes les mutations depuis le
+     * début, au lieu de reprendre au dernier timestamp appliqué.
+     */
+    public static void resetCursor() {
+        Preferences pref = Preferences.userNodeForPackage(
+            DownsyncCatchupService.class
+        );
+        pref.put(LAST_MUTATION_TS_KEY, "0");
+        System.out.println(
+            "[SYNC-CATCHUP] Curseur de rattrapage reinitialise a 0 (re-download complet au prochain cycle)."
+        );
+    }
+
+    /**
      * Rattrapage complet : télécharge depuis le début de l'outbox serveur
      * (getMissedMutations depuis l'epoch), crée les enregistrements downsync
      * locaux puis matérialise en base locale (MySQL ou SQLite selon la base

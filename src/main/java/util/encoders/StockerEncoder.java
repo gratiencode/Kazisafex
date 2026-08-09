@@ -44,7 +44,7 @@ public class StockerEncoder implements Encoder.Text<Stocker> {
                 .add("libelle", ins.getLibelle() == null ? "" : ins.getLibelle())
                 .add("coutAchat", ins.getCoutAchat())
                 .add("observation", ins.getObservation() == null ? "" : ins.getObservation())
-                .add("numlot", ins.getNumlot() == null ? Constants.TIMESTAMPED_FORMAT.format(ins.getDateStocker()) : ins.getNumlot())
+                .add("numlot", ins.getNumlot() == null ? Constants.TIMESTAMPED_FORMATTER.format(ins.getDateStocker()) : ins.getNumlot())
                 .add("reduction", ins.getReduction())
                 .add("prixAchatTotal", ins.getPrixAchatTotal())
                 .add("type", Tables.STOCKER.name())
@@ -58,7 +58,7 @@ public class StockerEncoder implements Encoder.Text<Stocker> {
                 .add("quantite", ins.getQuantite())
                 .add("localisation", ins.getLocalisation() == null ? "" : ins.getLocalisation())
                 .add("stockAlerte", ins.getStockAlerte())
-                .add("dateStocker", Constants.DATE_HEURE_FORMAT.format(ins.getDateStocker()))
+                .add("dateStocker", Constants.DATE_HEURE_FORMATTER.format(ins.getDateStocker()))
                 .add("livraisId", Json.createObjectBuilder()
                         .add("uid", ins.getLivraisId().getUid()).build())
                 .add("mesureId", Json.createObjectBuilder()
@@ -66,7 +66,7 @@ public class StockerEncoder implements Encoder.Text<Stocker> {
                 .add("productId", Json.createObjectBuilder()
                         .add("uid", ins.getProductId().getUid()).build());
         if (ins.getDateExpir() != null) {
-            builder.add("dateExpir", Constants.DATE_ONLY_FORMAT.format(ins.getDateExpir()));
+            builder.add("dateExpir", Constants.DATE_ONLY_FORMATTER.format(ins.getDateExpir()));
         }
         StringWriter sw = new StringWriter();
         Json.createWriter(sw).writeObject(builder.build());

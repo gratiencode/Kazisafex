@@ -113,6 +113,7 @@ public class MainUI {
     private static final int TOLERANCE_THRESHOLD = 0xFF;
     private static final java.util.List<Stage> activeToasts =
         new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final int MAX_VISIBLE_TOASTS = 5;
     public static Stage mainStage;
 
     /**
@@ -225,11 +226,26 @@ public class MainUI {
         }
     }
 
+    private static volatile long lastSyncToastAt = 0L;
+    private static volatile String lastSyncToastMessage = null;
+    private static final long TOAST_THROTTLE_MS = 3000L;
+
     public static void notifySync(
         String title,
         String message,
         String tooltip
     ) {
+        // Garde-fou anti-explosion : un même message (ou un message répété en
+        // rafale, ex. burst SSE) ne déclenche qu'un seul toast par fenêtre de
+        // TOAST_THROTTLE_MS. Évite de saturer l'écran et le son de notification.
+        long now = System.currentTimeMillis();
+        String key = message == null ? "" : message;
+        if (key.equals(lastSyncToastMessage)
+            && now - lastSyncToastAt < TOAST_THROTTLE_MS) {
+            return;
+        }
+        lastSyncToastMessage = key;
+        lastSyncToastAt = now;
         playSyncSound();
         showToast("info", message, 4, Pos.BOTTOM_RIGHT);
     }
@@ -905,6 +921,22 @@ public class MainUI {
             Scene scene = new Scene(root);
             scene.setFill(Color.TRANSPARENT);
             Stage stage = new Stage();
+            // Garde-fou anti-explosion : au plus MAX_VISIBLE_TOASTS toasts à
+            // l'écran. En cas de rafale (ex. burst SSE/WebSocket), on ferme les
+            // plus anciens pour ne jamais inonder l'écran.
+            int visible = 0;
+            for (Stage s : activeToasts) {
+                if (s.isShowing()) {
+                    visible++;
+                }
+            }
+            while (visible >= MAX_VISIBLE_TOASTS && !activeToasts.isEmpty()) {
+                Stage oldest = activeToasts.remove(0);
+                if (oldest.isShowing()) {
+                    oldest.close();
+                }
+                visible--;
+            }
             stage.initStyle(StageStyle.TRANSPARENT);
             stage.setScene(scene);
             stage.setAlwaysOnTop(true);

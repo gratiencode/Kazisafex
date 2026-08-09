@@ -12,9 +12,11 @@ import java.io.StringReader;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jakarta.json.Json;
+import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonReader;
+import jakarta.json.JsonString;
 
 import data.Abonnement;
 import data.Aretirer;
@@ -1148,13 +1150,114 @@ public class JsonUtil {
         }
     }
 
+    /**
+     * Parse numérique null-safe : retourne {@code 0.0} si la propriété est
+     * absente, {@code JsonValue.NULL} ou n'est pas un nombre (les payloads
+     * downsync peuvent ometre certains champs numériques ou les envoyer à
+     * {@code null}).
+     */
+    private static double safeDouble(JsonObject json, String name) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
+            return 0.0;
+        }
+        JsonNumber num = json.getJsonNumber(name);
+        return num == null ? 0.0 : num.doubleValue();
+    }
+
+    /** Parse {@code int} null-safe (retourne {@code 0} si absent ou {@code null}). */
+    private static int safeInt(JsonObject json, String name) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
+            return 0;
+        }
+        JsonNumber num = json.getJsonNumber(name);
+        return num == null ? 0 : num.intValue();
+    }
+
+    /** Parse {@code long} null-safe (retourne {@code 0} si absent ou {@code null}). */
+    private static long safeLong(JsonObject json, String name) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
+            return 0L;
+        }
+        JsonNumber num = json.getJsonNumber(name);
+        return num == null ? 0L : num.longValue();
+    }
+
+    /**
+     * Parse chaîne null-safe : retourne {@code null} si la propriété est
+     * absente, {@code JsonValue.NULL} ou n'est pas une chaîne (les payloads
+     * downsync peuvent contenir des champs à {@code null}).
+     */
+    private static String safeString(JsonObject json, String name) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
+            return null;
+        }
+        JsonString str = json.getJsonString(name);
+        return str == null ? null : str.getString();
+    }
+
+    /**
+     * Récupère un objet imbriqué null-safe : retourne {@code null} si la
+     * propriété est absente ou {@code JsonValue.NULL} (au lieu de lever une
+     * {@link ClassCastException}).
+     */
+    private static JsonObject safeObject(JsonObject json, String name) {
+        if (json == null || !json.containsKey(name) || json.isNull(name)) {
+            return null;
+        }
+        try {
+            return json.getJsonObject(name);
+        } catch (ClassCastException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Détermine le parent d'un client lors d'un downsync :
+     * <ul>
+     * <li>si le payload contient {@code parentId}, il est utilisé tel quel ;</li>
+     * <li>pour le client « Anonyme » (téléphone 09000), {@code parentId} est
+     * {@code null} ;</li>
+     * <li>pour tout autre client sans {@code parentId}, le parent par défaut
+     * est le client « Anonyme ».</li>
+     * </ul>
+     */
+    private static void resolveDefaultParent(JsonObject json, Client client) {
+        JsonObject oo = safeObject(json, "parentId");
+        if (oo != null) {
+            client.setParentId(new Client(safeString(oo, "uid")));
+        } else if (isAnonymousClient(client)) {
+            client.setParentId(null);
+        } else {
+            Client anonyme = getAnonymousClientSafely();
+            if (anonyme != null) {
+                client.setParentId(new Client(anonyme.getUid()));
+            }
+        }
+    }
+
+    /** Le client « Anonyme » par défaut (nom « Anonyme », téléphone 09000). */
+    private static boolean isAnonymousClient(Client client) {
+        return client != null
+                && "09000".equals(client.getPhone())
+                && "Anonyme".equalsIgnoreCase(client.getNomClient());
+    }
+
+    /** Recherche du client « Anonyme » local, sans lever d'exception. */
+    private static Client getAnonymousClientSafely() {
+        try {
+            return CompactMode.getAnonymousClient();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static Object objectify(String message) {
         JsonReader reader = Json.createReader(new StringReader(message));
         JsonObject json = reader.readObject();
         
         // First, check if there's a "type" field for reliable type detection
         if (json.containsKey("type") && !json.isNull("type")) {
-            String type = json.getString("type");
+            String type = safeString(json, "type");
             try {
                 Tables table = Tables.valueOf(type);
                 ObjectMapper mapper = KazisafeServiceFactory.mapper();
@@ -1299,223 +1402,217 @@ public class JsonUtil {
         
         // Fall back to field-based detection if no type field or deserialization failed
         if (json.containsKey("descritption")) {
-            Category cat = new Category(json.getString("uid"));
-            cat.setDescritption(json.getString("descritption"));
+            Category cat = new Category(safeString(json, "uid"));
+            cat.setDescritption(safeString(json, "descritption"));
             return cat;
         } else if (json.containsKey("codebar")) {
-            Produit p = new Produit(json.getString("uid"));
-            p.setCodebar(json.getString("codebar"));
-            p.setNomProduit(json.getString("nomProduit"));
-            p.setMarque(json.getString("marque"));
-            p.setModele(json.getString("modele"));
-            p.setCouleur(json.getString("couleur"));
-            p.setCodebar(json.getString("codebar"));
-            p.setTaille(json.getString("taille"));
-            p.setMethodeInventaire(json.getString("methodeInventaire"));
+            Produit p = new Produit(safeString(json, "uid"));
+            p.setCodebar(safeString(json, "codebar"));
+            p.setNomProduit(safeString(json, "nomProduit"));
+            p.setMarque(safeString(json, "marque"));
+            p.setModele(safeString(json, "modele"));
+            p.setCouleur(safeString(json, "couleur"));
+            p.setCodebar(safeString(json, "codebar"));
+            p.setTaille(safeString(json, "taille"));
+            p.setMethodeInventaire(safeString(json, "methodeInventaire"));
             p.setCategoryId(new Category(json.getJsonObject("categoryId").getString("uid")));
             return p;
         } else if (json.containsKey("quantContenu") && !json.containsKey("mesureId")) {
-            Mesure m = new Mesure(json.getString("uid"));
-            m.setDescription(json.getString("description"));
-            m.setQuantContenu(json.getJsonNumber("quantContenu").doubleValue());
+            Mesure m = new Mesure(safeString(json, "uid"));
+            m.setDescription(safeString(json, "description"));
+            m.setQuantContenu(safeDouble(json, "quantContenu"));
             JsonObject jso = json.getJsonObject("produitId");
-            Produit p = new Produit(jso.getString("uid"));
+            Produit p = new Produit(safeString(jso, "uid"));
             m.setProduitId(p);
             return m;
         } else if (json.containsKey("nomFourn") && !json.containsKey("fournId")) {
-            Fournisseur ins = new Fournisseur(json.getString("uid"));
-            ins.setAdresse(json.getString("adresse"));
-            ins.setIdentification(json.getString("identification"));
-            ins.setNomFourn(json.getString("nomFourn"));
-            ins.setPhone(json.getString("phone"));
+            Fournisseur ins = new Fournisseur(safeString(json, "uid"));
+            ins.setAdresse(safeString(json, "adresse"));
+            ins.setIdentification(safeString(json, "identification"));
+            ins.setNomFourn(safeString(json, "nomFourn"));
+            ins.setPhone(safeString(json, "phone"));
             return ins;
         } else if (json.containsKey("dateLivr") && !json.containsKey("livraisId")) {
-            Livraison ins = new Livraison(json.getString("uid"));
-            ins.setLibelle(json.containsKey("libelle") ? json.getString("libelle") : "");
-            ins.setNumPiece(json.getString("numPiece"));
-            ins.setObservation(json.containsKey("observation") ? json.getString("observation") : "");
-            ins.setPayed(json.getJsonNumber("payed").doubleValue());
-            ins.setReduction(json.getJsonNumber("reduction").doubleValue());
-            ins.setReference(json.getString("reference"));
-            ins.setRegion(json.getString("region"));
-            ins.setRemained(json.getJsonNumber("remained").doubleValue());
-            ins.setTopay(json.getJsonNumber("topay").doubleValue());
-            ins.setToreceive(json.getJsonNumber("toreceive").doubleValue());
+            Livraison ins = new Livraison(safeString(json, "uid"));
+            ins.setLibelle(json.containsKey("libelle") ? safeString(json, "libelle") : "");
+            ins.setNumPiece(safeString(json, "numPiece"));
+            ins.setObservation(json.containsKey("observation") ? safeString(json, "observation") : "");
+            ins.setPayed(safeDouble(json, "payed"));
+            ins.setReduction(safeDouble(json, "reduction"));
+            ins.setReference(safeString(json, "reference"));
+            ins.setRegion(safeString(json, "region"));
+            ins.setRemained(safeDouble(json, "remained"));
+            ins.setTopay(safeDouble(json, "topay"));
+            ins.setToreceive(safeDouble(json, "toreceive"));
             ins.setDateLivr(safeLocalDate(json, "dateLivr"));
-            JsonObject jso = json.getJsonObject("fournId");
-            Fournisseur fssr = new Fournisseur(jso.getString("uid"));
-            ins.setFournId(fssr);
+            JsonObject jso = safeObject(json, "fournId");
+            if (jso != null) {
+                Fournisseur fssr = new Fournisseur(safeString(jso, "uid"));
+                ins.setFournId(fssr);
+            }
             return ins;
         } else if (json.containsKey("dateStocker")) {
-            Stocker ins = new Stocker(json.getString("uid"));
-            ins.setLibelle(json.containsKey("libelle") ? json.getString("libelle") : "");
-            ins.setRegion(json.getString("region"));
-            ins.setObservation(json.containsKey("observation") ? json.getString("observation") : "");
-            ins.setNumlot(json.getString("numlot"));
-            ins.setLocalisation(json.getString("localisation"));
-            ins.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
-            ins.setReduction(json.getJsonNumber("reduction").doubleValue());
-            ins.setPrixAchatTotal(json.getJsonNumber("prixAchatTotal").doubleValue());
-            ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            ins.setStockAlerte(json.getJsonNumber("stockAlerte").doubleValue());
+            Stocker ins = new Stocker(safeString(json, "uid"));
+            ins.setLibelle(json.containsKey("libelle") ? safeString(json, "libelle") : "");
+            ins.setRegion(safeString(json, "region"));
+            ins.setObservation(json.containsKey("observation") ? safeString(json, "observation") : "");
+            ins.setNumlot(safeString(json, "numlot"));
+            ins.setLocalisation(safeString(json, "localisation"));
+            ins.setCoutAchat(safeDouble(json, "coutAchat"));
+            ins.setReduction(safeDouble(json, "reduction"));
+            ins.setPrixAchatTotal(safeDouble(json, "prixAchatTotal"));
+            ins.setQuantite(safeDouble(json, "quantite"));
+            ins.setStockAlerte(safeDouble(json, "stockAlerte"));
             ins.setDateExpir(safeLocalDate(json, "dateExpir"));
             ins.setDateStocker(safeLocalDateTime(json, "dateStocker"));
             JsonObject jso1 = json.getJsonObject("livraisId");
-            Livraison livr = new Livraison(jso1.getString("uid"));
+            Livraison livr = new Livraison(safeString(jso1, "uid"));
             ins.setLivraisId(livr);
             JsonObject jso2 = json.getJsonObject("mesureId");
-            Mesure m = new Mesure(jso2.getString("uid"));
+            Mesure m = new Mesure(safeString(jso2, "uid"));
             ins.setMesureId(m);
             JsonObject jso3 = json.getJsonObject("productId");
-            Produit pro = new Produit(jso3.getString("uid"));
+            Produit pro = new Produit(safeString(jso3, "uid"));
             ins.setProductId(pro);
             return ins;
         } else if (json.containsKey("dateDestockage")) {
             Destocker ins = new Destocker();
-            ins.setUid(json.getString("uid"));
-            ins.setLibelle(json.containsKey("libelle") ? json.getString("libelle") : "");
-            ins.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
-            ins.setObservation(json.containsKey("observation") ? json.getString("observation") : "");
-            ins.setNumlot(json.getString("numlot"));
-            ins.setReference(json.getString("reference"));
-            ins.setRegion(json.getString("region"));
-            ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            ins.setDestination(json.getString("destination"));
+            ins.setUid(safeString(json, "uid"));
+            ins.setLibelle(json.containsKey("libelle") ? safeString(json, "libelle") : "");
+            ins.setCoutAchat(safeDouble(json, "coutAchat"));
+            ins.setObservation(json.containsKey("observation") ? safeString(json, "observation") : "");
+            ins.setNumlot(safeString(json, "numlot"));
+            ins.setReference(safeString(json, "reference"));
+            ins.setRegion(safeString(json, "region"));
+            ins.setQuantite(safeDouble(json, "quantite"));
+            ins.setDestination(safeString(json, "destination"));
             ins.setDateDestockage(safeLocalDateTime(json, "dateDestockage"));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
-            mz.setUid(jso1.getString("uid"));
+            mz.setUid(safeString(jso1, "uid"));
             ins.setMesureId(mz);
             JsonObject jso3 = json.getJsonObject("productId");
-            Produit pro = new Produit(jso3.getString("uid"));
+            Produit pro = new Produit(safeString(jso3, "uid"));
             ins.setProductId(pro);
             return ins;
         } else if (json.containsKey("stockAlert")) {
-            Recquisition ins = new Recquisition(json.getString("uid"));
-            ins.setReference(json.getString("reference"));
-            ins.setObservation(json.containsKey("observation") ? json.getString("observation") : "");
-            ins.setNumlot(json.getString("numlot"));
-            ins.setRegion(json.getString("region"));
-            ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            ins.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
-            ins.setStockAlert(json.getJsonNumber("stockAlert").doubleValue());
+            Recquisition ins = new Recquisition(safeString(json, "uid"));
+            ins.setReference(safeString(json, "reference"));
+            ins.setObservation(json.containsKey("observation") ? safeString(json, "observation") : "");
+            ins.setNumlot(safeString(json, "numlot"));
+            ins.setRegion(safeString(json, "region"));
+            ins.setQuantite(safeDouble(json, "quantite"));
+            ins.setCoutAchat(safeDouble(json, "coutAchat"));
+            ins.setStockAlert(safeDouble(json, "stockAlert"));
             ins.setDateExpiry(safeLocalDate(json, "dateExpiry"));
             ins.setDate(safeLocalDateTime(json, "date"));
             JsonObject jso1 = json.getJsonObject("mesureId");
             Mesure mz = new Mesure();
-            mz.setUid(jso1.getString("uid"));
+            mz.setUid(safeString(jso1, "uid"));
             ins.setMesureId(mz);
             JsonObject jso3 = json.getJsonObject("productId");
-            Produit pro = new Produit(jso3.getString("uid"));
+            Produit pro = new Produit(safeString(jso3, "uid"));
             ins.setProductId(pro);
             return ins;
         } else if (json.containsKey("qmax") && json.containsKey("prixUnitaire")) {
-            PrixDeVente ins = new PrixDeVente(json.getString("uid"));
-            ins.setQmax(json.getJsonNumber("qmax").doubleValue());
-            ins.setQmin(json.getJsonNumber("qmin").doubleValue());
-            ins.setDevise(json.getString("devise"));
-            ins.setPrixUnitaire(json.getJsonNumber("prixUnitaire").doubleValue());
-            ins.setPourcentParCunit(json.containsKey("pourcentParCunit") ? json.getJsonNumber("pourcentParCunit").doubleValue() : 0);
+            PrixDeVente ins = new PrixDeVente(safeString(json, "uid"));
+            ins.setQmax(safeDouble(json, "qmax"));
+            ins.setQmin(safeDouble(json, "qmin"));
+            ins.setDevise(safeString(json, "devise"));
+            ins.setPrixUnitaire(safeDouble(json, "prixUnitaire"));
+            ins.setPourcentParCunit(safeDouble(json, "pourcentParCunit"));
             JsonObject jso1 = json.getJsonObject("mesureId");
-            Mesure mz = new Mesure(jso1.getString("uid"));
+            Mesure mz = new Mesure(safeString(jso1, "uid"));
             ins.setMesureId(mz);
             JsonObject jso2 = json.getJsonObject("recquisitionId");
-            Recquisition req = new Recquisition(jso2.getString("uid"));
+            Recquisition req = new Recquisition(safeString(jso2, "uid"));
             ins.setRecquisitionId(req);
             return ins;
         } else if (json.containsKey("typeClient") && !json.containsKey("clientId")) {
             Client ins = new Client();
-            ins.setUid(json.getString("uid"));
-            ins.setAdresse(json.getString("adresse"));
-            ins.setEmail(json.getString("email"));
-            ins.setTypeClient(json.getString("typeClient"));
-            ins.setNomClient(json.getString("nomClient"));
-            JsonObject oo = json.getJsonObject("parentId");
-            if (oo != null) {
-                ins.setParentId(new Client(oo.getString("uid")));
-            } else {
-                ins.setParentId(ins);
-            }
-            ins.setPhone(json.getString("phone"));
+            ins.setUid(safeString(json, "uid"));
+            ins.setAdresse(safeString(json, "adresse"));
+            ins.setEmail(safeString(json, "email"));
+            ins.setTypeClient(safeString(json, "typeClient"));
+            ins.setNomClient(safeString(json, "nomClient"));
+            ins.setPhone(safeString(json, "phone"));
+            resolveDefaultParent(json, ins);
             return ins;
         } else if (json.containsKey("dateVente")) {
             Vente ins = new Vente();
-            ins.setUid(json.getJsonNumber("uid").intValue());
-            ins.setLibelle(json.getString("libelle"));
-            ins.setLatitude(json.getJsonNumber("latitude").doubleValue());
-            ins.setObservation(json.getString("observation"));
-            ins.setLongitude(json.getJsonNumber("longitude").doubleValue());
-            ins.setMontantCdf(json.getJsonNumber("montantCdf").doubleValue());
-            ins.setMontantDette(json.getJsonNumber("montantDette").doubleValue());
-            ins.setRegion(json.getString("region"));
-            ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
-            ins.setPayment(json.getString("payment"));
-            ins.setReference(json.getString("reference"));
+            ins.setUid(safeInt(json, "uid"));
+            ins.setLibelle(safeString(json, "libelle"));
+            ins.setLatitude(safeDouble(json, "latitude"));
+            ins.setObservation(safeString(json, "observation"));
+            ins.setLongitude(safeDouble(json, "longitude"));
+            ins.setMontantCdf(safeDouble(json, "montantCdf"));
+            ins.setMontantDette(safeDouble(json, "montantDette"));
+            ins.setRegion(safeString(json, "region"));
+            ins.setMontantUsd(safeDouble(json, "montantUsd"));
+            ins.setPayment(safeString(json, "payment"));
+            ins.setReference(safeString(json, "reference"));
             ins.setEcheance(safeLocalDate(json, "echeance"));
             ins.setDateVente(safeLocalDateTime(json, "dateVente"));
-            ins.setDeviseDette(json.getString("deviseDette"));
-            JsonObject jso = json.getJsonObject("clientId");
-            Client clt = new Client();
-            clt.setUid(jso.getString("uid"));
-            clt.setAdresse(jso.getString("adresse"));
-            clt.setEmail(jso.getString("email"));
-            clt.setTypeClient(jso.getString("typeClient"));
-            clt.setNomClient(jso.getString("nomClient"));
-            clt.setPhone(jso.getString("phone"));
-            JsonObject oo = jso.getJsonObject("parentId");
-            if (oo != null) {
-                clt.setParentId(new Client(oo.getString("uid")));
-            } else {
-                clt.setParentId(clt);
+            ins.setDeviseDette(safeString(json, "deviseDette"));
+            JsonObject jso = safeObject(json, "clientId");
+            if (jso != null) {
+                Client clt = new Client();
+                clt.setUid(safeString(jso, "uid"));
+                clt.setAdresse(safeString(jso, "adresse"));
+                clt.setEmail(safeString(jso, "email"));
+                clt.setTypeClient(safeString(jso, "typeClient"));
+                clt.setNomClient(safeString(jso, "nomClient"));
+                clt.setPhone(safeString(jso, "phone"));
+                resolveDefaultParent(jso, clt);
+                ins.setClientId(clt);
             }
-            ins.setClientId(clt);
             return ins;
         } else if (json.containsKey("prixUnit")) {
             LigneVente ins = new LigneVente();
-            ins.setUid(json.getJsonNumber("uid").longValue());
-            ins.setClientId(json.getString("clientId"));
-            ins.setNumlot(json.getString("numlot"));
-            ins.setPrixUnit(json.getJsonNumber("prixUnit").doubleValue());
-            ins.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            ins.setMontantCdf(json.getJsonNumber("montantCdf").doubleValue());
-            ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
-            ins.setCoutAchat(json.containsKey("coutAchat") ? json.getJsonNumber("coutAchat").doubleValue() : 0);
+            ins.setUid(safeLong(json, "uid"));
+            ins.setClientId(safeString(json, "clientId"));
+            ins.setNumlot(safeString(json, "numlot"));
+            ins.setPrixUnit(safeDouble(json, "prixUnit"));
+            ins.setQuantite(safeDouble(json, "quantite"));
+            ins.setMontantCdf(safeDouble(json, "montantCdf"));
+            ins.setMontantUsd(safeDouble(json, "montantUsd"));
+            ins.setCoutAchat(safeDouble(json, "coutAchat"));
             JsonObject jso3 = json.getJsonObject("productId");
-            Produit pro = new Produit(jso3.getString("uid"));
+            Produit pro = new Produit(safeString(jso3, "uid"));
             ins.setProductId(pro);
             JsonObject jso = json.getJsonObject("mesureId");
             Mesure m = new Mesure();
-            m.setUid(jso.getString("uid"));
+            m.setUid(safeString(jso, "uid"));
             ins.setMesureId(m);
             JsonObject jso1 = json.getJsonObject("reference");
-            Vente v = new Vente(jso1.getJsonNumber("uid").intValue());
+            Vente v = new Vente(safeInt(jso1, "uid"));
             ins.setReference(v);
             return ins;
         } else if (json.containsKey("typeTresorerie") && !json.containsKey("caisseOpId")) {
             Traisorerie ins = new Traisorerie();
-            ins.setUid(json.getString("uid"));
-            ins.setLibelle(json.getString("libelle"));
-            ins.setMouvement(json.getString("mouvement"));
-            ins.setTypeTresorerie(json.getString("typeTresorerie"));
-            ins.setMontantCdf(json.getJsonNumber("montantCdf").doubleValue());
-            ins.setRegion(json.getString("region"));
+            ins.setUid(safeString(json, "uid"));
+            ins.setLibelle(safeString(json, "libelle"));
+            ins.setMouvement(safeString(json, "mouvement"));
+            ins.setTypeTresorerie(safeString(json, "typeTresorerie"));
+            ins.setMontantCdf(safeDouble(json, "montantCdf"));
+            ins.setRegion(safeString(json, "region"));
             if (json.containsKey("tresorId")) {
                 ins.setTresorId(new CompteTresor(json.getJsonObject("tresorId").getString("uid")));
             }
-            ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
-            ins.setReference(json.getString("reference"));
+            ins.setMontantUsd(safeDouble(json, "montantUsd"));
+            ins.setReference(safeString(json, "reference"));
             ins.setDate(safeLocalDateTime(json, "date"));
             return ins;
         } else if (json.containsKey("imputation")) {
             Operation ins = new Operation();
-            ins.setUid(json.getString("uid"));
-            ins.setLibelle(json.getString("libelle"));
-            ins.setMouvement(json.getString("mouvement"));
-            ins.setImputation(json.getString("imputation"));
-            ins.setMontantCdf(json.getJsonNumber("montantCdf").doubleValue());
-            ins.setRegion(json.getString("region"));
-            ins.setMontantUsd(json.getJsonNumber("montantUsd").doubleValue());
-            ins.setReferenceOp(json.getString("referenceOp"));
+            ins.setUid(safeString(json, "uid"));
+            ins.setLibelle(safeString(json, "libelle"));
+            ins.setMouvement(safeString(json, "mouvement"));
+            ins.setImputation(safeString(json, "imputation"));
+            ins.setMontantCdf(safeDouble(json, "montantCdf"));
+            ins.setRegion(safeString(json, "region"));
+            ins.setMontantUsd(safeDouble(json, "montantUsd"));
+            ins.setReferenceOp(safeString(json, "referenceOp"));
             if (json.containsKey("tresorId")) {
                 ins.setTresorId(new CompteTresor(json.getJsonObject("tresorId").getString("uid")));
             }
@@ -1525,141 +1622,141 @@ public class JsonUtil {
             ins.setDate(safeLocalDateTime(json, "date"));
             JsonObject jso = json.getJsonObject("caisseOpId");
             Traisorerie t = new Traisorerie();
-            t.setUid(jso.getString("uid"));
-            t.setLibelle(jso.getString("libelle"));
-            t.setMouvement(jso.getString("mouvement"));
-            t.setTypeTresorerie(jso.getString("typeTresorerie"));
-            t.setMontantCdf(jso.getJsonNumber("montantCdf").doubleValue());
-            t.setRegion(jso.getString("region"));
-            t.setMontantUsd(jso.getJsonNumber("montantUsd").doubleValue());
-            t.setReference(jso.getString("reference"));
+            t.setUid(safeString(jso, "uid"));
+            t.setLibelle(safeString(jso, "libelle"));
+            t.setMouvement(safeString(jso, "mouvement"));
+            t.setTypeTresorerie(safeString(jso, "typeTresorerie"));
+            t.setMontantCdf(safeDouble(jso, "montantCdf"));
+            t.setRegion(safeString(jso, "region"));
+            t.setMontantUsd(safeDouble(jso, "montantUsd"));
+            t.setReference(safeString(jso, "reference"));
             t.setDate(safeLocalDateTime(jso, "date"));
             ins.setCaisseOpId(t);
             return ins;
         } else if (json.containsKey("imageBase64")) {
             ImageProduit image = new ImageProduit();
-            image.setIdProduit(json.getString("idProduit"));
-            image.setImageBase64(json.getString("imageBase64"));
+            image.setIdProduit(safeString(json, "idProduit"));
+            image.setImageBase64(safeString(json, "imageBase64"));
             return image;
         } else if (json.containsKey("status")) {
             Aretirer oper = new Aretirer();
-            oper.setUid(json.getString("uid"));
-            oper.setNumlot(json.getString("numlot"));
-            oper.setPrixVente(json.getJsonNumber("prixVente").doubleValue());
-            oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            oper.setReferenceVente(json.getString("referenceVente"));
-            oper.setRegion(json.getString("region"));
-            oper.setStatus(json.getString("status"));
+            oper.setUid(safeString(json, "uid"));
+            oper.setNumlot(safeString(json, "numlot"));
+            oper.setPrixVente(safeDouble(json, "prixVente"));
+            oper.setQuantite(safeDouble(json, "quantite"));
+            oper.setReferenceVente(safeString(json, "referenceVente"));
+            oper.setRegion(safeString(json, "region"));
+            oper.setStatus(safeString(json, "status"));
             oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jsoc = json.getJsonObject("clientId");
-            Client clt = new Client(jsoc.getString("uid"));
+            Client clt = new Client(safeString(jsoc, "uid"));
             oper.setClientId(clt);
             JsonObject jsol = json.getJsonObject("ligneVenteId");
-            oper.setLigneVenteId(new LigneVente(jsol.getJsonNumber("uid").longValue()));
+            oper.setLigneVenteId(new LigneVente(safeLong(jsol, "uid")));
             JsonObject jsom = json.getJsonObject("mesureId");
-            oper.setMesureId(new Mesure(jsom.getString("uid")));
+            oper.setMesureId(new Mesure(safeString(jsom, "uid")));
             return oper;
         } else if (json.containsKey("clientOrganisationId")) {
             ClientAppartenir oper = new ClientAppartenir();
-            oper.setUid(json.getString("uid"));
-            oper.setRegion(json.getString("region"));
+            oper.setUid(safeString(json, "uid"));
+            oper.setRegion(safeString(json, "region"));
 
             oper.setDateAppartenir(safeLocalDate(json, "date"));
 
             JsonObject jsoc = json.getJsonObject("clientId");
-            Client clt = new Client(jsoc.getString("uid"));
+            Client clt = new Client(safeString(jsoc, "uid"));
             oper.setClientId(clt);
             JsonObject jsoo = json.getJsonObject("clientOrganisationId");
-            ClientOrganisation clto = new ClientOrganisation(jsoo.getString("uid"));
+            ClientOrganisation clto = new ClientOrganisation(safeString(jsoo, "uid"));
             oper.setClientOrganisationId(clto);
             return oper;
         } else if (json.containsKey("boitePostalOrganisation")) {
             ClientOrganisation oper = new ClientOrganisation();
-            oper.setUid(json.getString("uid"));
-            oper.setRegion(json.getString("region"));
-            oper.setAdresse(json.getString("adresse"));
-            oper.setBoitePostalOrganisation(json.getString("boitePostalOrganisation"));
-            oper.setDomaineOrganisation(json.getString("domaineOrganisation"));
-            oper.setEmailOrganisation(json.getString("emailOrganisation"));
-            oper.setNomOrganisation(json.getString("nomOrganisation"));
-            oper.setPhoneOrganisation(json.getString("phoneOrganisation"));
-            oper.setRccmOrganisation(json.getString("rccmOrganisation"));
-            oper.setWebsiteOrganisation(json.getString("websiteOrganisation"));
+            oper.setUid(safeString(json, "uid"));
+            oper.setRegion(safeString(json, "region"));
+            oper.setAdresse(safeString(json, "adresse"));
+            oper.setBoitePostalOrganisation(safeString(json, "boitePostalOrganisation"));
+            oper.setDomaineOrganisation(safeString(json, "domaineOrganisation"));
+            oper.setEmailOrganisation(safeString(json, "emailOrganisation"));
+            oper.setNomOrganisation(safeString(json, "nomOrganisation"));
+            oper.setPhoneOrganisation(safeString(json, "phoneOrganisation"));
+            oper.setRccmOrganisation(safeString(json, "rccmOrganisation"));
+            oper.setWebsiteOrganisation(safeString(json, "websiteOrganisation"));
             return oper;
         } else if (json.containsKey("regionProv")) {
             RetourDepot oper = new RetourDepot();
-            oper.setUid(json.getString("uid"));
-            oper.setRegion(json.getString("region"));
-            oper.setCoutAchat(json.getJsonNumber("coutAchat").doubleValue());
-            oper.setLocalisation(json.getString("localisation"));
-            oper.setMotif(json.getString("motif"));
-            oper.setNumlot(json.getString("numlot"));
-            oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
-            oper.setRegionDest(json.getString("regionDest"));
-            oper.setRegionProv(json.getString("regionProv"));
+            oper.setUid(safeString(json, "uid"));
+            oper.setRegion(safeString(json, "region"));
+            oper.setCoutAchat(safeDouble(json, "coutAchat"));
+            oper.setLocalisation(safeString(json, "localisation"));
+            oper.setMotif(safeString(json, "motif"));
+            oper.setNumlot(safeString(json, "numlot"));
+            oper.setQuantite(safeDouble(json, "quantite"));
+            oper.setRegionDest(safeString(json, "regionDest"));
+            oper.setRegionProv(safeString(json, "regionProv"));
             oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jo = json.getJsonObject("destockerId");
-            oper.setDestockerId(new Destocker(jo.getString("uid")));
+            oper.setDestockerId(new Destocker(safeString(jo, "uid")));
             JsonObject job = json.getJsonObject("recquisitionId");
-            oper.setRecquisitionId(new Recquisition(job.getString("uid")));
+            oper.setRecquisitionId(new Recquisition(safeString(job, "uid")));
             JsonObject jso = json.getJsonObject("mesureId");
-            oper.setMesureId(new Mesure(jso.getString("uid")));
+            oper.setMesureId(new Mesure(safeString(jso, "uid")));
             return oper;
         } else if (json.containsKey("referenceVente") && !json.containsKey("status")) {
             RetourMagasin oper = new RetourMagasin();
-            oper.setUid(json.getString("uid"));
-            oper.setRegion(json.getString("region"));
-            oper.setPrixVente(json.getJsonNumber("prixVente").doubleValue());
-            oper.setReferenceVente(json.getString("referenceVente"));
-            oper.setMotif(json.getString("motif"));
-            oper.setQuantite(json.getJsonNumber("quantite").doubleValue());
+            oper.setUid(safeString(json, "uid"));
+            oper.setRegion(safeString(json, "region"));
+            oper.setPrixVente(safeDouble(json, "prixVente"));
+            oper.setReferenceVente(safeString(json, "referenceVente"));
+            oper.setMotif(safeString(json, "motif"));
+            oper.setQuantite(safeDouble(json, "quantite"));
             oper.setDate(safeLocalDateTime(json, "date"));
             JsonObject jo = json.getJsonObject("ligneVenteId");
-            oper.setLigneVenteId(new LigneVente(jo.getJsonNumber("uid").longValue()));
+            oper.setLigneVenteId(new LigneVente(safeLong(jo, "uid")));
             JsonObject job = json.getJsonObject("recquisitionId");
-            oper.setClientId(new Client(job.getString("clientId")));
+            oper.setClientId(new Client(safeString(job, "clientId")));
             JsonObject jso = json.getJsonObject("mesureId");
-            oper.setMesureId(new Mesure(jso.getString("uid")));
+            oper.setMesureId(new Mesure(safeString(jso, "uid")));
             return oper;
         } else if (json.containsKey("typeAbonnemnt") || json.containsKey("typeAbonnement")) {
             Abonnement ab = new Abonnement();
-            ab.setUid(json.getString("uid"));
+            ab.setUid(safeString(json, "uid"));
 
             ab.setDateAbonnement(safeLocalDateTime(json, "dateAbonnement"));
 
-            ab.setDevise(json.getString("devise"));
-            ab.setEtat(json.getString("etat"));
-            ab.setMontant(json.getJsonNumber("montant").doubleValue());
-            ab.setNombreOperation(json.getJsonNumber("nombreOperation").doubleValue());
-            ab.setTypeAbonnement(json.getString("typeAbonnement"));
+            ab.setDevise(safeString(json, "devise"));
+            ab.setEtat(safeString(json, "etat"));
+            ab.setMontant(safeDouble(json, "montant"));
+            ab.setNombreOperation(safeDouble(json, "nombreOperation"));
+            ab.setTypeAbonnement(safeString(json, "typeAbonnement"));
             return ab;
         } else if (json.containsKey("startDate")) {
             Facture f = new Facture();
-            f.setUid(json.getString("uid"));
+            f.setUid(safeString(json, "uid"));
 
             f.setStartDate(safeLocalDate(json, "startDate"));
             f.setEndDate(safeLocalDate(json, "endDate"));
 
-            f.setNumero(json.getString("numero"));
+            f.setNumero(safeString(json, "numero"));
             f.setOrganisId(new ClientOrganisation(json.getJsonObject("organisId").getString("uid")));
-            f.setPayedamount(json.getJsonNumber("payedamount").doubleValue());
-            f.setRegion(json.getString("region"));
-            f.setStatus(json.getString("status"));
-            f.setTotalamount(json.getJsonNumber("totalamount").doubleValue());
+            f.setPayedamount(safeDouble(json, "payedamount"));
+            f.setRegion(safeString(json, "region"));
+            f.setStatus(safeString(json, "status"));
+            f.setTotalamount(safeDouble(json, "totalamount"));
             return f;
         } else if (json.containsKey("nomDepense")) {
-            Depense bill = new Depense(json.getString("uid"));
-            bill.setNomDepense(json.getString("nomDepense"));
-            bill.setRegion(json.getString("region"));
+            Depense bill = new Depense(safeString(json, "uid"));
+            bill.setNomDepense(safeString(json, "nomDepense"));
+            bill.setRegion(safeString(json, "region"));
             return bill;
         } else if (json.containsKey("bankName")) {
-            CompteTresor bill = new CompteTresor(json.getString("uid"));
-            bill.setBankName(json.getString("bankName"));
-            bill.setIntitule(json.getString("intitule"));
-            bill.setNumeroCompte(json.getString("numeroCompte"));
-            bill.setRegion(json.getString("region"));
-            bill.setSoldeMinimum(json.getJsonNumber("soldeMinimum").doubleValue());
-            bill.setTypeCompte(json.getString("typeCompte"));
+            CompteTresor bill = new CompteTresor(safeString(json, "uid"));
+            bill.setBankName(safeString(json, "bankName"));
+            bill.setIntitule(safeString(json, "intitule"));
+            bill.setNumeroCompte(safeString(json, "numeroCompte"));
+            bill.setRegion(safeString(json, "region"));
+            bill.setSoldeMinimum(safeDouble(json, "soldeMinimum"));
+            bill.setTypeCompte(safeString(json, "typeCompte"));
             return bill;
         }
 
@@ -1851,7 +1948,7 @@ public class JsonUtil {
             JsonReader reader = Json.createReader(new StringReader(message));
             JsonObject json = reader.readObject();
             if (json.containsKey("type")) {
-                return json.getString("type");
+                return safeString(json, "type");
             }
         }
         return null;

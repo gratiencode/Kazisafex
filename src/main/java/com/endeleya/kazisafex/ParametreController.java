@@ -42,6 +42,9 @@ import tools.CurrencyConverter;
 import tools.DataCache;
 import tools.MainUI;
 import tools.SyncEngine;
+import services.SyncOutboxService;
+import services.sync.DownsyncCatchupService;
+import tools.Constants;
 
 /**
  *
@@ -788,9 +791,19 @@ public class ParametreController implements Initializable {
         this.cbx_frequence
             .getSelectionModel()
             .selectedItemProperty()
-            .addListener((observable, oldValue, newValue) ->
-                Executors.newSingleThreadExecutor().execute(() -> {})
-            );
+            .addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    this.pref.putInt(
+                        "sync-freq",
+                        (Integer) newValue
+                    );
+                    System.out.println(
+                        "Frequence de synchronisation reglee a " +
+                        newValue +
+                        "s (appliquee au prochain cycle)"
+                    );
+                }
+            });
         this.logFileHyperlink.setText(getLogPath());
         this.methodGroup = new ToggleGroup();
         this.mode_stock = new ToggleGroup();
@@ -894,13 +907,32 @@ public class ParametreController implements Initializable {
 
     @FXML
     private void reinitSync(ActionEvent event) {
-        this.pref.putLong("_last_sync_happenedAt0_", 0L);
+        // 1. Curseur du sync HTTP legacy (full sync)
+        this.pref.putLong(Constants.SYNC_ELLAPSED_TIME, 0L);
+        // 2. Horodatage de fin de synchronisation : l'upsync ne filtre plus par
+        //    ancienneté (tous les PENDING/UNSYNCED sont re-téléversés), mais on
+        //    le remet à zéro pour rester cohérent avec le « full sync » legacy.
+        this.pref.putLong(SyncEngine.LAST_SYNC_TS_KEY, 0L);
+        // 3. Curseur « Page since=… » du rattrapage downsync (noeud DownsyncCatchupService)
+        DownsyncCatchupService.resetCursor();
+        // 4. Outbox : re-téléverser les mutations déjà appliquées / en échec
+        SyncOutboxService.resetForFullResync();
+        // 5. Relance immédiate d'un cycle de synchronisation
+        try {
+            SyncEngine.getInstance().syncInBackground();
+        } catch (Exception e) {
+            Logger.getLogger(ParametreController.class.getName()).log(
+                Level.SEVERE,
+                "Echec relance du cycle de synchronisation",
+                e
+            );
+        }
         MainUI.notify(
             null,
-            (String) "Info",
-            (String) "Configuration fiat avec succes, la prochaine synchronisation sera totale",
-            (long) 4L,
-            (String) "info"
+            "Info",
+            "Synchronisation reinitialisee, le prochain cycle sera total",
+            4L,
+            "info"
         );
     }
 
