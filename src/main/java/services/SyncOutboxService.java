@@ -803,7 +803,16 @@ public class SyncOutboxService {
                 }
                 // Au sein d'un même niveau, ordre FIFO (dépendances intra-niveau
                 // comme Client.parentId ou Periode.previousPeriod)
+                // Pour les entités CLIENT, s'assurer impérativement que le client "Anonyme" est matérialisé en PREMIER.
                 phaseRecords.sort((a, b) -> {
+                    boolean isClientA = "CLIENT".equalsIgnoreCase(a.getTableName());
+                    boolean isClientB = "CLIENT".equalsIgnoreCase(b.getTableName());
+                    if (isClientA && isClientB) {
+                        boolean isAnonA = a.getPayload() != null && (a.getPayload().contains("\"09000\"") || a.getPayload().contains("\"Anonyme\""));
+                        boolean isAnonB = b.getPayload() != null && (b.getPayload().contains("\"09000\"") || b.getPayload().contains("\"Anonyme\""));
+                        if (isAnonA && !isAnonB) return -1;
+                        if (!isAnonA && isAnonB) return 1;
+                    }
                     LocalDateTime t1 = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
                     LocalDateTime t2 = b.getCreatedAt() != null ? b.getCreatedAt() : LocalDateTime.MIN;
                     return t1.compareTo(t2);
@@ -948,6 +957,15 @@ public class SyncOutboxService {
                 return;
             }
 
+            // Le timestamp « updatedAt » du payload est la valeur de référence
+            // côté serveur. Il doit être préservé à la matérialisation : sinon le
+            // @PreUpdate des entités réécrit updatedAt à « maintenant », ce qui
+            // fait croire à une mutation locale à chaque matérialisation
+            // (backfill -> upsync -> validation d'état -> full resync) : boucle
+            // de synchronisation perpétuelle. On capture la valeur AVANT le
+            // merge (le callback de l'entité l'écraserait après coup).
+            LocalDateTime serverUpdatedAt = getRealUpdatedAt(entity);
+
             submitSyncWrite(em -> {
                 if ("REMOVE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
                     // Cast PK to the correct type to avoid ClassCastException with Integer/Long keys
@@ -956,11 +974,45 @@ public class SyncOutboxService {
                     if (managed != null) {
                         em.remove(managed);
                     }
-                } else {
-                    if (entity instanceof data.Produit produit) {
-                        resolveProduitCategory(em, produit);
-                    }
-                    em.merge(entity);
+                    return null;
+                }
+
+                Object typedId = getTypedEntityId(entity, table);
+                Object existing = em.find(entityClass, typedId != null ? typedId : entityUid);
+
+                // Règle de fraîcheur : une version venant du réseau n'écrase la
+                // version locale que si son updatedAt est STRICTEMENT plus récent.
+                // Sinon la version locale (modifiée via l'UI) prévaut et la
+                // matérialisation est ignorée — le now() de l'édit local ne doit
+                // jamais être réécrit par un état serveur plus ancien, ce qui
+                // alimenterait la boucle backfill -> upsync -> downsync.
+                LocalDateTime localUpdatedAt = existing != null
+                        ? getRealUpdatedAt(existing)
+                        : null;
+                if (serverUpdatedAt != null && localUpdatedAt != null
+                        && !serverUpdatedAt.isAfter(localUpdatedAt)) {
+                    System.out.println("[DOWNSYNC] " + entityType + " " + entityUid
+                            + " : version locale plus recente (local=" + localUpdatedAt
+                            + ", reseau=" + serverUpdatedAt + "), materialisation ignoree.");
+                    return null;
+                }
+
+                if (entity instanceof data.Produit produit) {
+                    resolveProduitCategory(em, produit);
+                }
+                em.merge(entity);
+                // Flush explicite : déclenche ici les callbacks @PreUpdate
+                // (sur le thread de la file d'écriture, où la suppression de
+                // l'outbox listener est active), puis on rétablit le timestamp
+                // serveur. Sans ce flush, le callback s'exécuterait au commit
+                // après le reset du drapeau ThreadLocal.
+                em.flush();
+                if (serverUpdatedAt != null) {
+                    em.createQuery("UPDATE " + entityClass.getSimpleName()
+                            + " e SET e.updatedAt = :serverUpdatedAt WHERE e.uid = :entityId")
+                            .setParameter("serverUpdatedAt", serverUpdatedAt)
+                            .setParameter("entityId", typedId != null ? typedId : entityUid)
+                            .executeUpdate();
                 }
                 return null;
             });

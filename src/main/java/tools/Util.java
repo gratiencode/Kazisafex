@@ -112,6 +112,7 @@ import data.helpers.TypeTraisorerie;
 import delegates.MesureDelegate;
 import delegates.StockerDelegate;
 import delegates.PermissionDelegate;
+import services.utils.PermissionRegistry;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -6072,7 +6073,7 @@ public class Util {
         b1:
         for (Map.Entry<String, List<PermitTo>> entry : hashPerms.entrySet()) {
             for (PermitTo permitTo : entry.getValue()) {
-                if (PermissionDelegate.hasPermission(permitTo)) {
+                if (PermissionRegistry.has(permitTo)) {
                     toActivate.put(entry.getKey(), Boolean.TRUE);
                     continue b1;
                 }

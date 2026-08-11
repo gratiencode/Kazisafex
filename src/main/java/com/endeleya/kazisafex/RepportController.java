@@ -67,6 +67,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.ChartItem;
 import tools.MainUI;
 import tools.SyncEngine;
@@ -1528,14 +1529,11 @@ public class RepportController implements Initializable {
     }
 
     private String detectRegion(String role) {
-        if (role == null) {
-            return region;
-        }
-        return role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? "%" : region;
+        return UserRoleRegistry.hasAllAccess(pref) || UserRoleRegistry.isTrader(pref) ? "%" : region;
     }
 
     private String selectedFinancialRegion() {
-        boolean globalAccess = role != null && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()));
+        boolean globalAccess = UserRoleRegistry.hasAllAccess(pref) || UserRoleRegistry.isTrader(pref);
         String selected = cbx_regions == null ? null : cbx_regions.getSelectionModel().getSelectedItem();
         if (globalAccess && selected != null && !selected.isBlank()) {
             return selected.trim();
@@ -1670,7 +1668,7 @@ public class RepportController implements Initializable {
         configTableVentePerProd();
         devise = pref.get("mainCur", "USD");
         region = pref.get("region", "...");
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
     }
 
     // public List<Vente> getVentes(LocalDate date, LocalDate date2, String region)
@@ -1781,7 +1779,7 @@ public class RepportController implements Initializable {
             loadImmobilisationsCache();
             return;
         }
-        String usedRegion = role != null && role.contains(Role.ALL_ACCESS.name()) ? null : region;
+        String usedRegion = UserRoleRegistry.hasAllAccess(pref) || UserRoleRegistry.isTrader(pref) ? null : region;
         kazisafe.getImmobilisations(usedRegion).enqueue(new Callback<List<Immobilisation>>() {
             @Override
             public void onResponse(Call<List<Immobilisation>> call, Response<List<Immobilisation>> rspns) {

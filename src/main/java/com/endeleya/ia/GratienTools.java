@@ -167,6 +167,7 @@ import tools.FileUtils;
 import tools.FinancialStatementPdfExporter;
 import tools.FinancialStatementRow;
 import tools.SyncEngine;
+import services.utils.UserRoleRegistry;
 import tools.Tables;
 import tools.Util;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
@@ -5678,8 +5679,7 @@ public class GratienTools {
         if (requested == null || requested.isBlank()) {
             return "%";
         }
-        String role = pref.get("priv", "");
-        boolean globalAccess = role != null && (role.equals("Trader") || role.contains("ALL_ACCESS"));
+        boolean globalAccess = UserRoleRegistry.hasAllAccess(pref) || UserRoleRegistry.isTrader(pref);
         if (!globalAccess && currentRegion != null && !currentRegion.isBlank()
                 && !requested.equalsIgnoreCase(currentRegion)) {
             throw new IllegalArgumentException("Votre rôle ne permet pas d'accéder au rapport de la région " + requested + ".");
@@ -6194,8 +6194,7 @@ public class GratienTools {
         if (requested == null || requested.isBlank()) {
             return "%";
         }
-        String role = pref.get("priv", "");
-        boolean globalAccess = role != null && (role.equals("Trader") || role.contains("ALL_ACCESS"));
+        boolean globalAccess = UserRoleRegistry.hasAllAccess(pref) || UserRoleRegistry.isTrader(pref);
         if (!globalAccess && currentRegion != null && !currentRegion.isBlank()
                 && !requested.equalsIgnoreCase(currentRegion)) {
             throw new IllegalArgumentException("Votre rôle ne permet pas d'accéder au rapport de la région " + requested + ".");

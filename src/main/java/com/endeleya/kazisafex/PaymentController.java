@@ -148,6 +148,7 @@ import tools.SyncEngine;
 import tools.SyncRetryHandler;
 import tools.Tables;
 import tools.Util;
+import services.utils.UserRoleRegistry;
 import utilities.PDFUtils;
 import java.util.stream.Collectors;
 
@@ -351,7 +352,7 @@ public class PaymentController
         this.maker.refreshFromPreferences();
         this.taux2change = CurrencyConverter.activeRate();
         this.print = this.pref.getBoolean("print", true);
-        this.role = this.pref.get("priv", null);
+        this.role = UserRoleRegistry.getRole(this.pref);
         this.region = this.pref.get("region", "...");
     }
 
@@ -2162,7 +2163,8 @@ public class PaymentController
         sa.setMesureId(mesureRef);
         sa.setQuantite(part.getQuantite());
         sa.setRegion(this.region);
-        sa.setTotalSaleUsd(dev.equalsIgnoreCase("USD") ? part.getMontantUsd() : part.getMontantCdf());
+        double usdEquivalent = part.getMontantUsd() + part.getMontantCdf() / this.taux2change;
+        sa.setTotalSaleUsd(usdEquivalent);
         saleMetrics.add(sa);
     }
 

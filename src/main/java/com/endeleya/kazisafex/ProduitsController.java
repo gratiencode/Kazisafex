@@ -114,7 +114,9 @@ import data.PermitTo;
 import org.apache.commons.lang3.math.NumberUtils;
 import retrofit2.Call;
 import retrofit2.Response;
+import services.utils.PermissionRegistry;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.Constants;
 import tools.DataCache;
 import tools.DataId;
@@ -304,7 +306,7 @@ public class ProduitsController implements Initializable {
         pagination.setPageFactory(this::createDataPage);
         wrapInCatPane.setVisible(false);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        role = pref.get("priv", "Unknown");
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", null);
         euid = pref.get("eUid", "");
 
@@ -1108,7 +1110,7 @@ public class ProduitsController implements Initializable {
                         produitsList.remove(produit);
                         MainUI.notify(null, "Succès", "Produit supprimé avec succès", 3, "Info");
 
-                        if (role.equals(Role.Trader.name())) {
+                        if (UserRoleRegistry.isTrader()) {
                             kazisafe.deleteProduit(role);
                         }
                     });
@@ -1129,8 +1131,7 @@ public class ProduitsController implements Initializable {
     }
 
     private boolean hasPermission(PermitTo permit) {
-        return role != null && role.toUpperCase().contains(Role.ALL_ACCESS.name())
-                || PermissionDelegate.hasPermission(permit);
+        return PermissionRegistry.has(pref, permit);
     }
 
     private void fillSites() {

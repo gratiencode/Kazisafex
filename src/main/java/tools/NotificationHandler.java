@@ -11,7 +11,9 @@ import data.*;
 import data.helpers.Role;
 import delegates.*;
 import java.awt.Toolkit;
+import java.lang.reflect.Method;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -19,6 +21,8 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.concurrent.CopyOnWriteArrayList;
 import services.ManagedSessionFactory;
+import services.utils.PermissionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.MemoryGuard;
 
 /**
@@ -87,16 +91,9 @@ public class NotificationHandler implements EventHandler {
             try {
                 final String eid = pref.get("eUid", "");
                 final String reg = pref.get("region", "");
-                final String role = pref.get("priv", null);
                 if (id != null && id.equals(eid)) {
-                    boolean ok = false;
-                    if (
-                        Role.Trader.name().equals(role) ||
-                        (role != null &&
-                            role.contains(Role.ALL_ACCESS.name()))
-                    ) {
-                        ok = true;
-                    } else {
+                    boolean ok = PermissionRegistry.hasGlobalAccess(pref);
+                    if (!ok) {
                         if (reg.equals(region) || region.equals("*")) {
                             ok = true;
                         }
@@ -145,6 +142,20 @@ public class NotificationHandler implements EventHandler {
                     boolean isDelete = obj.getAction() != null
                         && (obj.getAction().equalsIgnoreCase("delete")
                             || obj.getAction().equalsIgnoreCase("remove"));
+                    // Règle de fraîcheur (identique à la matérialisation) : une
+                    // version venant du réseau n'écrase la version locale que si
+                    // son updatedAt est STRICTEMENT plus récent. Sinon la version
+                    // locale (modifiée via l'UI) prévaut et l'objet SSE est ignoré.
+                    if (!isDelete && isStaleNetworkUpdate(obj, t)) {
+                        SyncLogger.getInstance().log(
+                            null,
+                            "SSE downsync - version locale plus recente, objet ignore ("
+                                + t + " " + readUid(obj) + ")",
+                            region,
+                            id
+                        );
+                        return;
+                    }
                     SyncOutboxListener.runSuppressed(() -> executeDownsyncMutation(() -> {
                             switch (t) {
                                 case Tables.PRODUIT -> {
@@ -330,6 +341,9 @@ public class NotificationHandler implements EventHandler {
                                                     stocker
                                                 );
                                         }
+                                        if (result != null) {
+                                            StockerDelegate.rectifyStockDepotByLot(result.getProductId(), result.getNumlot(), result.getRegion(), result.getCoutAchat(), result.getDateExpir());
+                                        }
                                         notifySynced(result);
                                     }
                                 }
@@ -366,6 +380,9 @@ public class NotificationHandler implements EventHandler {
                                                 DestockerDelegate.updateDestocker(
                                                     destocker
                                                 );
+                                        }
+                                        if (result != null) {
+                                            StockerDelegate.rectifyStockDepotByLot(result.getProductId(), result.getNumlot(), result.getRegion(), result.getCoutAchat(), null);
                                         }
                                         notifySynced(result);
                                     }
@@ -789,6 +806,130 @@ public class NotificationHandler implements EventHandler {
                     scheduleRetry(json, id, region, attempt + 1, null);
                 }
             });
+    }
+
+    /**
+     * Règle de fraîcheur pour les objets SSE : un objet réseau n'est appliqué
+     * que si son {@code updatedAt} est strictement plus récent que celui de
+     * l'entité locale. Sinon la version locale (modifiée via l'UI) prévaut.
+     * Sans timestamp ou sans entité locale existante, l'objet est appliqué.
+     */
+    private boolean isStaleNetworkUpdate(BaseModel incoming, Tables table) {
+        LocalDateTime incomingUpdatedAt = readUpdatedAt(incoming);
+        if (incomingUpdatedAt == null) {
+            return false;
+        }
+        Object local = findLocalEntity(table, readUid(incoming));
+        if (local == null) {
+            return false;
+        }
+        LocalDateTime localUpdatedAt = readUpdatedAt(local);
+        if (localUpdatedAt == null) {
+            return false;
+        }
+        return !incomingUpdatedAt.isAfter(localUpdatedAt);
+    }
+
+    private Object findLocalEntity(Tables t, String uid) {
+        if (uid == null || uid.isBlank()) {
+            return null;
+        }
+        try {
+            switch (t) {
+                case PRODUIT -> {
+                    return ProduitDelegate.findProduit(uid);
+                }
+                case CATEGORY -> {
+                    return CategoryDelegate.findCategory(uid);
+                }
+                case MESURE -> {
+                    return MesureDelegate.findMesure(uid);
+                }
+                case FOURNISSEUR -> {
+                    return FournisseurDelegate.findFournisseur(uid);
+                }
+                case LIVRAISON -> {
+                    return LivraisonDelegate.findLivraison(uid);
+                }
+                case STOCKER -> {
+                    return StockerDelegate.findStocker(uid);
+                }
+                case DESTOCKER -> {
+                    return DestockerDelegate.findDestocker(uid);
+                }
+                case RECQUISITION -> {
+                    return RecquisitionDelegate.findRecquisition(uid);
+                }
+                case PRIXDEVENTE -> {
+                    return PrixDeVenteDelegate.findPrixDeVente(uid);
+                }
+                case CLIENT -> {
+                    return ClientDelegate.findClient(uid);
+                }
+                case COMPTETRESOR -> {
+                    return CompteTresorDelegate.findCompteTresor(uid);
+                }
+                case VENTE -> {
+                    try {
+                        return VenteDelegate.findVente(Integer.parseInt(uid));
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                }
+                case LIGNEVENTE -> {
+                    try {
+                        return LigneVenteDelegate.findLigneVente(Long.parseLong(uid));
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                }
+                case TRAISORERIE -> {
+                    return TraisorerieDelegate.findTraisorerie(uid);
+                }
+                case DEPENSE -> {
+                    return DepenseDelegate.findDepense(uid);
+                }
+                case OPERATION -> {
+                    return OperationDelegate.findOperation(uid);
+                }
+                case COMPTER -> {
+                    return CompterDelegate.findCompter(uid);
+                }
+                case INVENTORY -> {
+                    return InventaireDelegate.findInventaire(uid);
+                }
+                case PRESENCE -> {
+                    return PresenceDelegate.findPresence(uid);
+                }
+                default -> {
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static LocalDateTime readUpdatedAt(Object entity) {
+        try {
+            Method m = entity.getClass().getMethod("getUpdatedAt");
+            Object res = m.invoke(entity);
+            if (res instanceof LocalDateTime) {
+                return (LocalDateTime) res;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static String readUid(Object entity) {
+        try {
+            Method m = entity.getClass().getMethod("getUid");
+            Object res = m.invoke(entity);
+            return res == null ? null : res.toString();
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private void scheduleRetry(

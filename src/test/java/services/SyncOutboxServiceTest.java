@@ -3,7 +3,6 @@ package services;
 import data.SyncOutbox;
 import data.network.dto.SyncOutboxDto;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -174,13 +173,13 @@ class SyncOutboxServiceTest {
         return d;
     }
 
-    // ── Upsync : filtre d'ancienneté (createdAt > lastSyncTimestamp) ─────────
+    // ── Upsync : fetchAllPendingOutbox (plus de filtre d'ancienneté ni de plafond) ──
 
-    private static SyncOutbox addPending(
+    private static SyncOutbox addRecord(
             SyncTestDb db,
             String uid,
             LocalDateTime createdAt,
-            Integer retryCount
+            String status
     ) {
         SyncOutbox r = new SyncOutbox();
         r.setUid(uid);
@@ -188,74 +187,101 @@ class SyncOutboxServiceTest {
         r.setEntityId("ent-" + uid);
         r.setAction("PERSIST");
         r.setPayload("{}");
-        r.setStatus(retryCount != null && retryCount > 0 ? "UNSYNCED" : "PENDING");
+        r.setStatus(status);
         r.setCreatedAt(createdAt);
-        r.setRetryCount(retryCount);
         db.records.put(uid, r);
         return r;
     }
 
-    private static void assertFiltered(List<SyncOutbox> result, String... expected) {
+    private static void assertUids(List<SyncOutbox> result, String... expected) {
         List<String> uids = result.stream()
                 .map(SyncOutbox::getUid)
                 .collect(Collectors.toList());
-        for (String uid : expected) {
-            assertTrue(uids.contains(uid), "attendu dans le résultat: " + uid + " (résultat=" + uids + ")");
-        }
-        assertEquals(expected.length, uids.size(),
-                "aucun enregistrement supplémentaire (résultat=" + uids + ")");
+        assertEquals(List.of(expected), uids,
+                "Seuls les statuts à remonter, triés par createdAt (résultat=" + uids + ")");
     }
 
     @Test
-    @DisplayName("fetchPendingOutboxSince (MySQL): ancienneté + retries préservés")
-    void testFetchPendingOutboxSinceFiltersMySQL() throws Exception {
+    @DisplayName("fetchAllPendingOutbox: seuls PENDING/UNSYNCED/FAILED, triés par createdAt")
+    void testFetchAllPendingOutbox() throws Exception {
         try (SyncTestDb db = new SyncTestDb()) {
-            LocalDateTime old = LocalDateTime.now().minusDays(2).withNano(0);
-            LocalDateTime fresh = LocalDateTime.now();
-            addPending(db, "p1", old, null); // ancien, jamais tenté -> exclu
-            addPending(db, "p2", fresh, null); // récent -> inclus
-            addPending(db, "p3", old, 2); // ancien en retry -> inclus
-            addPending(db, "p4", fresh, 5); // retryCount >= max -> exclu
-            addPending(db, "p5", old, 0); // ancien, retry 0 -> exclu
+            LocalDateTime t1 = LocalDateTime.of(2024, 1, 1, 10, 0);
+            LocalDateTime t2 = LocalDateTime.of(2024, 1, 2, 10, 0);
+            LocalDateTime t3 = LocalDateTime.of(2024, 1, 3, 10, 0);
+            addRecord(db, "applied", t1, "APPLIED");
+            addRecord(db, "downsynced", t1, "DOWNSYNCED");
+            addRecord(db, "p1", t2, "PENDING");
+            addRecord(db, "u1", t3, "UNSYNCED");
+            addRecord(db, "f1", t3, "FAILED");
 
-            long since = old.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            List<SyncOutbox> result =
-                    SyncOutboxService.fetchPendingOutboxSince(since);
+            List<SyncOutbox> result = SyncOutboxService.fetchAllPendingOutbox();
 
-            assertFiltered(result, "p2", "p3");
+            assertUids(result, "p1", "u1", "f1");
+        }
+    }
+
+    // ── Règle de fraîcheur : un payload réseau plus ancien que la version locale ──
+
+    private static final String SERVER_UPDATED_AT = "2024-05-01T10:00:00";
+    private static final LocalDateTime SERVER_TIME =
+            LocalDateTime.parse(SERVER_UPDATED_AT);
+
+    private static String produitPayload(String uid, String updatedAt) {
+        return "{\"type\":\"PRODUIT\",\"uid\":\"" + uid
+                + "\",\"nomProduit\":\"Lait\",\"updatedAt\":\"" + updatedAt + "\"}";
+    }
+
+    private static data.Produit localProduit(String uid, LocalDateTime updatedAt) {
+        data.Produit p = new data.Produit(uid);
+        p.setUpdatedAt(updatedAt);
+        return p;
+    }
+
+    @Test
+    @DisplayName("matérialisation: la version réseau plus récente est appliquée et garde son updatedAt serveur")
+    void testMaterializeAppliesNewerNetworkVersionAndPreservesUpdatedAt() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            db.record("PRODUIT", "prod-9", "PERSIST",
+                    produitPayload("prod-9", SERVER_UPDATED_AT));
+
+            SyncOutboxService.materializeDownsyncRecords();
+
+            // La valeur serveur est ré-appliquée par bulk UPDATE après le flush :
+            // l'updatedAt de l'objet local n'est pas « maintenant », donc le
+            // backfill ne peut pas croire à une mutation locale (pas de boucle).
+            assertTrue(db.executedUpdates.stream().anyMatch(q ->
+                            q.contains("UPDATE Produit e SET e.updatedAt")),
+                    "Le bulk UPDATE de préservation de l'updatedAt serveur doit être émis, "
+                            + "exécutés=" + db.executedUpdates);
+            assertEquals(SERVER_TIME, db.updateParams.get("serverUpdatedAt"),
+                    "Le timestamp serveur du payload est la valeur de référence, pas now()");
+
+            // Aucun PENDING recréé : le listener est supprimé pendant la
+            // matérialisation, aucun enregistrement supplémentaire n'apparaît.
+            assertEquals(1, db.records.size(),
+                    "Aucun enregistrement d'outbox ne doit être ajouté par la matérialisation");
+            assertTrue(db.outboxStatusesAll("APPLIED"),
+                    "Tous les records sont appliqués, aucun repassé en PENDING");
         }
     }
 
     @Test
-    @DisplayName("fetchPendingOutboxSince (SQLite): même filtre via executeRead")
-    void testFetchPendingOutboxSinceFiltersSqlite() throws Exception {
+    @DisplayName("matérialisation: un payload réseau périmé (updatedAt <= local) est ignoré, la version locale prévaut")
+    void testMaterializeIgnoresStaleNetworkPayload() throws Exception {
         try (SyncTestDb db = new SyncTestDb()) {
-            db.msf.when(ManagedSessionFactory::isEmbedded).thenReturn(true);
-            LocalDateTime old = LocalDateTime.now().minusDays(2).withNano(0);
-            LocalDateTime fresh = LocalDateTime.now();
-            addPending(db, "s1", old, null);
-            addPending(db, "s2", fresh, null);
-            addPending(db, "s3", old, 3);
+            // La version locale est plus récente que celle du réseau.
+            db.seedEntity(localProduit("prod-9",
+                    SERVER_TIME.plusDays(30)));
+            db.record("PRODUIT", "prod-9", "PERSIST",
+                    produitPayload("prod-9", SERVER_UPDATED_AT));
 
-            long since = old.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            List<SyncOutbox> result =
-                    SyncOutboxService.fetchPendingOutboxSince(since);
+            SyncOutboxService.materializeDownsyncRecords();
 
-            assertFiltered(result, "s2", "s3");
-        }
-    }
-
-    @Test
-    @DisplayName("fetchPendingOutboxSince: since=0 (full sync) retourne tout")
-    void testFetchPendingOutboxSinceFullSync() throws Exception {
-        try (SyncTestDb db = new SyncTestDb()) {
-            LocalDateTime old = LocalDateTime.now().minusDays(30).withNano(0);
-            addPending(db, "f1", old, null);
-            addPending(db, "f2", old, 1);
-
-            List<SyncOutbox> result = SyncOutboxService.fetchPendingOutboxSince(0L);
-
-            assertFiltered(result, "f1", "f2");
+            assertTrue(db.mergedEntities.stream()
+                            .noneMatch(o -> "prod-9".equals(SyncTestDb.uidOf(o))),
+                    "merge ne doit pas écraser la version locale plus récente");
+            assertTrue(db.outboxStatusesAll("APPLIED"),
+                    "Le record est traité (APPLIED) même si la matérialisation est ignorée");
         }
     }
 }

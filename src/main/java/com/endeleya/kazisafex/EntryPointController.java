@@ -11,6 +11,7 @@ import data.core.KazisafeServiceFactory;
 import data.helpers.Credentials;
 import data.helpers.LoginWebResult;
 import data.network.Kazisafe;
+import services.utils.UserRoleRegistry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
@@ -271,7 +272,7 @@ public class EntryPointController implements Initializable {
             return;
         }
         String region = pref.get("region", "Lubumbashi");
-        String rl = pref.get("priv", "Trader");
+        String rl = UserRoleRegistry.getRole(pref);
         String uname = pref.get("uname", "");
         genResult.setToken(token);
         genResult.setEntrepriseId(euid);
@@ -371,6 +372,7 @@ public class EntryPointController implements Initializable {
                                 pref.put("region", lr.getRegion());
                                 pref.put("token", lr.getToken());
                                 pref.put("ucontract", lr.getUserContract());
+                                UserRoleRegistry.saveRole(pref, lr.getRole());
                                 genResult = lr;
                                 loginSucceeded[0] = true;
                             }
@@ -420,7 +422,7 @@ public class EntryPointController implements Initializable {
                 if (sopen) {
                     String euid = pref.get("eUid", "__Generic_");
                     String token = pref.get("token", null);
-                    String rl = pref.get("priv", "Trader");
+                    String rl = UserRoleRegistry.getRole(pref);
                     String region = pref.get("region", "Lubumbashi");
                     if (token == null || token.isBlank()) {
                         MainUI.notify(

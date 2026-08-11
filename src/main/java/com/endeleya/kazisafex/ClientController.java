@@ -57,6 +57,7 @@ import data.Entreprise;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import services.utils.UserRoleRegistry;
 import tools.CurrencyConverter;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
@@ -394,7 +395,7 @@ public class ClientController implements Initializable {
                     alertdlg.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alertdlg.showAndWait();
                     if (showAndWait.get() == ButtonType.YES) {
-                        if (role.equals(Role.Trader.name()) || role.contains(Role.Manager.name())) {
+                        if (UserRoleRegistry.isTrader() || UserRoleRegistry.hasRole("Manager")) {
                             ClientDelegate.deleteClient(choosenClient);
                             lsclts.remove(choosenClient);
                             list_vu_saved_client_.getSelectionModel().clearSelection();
@@ -802,15 +803,15 @@ public class ClientController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         configList();
         ContextMenu cmenu = new ContextMenu();
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         tauxDeChange = CurrencyConverter.activeRate();
         devise = CurrencyConverter.mainCurrency();
         MenuItem mi = new MenuItem("Voir la consommation");
         cmenu.getItems().add(mi);
         mi.setOnAction((event) -> {
             if (organization != null) {
-                if (role.equals(Role.Trader.name()) | role.contains(Role.Manager.name())
-                        | role.contains(Role.Finance.name())) {
+                if (UserRoleRegistry.isTrader() || UserRoleRegistry.hasRole("Manager")
+                        || UserRoleRegistry.hasRole("Finance")) {
                     MainUI.floatDialog(tools.Constants.RELEVEE_DLG, 988, 598, token, kazisafe, entreprise,
                             organization);
                 } else {

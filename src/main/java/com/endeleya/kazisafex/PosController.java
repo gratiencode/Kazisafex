@@ -126,7 +126,9 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import services.ManagedSessionFactory;
+import services.utils.PermissionRegistry;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import javafx.scene.layout.HBox;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.layout.CornerRadii;
@@ -1374,7 +1376,7 @@ public class PosController implements Initializable {
         tile_pane.setPadding(new Insets(2, 2, 2, 2));
         region = pref.get("region", "Goma");
         count_logic = pref.getInt("count-logic", 0);
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
         rootView = new TreeItem<>(new SaleItem());
@@ -1451,8 +1453,7 @@ public class PosController implements Initializable {
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
-                    if (role.equals(Role.Trader.name()) | role.equals(Role.Manager.name())
-                            | role.equals(Role.Manager_ALL_ACCESS.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                    if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager")) {
                         List<LigneVente> ligvs = LigneVenteDelegate.findByReference(choosenVente.getUid());
                         ligvs.stream().map((ligv) -> {
                             Executors.newCachedThreadPool()
@@ -1495,8 +1496,9 @@ public class PosController implements Initializable {
                                 if (existingSa != null) {
                                     double newQty = (existingSa.getQuantite() == null ? 0 : existingSa.getQuantite())
                                             - ligv.getQuantite();
+                                    double lineUsdEq = ligv.getMontantUsd() + ligv.getMontantCdf() / taux2change;
                                     double newTotal = (existingSa.getTotalSaleUsd() == null ? 0
-                                            : existingSa.getTotalSaleUsd()) - ligv.getMontantUsd();
+                                            : existingSa.getTotalSaleUsd()) - lineUsdEq;
                                     double coutAch = ligv.getCoutAchat() == null ? 0 : ligv.getCoutAchat();
                                     double newCoutAchatTotal = (existingSa.getCoutAchatTotal() == null ? 0
                                             : existingSa.getCoutAchatTotal()) - (coutAch * ligv.getQuantite());
@@ -1658,7 +1660,7 @@ public class PosController implements Initializable {
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
-                    if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                    if (PermissionRegistry.hasGlobalAccess()) {
                         List<PrixDeVente> prcs = PrixDeVenteDelegate.findPricesForRecq(choosenReq.getUid());
                         prcs.forEach((prc) -> {
                             PrixDeVenteDelegate.deletePrixDeVente(prc);
@@ -1688,7 +1690,7 @@ public class PosController implements Initializable {
                 if (newValue && !tabRuptureLoaded) {
                     tabRuptureLoaded = true;
                     CompletableFuture.supplyAsync(() -> RecquisitionDelegate.findStockEnRupture(
-                            role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()) ? null : region))
+                            PermissionRegistry.hasGlobalAccess() ? null : region))
                             .thenAccept(list -> {
                                 Platform.runLater(() -> {
                                     obl_rupture_list.setAll(list);
@@ -1750,7 +1752,7 @@ public class PosController implements Initializable {
                     double somme = 0;
                     savedCarts.clear();
                     List<Vente> cartx;
-                    if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+                    if (PermissionRegistry.hasGlobalAccess()) {
                         cartx = VenteDelegate.findDraftedCarts();
                     } else {
                         cartx = VenteDelegate.findDraftedCarts(region);
@@ -2728,7 +2730,7 @@ public class PosController implements Initializable {
         chbx_xall.setSelected(false);
         ManagedSessionFactory.runInBackground(() -> {
             List<Rupture> ruptures;
-            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 ruptures = RecquisitionDelegate.findStockEnRupture();
             } else {
                 ruptures = RecquisitionDelegate.findStockEnRupture(region);
@@ -2974,7 +2976,7 @@ public class PosController implements Initializable {
         LocalDate dateDebut = Constants.Datetime.toLocalDate(leo.getTime());
         LocalDate dateFin = Constants.Datetime.toLocalDate(darg == null ? cexp.getTime() : darg);
         boolean hasGlobalAccess = role != null
-                && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()));
+                && (PermissionRegistry.hasGlobalAccess());
         String usedRegion = hasGlobalAccess ? "%" : region;
         List<Peremption> perimes = RecquisitionDelegate.showExpiredAtInterval(dateDebut, dateFin, usedRegion);
         ols_peremption.clear();
@@ -3190,7 +3192,7 @@ public class PosController implements Initializable {
         col_quanite_view.setCellValueFactory((TableColumn.CellDataFeatures<ListViewItem, String> param) -> {
             ListViewItem r = param.getValue();
             double rest = r.getQuantiteRestant();
-            // if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()))
+            // if (PermissionRegistry.hasGlobalAccess())
             // {
             // rest =
             // RecquisitionDelegate.findRemainedInMagasinFor(r.getProduit().getUid());
@@ -4044,7 +4046,7 @@ public class PosController implements Initializable {
 
     private double getQuant(String idpro, boolean entreOuSorti) {
         double result = 0;
-        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             if (entreOuSorti) {
                 result = RecquisitionDelegate.sumByProduit(idpro);
             } else {
@@ -4065,7 +4067,7 @@ public class PosController implements Initializable {
         LocalDate ld2 = d2.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 
         double result = 0;
-        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             if (entreOuSorti) {
                 result = RecquisitionDelegate.sumByProduit(idpro, ld1, ld2);
             } else {
@@ -4478,10 +4480,7 @@ public class PosController implements Initializable {
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
-                    if (role.equals(Role.Trader.name())
-                            | role.equals(Role.Manager.name())
-                            | role.equals(Role.Magazinner.name())
-                            | role.contains(Role.ALL_ACCESS.name())) {
+                    if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Magazinner")) {
                         FournisseurDelegate.deleteFournisseur(choosenSupply);
                         obl_fournisseurs.remove(choosenSupply);
                         // count_fournisseur.setText(String.format(bundle.getString("xitems"),
@@ -4588,8 +4587,7 @@ public class PosController implements Initializable {
     }
 
     private boolean hasPermission(PermitTo permit) {
-        return role != null && role.toUpperCase().contains(Role.ALL_ACCESS.name())
-                || role.toUpperCase().equals(Role.Trader.name()) || PermissionDelegate.hasPermission(permit);
+        return PermissionRegistry.has(permit);
     }
 
     private void settleSupplierDebt(Livraison target) {
@@ -5601,7 +5599,7 @@ public class PosController implements Initializable {
             return 0d;
         }
         boolean hasGlobalAccess = role != null
-                && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()));
+                && (PermissionRegistry.hasGlobalAccess());
         // Source de verite POS/panier: stock_agregate somme par produit (tous les lots
         // du scope).
         double pieces = hasGlobalAccess
@@ -5615,7 +5613,7 @@ public class PosController implements Initializable {
         if (dpk_debut_hyst.getValue() != null && dpk_fin_hyst.getValue() != null) {
 
             List<Vente> vts;
-            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 vts = VenteDelegate.findAllByDateInterval(dpk_debut_hyst.getValue(), dpk_fin_hyst.getValue());
             } else {
 
@@ -5791,7 +5789,7 @@ public class PosController implements Initializable {
         }
         obl_livraisons_req.addAll(foundl);
         list_livraison_req.setItems(obl_livraisons_req);
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             List<Recquisition> lsr = (List<Recquisition>) DataCache.get("pos-recq-" + role);
             if (lsr == null) {
                 List<Recquisition> ls = RecquisitionDelegate.findRecquisitions();
@@ -5832,8 +5830,7 @@ public class PosController implements Initializable {
             // filterNullRecquisitionProduct();
             List<Recquisition> loadReqs = loadReqs(loadedProducts);
             final String modec = pref.get("view-mode", "card");
-            final boolean traderOrAll = role.equals(Role.Trader.name())
-                    || role.contains(Role.ALL_ACCESS.name());
+            final boolean traderOrAll = PermissionRegistry.hasGlobalAccess();
 
             Platform.runLater(() -> {
                 prodx.clear();
@@ -5970,7 +5967,7 @@ public class PosController implements Initializable {
                     load_history.setVisible(true);
                     ManagedSessionFactory.runInBackground(() -> {
                         List<Vente> loop;
-                        if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+                        if (!PermissionRegistry.hasGlobalAccess()) {
                             loop = VenteDelegate.findCreditSalesFromRegion(region);
                         } else {
                             loop = VenteDelegate.findCreditSales();// db.findVenteCredit();
@@ -6023,7 +6020,7 @@ public class PosController implements Initializable {
                                     String.format(bundle.getString("xitems"), obl_rupture_list.size()));
                         });
                     } else {
-                        if (role.contains(Role.ALL_ACCESS.name()) | role.equals(Role.Trader.name())) {
+                        if (PermissionRegistry.hasGlobalAccess()) {
                             List<Rupture> list = RecquisitionDelegate.findStockEnRupture();
                             Platform.runLater(() -> {
                                 obl_rupture_list.setAll(list);
@@ -6115,7 +6112,7 @@ public class PosController implements Initializable {
         cbx_categofilter.getSelectionModel().selectedItemProperty()
                 .addListener((ObservableValue<? extends Category> observable, Category oldValue, Category newValue) -> {
                     if (newValue != null) {
-                        if (role.equals(Role.Trader.name()) | role.equals(Role.ALL_ACCESS.name())) {
+                        if (PermissionRegistry.hasGlobalAccess()) {
                             fillProductInTable(newValue.getUid());
                         } else {
                             fillProductInTable(newValue.getUid());
@@ -6163,7 +6160,7 @@ public class PosController implements Initializable {
         livraison = null;
         list_livraison_req.getSelectionModel().clearSelection();
         lbl_livrez_recq.setText("Livraisons :");
-        if (role.equals(Role.Trader.name())) {
+        if (UserRoleRegistry.isTrader()) {
             ManagedSessionFactory.runInBackground(() -> {
                 lsreq.setAll(RecquisitionDelegate.findRecquisitions());
                 Platform.runLater(() -> {
@@ -6202,7 +6199,7 @@ public class PosController implements Initializable {
         Optional<ButtonType> showAndWait = alert.showAndWait();
         if (showAndWait.get() == ButtonType.YES) {
             if (choosenReq != null) {
-                if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                if (PermissionRegistry.hasGlobalAccess()) {
                     // db.delete(choosenReq);
                     RecquisitionDelegate.deleteRecquisition(choosenReq);
                     MainUI.notify(null, "Suppression", "Récquisition suprimé avec succès", 4, "info");
@@ -6276,7 +6273,7 @@ public class PosController implements Initializable {
         ManagedSessionFactory.runInBackground(() -> {
             treeSaleItems.clear();
             region = pref.get("region", "...");
-            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 fillSaleHistory();
             } else {
                 List<Vente> lvts = VenteDelegate.findVentes(region);
@@ -6405,7 +6402,7 @@ public class PosController implements Initializable {
     private void fillSaleHistory() {
         rootView.getChildren().clear();
         List<Vente> ventes;
-        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             if (chbx_dettes_only.isSelected()) {
                 ventes = VenteDelegate.findCreditSales();
             } else {
@@ -6746,7 +6743,7 @@ public class PosController implements Initializable {
 
     public boolean isAlertReached(String idPro) {
         List<Recquisition> entrees;
-        if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+        if (!PermissionRegistry.hasGlobalAccess()) {
             entrees = RecquisitionDelegate.findRecquisitionByProduitRegion(idPro, region);
         } else {
             entrees = RecquisitionDelegate.findRecquisitionByProduit(idPro);
@@ -6755,7 +6752,7 @@ public class PosController implements Initializable {
         // Util.findLastRecquisitionFor(entrees, idPro);
 
         List<LigneVente> sorties;
-        if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+        if (!PermissionRegistry.hasGlobalAccess()) {
             sorties = LigneVenteDelegate.findByProduitRegion(idPro, region);// Util.findLigneVenteForProduit(db.findAll(),idPro,
             // region);
         } else {
@@ -6815,7 +6812,7 @@ public class PosController implements Initializable {
      */
     public boolean isExpiredSoon(String idPro) {
         List<Recquisition> entrees;
-        if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+        if (!PermissionRegistry.hasGlobalAccess()) {
             entrees = RecquisitionDelegate.findRecquisitionByProduitRegion(idPro, region);// db.findByProduit(Recquisition.class,
             // idPro,
             // region);//Util.findRequisitionForProduit(db.findByRegion(region),
@@ -7137,8 +7134,7 @@ public class PosController implements Initializable {
         obl_comptages = FXCollections.observableArrayList();
         states = FXCollections.observableArrayList("Non commencé", "En cours...", "Terminé");
 
-        canCreateInventory.set(PermissionDelegate.hasPermission(PermitTo.CREATE_INVENTORY)
-                || role.contains("ALL_ACCESS") || role.equals(Role.Trader.name()));
+        canCreateInventory.set(PermissionRegistry.hasPermission(pref, PermitTo.CREATE_INVENTORY));
 
         cbx_etat_inv_compter.setItems(states);
         cbx_region_inv_compter.setItems(regions);
@@ -7766,8 +7762,7 @@ public class PosController implements Initializable {
             alert.setHeaderText(null);
             Optional showAndWait = alert.showAndWait();
             if (showAndWait.get() == ButtonType.YES) {
-                if (this.role.equals(Role.Trader.name())
-                        | this.role.equals(Role.Manager_ALL_ACCESS.name())) {
+                if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager")) {
                     List counts = CompterDelegate
                             .findCompterBYInventaire((String) cbx_inventaire_compter.getValue().getUid());
                     if (counts.isEmpty()) {
@@ -7796,7 +7791,7 @@ public class PosController implements Initializable {
             alert.setHeaderText(null);
             Optional showAndWait = alert.showAndWait();
             if (showAndWait.get() == ButtonType.YES) {
-                if (PermissionDelegate.hasPermission((PermitTo) PermitTo.CREATE_INVENTORY)) {
+                if (PermissionRegistry.has(PermitTo.CREATE_INVENTORY)) {
                     Inventaire parent = this.choosenCompter.getInventaireId();
                     Compter toDelete = (Compter) this.choosenCompter;
                     CompterDelegate.deleteCompter(toDelete);

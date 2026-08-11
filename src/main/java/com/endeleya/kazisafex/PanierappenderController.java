@@ -82,6 +82,7 @@ import tools.SyncEngine;
 import tools.Util;
 import data.helpers.Role;
 import data.network.Kazisafe;
+import services.utils.UserRoleRegistry;
 import delegates.TraisorerieDelegate;
 import java.time.LocalDate;
 import java.util.AbstractMap;
@@ -177,7 +178,7 @@ public class PanierappenderController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         taux2change = CurrencyConverter.activeRate();
         region = pref.get("region", "...");
-        role = pref.get("priv", "");
+        role = UserRoleRegistry.getRole(pref);
         meth = pref.get("meth", "fifo");
         printerGroup = new ToggleGroup();
         thermal.setToggleGroup(printerGroup);
@@ -1240,7 +1241,7 @@ public class PanierappenderController implements Initializable {
     }
 
     private boolean hasGlobalStockAccess() {
-        return Role.Trader.name().equals(role) || (role != null && role.contains(Role.ALL_ACCESS.name()));
+        return UserRoleRegistry.isTrader(pref) || UserRoleRegistry.hasAllAccess(pref);
     }
 
     private double getCurrentRemainingPieces() {

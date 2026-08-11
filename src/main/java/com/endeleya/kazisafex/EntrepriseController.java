@@ -58,6 +58,7 @@ import tools.SyncEngine;
 import tools.Util;
 import static tools.Util.centerImage;
 import data.helpers.Role;
+import services.utils.UserRoleRegistry;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -150,7 +151,7 @@ public class EntrepriseController implements Initializable {
         txt_nom_entreprise.setText(eze.getNomEntreprise());
         choosenFile = FileUtils.pointFile(eze.getUid() + ".png");
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        role = pref.get("priv", "uknown");
+        role = UserRoleRegistry.getRole(pref);
         InputStream is;
         if (!choosenFile.exists()) {
             is = MainuiController.class.getResourceAsStream("/icons/office-building.png");
@@ -361,7 +362,7 @@ public class EntrepriseController implements Initializable {
     }
 
     public void updateOnCloud(Entreprise ese, String uid) {
-        if (!role.equals(Role.Trader.name())) {
+        if (!UserRoleRegistry.isTrader(pref)) {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("moreprivmsg"), 3, "error");
             return;
         }

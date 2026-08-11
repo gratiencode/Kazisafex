@@ -53,6 +53,7 @@ import delegates.MesureDelegate;
 import delegates.RecquisitionDelegate;
 import delegates.StockerDelegate;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.FicheItem;
 import services.RepportService;
 import tools.MainUI;
@@ -177,7 +178,7 @@ public class FichedestockController implements Initializable {
         MainUI.setPattern(dpk_fin_fiche);
         MainUI.setPattern(dpk_debut_fiche);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("regon", "...");
         configs();
     }
@@ -295,8 +296,7 @@ public class FichedestockController implements Initializable {
         List<Stocker> entrees;
         List<Destocker> sorties;
         String selectedRegion = cbx_regions.getValue();
-        boolean allRegions = Role.Trader.name().equals(role)
-                || (role != null && role.contains(Role.ALL_ACCESS.name()));
+        boolean allRegions = UserRoleRegistry.isTrader(pref) || UserRoleRegistry.hasAllAccess(pref);
         if (allRegions || selectedRegion == null || selectedRegion.isBlank()) {
             entrees = StockerDelegate.findStockerByProduit(produit.getUid());
             sorties = DestockerDelegate.findByProduit(produit.getUid());

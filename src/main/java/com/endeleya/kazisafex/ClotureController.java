@@ -69,6 +69,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.DataId;
@@ -188,7 +189,7 @@ public class ClotureController implements Initializable {
         mouvGroup = new ToggleGroup();
         kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
         entr = pref.get("eUid", "");
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         lsmesures = FXCollections.observableArrayList();
         regions = FXCollections.observableArrayList();
@@ -239,7 +240,7 @@ public class ClotureController implements Initializable {
         cbx_cloture_produit.setItems(lsproduits);
         cbx_cloture_mesure.setItems(lsmesures);
         cbx_region.setItems(regions);
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (UserRoleRegistry.isTrader(pref) || UserRoleRegistry.hasAllAccess(pref)) {
             cbx_region.setVisible(true);
         } else {
             cbx_region.setVisible(false);
@@ -273,7 +274,7 @@ public class ClotureController implements Initializable {
                         lsmesures.setAll(mes);
                         produit = t1;
                         CardHelper cah;
-                        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                        if (UserRoleRegistry.isTrader(pref) || UserRoleRegistry.hasAllAccess(pref)) {
                             cah = RecquisitionDelegate.makeCardFor(t1);
                         } else {
                             cah = RecquisitionDelegate.makeCardFor(t1, region);
@@ -373,7 +374,7 @@ public class ClotureController implements Initializable {
     private void ajusterStock(Produit prod, double ecart, Mesure m, String region) {
         System.out.println("Ecart " + ecart);
         CardHelper card;
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (UserRoleRegistry.isTrader(pref) || UserRoleRegistry.hasAllAccess(pref)) {
             card = RecquisitionDelegate.makeCardFor(prod);
         } else {
             card = RecquisitionDelegate.makeCardFor(prod, region);

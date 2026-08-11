@@ -33,6 +33,7 @@ import data.Traisorerie;
 import data.Vente;
 import data.Aretirer;
 import data.helpers.Role;
+import services.utils.UserRoleRegistry;
 import delegates.CategoryDelegate;
 import delegates.ClientDelegate;
 import delegates.MesureDelegate;
@@ -59,11 +60,15 @@ import tools.PurchaseBySupplier;
 import tools.DataCache;
 import utilities.Relevee;
 import tools.SyncEngine;
+import tools.CurrencyConverter;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Function;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -1651,12 +1656,13 @@ public class RepportService implements RapportStorage {
     @Override
     public Double turnOverOf(LocalDate d1, LocalDate d2, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT SUM(COALESCE(s.total_sale_usd,0)) ")
-                    .append("FROM sale_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ?");
+            double taux = CurrencyConverter.activeRate();
+            String sql = "SELECT ((SUM(COALESCE(v.montantUsd,0)) + (SUM(COALESCE(v.montantCdf,0)) / " + taux + "))) "
+                    + "FROM vente v WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                    + "AND (v.observation IS NULL OR v.observation != 'Drafted')";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    Query query = em.createNativeQuery(sql, Double.class);
                     query.setParameter(1, d1.atStartOfDay());
                     query.setParameter(2, d2.atTime(23, 59, 59));
                     query.setParameter(3, region);
@@ -1664,7 +1670,7 @@ public class RepportService implements RapportStorage {
                     return resp == null ? 0 : (Double) resp;
                 });
             }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Double.class);
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql, Double.class);
             query.setParameter(1, d1.atStartOfDay());
             query.setParameter(2, d2.atTime(23, 59, 59));
             query.setParameter(3, region);
@@ -1678,12 +1684,13 @@ public class RepportService implements RapportStorage {
     @Override
     public Double expenseOf(LocalDate d1, LocalDate d2, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT SUM(COALESCE(s.cout_achat_total,0)) ")
-                    .append("FROM sale_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ?");
+            String sql = "SELECT SUM(COALESCE(l.coutAchat,0) * l.quantite) "
+                    + "FROM ligne_vente l INNER JOIN vente v ON v.uid = l.reference_uid "
+                    + "WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                    + "AND (v.observation IS NULL OR v.observation != 'Drafted')";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    Query query = em.createNativeQuery(sql, Double.class);
                     query.setParameter(1, d1.atStartOfDay());
                     query.setParameter(2, d2.atTime(23, 59, 59));
                     query.setParameter(3, region);
@@ -1691,7 +1698,7 @@ public class RepportService implements RapportStorage {
                     return resp == null ? 0 : (Double) resp;
                 });
             }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Double.class);
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql, Double.class);
             query.setParameter(1, d1.atStartOfDay());
             query.setParameter(2, d2.atTime(23, 59, 59));
             query.setParameter(3, region);
@@ -2162,7 +2169,7 @@ public class RepportService implements RapportStorage {
     @Override
     public double dashCardVente(String role, LocalDate d1, LocalDate kesho, double taux, String region) {
         double sumSales = 0;
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (UserRoleRegistry.isTrader() || UserRoleRegistry.hasAllAccess()) {
             sumSales = VenteDelegate.sumVente(d1, kesho, taux, devise);
         } else {
             sumSales = VenteDelegate.sumVente(d1, kesho, region, taux);
@@ -2187,7 +2194,7 @@ public class RepportService implements RapportStorage {
     @Override
     public double dashCardResult(String role, LocalDate d1, LocalDate kesho, String region, double taux) {
         double result = 0;
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (UserRoleRegistry.isTrader() || UserRoleRegistry.hasAllAccess()) {
             double sumSales = VenteDelegate.sumVente(d1, kesho, taux, devise);
             double achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho);
             result = sumSales - achat;
@@ -2202,7 +2209,7 @@ public class RepportService implements RapportStorage {
     @Override
     public double dashCardDepense(String role, LocalDate d1, LocalDate kesho, String region) {
         double achat;
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (UserRoleRegistry.isTrader() || UserRoleRegistry.hasAllAccess()) {
             achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho);
         } else {
             achat = VenteDelegate.sumCoutAchatArticleVendu(d1, kesho, region);
@@ -2229,7 +2236,7 @@ public class RepportService implements RapportStorage {
             LocalDate d2, String role, String region, String periodName) {
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    String chartRegion = role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())
+                    String chartRegion = (UserRoleRegistry.isTrader() || UserRoleRegistry.hasAllAccess())
                             ? "%" : region;
                     List<Metric> kpis = DataCache.getOrLoad(
                             "report-chart-kpi-" + d1 + "-" + d2 + "-" + chartRegion + "-" + periodName,
@@ -2583,12 +2590,13 @@ public class RepportService implements RapportStorage {
     @Override
     public double chiffreDaffaire(LocalDate dateDebut, LocalDate dateFin, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append(
-                    "SELECT SUM(COALESCE(s.total_sale_usd,0)) CA FROM sale_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? ");
+            double taux = CurrencyConverter.activeRate();
+            String sql = "SELECT ((SUM(COALESCE(v.montantUsd,0)) + (SUM(COALESCE(v.montantCdf,0)) / " + taux + "))) "
+                    + "FROM vente v WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                    + "AND (v.observation IS NULL OR v.observation != 'Drafted') ";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    Query query = em.createNativeQuery(sql, Double.class);
                     query.setParameter(1, dateDebut.atStartOfDay());
                     query.setParameter(2, dateFin.atTime(23, 59, 59));
                     query.setParameter(3, region);
@@ -2597,7 +2605,7 @@ public class RepportService implements RapportStorage {
                 });
             }
 
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Double.class);
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql, Double.class);
             query.setParameter(1, dateDebut.atStartOfDay());
             query.setParameter(2, dateFin.atTime(23, 59, 59));
             query.setParameter(3, region);
@@ -2611,12 +2619,13 @@ public class RepportService implements RapportStorage {
     @Override
     public double chargeVariable(LocalDate dateDebut, LocalDate dateFin, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append(
-                    "SELECT SUM(COALESCE(s.cout_achat_total,0)) CA FROM sale_agregate s WHERE s.date BETWEEN ? AND ? AND s.region LIKE ? ");
+            String sql = "SELECT SUM(COALESCE(l.coutAchat,0) * l.quantite) "
+                    + "FROM ligne_vente l INNER JOIN vente v ON v.uid = l.reference_uid "
+                    + "WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                    + "AND (v.observation IS NULL OR v.observation != 'Drafted') ";
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Double.class);
+                    Query query = em.createNativeQuery(sql, Double.class);
                     query.setParameter(1, dateDebut.atStartOfDay());
                     query.setParameter(2, dateFin.atTime(23, 59, 59));
                     query.setParameter(3, region);
@@ -2624,7 +2633,7 @@ public class RepportService implements RapportStorage {
                     return rst == null ? 0 : (Double) rst;
                 });
             }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Double.class);
+            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql, Double.class);
             query.setParameter(1, dateDebut.atStartOfDay());
             query.setParameter(2, dateFin.atTime(23, 59, 59));
             query.setParameter(3, region);
@@ -2701,136 +2710,111 @@ public class RepportService implements RapportStorage {
             String region,
             String groupBy) {
 
-        List<Metric> metrics = new ArrayList<>();
+        String regionParam = (region == null || region.isEmpty()) ? "%" : region;
+        double taux = CurrencyConverter.activeRate();
         boolean embedded = ManagedSessionFactory.isEmbedded();
 
-        String periodeExpr = buildPeriodeExpression(groupBy, embedded);
-        String sql = buildSql(periodeExpr);
+        String salesSql = "SELECT v.uid, COALESCE(v.montantUsd,0), COALESCE(v.montantCdf,0), v.dateVente "
+                + "FROM vente v WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                + "AND (v.observation IS NULL OR v.observation != 'Drafted')";
+        String costSql = "SELECT l.reference_uid, SUM(COALESCE(l.coutAchat,0) * l.quantite) "
+                + "FROM ligne_vente l INNER JOIN vente v ON v.uid = l.reference_uid "
+                + "WHERE v.dateVente BETWEEN ? AND ? AND v.region LIKE ? "
+                + "AND (v.observation IS NULL OR v.observation != 'Drafted') GROUP BY l.reference_uid";
+
+        Function<EntityManager, List<Metric>> compute = em -> {
+            Map<Integer, LocalDate> uidToPeriod = new HashMap<>();
+            Map<LocalDate, double[]> acc = new TreeMap<>();
+
+            Query q1 = em.createNativeQuery(salesSql);
+            q1.setParameter(1, dateDebut.atStartOfDay());
+            q1.setParameter(2, dateFin.atTime(23, 59, 59));
+            q1.setParameter(3, regionParam);
+            List<Object[]> sales = q1.getResultList();
+            for (Object[] r : sales) {
+                int uid = ((Number) r[0]).intValue();
+                double usd = ((Number) r[1]).doubleValue();
+                double cdf = ((Number) r[2]).doubleValue();
+                LocalDate date = toLocalDate(r[3]);
+                if (date == null) {
+                    continue;
+                }
+                LocalDate period = periodOf(date, groupBy);
+                uidToPeriod.put(uid, period);
+                double[] a = acc.computeIfAbsent(period, k -> new double[2]);
+                a[0] += usd + (cdf / taux);
+            }
+
+            Query q2 = em.createNativeQuery(costSql);
+            q2.setParameter(1, dateDebut.atStartOfDay());
+            q2.setParameter(2, dateFin.atTime(23, 59, 59));
+            q2.setParameter(3, regionParam);
+            List<Object[]> costs = q2.getResultList();
+            for (Object[] r : costs) {
+                int uid = ((Number) r[0]).intValue();
+                double cost = ((Number) r[1]).doubleValue();
+                LocalDate period = uidToPeriod.get(uid);
+                if (period != null) {
+                    double[] a = acc.get(period);
+                    if (a != null) {
+                        a[1] += cost;
+                    }
+                }
+            }
+
+            List<Metric> result = new ArrayList<>();
+            for (Map.Entry<LocalDate, double[]> e : acc.entrySet()) {
+                double ca = e.getValue()[0];
+                double ch = e.getValue()[1];
+                result.add(new Metric(e.getKey(), ca, ch, ca - ch, regionParam));
+            }
+            return result;
+        };
 
         if (embedded) {
-            return ManagedSessionFactory
-                    .executeRead(em -> executeQuery(em, sql, dateDebut, dateFin, region, groupBy, metrics));
+            return ManagedSessionFactory.executeRead(compute);
         }
-
-        return executeQuery(
-                ManagedSessionFactory.getEntityManager(),
-                sql,
-                dateDebut,
-                dateFin,
-                region,
-                groupBy,
-                metrics);
+        return compute.apply(ManagedSessionFactory.getEntityManager());
     }
 
-    private String buildSql(String periodeExpr) {
-        return """
-                SELECT
-                    SUM(COALESCE(s.total_sale_usd,0)) AS CA,
-                    SUM(COALESCE(s.cout_achat_total,0)) AS CH,
-                    SUM(COALESCE(s.total_sale_usd,0) - COALESCE(s.cout_achat_total,0)) AS RESULT,
-                    %s AS periode
-                FROM sale_agregate s
-                WHERE s.date BETWEEN :start AND :end
-                  AND s.region LIKE :region
-                GROUP BY periode
-                ORDER BY periode ASC
-                """.formatted(periodeExpr);
-    }
-
-    private String buildPeriodeExpression(String groupBy, boolean embedded) {
-
-        return switch (groupBy.toLowerCase()) {
-
-            case "mensuel" ->
-                embedded
-                ? "strftime('%m', s.date/1000, 'unixepoch')"
-                : "MONTH(s.date)";
-
-            case "annuel" ->
-                embedded
-                ? "strftime('%Y', s.date/1000, 'unixepoch')"
-                : "YEAR(s.date)";
-
-            case "trimestriel" ->
-                embedded
-                ? "((cast(strftime('%m', s.date/1000, 'unixepoch') as integer) + 2) / 3)"
-                : "QUARTER(s.date)";
-
-            default ->
-                "s.date";
-        };
-    }
-
-    private List<Metric> executeQuery(EntityManager em,
-            String sql,
-            LocalDate dateDebut,
-            LocalDate dateFin,
-            String region,
-            String groupBy,
-            List<Metric> metrics) {
-
-        Query q = em.createNativeQuery(sql);
-        q.setParameter("start", dateDebut.atStartOfDay());
-        q.setParameter("end", dateFin.atTime(23, 59, 59));
-        q.setParameter("region", region);
-
-        List<Object[]> rows = q.getResultList();
-        for (Object[] r : rows) {
-            metrics.add(mapRowToMetric(r, groupBy, dateFin, region));
-        }
-        return metrics;
-    }
-
-    /**
-     * SQLite renvoie souvent des colonnes strftime comme String ; MySQL comme
-     * Number.
-     */
-    private static int intFromNativeRow(Object value) {
+    private static LocalDate toLocalDate(Object value) {
         if (value == null) {
-            return 0;
+            return null;
+        }
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime().toLocalDate();
+        }
+        if (value instanceof java.sql.Date d) {
+            return d.toLocalDate();
+        }
+        if (value instanceof LocalDateTime ldt) {
+            return ldt.toLocalDate();
+        }
+        if (value instanceof LocalDate ld) {
+            return ld;
         }
         if (value instanceof Number n) {
-            return n.intValue();
+            return new java.sql.Timestamp(n.longValue()).toLocalDateTime().toLocalDate();
         }
-        return Integer.parseInt(value.toString().trim());
+        try {
+            return LocalDate.parse(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
-    private Metric mapRowToMetric(Object[] r,
-            String groupBy,
-            LocalDate referenceDate,
-            String region) {
-
-        double ca = ((Number) r[0]).doubleValue();
-        double ch = ((Number) r[1]).doubleValue();
-        double result = ((Number) r[2]).doubleValue();
-
-        LocalDate periode;
-
+    private static LocalDate periodOf(LocalDate date, String groupBy) {
         switch (groupBy.toLowerCase()) {
-
-            case "mensuel" -> {
-                int month = intFromNativeRow(r[3]);
-                YearMonth ym = YearMonth.of(referenceDate.getYear(), month);
-                periode = ym.atEndOfMonth(); // ✅ bissextile OK
-            }
-
-            case "annuel" -> {
-                int year = intFromNativeRow(r[3]);
-                periode = LocalDate.of(year, 12, 31);
-            }
-
-            case "trimestriel" -> {
-                int quarter = intFromNativeRow(r[3]);
-                int endMonth = quarter * 3;
-                YearMonth ym = YearMonth.of(referenceDate.getYear(), endMonth);
-                periode = ym.atEndOfMonth();
-            }
-
-            default ->
-                periode = ((java.sql.Date) r[3]).toLocalDate();
+            case "mensuel":
+                return YearMonth.of(date.getYear(), date.getMonthValue()).atEndOfMonth();
+            case "annuel":
+                return LocalDate.of(date.getYear(), 12, 31);
+            case "trimestriel":
+                int quarter = (date.getMonthValue() + 2) / 3;
+                return YearMonth.of(date.getYear(), quarter * 3).atEndOfMonth();
+            default:
+                return date;
         }
-
-        return new Metric(periode, ca, ch, result, region);
     }
 
     private List<SaleAgregate> findSaleAgs(LocalDate today, LocalDate today1, String region) {

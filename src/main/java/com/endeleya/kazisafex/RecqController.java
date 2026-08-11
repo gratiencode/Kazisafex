@@ -65,6 +65,8 @@ import tools.CurrencyConverter;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import services.utils.UserRoleRegistry;
+import services.utils.PermissionRegistry;
 import tools.Tables;
 import tools.Util;
 import tools.Constants;
@@ -300,7 +302,7 @@ public class RecqController implements Initializable {
             if (d.getObservation().equalsIgnoreCase("Déclassement de stock")) {
                 continue;
             }
-            if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+            if (!PermissionRegistry.hasGlobalAccess()) {
                 if (d.getDestination().equals(region)) {
                     Produit p = Util.findProduit(produit, d.getProductId().getUid());
                     d.setProductId(p);
@@ -740,7 +742,7 @@ public class RecqController implements Initializable {
         MainUI.setPattern(dpk_date_expiry_req);
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         taux2change = CurrencyConverter.legacyCdfRate();
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         pricepane.setVisible(false);
         config();
@@ -1131,7 +1133,7 @@ public class RecqController implements Initializable {
         recquisition.setNumlot(tf_numlot_req.getText());
         recquisition.setObservation(tf_obs_req.getText());
 
-        if (role.equals(Role.Trader.name()) || role.equals(Role.Manager.name()) || role.equals(Role.Magazinner.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Magazinner")) {
             Recquisition req = RecquisitionDelegate.updateRecquisition(recquisition);
             saveRecqusitionByHttp(req);
         } else {

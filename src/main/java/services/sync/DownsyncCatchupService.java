@@ -74,7 +74,8 @@ public class DownsyncCatchupService {
             DownsyncCatchupService.class
         );
 
-        System.out.println("[SYNC-CATCHUP] Starting catch-up since: " + since);
+        String originalSince = since;
+        System.out.println("[SYNC-CATCHUP] Starting catch-up since: " + since + ", originalSince: " + originalSince);
         if (statusUpdater != null) {
             statusUpdater.accept(
                 "Téléchargement des mutations depuis le serveur..."
@@ -92,7 +93,7 @@ public class DownsyncCatchupService {
             // (curseur composé), jusqu'à ce que le serveur renvoie moins de
             // lignes que la limite qu'il applique.
             while (!Thread.currentThread().isInterrupted()) {
-                Response<List<SyncOutboxDto>> response = executeWithRetry(api, since, lastPriority, pageSize);
+                Response<List<SyncOutboxDto>> response = executeWithRetry(api, since, originalSince, lastPriority, pageSize);
 
                 if (!response.isSuccessful() || response.body() == null) {
                     if (response.code() == 429) {
@@ -259,13 +260,13 @@ public class DownsyncCatchupService {
      * mais avec un retry immédiat avant de rendre la main.
      */
     private static Response<List<SyncOutboxDto>> executeWithRetry(
-        Kazisafe api, String since, int lastPriority, int pageSize
+        Kazisafe api, String since, String originalSince, int lastPriority, int pageSize
     ) throws java.io.IOException {
         int size = pageSize;
         for (int attempt = 1; ; attempt++) {
             try {
                 Response<List<SyncOutboxDto>> resp =
-                    api.getMissedMutations(since, lastPriority, size).execute();
+                    api.getMissedMutations(since, originalSince, lastPriority, size).execute();
                 if (resp.isSuccessful() || resp.code() != 429 || attempt >= 3) {
                     return resp;
                 }

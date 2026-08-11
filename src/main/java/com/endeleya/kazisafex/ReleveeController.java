@@ -76,6 +76,8 @@ import tools.DebtItem;
 import tools.FileUtils;
 import tools.MainUI;
 import tools.SyncEngine;
+import services.utils.UserRoleRegistry;
+import services.utils.PermissionRegistry;
 import tools.Tables;
 import tools.Util;
 import utilities.Relevee;
@@ -338,7 +340,7 @@ public class ReleveeController implements Initializable {
         dpk1.setValue(start);
         dpk2.setValue(date);
         count_logic = pref.getInt("count-logic", 0);
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         ContextMenu recov = new ContextMenu();
         MenuItem rec = new MenuItem("Voir la facture");
@@ -416,9 +418,9 @@ public class ReleveeController implements Initializable {
                     alert.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alert.showAndWait();
                     if (showAndWait.get() == ButtonType.YES) {
-                        if (role.equals(Role.Trader.name())
-                                | role.toUpperCase().contains(Role.Finance.name().toUpperCase())
-                                | role.toUpperCase().contains(Role.Manager.name().toUpperCase())) {
+                        if (PermissionRegistry.hasGlobalAccess()
+                                || UserRoleRegistry.hasRole("Finance")
+                                || UserRoleRegistry.hasRole("Manager")) {
                             FactureDelegate.deleteFacture(choosenBill);
                             choosenBill.setType(Tables.FACTURE.name());
                             Executors.newCachedThreadPool()

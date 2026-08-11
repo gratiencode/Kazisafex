@@ -23,11 +23,10 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.text.Font?>
 
-<fx:define>
-   <ToggleGroup fx:id="grpAchSource" />
-</fx:define>
-
 <AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="615.0" prefWidth="1211.0" style="-fx-background-radius: 12; -fx-background-color: #ffffff;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.RepportController">
+   <fx:define>
+      <ToggleGroup fx:id="grpAchSource" />
+   </fx:define>
    <children>
       <DatePicker fx:id="dpk_debut_report" layoutX="868.0" layoutY="9.0" onAction="#showCurrentInTable" prefHeight="24.0" prefWidth="150.0" AnchorPane.rightAnchor="193.0" />
       <DatePicker fx:id="dpk_fin_report" layoutX="1044.0" layoutY="10.0" onAction="#showCurrentInTable" prefHeight="24.0" prefWidth="150.0" AnchorPane.rightAnchor="17.0" />

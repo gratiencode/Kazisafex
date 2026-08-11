@@ -7,6 +7,8 @@ import data.core.KazisafeServiceFactory;
 import data.network.Kazisafe;
 import delegates.ImmobilisationDelegate;
 import delegates.PermissionDelegate;
+import services.utils.PermissionRegistry;
+import services.utils.UserRoleRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URL;
@@ -104,7 +106,7 @@ public class ImmobilisationController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         instance = this;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        role = pref.get("priv", "");
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         txt_categorie.setItems(FXCollections.observableArrayList("Corporelle", "Incorporelle", "Financiere"));
         configureTable();
@@ -415,12 +417,11 @@ public class ImmobilisationController implements Initializable {
     }
 
     private boolean hasPermission(PermitTo permit) {
-        return role != null && role.toUpperCase().contains("ALL_ACCESS")
-                || PermissionDelegate.hasPermission(permit);
+        return PermissionRegistry.has(pref, permit);
     }
 
     private String selectRegion() {
-        return role != null && role.toUpperCase().contains("ALL_ACCESS") ? null : region;
+        return UserRoleRegistry.hasAllAccess(pref) ? null : region;
     }
 
     private String format(Double value) {

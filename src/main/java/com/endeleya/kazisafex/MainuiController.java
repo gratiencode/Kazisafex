@@ -153,6 +153,8 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import services.PlatformUtil;
+import services.utils.PermissionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.CurrencyConverter;
 import tools.Agregator;
 import tools.Constants;
@@ -446,7 +448,7 @@ public class MainuiController implements Initializable {
         bundle = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         appName.setText("Kazisafe");
-        role = pref.get("priv", "Non disponible");
+        role = UserRoleRegistry.getRole(pref);
         installTooltips();
         Tooltip.install(img_profile, new Tooltip(role));
         Tooltip.install(
@@ -1072,10 +1074,7 @@ public class MainuiController implements Initializable {
     }
 
     public void creanceToday() {
-        if (
-            role.equals(Role.Trader.name()) |
-            role.contains(Role.ALL_ACCESS.name())
-        ) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             List<Vente> ventes = getVentesDebt(LocalDate.now());
             double sumSales = Util.sumCreditSales(ventes, taux);
             String somC = maker.isUsd()
@@ -1153,10 +1152,7 @@ public class MainuiController implements Initializable {
         // System.out.println("mois en cours " + month);
         List<Metric> kpis;
 
-        if (
-            role.equals(Role.Trader.name()) |
-            role.contains(Role.ALL_ACCESS.name())
-        ) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             kpis = RepportDelegate.kpiValues(
                 LocalDate.of(Year.now().getValue(), Month.JANUARY, 1),
                 LocalDate.now(),
@@ -1242,10 +1238,7 @@ public class MainuiController implements Initializable {
         piepane.setPrefSize(351, 318);
         piepane.setLabelsVisible(true);
         List<TopTen> entries;
-        if (
-            role.equals(Role.Trader.name()) ||
-            role.contains(Role.ALL_ACCESS.name())
-        ) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             entries = VenteDelegate.getTop10ProductDesc();
         } else {
             entries = VenteDelegate.getTop10ProductDesc(region);
@@ -1832,8 +1825,8 @@ public class MainuiController implements Initializable {
                         return p;
                     })
                     .collect(Collectors.toList());
-                PermissionDelegate.renewPermissions(tosave);
-                pref.put("priv", loginResult.getRole());
+                PermissionRegistry.renewPermissions(tosave);
+                UserRoleRegistry.saveRole(pref, loginResult.getRole());
             } catch (JsonProcessingException ex) {
                 Logger.getLogger(MainuiController.class.getName()).log(
                     Level.SEVERE,
@@ -1857,10 +1850,10 @@ public class MainuiController implements Initializable {
             entrep_name.setText(eName);
             logr.setNomentreprise(eName);
         }
-        role = logr.getRole();
-        if (role == null) {
-            role = pref.get("role", "Trader");
+        if (logr.getRole() != null && !logr.getRole().isBlank()) {
+            UserRoleRegistry.saveRole(pref, logr.getRole());
         }
+        role = UserRoleRegistry.getRole(pref);
         region = logr.getRegion();
         if (region == null) {
             region = pref.get("region", "Goma");
@@ -2194,26 +2187,23 @@ public class MainuiController implements Initializable {
         // }
         // }
         System.out.println("permix " + loginResult.getRole());
-        if (role.equals(Role.Saler.name())) {
+        if (UserRoleRegistry.hasRole("Saler")) {
             tbar_menu.getItems().remove(caisse);
             tbar_menu.getItems().remove(immobilisation);
             tbar_menu.getItems().remove(stockage);
             tbar_menu.getItems().remove(agents);
             tbar_menu.getItems().remove(production);
-        } else if (role.equals(Role.Magazinner.name())) {
+        } else if (UserRoleRegistry.hasRole("Magazinner")) {
             tbar_menu.getItems().remove(caisse);
             tbar_menu.getItems().remove(immobilisation);
             tbar_menu.getItems().remove(agents);
             tbar_menu.getItems().remove(rapport);
-        } else if (role.equals(Role.Finance.name())) {
+        } else if (UserRoleRegistry.hasRole("Finance")) {
             tbar_menu.getItems().remove(stockage);
             tbar_menu.getItems().remove(production);
             tbar_menu.getItems().remove(agents);
             tbar_menu.getItems().remove(rapport);
-        } else if (
-            role.equals(Role.Manager.name()) ||
-            role.contains(Role.ALL_ACCESS.name())
-        ) {
+        } else if (UserRoleRegistry.hasRole("Manager") || PermissionRegistry.hasGlobalAccess()) {
             tbar_menu.getItems().remove(agents);
         } else {
         }
@@ -3059,7 +3049,15 @@ public class MainuiController implements Initializable {
             return;
         }
         // Afficher immédiatement le message de l'utilisateur dans le chat.
+        // Guard NPE : webE n'est initialisé que lorsque le panneau IA est ouvert.
+        if (webE == null) {
+            txt_input_iaquery.clear();
+            aiAttachments.clear();
+            refreshAttachmentLabel();
+            return;
+        }
         Platform.runLater(() -> {
+            if (webE == null) return;
             webE.executeScript(
                 "appendUser(" +
                     escapeForJS(
@@ -3079,13 +3077,15 @@ public class MainuiController implements Initializable {
             String notice = compacting
                     ? "\uD83E\uDDD1\u200D\uD83D\uDCBB Message reçu. Gratien est en train de compacter sa mémoire ; votre message sera traité juste après."
                     : "\u23f3 Message reçu. Gratien finit sa réponse actuelle et traitera votre message ensuite.";
-            Platform.runLater(() ->
-                webE.executeScript(
-                    "showBotProcess(" +
-                        escapeForJS(notice) +
-                        ")"
-                )
-            );
+            Platform.runLater(() -> {
+                if (webE != null) {
+                    webE.executeScript(
+                        "showBotProcess(" +
+                            escapeForJS(notice) +
+                            ")"
+                    );
+                }
+            });
             return;
         }
         dispatchToGratien(question, attachments);
@@ -3106,7 +3106,7 @@ public class MainuiController implements Initializable {
                     @Override
                     public void onToken(String token) {
                         Platform.runLater(() -> {
-                            if (!handleSecureMysqlPasswordRequest(token)) {
+                            if (webE != null && !handleSecureMysqlPasswordRequest(token)) {
                                 webE.executeScript(
                                     "appendBotAnswer(" +
                                         escapeForJS(token) +
@@ -3119,7 +3119,7 @@ public class MainuiController implements Initializable {
                     @Override
                     public void onProcess(String message) {
                         Platform.runLater(() -> {
-                            if (!handleSecureMysqlPasswordRequest(message)) {
+                            if (webE != null && !handleSecureMysqlPasswordRequest(message)) {
                                 webE.executeScript(
                                     "showBotProcess(" +
                                         escapeForJS(message) +
@@ -3131,24 +3131,26 @@ public class MainuiController implements Initializable {
 
                     @Override
                     public void onComplete() {
-                        Platform.runLater(() ->
-                            webE.executeScript("endBotMessage()")
-                        );
+                        Platform.runLater(() -> {
+                            if (webE != null) webE.executeScript("endBotMessage()");
+                        });
                         afterGratienFinished();
                     }
 
                     @Override
                     public void onError(Throwable error) {
                         Platform.runLater(() -> {
-                            webE.executeScript(
-                                "appendBotPartial(" +
-                                    escapeForJS(
-                                        "Impossible de joindre Gratien via Ollama: " +
-                                            throwableMessage(error)
-                                    ) +
-                                    ")"
-                            );
-                            webE.executeScript("endBotMessage()");
+                            if (webE != null) {
+                                webE.executeScript(
+                                    "appendBotPartial(" +
+                                        escapeForJS(
+                                            "Impossible de joindre Gratien via Ollama: " +
+                                                throwableMessage(error)
+                                        ) +
+                                        ")"
+                                );
+                                webE.executeScript("endBotMessage()");
+                            }
                         });
                         afterGratienFinished();
                     }
@@ -3166,22 +3168,34 @@ public class MainuiController implements Initializable {
         PendingUserMessage next = gratienMessageQueue.poll();
         if (next != null) {
             // Afficher le message en attente dans le chat avant de le traiter.
-            Platform.runLater(() ->
-                webE.executeScript(
-                    "appendUser(" +
-                        escapeForJS(
-                            next.question() +
-                                userAttachmentPreviewMarkdown(next.attachments())
-                        ) +
-                        ")"
-                )
-            );
+            Platform.runLater(() -> {
+                if (webE != null) {
+                    webE.executeScript(
+                        "appendUser(" +
+                            escapeForJS(
+                                next.question() +
+                                    userAttachmentPreviewMarkdown(next.attachments())
+                            ) +
+                            ")"
+                    );
+                }
+            });
             dispatchToGratien(next.question(), next.attachments());
         }
     }
 
     /** Encapsule un message utilisateur mis en file d'attente. */
     private record PendingUserMessage(String question, List<File> attachments) {}
+
+    /**
+     * Exécute un script JS dans le chat IA, sans NPE : webE n'existe que si le
+     * panneau IA a été initialisé (initializeAi). No-op dans le cas contraire.
+     */
+    private void runChatScript(String script) {
+        if (webE != null) {
+            webE.executeScript(script);
+        }
+    }
 
     private boolean handleSecureMysqlPasswordRequest(String message) {
         SecureMysqlRequest request = SecureMysqlRequest.from(message);
@@ -3191,7 +3205,7 @@ public class MainuiController implements Initializable {
         if (!handledSecureMysqlRequests.add(request.key())) {
             return true;
         }
-        webE.executeScript(
+        runChatScript(
             "showBotProcess(" +
                 escapeForJS(
                     "Saisie sécurisée du mot de passe root MySQL requise."
@@ -3200,14 +3214,14 @@ public class MainuiController implements Initializable {
         );
         Optional<String> password = requestMysqlRootPassword(request);
         if (password.isEmpty() || password.get().isBlank()) {
-            webE.executeScript(
+            runChatScript(
                 "appendBotAnswer(" +
                     escapeForJS(
                         "Configuration annulée: aucun mot de passe root MySQL n'a été saisi."
                     ) +
                     ")"
             );
-            webE.executeScript("endBotMessage()");
+            runChatScript("endBotMessage()");
             return true;
         }
         runSecureMysqlAction(request, password.get());
@@ -3270,10 +3284,10 @@ public class MainuiController implements Initializable {
                 );
             }
             Platform.runLater(() -> {
-                webE.executeScript(
+                runChatScript(
                     "appendBotAnswer(" + escapeForJS(result) + ")"
                 );
-                webE.executeScript("endBotMessage()");
+                runChatScript("endBotMessage()");
             });
         }, "Gratien-secure-mysql-action").start();
     }
@@ -3357,9 +3371,10 @@ public class MainuiController implements Initializable {
     private void addAttachemnts() {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Joindre un fichier à Gratien");
-        List<File> selectedFiles = chooser.showOpenMultipleDialog(
-            ia_webvu_chat.getScene().getWindow()
-        );
+        javafx.stage.Window owner = (ia_webvu_chat != null && ia_webvu_chat.getScene() != null)
+                ? ia_webvu_chat.getScene().getWindow()
+                : null;
+        List<File> selectedFiles = chooser.showOpenMultipleDialog(owner);
         if (selectedFiles == null || selectedFiles.isEmpty()) {
             return;
         }

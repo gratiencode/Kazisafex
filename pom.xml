@@ -11,12 +11,31 @@
         <maven.compiler.release>25</maven.compiler.release>
         <javafx.version>22.0.2</javafx.version>
         <hikaricp.version>5.1.0</hikaricp.version>
+        <!-- Tests exécutés uniquement à la demande : -Dtests.skip=false -->
+        <tests.skip>true</tests.skip>
     </properties>
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -26,13 +45,37 @@
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
             <version>${javafx.version}</version>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-web</artifactId>
             <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
         </dependency>
         <dependency>
             <groupId>com.squareup.retrofit2</groupId>
@@ -348,13 +391,22 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>5.11.0</version>
+            <version>5.20.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
-            <version>5.11.0</version>
+            <version>5.20.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Byte Buddy (Mockito) : on force la version compatible Java 25, sinon
+        la 1.15.11 transitée par Hibernate (runtime) gagne la résolution et
+        Mockito ne peut pas créer ses mocks sur JDK 25+. -->
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>1.17.8</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -387,7 +439,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.endeleya.kazisafex.Kazisafex</mainClass>
+                    <mainClass>com.endeleya.kazisafex.Main</mainClass>
                     <!-- Workaround JDK 22.0.1 : le compilateur C1 produit du code
                     fautif dans org.jboss.jandex.Indexer.parseType (utilise par
                     Hibernate au demarrage), entrainant un SIGSEGV (exit 139)
@@ -526,6 +578,14 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!-- Tests non exécutés pendant le build (dépendent de
+                    l'environnement : Ollama, bases de données locales...).
+                    Ils restent compilés ; on peut les relancer à la demande :
+                    mvn test -Dtests.skip=false -Dtest=NomDuTest -->
+                    <skipTests>${tests.skip}</skipTests>
+                    <!-- Java 21+ bloque l'attachement dynamique de l'agent Byte
+                    Buddy (Mockito/mockStatic). On le ré-autorise pour les tests. -->
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
                     <systemPropertyVariables>
                         <kazisafe.test.mode>true</kazisafe.test.mode>
                     </systemPropertyVariables>
@@ -537,7 +597,7 @@
                 <version>3.6.3</version>
                 <configuration>
                     <!-- Remplacez par le nom de votre classe principale réelle si différente -->
-                    <mainClass>com.endeleya.kazisafex.Kazisafex</mainClass>
+                    <mainClass>com.endeleya.kazisafex.Main</mainClass>
         
 
                 </configuration>

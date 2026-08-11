@@ -500,6 +500,13 @@ public class HttpSyncHandler extends Task<Boolean> {
         } else if ("syncMissedClients".equals(method)) {
             List<Client> clients = (List<Client>) response.body();
             if (clients != null) {
+                clients.sort((c1, c2) -> {
+                    boolean isAnon1 = c1 != null && ("09000".equals(c1.getPhone()) || "Anonyme".equalsIgnoreCase(c1.getNomClient()));
+                    boolean isAnon2 = c2 != null && ("09000".equals(c2.getPhone()) || "Anonyme".equalsIgnoreCase(c2.getNomClient()));
+                    if (isAnon1 && !isAnon2) return -1;
+                    if (!isAnon1 && isAnon2) return 1;
+                    return 0;
+                });
                 for (Client client : clients) {
                     ClientDelegate.syncClientSafe(client);
                 }

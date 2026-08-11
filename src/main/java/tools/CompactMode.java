@@ -30,6 +30,7 @@ import data.ProduitHelper;
 import data.Vente;
 import data.VenteHelper;
 import data.helpers.Role;
+import services.utils.PermissionRegistry;
 import data.network.Kazisafe;
 import delegates.ClientDelegate;
 import delegates.CompteTresorDelegate;
@@ -928,7 +929,7 @@ public class CompactMode {
     public double dashCardVente(String role) {
         LocalDate d1 = LocalDate.now();
         LocalDate kesho = d1.plusDays(1);
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             double sumSales = VenteDelegate.sumVente(d1, kesho, taux2change, devise);
             return sumSales;
         } else {
@@ -938,7 +939,7 @@ public class CompactMode {
     }
 
     public double creanceToday(String role) {
-        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             List<Vente> ventes = getVentesDebt(LocalDate.now());
             double sumSales = Util.sumCreditSales(ventes, taux2change);
             return sumSales;

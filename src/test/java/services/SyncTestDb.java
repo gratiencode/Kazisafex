@@ -45,7 +45,13 @@ public final class SyncTestDb implements AutoCloseable {
     public final List<Object> removedEntities = new java.util.ArrayList<>();
     public final List<Object> persistedEntities = new java.util.ArrayList<>();
 
+    /** Bulk UPDATEs exécutés (matérialisation : préservation de l'updatedAt serveur). */
+    public final List<String> executedUpdates = new java.util.ArrayList<>();
+    public final Map<String, Object> updateParams = new HashMap<>();
+
     private final Map<String, Object> params = new HashMap<>();
+    private final java.util.concurrent.atomic.AtomicReference<String> lastUpdateQuery =
+            new java.util.concurrent.atomic.AtomicReference<>();
 
     @SuppressWarnings("unchecked")
     public SyncTestDb() {
@@ -125,12 +131,34 @@ public final class SyncTestDb implements AutoCloseable {
                         .filter(r -> table.equals(r.getTableName()) && entityId.equals(r.getEntityId()))
                         .collect(Collectors.toList());
             }
-            return List.of();
+            // Upsync : fetchAllPendingOutbox (aucun paramètre) : seuls les
+            // statuts à remonter sont retournés, triés par createdAt.
+            return records.values().stream()
+                    .filter(r -> {
+                        String st = r.getStatus();
+                        return "PENDING".equals(st) || "UNSYNCED".equals(st) || "FAILED".equals(st);
+                    })
+                    .sorted(Comparator.comparing(r ->
+                            r.getCreatedAt() == null
+                                ? LocalDateTime.MIN
+                                : r.getCreatedAt()
+                    ))
+                    .collect(Collectors.toList());
         });
 
         Query deleteQ = mock(Query.class);
-        when(em.createQuery(anyString())).thenReturn(deleteQ);
-        when(deleteQ.executeUpdate()).thenReturn(0);
+        when(em.createQuery(anyString())).thenAnswer(inv -> {
+            lastUpdateQuery.set(inv.getArgument(0));
+            return deleteQ;
+        });
+        when(deleteQ.setParameter(anyString(), any())).thenAnswer(inv -> {
+            updateParams.put(inv.getArgument(0), inv.getArgument(1));
+            return deleteQ;
+        });
+        when(deleteQ.executeUpdate()).thenAnswer(inv -> {
+            executedUpdates.add(lastUpdateQuery.get());
+            return 0;
+        });
 
         when(em.find(any(Class.class), any())).thenAnswer(inv -> {
             Class<?> cls = inv.getArgument(0);

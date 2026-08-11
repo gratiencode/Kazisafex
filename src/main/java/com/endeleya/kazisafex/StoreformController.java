@@ -71,6 +71,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 import tools.CurrencyConverter;
 import tools.ComboBoxAutoCompletion;
 import tools.Constants;
@@ -1147,7 +1148,7 @@ public class StoreformController implements Initializable {
         taux = CurrencyConverter.activeRate();
         region = pref.get("region", null);
         token = pref.get("token", null);
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         List<Livraison> livrs = LivraisonDelegate.findLivraisons();
         lisvrezon.addAll(livrs);
         ContextMenu contextMenu = new ContextMenu();

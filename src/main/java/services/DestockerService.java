@@ -338,12 +338,17 @@ public class DestockerService implements DestockerStorage {
     @Override
     public List<Destocker> findDestockerByProduit(String uid, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM destocker WHERE product_id = ? AND region = ? ");
+            boolean isGlobal = region == null || region.isBlank() || "Tout".equalsIgnoreCase(region) || "All".equalsIgnoreCase(region);
             return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), Destocker.class);
-                query.setParameter(1, uid);
-                query.setParameter(2, region);
+                Query query;
+                if (isGlobal) {
+                    query = em.createNativeQuery("SELECT * FROM destocker WHERE product_id = ?", Destocker.class);
+                    query.setParameter(1, uid);
+                } else {
+                    query = em.createNativeQuery("SELECT * FROM destocker WHERE product_id = ? AND region = ?", Destocker.class);
+                    query.setParameter(1, uid);
+                    query.setParameter(2, region);
+                }
                 return query.getResultList();
             });
         } catch (NoResultException e) {

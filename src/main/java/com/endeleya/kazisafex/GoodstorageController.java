@@ -29,12 +29,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -122,6 +124,8 @@ import data.helpers.Role;
 import data.network.Kazisafe;
 import delegates.CategoryDelegate;
 import delegates.PermissionDelegate;
+import services.utils.PermissionRegistry;
+import services.utils.UserRoleRegistry;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
@@ -500,9 +504,7 @@ public class GoodstorageController implements Initializable {
         listlivr.clear();
         initPref();
         DestockerDelegate.removeOrphans();
-        if (role.equals(Role.Trader.name())
-                || role.equals(Role.Magazinner_ALL_ACCESS.name())
-                || role.equals(Role.Manager_ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             long sized = ProduitDelegate.getCount();
             int offsetd = 0;
             Long limis = Math.min(offsetd + rowsDataCount1, sized);
@@ -615,7 +617,7 @@ public class GoodstorageController implements Initializable {
         destox = new ArrayList<>();
         products = ProduitDelegate.findProduits();
         initPref();
-        if (role.equals(Role.Trader.name()) || role.toUpperCase().contains(Role.ALL_ACCESS.name().toUpperCase())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             cbx_regions.setVisible(true);
         }
         populate();
@@ -1029,7 +1031,7 @@ public class GoodstorageController implements Initializable {
             if (products == null || products.isEmpty()) {
                 products = delegates.ProduitDelegate.findProduits();
             }
-            if (!role.equals(Role.Trader.name()) && !role.contains(Role.ALL_ACCESS.name())) {
+            if (!PermissionRegistry.hasGlobalAccess()) {
                 try {
                     loadInventaireDepot(Util.filterNoNullMesure(products), region);
                 } catch (Exception ex) {
@@ -1337,6 +1339,19 @@ public class GoodstorageController implements Initializable {
             double totalValue = 0d;
             for (Produit p : lp) {
                 List<StockDepotAgregate> lotAggregates = StockerDelegate.findLatestLotDepotStockAggregates(p.getUid(), effectiveRegion);
+                if (lotAggregates == null || lotAggregates.isEmpty()) {
+                    List<Stocker> productStockers = StockerDelegate.findStockerByProduit(p.getUid(), effectiveRegion);
+                    if (productStockers != null && !productStockers.isEmpty()) {
+                        Set<String> lotsToRectify = new HashSet<>();
+                        for (Stocker st : productStockers) {
+                            lotsToRectify.add(st.getNumlot() == null ? "" : st.getNumlot());
+                        }
+                        for (String lot : lotsToRectify) {
+                            StockerDelegate.rectifyStockDepotByLot(p, lot, effectiveRegion, 0, null);
+                        }
+                        lotAggregates = StockerDelegate.findLatestLotDepotStockAggregates(p.getUid(), effectiveRegion);
+                    }
+                }
                 if (lotAggregates == null || lotAggregates.isEmpty()) {
                     continue;
                 }
@@ -1706,7 +1721,7 @@ public class GoodstorageController implements Initializable {
 
                 List<Stocker> lst;
                 List<Destocker> lsd;
-                if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                if (PermissionRegistry.hasGlobalAccess()) {
 
                     lst = StockerDelegate.findByDateIntervale(date1, date2);// strongDb.findAllByDateInterval(Stocker.class,
                                                                             // tools.Constants.Datetime.toUtilDate(date1),
@@ -2014,7 +2029,7 @@ public class GoodstorageController implements Initializable {
             InventoryItem invent = new InventoryItem();
             List<Stocker> lst;
             List<Destocker> lsd;
-            if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
                 lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
             } else {
@@ -2105,7 +2120,7 @@ public class GoodstorageController implements Initializable {
             InventoryItem invent = new InventoryItem();
             List<Stocker> lst;
             List<Destocker> lsd;
-            if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 lst = Util.findStockersForProduit(Util.filterNoNullMesure(stox), p.getUid());
                 lsd = Util.findDestockersForProduit(Util.filterNoNullMesure(destox), p.getUid());
             } else {
@@ -2190,7 +2205,7 @@ public class GoodstorageController implements Initializable {
             InventoryItem invent = new InventoryItem();
             List<Stocker> lst;
             List<Destocker> lsd;
-            if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 lst = requisitionToStocker(RecquisitionDelegate.findRecquisitionByProduit(p.getUid()));// strongDb.findByProduit(Recquisition.class,
                                                                                                        // p.getUid()));
                 lsd = ligneVenteToDestocker(LigneVenteDelegate.findByProduit(p.getUid()));// strongDb.findByProduit(LigneVente.class,
@@ -2346,8 +2361,7 @@ public class GoodstorageController implements Initializable {
                 }
             }
             table_stockage.setItems(rst);
-            if (role.equals(Role.Trader.name()) || role.equals(Role.Manager.name())
-                    || role.equals(Role.Finance.name()) || role.equals(Role.Finance_ALL_ACCESS)) {
+            if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Finance")) {
                 global_achat.setText("Total : " + formatStockValue(som));
             }
 
@@ -2458,7 +2472,7 @@ public class GoodstorageController implements Initializable {
         listfourn = FXCollections.observableArrayList();
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         region = pref.get("region", "...");
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
         applyPermissionUiState();
@@ -2526,10 +2540,7 @@ public class GoodstorageController implements Initializable {
                 alert.setHeaderText(null);
                 Optional<ButtonType> showAndWait = alert.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
-                    if (role.equals(Role.Trader.name())
-                            | role.equals(Role.Manager.name())
-                            | role.equals(Role.Magazinner.name())
-                            | role.contains(Role.ALL_ACCESS.name())) {
+                    if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Magazinner")) {
                         StockerDelegate.deleteStocker(chstocker);
                         Produit prod = chstocker.getProductId();
                         list_stockers.remove(chstocker);
@@ -2590,10 +2601,7 @@ public class GoodstorageController implements Initializable {
                     alert.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alert.showAndWait();
                     if (showAndWait.get() == ButtonType.YES) {
-                        if (role.equals(Role.Trader.name())
-                                | role.equals(Role.Manager.name())
-                                | role.equals(Role.Magazinner.name())
-                                | role.contains(Role.ALL_ACCESS.name())) {
+                        if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Magazinner")) {
                             FournisseurDelegate.deleteFournisseur(choosenSupply);
                             listfourn.remove(choosenSupply);
                             count_fournisseur.setText(String.format(bundle.getString("xitems"), listfourn.size()));
@@ -2684,10 +2692,7 @@ public class GoodstorageController implements Initializable {
                     alert.setHeaderText(null);
                     Optional<ButtonType> showAndWait = alert.showAndWait();
                     if (showAndWait.get() == ButtonType.YES) {
-                        if (role.equals(Role.Trader.name())
-                                | role.equals(Role.Manager.name())
-                                | role.equals(Role.Magazinner.name())
-                                | role.contains(Role.ALL_ACCESS.name())) {
+                        if (PermissionRegistry.hasGlobalAccess() || UserRoleRegistry.hasRole("Manager") || UserRoleRegistry.hasRole("Magazinner")) {
                             LivraisonDelegate.deleteLivraison(livraison);
                             listlivr.remove(livraison);
                             count_livraizon.setText(String.format(bundle.getString("xitems"), listlivr.size()));
@@ -2904,7 +2909,7 @@ public class GoodstorageController implements Initializable {
                 DestockerDelegate.deleteDestocker(chdestocker);// strongDb.delete(chdestocker);
                 MainUI.notify(null, "Suppression", "Destockage suprimé avec succès", 4, "info");
                 MainuiController.getInstance().switchToStock(event);
-                if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                if (PermissionRegistry.hasGlobalAccess()) {
                     kazisafe.deleteDestockage(chdestocker.getUid()).enqueue(new Callback<Void>() {
                         @Override
                         public void onResponse(Call<Void> call, Response<Void> rspns) {
@@ -2957,8 +2962,7 @@ public class GoodstorageController implements Initializable {
     }
 
     private boolean hasPermission(PermitTo permit) {
-        return role != null && role.toUpperCase().contains(Role.ALL_ACCESS.name())
-                || role.toUpperCase().equals(Role.Trader.name()) || PermissionDelegate.hasPermission(permit);
+        return PermissionRegistry.has(pref, permit);
     }
 
     private void settleSupplierDebt(Livraison target) {

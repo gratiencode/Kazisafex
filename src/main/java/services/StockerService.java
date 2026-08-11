@@ -391,12 +391,17 @@ public class StockerService implements StockerStorage {
     @Override
     public List<Stocker> findStockerByProduit(String pid, String region) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM stocker s WHERE s.product_id = ? AND s.region = ? ");
+            boolean isGlobal = region == null || region.isBlank() || "Tout".equalsIgnoreCase(region) || "All".equalsIgnoreCase(region);
             return ManagedSessionFactory.executeRead(em -> {
-                Query query = em.createNativeQuery(sb.toString(), Stocker.class);
-                query.setParameter(1, pid);
-                query.setParameter(2, region);
+                Query query;
+                if (isGlobal) {
+                    query = em.createNativeQuery("SELECT * FROM stocker s WHERE s.product_id = ?", Stocker.class);
+                    query.setParameter(1, pid);
+                } else {
+                    query = em.createNativeQuery("SELECT * FROM stocker s WHERE s.product_id = ? AND s.region = ?", Stocker.class);
+                    query.setParameter(1, pid);
+                    query.setParameter(2, region);
+                }
                 return query.getResultList();
             });
         } catch (NoResultException e) {
@@ -716,7 +721,7 @@ public class StockerService implements StockerStorage {
         LocalDate resolvedDateExpir = resolveDepotDateExpiration(produit.getUid(), numlot, region, dateExpir);
         double resolvedCost = resolveDepotUnitCost(produit.getUid(), numlot, region, coutAch);
 
-        StockDepotAgregate depot = findDepotAggregateByLot(produit, numlot, region, today);
+        StockDepotAgregate depot = findDepotAggregateByLot(produit, numlot, region);
         boolean exists = (depot != null);
         if (!exists) {
             depot = new StockDepotAgregate();
@@ -788,14 +793,14 @@ public class StockerService implements StockerStorage {
         return latest != null ? latest.getCoutAchat() : 0d;
     }
 
-    private StockDepotAgregate findDepotAggregateByLot(data.Produit p, String numlot, String region, LocalDate dte) {
+    private StockDepotAgregate findDepotAggregateByLot(data.Produit p, String numlot, String region) {
         try {
             String safeLot = numlot == null ? "" : numlot;
-            String sql = "SELECT * FROM stock_depot_agregate WHERE product_id=? AND IFNULL(num_lot,'')=? AND region=? AND date_record=? LIMIT 1";
+            String sql = "SELECT * FROM stock_depot_agregate WHERE product_id=? AND IFNULL(num_lot,'')=? AND region=? ORDER BY date_record DESC LIMIT 1";
             return ManagedSessionFactory.executeRead(em -> {
                 List<StockDepotAgregate> r = em.createNativeQuery(sql, StockDepotAgregate.class)
                         .setParameter(1, p.getUid()).setParameter(2, safeLot)
-                        .setParameter(3, region).setParameter(4, dte)
+                        .setParameter(3, region)
                         .getResultList();
                 return r.isEmpty() ? null : r.get(0);
             });
@@ -821,18 +826,33 @@ public class StockerService implements StockerStorage {
     @Override
     public List<StockDepotAgregate> findLatestLotDepotStockAggregates(String productId, String region) {
         try {
-            // Un seul agrégat par lot : le plus récent
-            String sql = "SELECT s.* FROM stock_depot_agregate s "
-                    + "INNER JOIN (SELECT IFNULL(num_lot,'') as n_lot, MAX(date_record) AS maxd FROM stock_depot_agregate "
-                    + "WHERE product_id=? AND region=? GROUP BY IFNULL(num_lot,'')) t "
-                    + "ON IFNULL(s.num_lot,'')=t.n_lot AND s.date_record=t.maxd "
-                    + "WHERE s.product_id=? AND s.region=? ORDER BY s.date_record DESC";
-            return ManagedSessionFactory.executeRead(em -> {
-                return em.createNativeQuery(sql, StockDepotAgregate.class)
-                        .setParameter(1, productId).setParameter(2, region)
-                        .setParameter(3, productId).setParameter(4, region)
-                        .getResultList();
-            });
+            boolean isGlobal = region == null || region.isBlank() || "Tout".equalsIgnoreCase(region) || "All".equalsIgnoreCase(region);
+            String sql;
+            if (isGlobal) {
+                sql = "SELECT s.* FROM stock_depot_agregate s "
+                        + "INNER JOIN (SELECT IFNULL(num_lot,'') as n_lot, region as reg, MAX(date_record) AS maxd FROM stock_depot_agregate "
+                        + "WHERE product_id=? GROUP BY IFNULL(num_lot,''), region) t "
+                        + "ON IFNULL(s.num_lot,'')=t.n_lot AND s.region=t.reg AND s.date_record=t.maxd "
+                        + "WHERE s.product_id=? ORDER BY s.date_record DESC";
+                return ManagedSessionFactory.executeRead(em -> {
+                    return em.createNativeQuery(sql, StockDepotAgregate.class)
+                            .setParameter(1, productId)
+                            .setParameter(2, productId)
+                            .getResultList();
+                });
+            } else {
+                sql = "SELECT s.* FROM stock_depot_agregate s "
+                        + "INNER JOIN (SELECT IFNULL(num_lot,'') as n_lot, MAX(date_record) AS maxd FROM stock_depot_agregate "
+                        + "WHERE product_id=? AND region=? GROUP BY IFNULL(num_lot,'')) t "
+                        + "ON IFNULL(s.num_lot,'')=t.n_lot AND s.date_record=t.maxd "
+                        + "WHERE s.product_id=? AND s.region=? ORDER BY s.date_record DESC";
+                return ManagedSessionFactory.executeRead(em -> {
+                    return em.createNativeQuery(sql, StockDepotAgregate.class)
+                            .setParameter(1, productId).setParameter(2, region)
+                            .setParameter(3, productId).setParameter(4, region)
+                            .getResultList();
+                });
+            }
         } catch (Exception e) { return List.of(); }
     }
 

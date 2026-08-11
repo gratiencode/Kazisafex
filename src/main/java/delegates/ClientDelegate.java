@@ -97,15 +97,21 @@ public class ClientDelegate {
         if (incoming.getTypeClient() != null && !incoming.getTypeClient().trim().isEmpty()) {
             local.setTypeClient(incoming.getTypeClient().trim());
         }
-        if (incoming.getParentId() != null) {
-            if (incoming.getParentId().getUid().equals(incoming.getUid())) {
+        if (incoming.getParentId() != null && incoming.getParentId().getUid() != null) {
+            String pUid = incoming.getParentId().getUid();
+            if (pUid.equals(incoming.getUid()) || (local.getUid() != null && pUid.equals(local.getUid()))) {
                 local.setParentId(local);
             } else {
-                Client parent = findClient(incoming.getParentId().getUid());
+                Client parent = findClient(pUid);
                 if (parent != null) {
                     local.setParentId(parent);
                 } else {
-                    local.setParentId(incoming.getParentId());
+                    Client anonyme = findAnonymousClient();
+                    if (anonyme != null && !anonyme.getUid().equals(local.getUid())) {
+                        local.setParentId(anonyme);
+                    } else {
+                        local.setParentId(null);
+                    }
                 }
             }
         }
@@ -116,6 +122,28 @@ public class ClientDelegate {
     }
 
     public static Client syncClientSafe(Client client) {
+        if (client == null) {
+            return null;
+        }
+        // Resolving parentId safely before persistence/merge
+        if (client.getParentId() != null && client.getParentId().getUid() != null) {
+            String parentUid = client.getParentId().getUid();
+            if (parentUid.equals(client.getUid())) {
+                client.setParentId(client);
+            } else {
+                Client parent = findClient(parentUid);
+                if (parent != null) {
+                    client.setParentId(parent);
+                } else {
+                    Client anonyme = findAnonymousClient();
+                    if (anonyme != null && !anonyme.getUid().equals(client.getUid())) {
+                        client.setParentId(anonyme);
+                    } else {
+                        client.setParentId(null);
+                    }
+                }
+            }
+        }
         // 1. Try exact UID match first
         Client localClient = findClient(client.getUid());
         // 2. Fallback: find by phone

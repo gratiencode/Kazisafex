@@ -1449,6 +1449,7 @@ public interface Kazisafe {
     @GET("sync/outbox/missed")
     Call<List<SyncOutboxDto>> getMissedMutations(
         @Query("since") String since,
+        @Query("originalSince") String originalSince,
         @Query("lastPriority") Integer lastPriority,
         @Query("limit") Integer limit
     );

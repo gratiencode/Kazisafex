@@ -12,6 +12,7 @@ import delegates.RecquisitionDelegate;
 import delegates.StockerDelegate;
 import delegates.PrixDeVenteDelegate;
 import delegates.PermissionDelegate;
+import services.utils.PermissionRegistry;
 import data.PermitTo;
 import data.core.KazisafeServiceFactory;
 import java.math.BigDecimal;
@@ -75,6 +76,7 @@ import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
 
 import data.Destocker;
 import data.Entreprise;
@@ -355,43 +357,40 @@ public class DestockController implements Initializable {
             public void changed(ObservableValue<? extends Stocker> observable, Stocker oldValue, Stocker newValue) {
                 if (newValue != null) {
                     choosenStockLot = newValue;
-                    alveol.setText(choosenStockLot.getLocalisation());
+                    alveol.setText(choosenStockLot.getLocalisation() != null ? choosenStockLot.getLocalisation() : "");
                     LocalDate date = choosenStockLot.getDateExpir();
                     txt_date_expiry.setText(date == null ? bundle.getString("noperish") : "Exp : " + date.toString());
 
                     txt_date_expiry.setBackground(new Background(
                             new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-                    if (date == null) {
-                        return;
-                    }
 
-                    Mesure mz = choosenStockLot.getMesureId();
-                    List<Destocker> lsdx = DestockerDelegate.findByProduitLot(choosenProduct.getUid(),
-                            choosenStockLot.getNumlot());
-                    List<Destocker> lsd = fullMesureRecqs(lsdx);
-                    double sortie = Util.sumDestockerQuantInPc(lsd);
-                    Mesure mreel = MesureDelegate.findMesure(mz.getUid());
-                    double entree = choosenStockLot.getQuantite() * mreel.getQuantContenu();
-                    double dispo = entree - sortie;
-
-                    double stalertx = (choosenStockLot.getStockAlerte() * mreel.getQuantContenu());
-                    double choose = stalertx / choosenM.getQuantContenu();
-                    txt_stk_alerte.setText("Alert : " + choose);
-
-                    double converted = dispo / choosenM.getQuantContenu();
-                    lbl_cout_achat.setText(String.format("%.2f USD", choosenStockLot.getCoutAchat()));
+                    lbl_cout_achat.setText(String.format(java.util.Locale.US, "%.2f USD", choosenStockLot.getCoutAchat()));
                     tf_cout_unitr_cump_dstk.setText(String.valueOf(choosenStockLot.getCoutAchat()));
+
+                    if (choosenM != null) {
+                        Mesure mz = choosenStockLot.getMesureId();
+                        Mesure mreel = mz != null ? MesureDelegate.findMesure(mz.getUid()) : null;
+                        double quantContenu = (mreel != null && mreel.getQuantContenu() != null) ? mreel.getQuantContenu() : 1.0;
+                        double stalertx = (choosenStockLot.getStockAlerte() * quantContenu);
+                        double choose = stalertx / (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
+                        txt_stk_alerte.setText("Alert : " + choose);
+                    }
 
                     updateGlobalStockDisplay();
 
-                    List<Recquisition> reqs = RecquisitionDelegate.findByReference(choosenProduct.getUid(),
-                            choosenStockLot.getLivraisId().getReference());
-                    if (!reqs.isEmpty()) {
-                        Recquisition req = reqs.get(0);
-                        List<PrixDeVente> prix = PrixDeVenteDelegate.findPrixDeVentes(0.0, mz.getUid(), req.getUid());
-                        if (!prix.isEmpty()) {
-                            double prixVente = prix.get(0).getPrixUnitaire();
-                            lbl_prix_vente.setText(String.format("%.2f %s", prixVente, prix.get(0).getDevise()));
+                    if (choosenProduct != null && choosenStockLot.getLivraisId() != null) {
+                        List<Recquisition> reqs = RecquisitionDelegate.findByReference(choosenProduct.getUid(),
+                                choosenStockLot.getLivraisId().getReference());
+                        if (!reqs.isEmpty()) {
+                            Recquisition req = reqs.get(0);
+                            Mesure mz = choosenStockLot.getMesureId();
+                            List<PrixDeVente> prix = mz != null ? PrixDeVenteDelegate.findPrixDeVentes(0.0, mz.getUid(), req.getUid()) : List.of();
+                            if (!prix.isEmpty()) {
+                                double prixVente = prix.get(0).getPrixUnitaire();
+                                lbl_prix_vente.setText(String.format(java.util.Locale.US, "%.2f %s", prixVente, prix.get(0).getDevise()));
+                            } else {
+                                lbl_prix_vente.setText("0.0 USD");
+                            }
                         } else {
                             lbl_prix_vente.setText("0.0 USD");
                         }
@@ -399,22 +398,24 @@ public class DestockController implements Initializable {
                         lbl_prix_vente.setText("0.0 USD");
                     }
 
-                    int exp = isStockExpired(choosenStockLot);
-                    if (exp == -1) {
-                        txt_date_expiry.setBackground(new Background(
-                                new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 3) {
-                        txt_date_expiry.setBackground(new Background(
-                                new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 6) {
-                        txt_date_expiry.setBackground(new Background(
-                                new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-                    } else if (exp == 12) {
-                        txt_date_expiry.setBackground(new Background(
-                                new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-                    } else {
-                        txt_date_expiry.setBackground(new Background(
-                                new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+                    if (date != null) {
+                        int exp = isStockExpired(choosenStockLot);
+                        if (exp == -1) {
+                            txt_date_expiry.setBackground(new Background(
+                                    new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
+                        } else if (exp == 3) {
+                            txt_date_expiry.setBackground(new Background(
+                                    new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
+                        } else if (exp == 6) {
+                            txt_date_expiry.setBackground(new Background(
+                                    new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
+                        } else if (exp == 12) {
+                            txt_date_expiry.setBackground(new Background(
+                                    new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
+                        } else {
+                            txt_date_expiry.setBackground(new Background(
+                                    new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+                        }
                     }
                     txt_date_expiry.setStyle(
                             "-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 2;");
@@ -451,28 +452,56 @@ public class DestockController implements Initializable {
     private void updateGlobalStockDisplay() {
         if (choosenProduct == null) {
             tf_quant_disponible.clear();
+            value_stock.setText("0");
             return;
         }
 
-        double dispoGlobalEnPc = stockDepotService.getAvailableStock(choosenProduct.getUid(), region);
-
-        // Soustraire lsdin local
-        for (Destocker pending : lsdin) {
-            if (pending.getProductId().getUid().equals(choosenProduct.getUid())) {
-                Mesure pm = MesureDelegate.findMesure(pending.getMesureId().getUid());
-                dispoGlobalEnPc -= pending.getQuantite() * pm.getQuantContenu();
+        double dispoEnPc = 0.0;
+        if (choosenStockLot != null && choosenStockLot.getNumlot() != null) {
+            dispoEnPc = StockerDelegate.findLatestDepotStockByLot(choosenProduct.getUid(), choosenStockLot.getNumlot(), region);
+            if (dispoEnPc <= 0) {
+                List<Stocker> lotStockers = StockerDelegate.findStockerByProduitLot(choosenProduct.getUid(), choosenStockLot.getNumlot());
+                double eLot = 0;
+                if (lotStockers != null) {
+                    for (Stocker st : lotStockers) {
+                        Mesure m = st.getMesureId() != null ? MesureDelegate.findMesure(st.getMesureId().getUid()) : null;
+                        eLot += st.getQuantite() * (m != null && m.getQuantContenu() != null ? m.getQuantContenu() : 1.0);
+                    }
+                }
+                List<Destocker> lotDestockers = DestockerDelegate.findByProduitLot(choosenProduct.getUid(), choosenStockLot.getNumlot());
+                double sLot = Util.sumDestockerQuantInPc(fullMesureRecqs(lotDestockers));
+                dispoEnPc = Math.max(0, eLot - sLot);
+            }
+        } else {
+            dispoEnPc = stockDepotService.getAvailableStock(choosenProduct.getUid(), region);
+            if (dispoEnPc <= 0) {
+                double entree = StockerDelegate.sum(choosenProduct.getUid());
+                double sortie = DestockerDelegate.sum(choosenProduct.getUid());
+                dispoEnPc = Math.max(0, entree - sortie);
             }
         }
 
+        // Soustraire lsdin local (éléments du tableau non encore validés)
+        for (Destocker pending : lsdin) {
+            if (pending.getProductId() != null && pending.getProductId().getUid().equals(choosenProduct.getUid())) {
+                if (choosenStockLot == null || choosenStockLot.getNumlot() == null || Objects.equals(pending.getNumlot(), choosenStockLot.getNumlot())) {
+                    Mesure pm = pending.getMesureId() != null ? MesureDelegate.findMesure(pending.getMesureId().getUid()) : null;
+                    double qc = (pm != null && pm.getQuantContenu() != null) ? pm.getQuantContenu() : 1.0;
+                    dispoEnPc -= pending.getQuantite() * qc;
+                }
+            }
+        }
+
+        dispoEnPc = Math.max(0, dispoEnPc);
+
         if (choosenM != null && choosenM.getQuantContenu() != null && choosenM.getQuantContenu() > 0) {
-            double converted = dispoGlobalEnPc / choosenM.getQuantContenu();
+            double converted = dispoEnPc / choosenM.getQuantContenu();
             tf_quant_disponible.setText(String.format(java.util.Locale.US, "%.2f", converted));
 
-            // Value
             double cumpx = choosenStockLot != null ? choosenStockLot.getCoutAchat() : 0.0;
             value_stock.setText(String.format(java.util.Locale.US, "%.2f", converted * cumpx));
         } else {
-            tf_quant_disponible.setText(String.format(java.util.Locale.US, "%.2f (en Pc)", dispoGlobalEnPc));
+            tf_quant_disponible.setText(String.format(java.util.Locale.US, "%.2f (en Pc)", dispoEnPc));
         }
     }
 
@@ -657,7 +686,7 @@ public class DestockController implements Initializable {
         menuItem1.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
-                if (!PermissionDelegate.hasPermission(PermitTo.DELETE_DESTOCKER) && !role.contains("ALL_ACCESS")) {
+                if (!PermissionRegistry.has(PermitTo.DELETE_DESTOCKER)) {
                     MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de supprimer un destockage.", 3, "error");
                     return;
                 }
@@ -681,7 +710,7 @@ public class DestockController implements Initializable {
         menuItem2.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
-                if (!PermissionDelegate.hasPermission(PermitTo.UPDATE_DESTOCKER) && !role.contains("ALL_ACCESS")) {
+                if (!PermissionRegistry.has(PermitTo.UPDATE_DESTOCKER)) {
                     MainUI.notify(null, "Accès refusé", "Vous n'avez pas la permission de modifier un destockage.", 3, "error");
                     return;
                 }
@@ -697,7 +726,7 @@ public class DestockController implements Initializable {
         token = pref.get("token", null);
         entr = pref.get("eUid", "f3d81978a5524681bf1090d1d41edb15");
         region = pref.get("region", "...");
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         meth = pref.get("meth", "fifo");
         taux = CurrencyConverter.legacyCdfRate();
         txt_date_expiry.setStyle("-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 2;");
@@ -742,31 +771,48 @@ public class DestockController implements Initializable {
             return;
         }
 
-        // --- Stock Availability Check ---
-        double dispoGlobalEnPc = stockDepotService.getAvailableStock(choosenProduct.getUid(), region);
-        if (dispoGlobalEnPc <= 0) {
-            StockDepotAgregate latest = stockDepotService.findLatestStockDepotAgregate(choosenProduct.getUid(), region);
-            if (latest == null) {
-                // Fallsback to raw tables
+        // --- Stock Availability Check (Par lot ou global) ---
+        double dispoEnPc = 0.0;
+        if (choosenStockLot != null && choosenStockLot.getNumlot() != null) {
+            dispoEnPc = StockerDelegate.findLatestDepotStockByLot(choosenProduct.getUid(), choosenStockLot.getNumlot(), region);
+            if (dispoEnPc <= 0) {
+                List<Stocker> lotStockers = StockerDelegate.findStockerByProduitLot(choosenProduct.getUid(), choosenStockLot.getNumlot());
+                double eLot = 0;
+                if (lotStockers != null) {
+                    for (Stocker st : lotStockers) {
+                        Mesure m = st.getMesureId() != null ? MesureDelegate.findMesure(st.getMesureId().getUid()) : null;
+                        eLot += st.getQuantite() * (m != null && m.getQuantContenu() != null ? m.getQuantContenu() : 1.0);
+                    }
+                }
+                List<Destocker> lotDestockers = DestockerDelegate.findByProduitLot(choosenProduct.getUid(), choosenStockLot.getNumlot());
+                double sLot = Util.sumDestockerQuantInPc(fullMesureRecqs(lotDestockers));
+                dispoEnPc = Math.max(0, eLot - sLot);
+            }
+        } else {
+            dispoEnPc = stockDepotService.getAvailableStock(choosenProduct.getUid(), region);
+            if (dispoEnPc <= 0) {
                 double entree = StockerDelegate.sum(choosenProduct.getUid());
                 double sortie = DestockerDelegate.sum(choosenProduct.getUid());
-                dispoGlobalEnPc = entree - sortie;
+                dispoEnPc = Math.max(0, entree - sortie);
             }
         }
 
-        // Account for items already in the list to avoid double counting
+        // Soustraire les éléments déjà ajoutés dans le tableau lsdin (non validés en BD)
         for (Destocker pending : lsdin) {
-            if (pending.getProductId().getUid().equals(choosenProduct.getUid())) {
-                Mesure pm = MesureDelegate.findMesure(pending.getMesureId().getUid());
-                dispoGlobalEnPc -= pending.getQuantite() * pm.getQuantContenu();
+            if (pending.getProductId() != null && pending.getProductId().getUid().equals(choosenProduct.getUid())) {
+                if (choosenStockLot == null || choosenStockLot.getNumlot() == null || Objects.equals(pending.getNumlot(), choosenStockLot.getNumlot())) {
+                    Mesure pm = pending.getMesureId() != null ? MesureDelegate.findMesure(pending.getMesureId().getUid()) : null;
+                    double qc = (pm != null && pm.getQuantContenu() != null) ? pm.getQuantContenu() : 1.0;
+                    dispoEnPc -= pending.getQuantite() * qc;
+                }
             }
         }
 
-        double qteEnPc = qte * choosenM.getQuantContenu();
-        if (qteEnPc > dispoGlobalEnPc) {
-            double maxDispo = dispoGlobalEnPc / (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
+        double qteEnPc = qte * (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
+        if (qteEnPc > dispoEnPc) {
+            double maxDispo = Math.max(0, dispoEnPc) / (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
             MainUI.notify(null, "Stock insuffisant",
-                    String.format("Stock global disponible : %.2f %s", maxDispo, choosenM.getDescription()),
+                    String.format(java.util.Locale.US, "Stock disponible : %.2f %s", maxDispo, choosenM.getDescription()),
                     5, "error");
             return;
         }
@@ -786,31 +832,22 @@ public class DestockController implements Initializable {
             s.setObservation(obs.isEmpty() ? "R.A.S" : obs);
             s.setRegion(region);
 
-            // SAVE AND RECORD IMMEDIATELY
-            Destocker saved = DestockerDelegate.saveDestocker(s);
-            if (saved != null) {
-                // Update local list for display
-                lsdin.add(0, saved);
+            // Ajouter un en dessous dans le tableau d'articles (lsdin)
+            lsdin.add(s);
 
-                // Synchronize via HTTP directly
-                saveDestockerWithRetry(saved);
-                StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), null);
-
-                // Update UI Sum
-                double total = 0;
-                for (Destocker d : lsdin) {
-                    total += d.getCoutAchat() * d.getQuantite();
-                }
-                cglobal = total; // Sync internal field
-                txt_somme_global_dstk.setText(String.format("Total : %.2f", total));
-                txt_count_dstk.setText(String.valueOf(lsdin.size()) + " article(s)");
-
-                MainUI.notify(null, "Succès", "Destockage enregistré avec succès", 4, "info");
-
-                // Clear inputs for next entry
-                tf_quantite_dstk.clear();
-                tf_observation.clear();
+            // Mise à jour des totaux de l'interface
+            double total = 0;
+            for (Destocker d : lsdin) {
+                total += d.getCoutAchat() * d.getQuantite();
             }
+            cglobal = total;
+            txt_somme_global_dstk.setText(String.format(java.util.Locale.US, "Total : %.2f", total));
+            txt_count_dstk.setText(String.valueOf(lsdin.size()) + " article(s)");
+
+            MainUI.notify(null, "Succès", "Article ajouté au tableau", 3, "info");
+
+            tf_quantite_dstk.clear();
+            tf_observation.clear();
         } else if (this.action.equals(Constants.ACTION_UPDATE)) {
             if (choosenDestocker == null) {
                 return;
@@ -823,32 +860,25 @@ public class DestockController implements Initializable {
             choosenDestocker.setObservation(tf_observation.getText());
             choosenDestocker.setCoutAchat(Double.parseDouble(tf_cout_unitr_cump_dstk.getText()));
 
-            Destocker updated = DestockerDelegate.updateDestocker(choosenDestocker);
-            if (updated != null) {
-                saveDestockerWithRetry(updated);
-                StockerDelegate.rectifyStockDepotByLot(updated.getProductId(), updated.getNumlot(), updated.getRegion(), updated.getCoutAchat(), null);
-
-                int index = lsdin.indexOf(choosenDestocker);
-                if (index != -1) {
-                    lsdin.set(index, updated);
-                }
-
-                double total = 0;
-                for (Destocker d : lsdin) {
-                    total += d.getCoutAchat() * d.getQuantite();
-                }
-                cglobal = total;
-                txt_somme_global_dstk.setText(String.format("Total : %.2f", total));
-
-                MainUI.notify(null, "Succès", "Destockage mis à jour.", 2, "info");
+            int index = lsdin.indexOf(choosenDestocker);
+            if (index != -1) {
+                lsdin.set(index, choosenDestocker);
             }
+
+            double total = 0;
+            for (Destocker d : lsdin) {
+                total += d.getCoutAchat() * d.getQuantite();
+            }
+            cglobal = total;
+            txt_somme_global_dstk.setText(String.format(java.util.Locale.US, "Total : %.2f", total));
+
+            MainUI.notify(null, "Succès", "Destockage mis à jour dans le tableau.", 2, "info");
         }
         resetFields();
     }
 
     /**
-     * Sauvegarde tous les destockers ajoutés dans la liste locale (lsdin) en
-     * BD. Inspiré du pattern saveStock de StoreformController.
+     * Sauvegarde tous les destockers ajoutés dans la liste locale (lsdin) en BD.
      */
     @FXML
     public void saveAllDestockers(ActionEvent event) {
@@ -857,22 +887,36 @@ public class DestockController implements Initializable {
             return;
         }
 
+        int count = 0;
+        java.util.Map<String, Destocker> distinctLots = new java.util.LinkedHashMap<>();
         for (Destocker s : lsdin) {
             Destocker saved = DestockerDelegate.saveDestocker(s);
             if (saved != null) {
                 saveDestockerWithRetry(saved);
-                StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), null);
                 Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
                 lisdestocker.add(0, saved);
+                count++;
+
+                String pId = saved.getProductId() != null ? saved.getProductId().getUid() : "";
+                String lot = saved.getNumlot() != null ? saved.getNumlot() : "";
+                String reg = saved.getRegion() != null ? saved.getRegion() : "";
+                String key = pId + "#" + lot + "#" + reg;
+                distinctLots.putIfAbsent(key, saved);
             }
         }
 
-        MainUI.notify(null, "Succès", lsdin.size() + " destockage(s) enregistré(s) avec succès.", 3, "info");
+        // Rectification optimisée : un seul recalcul par lot distinct pour le lot d'articles enregistrés
+        for (Destocker target : distinctLots.values()) {
+            StockerDelegate.rectifyStockDepotByLot(target.getProductId(), target.getNumlot(), target.getRegion(), target.getCoutAchat(), null);
+        }
+
+        MainUI.notify(null, "Succès", count + " destockage(s) enregistré(s) avec succès.", 3, "info");
         lsdin.clear();
         cglobal = 0;
         txt_somme_global_dstk.setText("Total : 0.00");
         txt_count_dstk.setText("0 article(s)");
         txt_reference_dstk.setText("DST" + ((int) (Math.random() * 100000)) + "K");
+        updateGlobalStockDisplay();
     }
 
     private void resetFields() {
@@ -975,13 +1019,7 @@ public class DestockController implements Initializable {
                 return;
             }
             choosenStockLot = lisstocker.get(0);
-            double sortie = DestockerDelegate.sum(choosenProduct.getUid());
-            double entree = StockerDelegate.sum(choosenProduct.getUid());
-            double dispo = entree - sortie;
-            double converted = dispo / (choosenM != null ? choosenM.getQuantContenu() : 1);
-            tf_cout_unitr_cump_dstk.setText(String.valueOf(choosenStockLot.getCoutAchat()));
-            tf_quant_disponible.setText(String.valueOf(converted));
-            value_stock.setText(String.valueOf(BigDecimal.valueOf(converted * choosenStockLot.getCoutAchat()).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
+            updateGlobalStockDisplay();
         });
         cbx_stock_lots.setConverter(new StringConverter<Stocker>() {
             @Override

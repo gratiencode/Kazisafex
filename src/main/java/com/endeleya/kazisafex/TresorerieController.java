@@ -81,6 +81,8 @@ import delegates.DepenseDelegate;
 import delegates.DepenseAgregateDelegate;
 import data.Entreprise;
 import services.utils.RegionRegistry;
+import services.utils.UserRoleRegistry;
+import services.utils.PermissionRegistry;
 import data.Facture;
 import data.Operation;
 import data.Refresher;
@@ -736,8 +738,8 @@ public class TresorerieController implements Initializable {
         cbx_depenses.setItems(depenses);
         lstrz = new ArrayList<>();
         List<DepenseAgregate> rawDep;
-        String regionKey = (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) ? "all" : region;
-        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        String regionKey = (PermissionRegistry.hasGlobalAccess()) ? "all" : region;
+        if (PermissionRegistry.hasGlobalAccess()) {
             cbx_region.setVisible(true);
             lstrz.addAll(DataCache.getOrLoad("tresorerie-transactions-" + regionKey, TraisorerieDelegate::findTraisoreries));
             comptes.addAll(DataCache.getOrLoad("tresorerie-comptes-" + regionKey, () -> CompteTresorDelegate.findCompteTresors()));
@@ -1171,7 +1173,7 @@ public class TresorerieController implements Initializable {
         refreshCurrencyContext();
         bundle = rb;
         token = pref.get("token", null);
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         entr = pref.get("eUid", "unknown");
         configtab();
@@ -1212,7 +1214,7 @@ public class TresorerieController implements Initializable {
                     alert.setHeaderText(null);
                     Optional<ButtonType> clkbtn = alert.showAndWait();
                     if (clkbtn.get() == ButtonType.YES) {
-                        if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                        if (PermissionRegistry.hasGlobalAccess()) {
                             List<Traisorerie> transx = TraisorerieDelegate
                                     .findTraisorByCompteTresor(choosenComptetr.getUid());
                             if (transx == null ? true : transx.isEmpty()) {
@@ -1246,7 +1248,7 @@ public class TresorerieController implements Initializable {
         syncExecutor.submit(() -> {
             refreshCurrencyContext();
             List<Traisorerie> fresh;
-            if (role != null && (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name()))) {
+            if (role != null && (PermissionRegistry.hasGlobalAccess())) {
                 fresh = TraisorerieDelegate.findTraisoreries();
             } else {
                 fresh = TraisorerieDelegate.findTraisoreries(region);
@@ -1266,7 +1268,7 @@ public class TresorerieController implements Initializable {
             depensesRealisees.clear();
             depenses.clear();
             List<DepenseAgregate> rawData;
-            if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+            if (PermissionRegistry.hasGlobalAccess()) {
                 rawData = DepenseAgregateDelegate.findDepenseAgregates(dpk_debut_depense_real.getValue(), dpk_fin_depense_real.getValue(),null);
                 depenses.addAll(DepenseDelegate.findDepenses());
             } else {
@@ -1651,7 +1653,7 @@ public class TresorerieController implements Initializable {
         Optional<ButtonType> clkbtn = alert.showAndWait();
         if (clkbtn.get() == ButtonType.YES) {
             if (trx != null) {
-                if (role.equals(Role.Trader.name()) | role.contains(Role.ALL_ACCESS.name())) {
+                if (PermissionRegistry.hasGlobalAccess()) {
                     TraisorerieDelegate.deleteTraisorerie(trx);
                     // database.delete(trx);
                     MainUI.notify(null, "Succes", "Transaction supprimee avec succes", 3, "info");
@@ -1779,7 +1781,7 @@ public class TresorerieController implements Initializable {
         depensesRealisees.clear();
         depenses.clear();
         List<DepenseAgregate> rawData;
-        if (role.equals(Role.Trader.name()) || role.contains(Role.ALL_ACCESS.name())) {
+        if (PermissionRegistry.hasGlobalAccess()) {
             rawData = DepenseAgregateDelegate.findDepenseAgregates();
             depenses.addAll(DepenseDelegate.findDepenses());
         } else {

@@ -44,6 +44,7 @@ import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import services.utils.UserRoleRegistry;
 import tools.Tables;
 import tools.Util;
 
@@ -106,7 +107,7 @@ public class DeliveryController implements Initializable {
         this.RB = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         region = pref.get("region", "...");
-        role = pref.get("priv", null);
+        role = UserRoleRegistry.getRole(pref);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
         bntsave.setText(RB.getString("xbtn.save") + " >>");
