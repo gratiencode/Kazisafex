@@ -131,7 +131,10 @@ public final class GratienAssistantClient {
             return;
         }
         String context = loadAgentContext();
-        String contextualized = context.isEmpty() ? question : question + "\n\nContexte:\n" + context;
+        String guide = tools.KazisafeGuide.usageKnowledge(question);
+        String contextualized = context.isEmpty() && guide.isEmpty() ? question
+                : question + "\n\nContexte:\n" + context
+                + (guide.isEmpty() ? "" : "\n\n" + guide);
 
         if (attachments == null || attachments.isEmpty()) {
             // Chat texte: proxy LangChain4j avec GratienTools, memoire et function calling.

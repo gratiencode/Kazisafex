@@ -30,7 +30,7 @@ public class DestockerService implements DestockerStorage {
     @Override
     public List<Destocker> findDestockers(String region) {
         StringBuilder sb = new StringBuilder();
-        sb.append("SELECT * FROM destocker WHERE region = ? ORDER BY dateDestockage DESC");
+        sb.append("SELECT * FROM destocker WHERE destination = ? ORDER BY dateDestockage DESC");
         return ManagedSessionFactory.executeRead(em -> {
             Query query = em.createNativeQuery(sb.toString(), Destocker.class);
             query.setParameter(1, region);

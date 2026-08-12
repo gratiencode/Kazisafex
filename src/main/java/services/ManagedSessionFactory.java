@@ -49,6 +49,7 @@ public class ManagedSessionFactory {
     private static final Map<Thread, EntityManager> trackedEMs = new ConcurrentHashMap<>();
     private static final boolean embedded;
     private static WriteQueueManager writeQueue;
+    private static volatile ExecutorService mysqlWriteExecutor;
 
     static {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
@@ -264,12 +265,44 @@ public class ManagedSessionFactory {
     public static <T> CompletableFuture<T> submitWrite(
         Function<EntityManager, T> action
     ) {
-        if (!embedded) {
-            throw new IllegalStateException(
-                "submitWrite() réservé à SQLite, utilisez getEntityManager() pour MySQL"
-            );
+        if (embedded) {
+            return writeQueue.submit(action);
         }
-        return writeQueue.submit(action);
+        // MySQL : écriture asynchrone dans un thread dédié avec transaction
+        // propre (chaque action ouvre son EntityManager via executeWrite).
+        // On propage l'état de suppression de SyncOutboxListener du thread
+        // appelant pour ne pas ré-écrire dans l'outbox pendant un downsync.
+        boolean suppressed = data.SyncOutboxListener.isSuppressed();
+        return CompletableFuture.supplyAsync(() -> {
+            boolean previous = data.SyncOutboxListener.isSuppressed();
+            data.SyncOutboxListener.setSuppressed(suppressed);
+            try {
+                return executeWrite(action);
+            } finally {
+                data.SyncOutboxListener.setSuppressed(previous);
+            }
+        }, mysqlWriteExecutor());
+    }
+
+    private static ExecutorService mysqlWriteExecutor() {
+        ExecutorService es = mysqlWriteExecutor;
+        if (es == null) {
+            synchronized (ManagedSessionFactory.class) {
+                es = mysqlWriteExecutor;
+                if (es == null) {
+                    int max = Math.max(
+                        2,
+                        Math.min(8, resolveMySqlPoolMaxSize() / 4)
+                    );
+                    es = Executors.newFixedThreadPool(
+                        max,
+                        MemoryGuard.daemonFactory("Kazisafe-MySql-WritePool")
+                    );
+                    mysqlWriteExecutor = es;
+                }
+            }
+        }
+        return es;
     }
 
     public static <T> T executeRead(Function<EntityManager, T> action) {
@@ -484,7 +517,13 @@ public class ManagedSessionFactory {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "Admin*21");
+        String prefVal = pref.get("default_mysql_password", null);
+        if (prefVal != null && !prefVal.isBlank()) {
+            return prefVal;
+        }
+        throw new IllegalStateException(
+            "Database password not configured. Set KAZISAFE_DB_PASSWORD or preference 'default_mysql_password'."
+        );
     }
 
     private static String resolveLocalDbSecret(String databaseName) {

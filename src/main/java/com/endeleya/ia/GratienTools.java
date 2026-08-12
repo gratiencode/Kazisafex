@@ -53,6 +53,7 @@ import data.Traisorerie;
 import data.Vente;
 import data.VenteHelper;
 import data.core.KazisafeServiceFactory;
+import data.helpers.CardHelper;
 import data.helpers.Mouvment;
 import data.helpers.TypeTraisorerie;
 import data.network.Kazisafe;
@@ -177,7 +178,7 @@ public class GratienTools {
 
     private final Preferences pref = Preferences.userNodeForPackage(SyncEngine.class);
     private final FinancialStatementAgregateService financialService = new FinancialStatementAgregateService();
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = data.core.KazisafeServiceFactory.mapper();
     private static final Map<String, InvoiceWorkflowContext> INVOICE_WORKFLOWS = new ConcurrentHashMap<>();
     private static final Map<String, CurrencyConversionState> PENDING_CURRENCY_CONVERSIONS = new ConcurrentHashMap<>();
     private static final Map<String, SaleWorkflowContext> SALE_WORKFLOWS = new ConcurrentHashMap<>();
@@ -7618,5 +7619,495 @@ public class GratienTools {
             }
             return "Synchronisation adaptive déclenchée ! Les données seront envoyées progressivement.";
         });
+    }
+
+    @Tool("Planifie avant toute action la séquence d'outils et de workflows que Gratien exécutera pour une tâche complexe. Appelez cet outil dès qu'une demande nécessite plusieurs étapes ou combine stock entrepôt, destockage, analyse business ou ajustement d'inventaire. Présentez le plan à l'utilisateur et attendez sa confirmation avant d'exécuter le premier outil.")
+    public String planExecution(@P("Description complète de la tâche à planifier") String taskDescription) {
+        return buildExecutionPlan(taskDescription);
+    }
+
+    @Tool("Cree un approvisionnement de stock destine a l'ENTREPOT (table Stocker): produit, quantite recue, cout d'achat unitaire, lot et date d'expiration. Une livraison fournisseur est creee ou reutilisee automatiquement. Utilisez ceci uniquement pour le stock du depot, pas pour le magasin.")
+    public String createStockForWarehouse(
+            @P("Produit: uid, code-barres ou nom exact") String product,
+            @P("Quantite recue dans l'unite de mesure") double quantity,
+            @P("Unite de mesure, ex: Pièce (facultatif)") String measure,
+            @P("Cout d'achat unitaire") double coutAchat,
+            @P("Numero de lot (facultatif)") String lot,
+            @P("Date d'expiration yyyy-MM-dd (facultatif)") String expiryDate,
+            @P("Region (defaut: region active)") String region,
+            @P("Localisation dans le depot, ex: Rayon A (facultatif)") String localisation,
+            @P("Stock minimum d'alerte (facultatif)") double stockAlert,
+            @P("Prix de vente estime (facultatif)") double prixVenteEstime,
+            @P("Reference de livraison (facultatif)") String reference,
+            @P("Observation (facultatif)") String observation) {
+        String key = safe(product, "") + "|" + quantity + "|" + safe(measure, "") + "|" + coutAchat + "|" + safe(lot, "")
+                + "|" + safe(expiryDate, "") + "|" + safe(region, "");
+        return executeOnce("createStockForWarehouse", key, () -> {
+            Produit prod = findProductByUidCodebarOrName(product);
+            if (prod == null) {
+                return "Produit introuvable. Utilisez `findProductCandidates` pour retrouver le produit exact avant de réessayer.";
+            }
+            String usedRegion = stockRegion(region);
+            double qty = quantity > 0 ? quantity : 1d;
+            double unitCost = coutAchat > 0 ? coutAchat : 0d;
+            Mesure unit = resolveMeasureForProduct(prod, measure);
+            String generatedLot = safe(lot, "LOT-" + System.currentTimeMillis());
+            String ref = safe(reference, "APP-DEP-" + System.currentTimeMillis());
+            Livraison delivery = findOrCreateWarehouseDelivery(usedRegion, ref);
+            Stocker stocker = new Stocker(DataId.generate());
+            stocker.setProductId(prod);
+            stocker.setMesureId(unit);
+            stocker.setQuantite(qty);
+            stocker.setCoutAchat(unitCost);
+            stocker.setPrixAchatTotal(qty * unitCost);
+            stocker.setPrixVenteEstime(prixVenteEstime);
+            stocker.setNumlot(generatedLot);
+            stocker.setDateExpir(parseExpiryDate(expiryDate));
+            stocker.setDateStocker(LocalDateTime.now());
+            stocker.setRegion(usedRegion);
+            stocker.setLocalisation(safe(localisation, "Entrepôt"));
+            stocker.setLibelle("Approvisionnement entrepôt via Gratien");
+            stocker.setStockAlerte(stockAlert);
+            stocker.setObservation(safe(observation, "Créé par Gratien"));
+            stocker.setLivraisId(delivery);
+            Stocker saved = StockerDelegate.saveStocker(stocker);
+            if (saved == null) {
+                return "Échec de l'enregistrement du stock entrepôt.";
+            }
+            syncCreate(saved, Tables.STOCKER);
+            StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(),
+                    saved.getCoutAchat(), saved.getDateExpir());
+            return "Stock créé pour l'entrepôt (" + usedRegion + "):\n\n"
+                    + "| Champ | Valeur |\n|---|---|\n"
+                    + "| Produit | " + tableCell(prod.getNomProduit()) + " |\n"
+                    + "| Quantité | " + purchaseAmount(qty) + " " + tableCell(unit.getDescription()) + " |\n"
+                    + "| Coût d'achat unitaire | " + purchaseAmount(unitCost) + " |\n"
+                    + "| Prix d'achat total | " + purchaseAmount(qty * unitCost) + " |\n"
+                    + "| Lot | " + tableCell(generatedLot) + " |\n"
+                    + "| Expiration | " + (saved.getDateExpir() == null ? "-" : saved.getDateExpir()) + " |\n"
+                    + "| Livraison | " + tableCell(ref) + " |\n"
+                    + "| Stock d'alerte | " + purchaseAmount(stockAlert) + " |\n\n"
+                    + "L'agrégat du dépôt a été mis à jour.";
+        });
+    }
+
+    @Tool("Execute une sortie de stock du DEPOT (table Destocker): retire une quantite d'un produit/lot du depot vers une destination (magasin, perte, casse, ajustement...). Verifie le stock disponible avant la sortie et met a jour l'agregat du depot.")
+    public String executeDestockage(
+            @P("Produit: uid, code-barres ou nom exact") String product,
+            @P("Quantite a sortir dans l'unite de mesure") double quantity,
+            @P("Unite de mesure, ex: Pièce (facultatif)") String measure,
+            @P("Destination de la sortie (ex: Magasin, Perte, Casse, Ajustement)") String destination,
+            @P("Numero de lot (facultatif)") String lot,
+            @P("Reference (facultatif)") String reference,
+            @P("Region (defaut: region active)") String region,
+            @P("Cout d'achat unitaire (facultatif, sinon celui du lot)") double coutAchat,
+            @P("Observation (facultatif)") String observation) {
+        String key = safe(product, "") + "|" + quantity + "|" + safe(measure, "") + "|" + safe(destination, "")
+                + "|" + safe(lot, "") + "|" + safe(region, "");
+        return executeOnce("executeDestockage", key, () -> {
+            Produit prod = findProductByUidCodebarOrName(product);
+            if (prod == null) {
+                return "Produit introuvable. Utilisez `findProductCandidates` pour retrouver le produit exact avant de réessayer.";
+            }
+            String usedRegion = stockRegion(region);
+            double qty = quantity > 0 ? quantity : 1d;
+            Mesure unit = resolveMeasureForProduct(prod, measure);
+            String usedLot = safe(lot, "LOT-" + System.currentTimeMillis());
+            double available = depotAvailableStock(prod.getUid(), usedRegion, usedLot);
+            if (qty > available) {
+                return "Stock dépôt insuffisant: disponible " + purchaseAmount(available) + " pour le produit '"
+                        + safe(prod.getNomProduit(), "?") + "' (lot " + tableCell(usedLot) + ", région " + usedRegion
+                        + "). Aucune sortie effectuée.";
+            }
+            Destocker destocker = new Destocker(DataId.generate());
+            destocker.setProductId(prod);
+            destocker.setMesureId(unit);
+            destocker.setQuantite(qty);
+            destocker.setCoutAchat(coutAchat);
+            destocker.setDateDestockage(LocalDateTime.now());
+            destocker.setDestination(safe(destination, "Magasin"));
+            destocker.setNumlot(usedLot);
+            destocker.setReference(safe(reference, "DST-" + System.currentTimeMillis()));
+            destocker.setLibelle("Destockage via Gratien");
+            destocker.setObservation(safe(observation, "Sortie créée par Gratien"));
+            destocker.setRegion(usedRegion);
+            Destocker saved = DestockerDelegate.saveDestocker(destocker);
+            if (saved == null) {
+                return "Échec de l'enregistrement du destockage.";
+            }
+            syncCreate(saved, Tables.DESTOCKER);
+            StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(),
+                    saved.getCoutAchat(), null);
+            double remaining = depotAvailableStock(prod.getUid(), usedRegion, usedLot);
+            return "Destockage exécuté (" + usedRegion + "):\n\n"
+                    + "| Champ | Valeur |\n|---|---|\n"
+                    + "| Produit | " + tableCell(prod.getNomProduit()) + " |\n"
+                    + "| Quantité sortie | " + purchaseAmount(qty) + " " + tableCell(unit.getDescription()) + " |\n"
+                    + "| Destination | " + tableCell(destocker.getDestination()) + " |\n"
+                    + "| Lot | " + tableCell(usedLot) + " |\n"
+                    + "| Référence | " + tableCell(destocker.getReference()) + " |\n"
+                    + "| Restant au dépôt (lot) | " + purchaseAmount(remaining) + " |\n\n"
+                    + "L'agrégat du dépôt a été mis à jour.";
+        });
+    }
+
+    @Tool("Donne une analyse globale du business sur une periode: valeur des stocks, couts et depenses, chiffre d'affaires, resultat et tresorerie. Recalcule les etats financiers si necessaire puis affiche une synthese en tableaux Markdown.")
+    public String globalBusinessAnalysis(
+            @P("Date debut yyyy-MM-dd (defaut: debut du mois en cours)") String start,
+            @P("Date fin yyyy-MM-dd (defaut: aujourd'hui)") String end,
+            @P("Region optionnelle. Une autre region est acceptee seulement avec un role ALL_ACCESS ou Trader") String region) {
+        String key = safe(start, "") + "|" + safe(end, "") + "|" + safe(region, "");
+        return executeOnce("globalBusinessAnalysis", key, () -> {
+            try {
+                LocalDate d1 = start == null || start.isBlank() ? LocalDate.now().withDayOfMonth(1) : LocalDate.parse(start);
+                LocalDate d2 = end == null || end.isBlank() ? LocalDate.now() : LocalDate.parse(end);
+                if (d1.isAfter(d2)) {
+                    LocalDate tmp = d1;
+                    d1 = d2;
+                    d2 = tmp;
+                }
+                FinancialReportPayload payload = loadFinancialPayload("periode", "tous", d1.toString(), d2.toString(), 0, 3, region);
+                StringBuilder builder = new StringBuilder();
+                appendReportHeader(builder, currentEntreprise(), "Analyse globale du business", payload.regionLabel(), d1, d2);
+                builder.append(buildBusinessAnalysisSummary(payload));
+                appendReportFooter(builder);
+                return builder.toString();
+            } catch (Exception ex) {
+                return "Impossible d'afficher l'analyse globale: " + ex.getMessage();
+            }
+        });
+    }
+
+    @Tool("Ajuste le stock d'un produit pour corriger un ecart d'inventaire. Pour le DEPOT: augmente avec un Stocker ou diminue avec un Destocker. Pour le MAGASIN: augmente avec une Recquisition ou diminue avec une Vente d'ajustement + LigneVente. L'ecart est signe: positif ajoute, negatif retire.")
+    public String adjustStockDepotAndShop(
+            @P("Produit: uid, code-barres ou nom exact") String product,
+            @P("Ecart signe: positif pour ajouter du stock, negatif pour en retirer") double ecart,
+            @P("Emplacement: depot ou magasin") String location,
+            @P("Unite de mesure, ex: Pièce (facultatif)") String measure,
+            @P("Numero de lot (facultatif)") String lot,
+            @P("Region (defaut: region active)") String region,
+            @P("Reference (facultatif)") String reference,
+            @P("Observation (facultatif)") String observation) {
+        String key = safe(product, "") + "|" + ecart + "|" + safe(location, "") + "|" + safe(lot, "") + "|" + safe(region, "");
+        return executeOnce("adjustStockDepotAndShop", key, () -> {
+            if (ecart == 0) {
+                return "Écart nul: aucune opération nécessaire.";
+            }
+            Produit prod = findProductByUidCodebarOrName(product);
+            if (prod == null) {
+                return "Produit introuvable. Utilisez `findProductCandidates` pour retrouver le produit exact avant de réessayer.";
+            }
+            String usedRegion = stockRegion(region);
+            Mesure unit = resolveMeasureForProduct(prod, measure);
+            String where = safe(location, "").toLowerCase(Locale.ROOT);
+            boolean depot = where.contains("dep") || where.contains("entrepot") || where.contains("entrepôt");
+            if (depot) {
+                return adjustDepotStock(prod, ecart, unit, usedRegion, lot, reference, observation);
+            }
+            return adjustShopStock(prod, ecart, unit, usedRegion, lot, reference, observation);
+        });
+    }
+
+    private String buildExecutionPlan(String taskDescription) {
+        String task = safe(taskDescription, "").toLowerCase(Locale.ROOT);
+        StringBuilder plan = new StringBuilder();
+        plan.append("### Plan d'exécution proposé\n\n");
+        plan.append("Voici le plan que je propose pour réaliser cette tâche. **Confirmez** pour que je commence, ou précisez les étapes à modifier.\n\n");
+        plan.append("| Étape | Outil / Workflow | Action |\n|---|---|---|\n");
+        int step = 0;
+        if (containsAny(task, new String[]{"stock", "entrepot", "entrepôt", "approvision", "stocker", "livraison", "achat", "reçue", "recue"})) {
+            plan.append("| ").append(++step).append(" | `createStockForWarehouse` | Enregistrer le stock reçu à l'entrepôt (Stocker) avec produit, quantité, coût d'achat, lot et livraison |\n");
+        }
+        if (containsAny(task, new String[]{"destock", "sortie", "retirer", "perte", "casse", "transfert", "retrait"})) {
+            plan.append("| ").append(++step).append(" | `executeDestockage` | Exécuter la sortie de stock du dépôt (Destocker) en vérifiant le stock disponible |\n");
+        }
+        if (containsAny(task, new String[]{"analys", "business", "performance", "bilan", "chiffre", "resultat", "résultat", "depense", "dépense", "cout", "coût", "valorisation", "conseil"})) {
+            plan.append("| ").append(++step).append(" | `globalBusinessAnalysis` | Calculer les valeurs de stock, coûts/dépenses, chiffre d'affaires, résultat et trésorerie |\n");
+        }
+        if (containsAny(task, new String[]{"ajust", "correction", "inventaire", "ecart", "écart", "rectif", "retour"})) {
+            plan.append("| ").append(++step).append(" | `adjustStockDepotAndShop` | Corriger l'écart d'inventaire du dépôt (Stocker/Destocker) ou du magasin (Recquisition/LigneVente) |\n");
+        }
+        if (step == 0) {
+            return "Je n'ai pas identifié d'étape métier claire dans cette demande. Précisez l'opération souhaitée (création de stock entrepôt, destockage, analyse business ou ajustement d'inventaire) afin que je puisse planifier les outils à utiliser.";
+        }
+        plan.append("\nJe commence dès votre confirmation (`oui`).");
+        return plan.toString();
+    }
+
+    private boolean containsAny(String text, String[] keywords) {
+        if (text == null) {
+            return false;
+        }
+        for (String keyword : keywords) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String stockRegion(String requestedRegion) {
+        if (requestedRegion == null || requestedRegion.isBlank()) {
+            return safe(pref.get("region", "Goma"), "Goma");
+        }
+        return requestedRegion.trim();
+    }
+
+    private Livraison findOrCreateWarehouseDelivery(String region, String reference) {
+        String ref = safe(reference, "APP-DEP-" + System.currentTimeMillis());
+        Fournisseur supplier = genericCompanySupplier();
+        List<Livraison> deliveries = LivraisonDelegate.findByRef(ref);
+        if (deliveries != null) {
+            for (Livraison delivery : deliveries) {
+                if (delivery != null && sameSupplier(delivery.getFournId(), supplier)) {
+                    return delivery;
+                }
+            }
+        }
+        Livraison delivery = new Livraison(DataId.generate());
+        delivery.setDateLivr(LocalDate.now());
+        delivery.setFournId(supplier);
+        delivery.setLibelle("Approvisionnement entrepôt via Gratien");
+        delivery.setNumPiece(ref);
+        delivery.setObservation("Livraison dépôt créée par Gratien");
+        delivery.setReference(ref);
+        delivery.setRegion(region);
+        delivery.setReduction(0d);
+        delivery.setTopay(0d);
+        delivery.setPayed(0d);
+        delivery.setRemained(0d);
+        delivery.setToreceive(0d);
+        Livraison saved = LivraisonDelegate.saveLivraison(delivery);
+        syncCreate(saved, Tables.LIVRAISON);
+        return saved;
+    }
+
+    private Mesure resolveMeasureForProduct(Produit product, String description) {
+        if (product == null || product.getUid() == null) {
+            return null;
+        }
+        Mesure unit = MesureDelegate.findByProduitAndQuant(product.getUid(), 1d);
+        if (unit != null) {
+            return unit;
+        }
+        if (description != null && !description.isBlank()) {
+            List<Mesure> measures = MesureDelegate.findAscSortedByQuantWithProduit(product.getUid());
+            if (measures != null) {
+                for (Mesure measure : measures) {
+                    if (measure != null && normalizeToolKey(measure.getDescription()).contains(normalizeToolKey(description))) {
+                        return measure;
+                    }
+                }
+            }
+        }
+        return ensureUnitMeasure(product, description);
+    }
+
+    private double depotAvailableStock(String productId, String region, String lot) {
+        try {
+            if (lot != null && !lot.isBlank()) {
+                return Math.max(0d, StockerDelegate.findLatestDepotStockByLot(productId, lot, region));
+            }
+            return Math.max(0d, new StockDepotAgregateService().getAvailableStock(productId, region));
+        } catch (Exception ignored) {
+            return 0d;
+        }
+    }
+
+    private String adjustDepotStock(Produit prod, double ecart, Mesure unit, String region, String lot,
+            String reference, String observation) {
+        String usedLot = safe(lot, "ADJ-DEP-" + System.currentTimeMillis());
+        String ref = safe(reference, "INV-DEP-" + System.currentTimeMillis());
+        double available = depotAvailableStock(prod.getUid(), region, usedLot);
+        if (ecart < 0 && Math.abs(ecart) > available) {
+            return "Écart impossible au dépôt: stock disponible " + purchaseAmount(available) + " (lot "
+                    + tableCell(usedLot) + "), écart demandé " + purchaseAmount(Math.abs(ecart))
+                    + ". Aucune opération effectuée.";
+        }
+        if (ecart > 0) {
+            double unitCost = 0d;
+            StockDepotAgregate latest = new StockDepotAgregateService().findLatestStockDepotAgregate(prod.getUid(), region);
+            if (latest != null) {
+                unitCost = latest.getCoutAchat();
+            }
+            Stocker stocker = new Stocker(DataId.generate());
+            stocker.setProductId(prod);
+            stocker.setMesureId(unit);
+            stocker.setQuantite(ecart);
+            stocker.setCoutAchat(unitCost);
+            stocker.setPrixAchatTotal(ecart * unitCost);
+            stocker.setNumlot(usedLot);
+            stocker.setDateStocker(LocalDateTime.now());
+            stocker.setRegion(region);
+            stocker.setLocalisation("Ajustement Inventaire");
+            stocker.setLibelle("Ajustement inventaire dépôt: excédent ajouté");
+            stocker.setObservation(safe(observation, "Correction d'inventaire via Gratien"));
+            stocker.setDateExpir(LocalDate.now().plusYears(1));
+            stocker.setStockAlerte(0d);
+            stocker.setLivraisId(findOrCreateWarehouseDelivery(region, ref));
+            Stocker saved = StockerDelegate.saveStocker(stocker);
+            if (saved == null) {
+                return "Échec de l'ajustement (ajout) du stock dépôt.";
+            }
+            syncCreate(saved, Tables.STOCKER);
+            StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(),
+                    saved.getCoutAchat(), saved.getDateExpir());
+            return "Ajustement dépôt (ajout) réussi: +" + purchaseAmount(ecart) + " " + tableCell(unit.getDescription())
+                    + " du produit '" + safe(prod.getNomProduit(), "?") + "' (réf " + tableCell(ref) + "). Agrégat dépôt mis à jour.";
+        }
+        Destocker destocker = new Destocker(DataId.generate());
+        destocker.setProductId(prod);
+        destocker.setMesureId(unit);
+        destocker.setQuantite(Math.abs(ecart));
+        destocker.setCoutAchat(0d);
+        destocker.setDateDestockage(LocalDateTime.now());
+        destocker.setDestination("Ajustement Inventaire");
+        destocker.setNumlot(usedLot);
+        destocker.setReference(ref);
+        destocker.setLibelle("Ajustement inventaire dépôt: manquant déstocké");
+        destocker.setObservation(safe(observation, "Correction d'inventaire via Gratien"));
+        destocker.setRegion(region);
+        Destocker saved = DestockerDelegate.saveDestocker(destocker);
+        if (saved == null) {
+            return "Échec de l'ajustement (sortie) du stock dépôt.";
+        }
+        syncCreate(saved, Tables.DESTOCKER);
+        StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(),
+                saved.getCoutAchat(), null);
+        double remaining = depotAvailableStock(prod.getUid(), region, usedLot);
+        return "Ajustement dépôt (sortie) réussi: -" + purchaseAmount(Math.abs(ecart)) + " " + tableCell(unit.getDescription())
+                + " du produit '" + safe(prod.getNomProduit(), "?") + "' (réf " + tableCell(ref) + "). Restant au dépôt: "
+                + purchaseAmount(remaining) + ".";
+    }
+
+    private String adjustShopStock(Produit prod, double ecart, Mesure unit, String region, String lot,
+            String reference, String observation) {
+        CardHelper card = null;
+        try {
+            card = RecquisitionDelegate.makeCardFor(prod, region);
+        } catch (Exception ignored) {
+            card = null;
+        }
+        double unitCost = card == null || card.getRecquisition() == null ? 0d : card.getRecquisition().getCoutAchat();
+        LocalDate expiry = card == null || card.getRecquisition() == null ? null : card.getRecquisition().getDateExpiry();
+        double alert = card == null || card.getRecquisition() == null ? 1d : card.getRecquisition().getStockAlert();
+        String usedLot = safe(lot, "INV-" + LocalDate.now());
+        String ref = safe(reference, "INV-#" + (int) (Math.random() * 100000));
+        String obs = safe(observation, "Importation Inventaire");
+        if (ecart > 0) {
+            Recquisition req = new Recquisition(DataId.generate());
+            req.setCoutAchat(unitCost);
+            req.setDate(LocalDateTime.now());
+            req.setQuantite(ecart);
+            req.setRegion(region);
+            req.setDateExpiry(expiry);
+            req.setMesureId(unit);
+            req.setProductId(prod);
+            req.setStockAlert(alert);
+            req.setNumlot(usedLot);
+            req.setObservation(obs);
+            req.setReference(ref);
+            Recquisition saved = RecquisitionDelegate.saveRecquisition(req);
+            if (saved == null) {
+                return "Échec de l'ajustement (ajout) du stock magasin.";
+            }
+            syncCreate(saved, Tables.RECQUISITION);
+            RecquisitionDelegate.rectifyStock(prod, LocalDate.now(), LocalDate.now(), region, usedLot);
+            return "Ajustement magasin (ajout) réussi: +" + purchaseAmount(ecart) + " " + tableCell(unit.getDescription())
+                    + " du produit '" + safe(prod.getNomProduit(), "?") + "' (réf " + tableCell(ref) + "). Stock magasin rectifié.";
+        }
+        Vente vente = new Vente(DataId.generateInt());
+        vente.setClientId(ClientDelegate.findImporterClient());
+        vente.setDateVente(LocalDateTime.now());
+        vente.setDeviseDette("USD");
+        vente.setReference(ref);
+        vente.setLatitude(0d);
+        vente.setLongitude(0d);
+        vente.setLibelle("Ajustement Inventaire");
+        vente.setMontantUsd(0);
+        vente.setMontantCdf(0);
+        vente.setMontantDette(0d);
+        vente.setRegion(region);
+        vente.setObservation("CORRECTION");
+        Vente savedVente = VenteDelegate.saveVente(vente);
+        if (savedVente == null) {
+            return "Échec de l'ajustement (sortie) du stock magasin.";
+        }
+        syncCreate(savedVente, Tables.VENTE);
+        double q = Math.abs(ecart);
+        LigneVente ligne = new LigneVente(DataId.generateLong());
+        ligne.setClientId("-");
+        ligne.setMesureId(unit);
+        ligne.setMontantCdf(0d);
+        ligne.setMontantUsd(0);
+        ligne.setNumlot(usedLot);
+        ligne.setPrixUnit(0d);
+        ligne.setProductId(prod);
+        ligne.setQuantite(q);
+        ligne.setReference(savedVente);
+        LigneVente savedLigne = LigneVenteDelegate.saveLigneVente(ligne);
+        if (savedLigne == null) {
+            return "Échec de l'enregistrement de la ligne d'ajustement magasin.";
+        }
+        syncCreate(savedLigne, Tables.LIGNEVENTE);
+        RecquisitionDelegate.rectifyStock(prod, LocalDate.now(), LocalDate.now(), region, usedLot);
+        return "Ajustement magasin (sortie) réussi: -" + purchaseAmount(q) + " " + tableCell(unit.getDescription())
+                + " du produit '" + safe(prod.getNomProduit(), "?") + "' (réf " + tableCell(ref) + "). Stock magasin rectifié.";
+    }
+
+    private String buildBusinessAnalysisSummary(FinancialReportPayload payload) {
+        Map<String, Double> resultat = codeValues(payload.compteResultat());
+        Map<String, Double> bilan = codeValues(payload.bilan());
+        double autresCharges = sum(resultat.get("RL"), resultat.get("RI"), resultat.get("RH"), resultat.get("RF"),
+                resultat.get("RM"));
+        StringBuilder builder = new StringBuilder();
+        builder.append("### Compte de résultat\n\n");
+        builder.append("| Indicateur | Montant (USD) |\n|---|---:|\n");
+        builder.append("| Chiffre d'affaires (ventes marchandises) | ").append(amountLine(resultat.get("TA"))).append(" |\n");
+        builder.append("| Achats de marchandises | ").append(amountLine(resultat.get("RA"))).append(" |\n");
+        builder.append("| Marge commerciale | ").append(amountLine(resultat.get("XA"))).append(" |\n");
+        builder.append("| Excédent brut d'exploitation (EBE) | ").append(amountLine(resultat.get("XD"))).append(" |\n");
+        builder.append("| Charges de personnel | ").append(amountLine(resultat.get("RK"))).append(" |\n");
+        builder.append("| Impôts et taxes | ").append(amountLine(resultat.get("RJ"))).append(" |\n");
+        builder.append("| Autres charges d'exploitation | ").append(amountLine(autresCharges)).append(" |\n");
+        builder.append("| Charges financières | ").append(amountLine(resultat.get("RN"))).append(" |\n");
+        builder.append("| **Résultat net de l'exercice** | **").append(amountLine(resultat.get("XJ"))).append("** |\n\n");
+        builder.append("### Bilan (fin de période)\n\n");
+        builder.append("| Indicateur | Montant (USD) |\n|---|---:|\n");
+        builder.append("| Valeur des stocks (magasin + dépôt) | ").append(amountLine(bilan.get("6"))).append(" |\n");
+        builder.append("| Trésorerie (banques + caisse) | ").append(amountLine(bilan.get("9"))).append(" |\n");
+        builder.append("| Créances clients | ").append(amountLine(bilan.get("7"))).append(" |\n");
+        builder.append("| Dettes fournisseurs | ").append(amountLine(bilan.get("15"))).append(" |\n");
+        builder.append("\nSouhaitez-vous le rapport détaillé complet (Bilan, Compte de résultat, Flux de trésorerie) en PDF ou Excel ? Répondez `oui` et Gratien le générera après confirmation.");
+        return builder.toString();
+    }
+
+    private Map<String, Double> codeValues(List<FinancialStatementRow> rows) {
+        Map<String, Double> values = new HashMap<>();
+        if (rows == null) {
+            return values;
+        }
+        for (FinancialStatementRow row : rows) {
+            if (row == null || row.getCode() == null || row.isSectionHeader()) {
+                continue;
+            }
+            String code = row.getCode().trim().toUpperCase(Locale.ROOT);
+            values.merge(code, value(row.getAmountN()), Double::sum);
+        }
+        return values;
+    }
+
+    private double sum(Double... values) {
+        double total = 0d;
+        if (values != null) {
+            for (Double val : values) {
+                total += value(val);
+            }
+        }
+        return total;
+    }
+
+    private String amountLine(Double amount) {
+        return purchaseAmount(value(amount));
     }
 }

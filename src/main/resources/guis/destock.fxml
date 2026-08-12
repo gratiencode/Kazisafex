@@ -55,7 +55,7 @@
          </font>
       </Label>
       <Separator layoutY="481.0" prefHeight="3.0" prefWidth="600.0" />
-      <Button layoutX="432.0" layoutY="440.0" mnemonicParsing="false" onAction="#addDestocker" prefHeight="30.0" prefWidth="108.0" style="-fx-background-color: #44cef5;" text="%xaddingitem" textFill="WHITE" />
+      <Button fx:id="btn_add_destock" layoutX="432.0" layoutY="440.0" mnemonicParsing="false" onAction="#addDestocker" prefHeight="30.0" prefWidth="108.0" style="-fx-background-color: #44cef5;" text="%xaddingitem" textFill="WHITE" />
       <TableView fx:id="tb_destock_list" layoutX="33.0" layoutY="517.0" prefHeight="113.0" prefWidth="542.0" style="-fx-border-color: #44cef5; -fx-background-color: #ffffff;">
          <columns>
             <TableColumn fx:id="col_reference" prefWidth="70.0" text="Référence" />

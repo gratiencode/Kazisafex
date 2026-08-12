@@ -27,6 +27,7 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
+<?import javafx.scene.web.WebView?>
 
 <BorderPane prefHeight="840.0" prefWidth="1157.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.endeleya.kazisafex.MainuiController">
    <top>
@@ -627,7 +628,7 @@
                      <children>
                         <AnchorPane prefHeight="497.0" prefWidth="228.0" style="-fx-background-color: white; -fx-border-color: rgba(68,206,245,0.45); -fx-border-radius: 18; -fx-background-radius: 18; -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.10), 22, 0.18, 0, 9);">
                            <children>
-                              <!-- WebView desactive pour diagnostic du crash natif (WebKit) -->
+                              <WebView fx:id="ia_webvu_chat" layoutX="7.0" layoutY="8.0" prefHeight="545.0" prefWidth="214.0" AnchorPane.bottomAnchor="7.0" AnchorPane.leftAnchor="7.0" AnchorPane.rightAnchor="7.0" AnchorPane.topAnchor="7.0" />
                            </children>
                         </AnchorPane>
                         <AnchorPane prefHeight="118.0" prefWidth="228.0" style="-fx-background-color: white; -fx-border-color: rgba(68,206,245,0.30); -fx-background-radius: 18; -fx-border-radius: 18; -fx-effect: dropshadow(gaussian, rgba(18,32,58,0.08), 16, 0.16, 0, 6);">

@@ -11,7 +11,6 @@ import delegates.ProduitDelegate;
 import delegates.RecquisitionDelegate;
 import delegates.StockerDelegate;
 import delegates.PrixDeVenteDelegate;
-import delegates.PermissionDelegate;
 import services.utils.PermissionRegistry;
 import data.PermitTo;
 import data.core.KazisafeServiceFactory;
@@ -20,22 +19,15 @@ import java.math.RoundingMode;
 import java.net.URL;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.ResourceBundle;
-import java.util.Set;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
-import java.util.concurrent.Executors;
 import tools.MemoryGuard;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -58,7 +50,6 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.MenuItem;
@@ -86,12 +77,7 @@ import data.PrixDeVente;
 import data.Production;
 import data.Produit;
 import data.Recquisition;
-import data.StockDepotAgregate;
 import data.Stocker;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import tools.ComboBoxAutoCompletion;
 import tools.Constants;
 import tools.CurrencyConverter;
 import tools.DataId;
@@ -101,7 +87,6 @@ import tools.SyncEngine;
 import tools.ComboBoxAutoCompletion;
 import tools.Tables;
 import tools.Util;
-import data.helpers.Role;
 import data.network.Kazisafe;
 import delegates.ProductionDelegate;
 import services.StockDepotAgregateService;
@@ -222,6 +207,7 @@ public class DestockController implements Initializable {
     ResourceBundle bundle;
     Recquisition req;
     List<PrixDeVente> prices;
+    String ref="DST" + ((int) (Math.random() * 100000)) + "K";
     double taux;
 
     public DestockController() {
@@ -243,7 +229,7 @@ public class DestockController implements Initializable {
         RegionRegistry.loadAndSync(pref, kazisafe, regions, List.of("Déclassement de stock"));
         RegionRegistry.selectSavedRegion(pref, cbx_destination_dstk);
         cbx_choose_mesure_dstk.setItems(lismesure);
-        txt_reference_dstk.setText("DST" + ((int) (Math.random() * 100000)) + "K");
+        txt_reference_dstk.setText(ref);
         tb_destock_list.setItems(lsdin);
         this.action = Constants.ACTION_CREATE;
 
@@ -324,19 +310,16 @@ public class DestockController implements Initializable {
         });
 
         cbx_choose_mesure_vente.setItems(lismesure);
-        save_req.selectedProperty().addListener(new ChangeListener<Boolean>() {
-            @Override
-            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-                if (newValue) {
-                    if (tf_quantite_dstk.getText().isEmpty() || cbx_destination_dstk.getValue() == null) {
-                        MainUI.notify(null, bundle.getString("error"),
-                                "Completer la quantite et la destination puis continuer", 3, "error");
-                        save_req.setSelected(false);
-                        prices.clear();
-                        return;
-                    }
-                    pricepane.setVisible(true);
+        save_req.selectedProperty().addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            if (newValue) {
+                if (tf_quantite_dstk.getText().isEmpty() || cbx_destination_dstk.getValue() == null) {
+                    MainUI.notify(null, bundle.getString("error"),
+                            "Completer la quantite et la destination puis continuer", 3, "error");
+                    save_req.setSelected(false);
+                    prices.clear();
+                    return;
                 }
+                pricepane.setVisible(true);
             }
         });
 
@@ -352,99 +335,65 @@ public class DestockController implements Initializable {
                         MainUI.notify(null, "Erreur", "Entrer les chiffres uniquement", 3, "error");
                     }
                 });
-        cbx_stock_lots.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Stocker>() {
-            @Override
-            public void changed(ObservableValue<? extends Stocker> observable, Stocker oldValue, Stocker newValue) {
-                if (newValue != null) {
-                    choosenStockLot = newValue;
-                    alveol.setText(choosenStockLot.getLocalisation() != null ? choosenStockLot.getLocalisation() : "");
-                    LocalDate date = choosenStockLot.getDateExpir();
-                    txt_date_expiry.setText(date == null ? bundle.getString("noperish") : "Exp : " + date.toString());
-
-                    txt_date_expiry.setBackground(new Background(
-                            new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-
-                    lbl_cout_achat.setText(String.format(java.util.Locale.US, "%.2f USD", choosenStockLot.getCoutAchat()));
-                    tf_cout_unitr_cump_dstk.setText(String.valueOf(choosenStockLot.getCoutAchat()));
-
-                    if (choosenM != null) {
+        cbx_stock_lots.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Stocker> observable, Stocker oldValue, Stocker newValue) -> {
+            if (newValue != null) {
+                choosenStockLot = newValue;
+                alveol.setText(choosenStockLot.getLocalisation() != null ? choosenStockLot.getLocalisation() : "");
+                LocalDate date = choosenStockLot.getDateExpir();
+                txt_date_expiry.setText(date == null ? bundle.getString("noperish") : "Exp : " + date.toString());
+                txt_date_expiry.setBackground(new Background(
+                        new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
+                setLabel(lbl_cout_achat, String.format(java.util.Locale.US, "%.2f USD", choosenStockLot.getCoutAchat()));
+                tf_cout_unitr_cump_dstk.setText(String.format(java.util.Locale.US, "%.2f", choosenStockLot.getCoutAchat()));
+                if (choosenM != null) {
+                    Mesure mz = choosenStockLot.getMesureId();
+                    Mesure mreel = mz != null ? MesureDelegate.findMesure(mz.getUid()) : null;
+                    double quantContenu = (mreel != null && mreel.getQuantContenu() != null) ? mreel.getQuantContenu() : 1.0;
+                    double stalertx = (choosenStockLot.getStockAlerte() * quantContenu);
+                    double choose = stalertx / (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
+                    txt_stk_alerte.setText("Alert : " + choose);
+                }
+                updateGlobalStockDisplay();
+                if (choosenProduct != null && choosenStockLot.getLivraisId() != null) {
+                    List<Recquisition> reqs = RecquisitionDelegate.findByReference(choosenProduct.getUid(),
+                            choosenStockLot.getLivraisId().getReference());
+                    if (!reqs.isEmpty()) {
+                        Recquisition req1 = reqs.get(0);
                         Mesure mz = choosenStockLot.getMesureId();
-                        Mesure mreel = mz != null ? MesureDelegate.findMesure(mz.getUid()) : null;
-                        double quantContenu = (mreel != null && mreel.getQuantContenu() != null) ? mreel.getQuantContenu() : 1.0;
-                        double stalertx = (choosenStockLot.getStockAlerte() * quantContenu);
-                        double choose = stalertx / (choosenM.getQuantContenu() != null ? choosenM.getQuantContenu() : 1.0);
-                        txt_stk_alerte.setText("Alert : " + choose);
-                    }
-
-                    updateGlobalStockDisplay();
-
-                    if (choosenProduct != null && choosenStockLot.getLivraisId() != null) {
-                        List<Recquisition> reqs = RecquisitionDelegate.findByReference(choosenProduct.getUid(),
-                                choosenStockLot.getLivraisId().getReference());
-                        if (!reqs.isEmpty()) {
-                            Recquisition req = reqs.get(0);
-                            Mesure mz = choosenStockLot.getMesureId();
-                            List<PrixDeVente> prix = mz != null ? PrixDeVenteDelegate.findPrixDeVentes(0.0, mz.getUid(), req.getUid()) : List.of();
-                            if (!prix.isEmpty()) {
-                                double prixVente = prix.get(0).getPrixUnitaire();
-                                lbl_prix_vente.setText(String.format(java.util.Locale.US, "%.2f %s", prixVente, prix.get(0).getDevise()));
-                            } else {
-                                lbl_prix_vente.setText("0.0 USD");
-                            }
+                        List<PrixDeVente> prix = mz != null ? PrixDeVenteDelegate.findPrixDeVentes(0.0, mz.getUid(), req1.getUid()) : List.of();
+                        if (!prix.isEmpty()) {
+                            double prixVente = prix.get(0).getPrixUnitaire();
+                            setLabel(lbl_prix_vente, String.format(java.util.Locale.US, "%.2f %s", prixVente, prix.get(0).getDevise()));
                         } else {
-                            lbl_prix_vente.setText("0.0 USD");
+                            setLabel(lbl_prix_vente, "0.0 USD");
                         }
                     } else {
-                        lbl_prix_vente.setText("0.0 USD");
+                        setLabel(lbl_prix_vente, "0.0 USD");
                     }
-
-                    if (date != null) {
-                        int exp = isStockExpired(choosenStockLot);
-                        if (exp == -1) {
-                            txt_date_expiry.setBackground(new Background(
-                                    new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
-                        } else if (exp == 3) {
-                            txt_date_expiry.setBackground(new Background(
-                                    new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
-                        } else if (exp == 6) {
-                            txt_date_expiry.setBackground(new Background(
-                                    new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
-                        } else if (exp == 12) {
-                            txt_date_expiry.setBackground(new Background(
-                                    new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
-                        } else {
-                            txt_date_expiry.setBackground(new Background(
-                                    new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
-                        }
+                } else {
+                    setLabel(lbl_prix_vente, "0.0 USD");
+                }
+                if (date != null) {
+                    int exp = isStockExpired(choosenStockLot);
+                    if (exp == -1) {
+                        txt_date_expiry.setBackground(new Background(
+                                new BackgroundFill(Color.web("#f58282"), new CornerRadii(20), new Insets(4))));
+                    } else if (exp == 3) {
+                        txt_date_expiry.setBackground(new Background(
+                                new BackgroundFill(Color.web("#c46506"), new CornerRadii(20), new Insets(4))));
+                    } else if (exp == 6) {
+                        txt_date_expiry.setBackground(new Background(
+                                new BackgroundFill(Color.web("#f7fa61"), new CornerRadii(20), new Insets(4))));
+                    } else if (exp == 12) {
+                        txt_date_expiry.setBackground(new Background(
+                                new BackgroundFill(Color.web("#c5e6b3"), new CornerRadii(20), new Insets(4))));
+                    } else {
+                        txt_date_expiry.setBackground(new Background(
+                                new BackgroundFill(Color.web("#ffffff"), new CornerRadii(20), new Insets(4))));
                     }
-                    txt_date_expiry.setStyle(
-                            "-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 2;");
                 }
-            }
-        });
-        cbx_choose_product_dstk.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Produit>() {
-            @Override
-            public void changed(ObservableValue<? extends Produit> observable, Produit oldValue, Produit newValue) {
-                if (newValue != null) {
-                    choosenProduct = newValue;
-                    lbl_cout_achat.setText("0.0 USD");
-                    lbl_prix_vente.setText("0.0 USD");
-                    tf_quantite_dstk.clear();
-                    tf_quant_disponible.clear();
-                    cbx_choose_mesure_dstk.setValue(null);
-                    txt_stk_alerte.setText("Alert: 0");
-
-                    List<Stocker> stocks = StockerDelegate.findStockerByProduit(newValue.getUid());
-                    lisstocker.clear();
-                    lisstocker.addAll(stocks);
-
-                    List<Mesure> mesures = MesureDelegate.findAscSortedByQuantWithProduit(newValue.getUid());
-                    lismesure.clear();
-                    lismesure.addAll(mesures);
-                    cbx_choose_mesure_dstk.setItems(lismesure);
-
-                    updateGlobalStockDisplay();
-                }
+                txt_date_expiry.setStyle(
+                        "-fx-border-color: #44cef5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-label-padding: 2;");
             }
         });
     }
@@ -502,6 +451,13 @@ public class DestockController implements Initializable {
             value_stock.setText(String.format(java.util.Locale.US, "%.2f", converted * cumpx));
         } else {
             tf_quant_disponible.setText(String.format(java.util.Locale.US, "%.2f (en Pc)", dispoEnPc));
+        }
+    }
+
+    /** Met a jour un label seulement s'il existe dans le FXML (certains ne sont pas definis). */
+    private static void setLabel(Label label, String text) {
+        if (label != null) {
+            label.setText(text);
         }
     }
 
@@ -573,8 +529,8 @@ public class DestockController implements Initializable {
         PrixDeVente pv = new PrixDeVente(DataId.generate());
         pv.setDevise(cbx_devise_req1.getValue());
         pv.setPrixUnitaire(pvu);
-        pv.setQmin(Double.valueOf(tf_qte_min.getText()));
-        pv.setQmax(Double.valueOf(tf_qte_max.getText()));
+        pv.setQmin(Double.parseDouble(tf_qte_min.getText()));
+        pv.setQmax(Double.parseDouble(tf_qte_max.getText()));
         pv.setMesureId(mesurePv);
         if (findPrix(prices, pv) == null) {
             addPrice(pv, tilepn_prices1, true);
@@ -745,16 +701,24 @@ public class DestockController implements Initializable {
     public void addDestocker(ActionEvent event) {
         String reg = cbx_destination_dstk.getValue();
         if (dpk_date_dstk.getValue() == null || choosenProduct == null
-                || tf_quantite_dstk.getText().isEmpty() || cbx_destination_dstk.getValue() == null) {
+                || tf_quantite_dstk.getText().isEmpty() || cbx_destination_dstk.getValue() == null
+                ||tf_cout_unitr_cump_dstk.getText().isBlank()) {
             MainUI.notify(null, bundle.getString("error"), bundle.getString("fillnoptional"), 5, "error");
             return;
         }
 
         double qte;
+        double catu;
         try {
             qte = Double.parseDouble(tf_quantite_dstk.getText());
         } catch (NumberFormatException ex) {
             MainUI.notify(null, bundle.getString("error"), "Quantité invalide", 3, "error");
+            return;
+        }
+         try {
+            catu = Double.parseDouble(tf_cout_unitr_cump_dstk.getText());
+        } catch (NumberFormatException ex) {
+            MainUI.notify(null, bundle.getString("error"), "Cout d'achat unitaire invalide", 3, "error");
             return;
         }
         if (qte <= 0) {
@@ -819,7 +783,7 @@ public class DestockController implements Initializable {
 
         if (this.action.equals(Constants.ACTION_CREATE)) {
             Destocker s = new Destocker(DataId.generate());
-            s.setCoutAchat(choosenStockLot.getCoutAchat());
+            s.setCoutAchat(catu);
             s.setDateDestockage(dpk_date_dstk.getValue().atStartOfDay());
             s.setQuantite(qte);
             s.setDestination(reg);
@@ -858,7 +822,7 @@ public class DestockController implements Initializable {
             choosenDestocker.setDestination(reg);
             choosenDestocker.setMesureId(choosenM);
             choosenDestocker.setObservation(tf_observation.getText());
-            choosenDestocker.setCoutAchat(Double.parseDouble(tf_cout_unitr_cump_dstk.getText()));
+            choosenDestocker.setCoutAchat(catu);
 
             int index = lsdin.indexOf(choosenDestocker);
             if (index != -1) {
@@ -879,6 +843,8 @@ public class DestockController implements Initializable {
 
     /**
      * Sauvegarde tous les destockers ajoutés dans la liste locale (lsdin) en BD.
+     * Les écritures et les rectifications d'agrégats sont déportées hors du
+     * thread JavaFX pour ne pas figer l'interface.
      */
     @FXML
     public void saveAllDestockers(ActionEvent event) {
@@ -887,36 +853,68 @@ public class DestockController implements Initializable {
             return;
         }
 
-        int count = 0;
-        java.util.Map<String, Destocker> distinctLots = new java.util.LinkedHashMap<>();
-        for (Destocker s : lsdin) {
-            Destocker saved = DestockerDelegate.saveDestocker(s);
-            if (saved != null) {
-                saveDestockerWithRetry(saved);
-                Util.sync(saved, Constants.ACTION_CREATE, Tables.DESTOCKER);
-                lisdestocker.add(0, saved);
-                count++;
+        List<Destocker> toSave = new ArrayList<>(lsdin);
+        btn_add_destock.setDisable(true);
 
-                String pId = saved.getProductId() != null ? saved.getProductId().getUid() : "";
-                String lot = saved.getNumlot() != null ? saved.getNumlot() : "";
-                String reg = saved.getRegion() != null ? saved.getRegion() : "";
-                String key = pId + "#" + lot + "#" + reg;
-                distinctLots.putIfAbsent(key, saved);
+        MemoryGuard.newSingleThreadExecutor("kazisafe-destock-save").submit(() -> {
+            int count = 0;
+            List<Destocker> savedList = new ArrayList<>();
+            java.util.Map<String, Destocker> distinctLots = new java.util.LinkedHashMap<>();
+             String locref=ref;
+            try {
+                for (Destocker s : toSave) {
+                    s.setReference(locref);
+                    Destocker saved = DestockerDelegate.saveDestocker(s);
+                    if (saved != null) {
+                        saveDestockerWithRetry(saved);
+                        savedList.add(saved);
+                        count++;
+
+                        String pId = saved.getProductId() != null ? saved.getProductId().getUid() : "";
+                        String lot = saved.getNumlot() != null ? saved.getNumlot() : "";
+                        String reg = saved.getRegion() != null ? saved.getRegion() : "";
+                        // Create a lightweight snapshot to preserve the original coutAchat
+                        Destocker snapshot = new Destocker(saved.getUid());
+                        snapshot.setProductId(saved.getProductId());
+                        snapshot.setNumlot(saved.getNumlot());
+                        snapshot.setRegion(saved.getRegion());
+                        snapshot.setCoutAchat(saved.getCoutAchat());
+                        distinctLots.putIfAbsent(pId + "#" + lot + "#" + reg, snapshot);
+                    }
+                }
+
+                // Rectification optimisée : un seul recalcul par lot distinct
+                for (Destocker target : distinctLots.values()) {
+                    StockerDelegate.rectifyStockDepotByLot(target.getProductId(), target.getNumlot(), target.getRegion(), target.getCoutAchat(), null);
+                }
+               
+            } catch (Exception ex) {
+                Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE,
+                        "Échec de l'enregistrement des destockages", ex);
+                final int failedAfter = savedList.size();
+                Platform.runLater(() -> {
+                    btn_add_destock.setDisable(false);
+                    MainUI.notify(null, "Erreur",
+                            "Échec de l'enregistrement après " + failedAfter + " destockage(s) : " + ex.getMessage(),
+                            5, "error");
+                });
+                return;
             }
-        }
 
-        // Rectification optimisée : un seul recalcul par lot distinct pour le lot d'articles enregistrés
-        for (Destocker target : distinctLots.values()) {
-            StockerDelegate.rectifyStockDepotByLot(target.getProductId(), target.getNumlot(), target.getRegion(), target.getCoutAchat(), null);
-        }
-
-        MainUI.notify(null, "Succès", count + " destockage(s) enregistré(s) avec succès.", 3, "info");
-        lsdin.clear();
-        cglobal = 0;
-        txt_somme_global_dstk.setText("Total : 0.00");
-        txt_count_dstk.setText("0 article(s)");
-        txt_reference_dstk.setText("DST" + ((int) (Math.random() * 100000)) + "K");
-        updateGlobalStockDisplay();
+            final int finalCount = count;
+            final List<Destocker> finalAdded = savedList;
+            Platform.runLater(() -> {
+                lisdestocker.addAll(0, finalAdded);
+                MainUI.notify(null, "Succès", finalCount + " destockage(s) enregistré(s) avec succès.", 3, "info");
+                lsdin.clear();
+                cglobal = 0;
+                txt_somme_global_dstk.setText("Total : 0.00");
+                txt_count_dstk.setText("0 article(s)");
+                txt_reference_dstk.setText("DST" + ((int) (Math.random() * 100000)) + "K");
+                btn_add_destock.setDisable(false);
+                updateGlobalStockDisplay();
+            });
+        });
     }
 
     private void resetFields() {
@@ -1003,6 +1001,7 @@ public class DestockController implements Initializable {
             if (choosenProduct == null) {
                 return;
             }
+            tf_quantite_dstk.clear();
             lismesure.setAll(MesureDelegate.findMesureByProduit(choosenProduct.getUid()));
             lisstocker.clear();
             List<Stocker> lsks = meth.equals("ppps") ? StockerDelegate.toFefoOrdering(choosenProduct.getUid()) : (meth.equals("fifo") ? StockerDelegate.toFifoOrdering(choosenProduct.getUid()) : StockerDelegate.toLifoOrdering(choosenProduct.getUid()));
@@ -1013,12 +1012,22 @@ public class DestockController implements Initializable {
                 lisstocker.add(lsk);
             }
             cbx_choose_mesure_dstk.getSelectionModel().selectFirst();
-            cbx_stock_lots.getSelectionModel().selectFirst();
             if (lisstocker.isEmpty()) {
+                choosenStockLot = null;
+                cbx_stock_lots.getSelectionModel().clearSelection();
+                setLabel(lbl_cout_achat, "0.0 USD");
+                setLabel(lbl_prix_vente, "0.0 USD");
+                tf_cout_unitr_cump_dstk.clear();
+                txt_stk_alerte.setText("Alert: 0");
                 MainUI.notify(null, bundle.getString("error"), bundle.getString("nostockmsg"), 4, "error");
+                updateGlobalStockDisplay();
                 return;
             }
             choosenStockLot = lisstocker.get(0);
+            cbx_stock_lots.getSelectionModel().selectFirst();
+            setLabel(lbl_cout_achat, String.format(java.util.Locale.US, "%.2f USD", choosenStockLot.getCoutAchat()));
+            setLabel(lbl_prix_vente, String.format(java.util.Locale.US, "%.2f USD", choosenStockLot.getPrixVenteEstime()));
+            tf_cout_unitr_cump_dstk.setText(String.format(java.util.Locale.US, "%.2f", choosenStockLot.getCoutAchat()));
             updateGlobalStockDisplay();
         });
         cbx_stock_lots.setConverter(new StringConverter<Stocker>() {
@@ -1067,7 +1076,7 @@ public class DestockController implements Initializable {
         this.choosenDestocker = dx;
         choosenProduct = dx.getProductId();
         cbx_choose_product_dstk.setValue(choosenProduct);
-        tf_cout_unitr_cump_dstk.setText(String.valueOf(dx.getCoutAchat()));
+        tf_cout_unitr_cump_dstk.setText(String.format(java.util.Locale.US, "%.2f", dx.getCoutAchat()));
         txt_reference_dstk.setText(dx.getReference());
         lismesure.setAll(MesureDelegate.findMesureByProduit(choosenProduct.getUid()));
     }

@@ -16,6 +16,7 @@ public interface GratienAgent {
             {{entreprise}}
                   
             Quand une demande correspond a un outil disponible, appelle l'outil au lieu de repondre seulement en texte.
+            Pour une tache complexe necessitant plusieurs etapes ou combinant stock entrepot, destockage, analyse business ou ajustement d'inventaire, appelle d'abord l'outil `planExecution`, presente le plan a l'utilisateur, puis attends sa confirmation avant d'executer le premier outil.
             Pour creer un ou plusieurs produits hors facture, utilise `createProductsAndAskMeasures`.
             Quand l'utilisateur donne ensuite les mesures des produits, utilise `createProductMeasures`.
             Apres l'execution d'un outil, ne te presente jamais et ne liste jamais tes capacites.

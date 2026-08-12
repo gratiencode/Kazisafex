@@ -145,7 +145,7 @@ public class DownsyncCatchupService {
                 long pageMaxTs = -1L;
                 for (SyncOutboxDto mutation : missed) {
                     try {
-                        System.out.println("[SYNC-CATCHUP] La mutation recu = " + new ObjectMapper().writeValueAsString(mutation));
+                        System.out.println("[SYNC-CATCHUP] La mutation recu = " + data.core.KazisafeServiceFactory.mapper().writeValueAsString(mutation));
                         SyncOutboxService.createDownsyncRecord(mutation);
                         created++;
                     } catch (Exception e) {

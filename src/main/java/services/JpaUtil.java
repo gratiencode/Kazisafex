@@ -127,7 +127,13 @@ public class JpaUtil {
         if (fromEnv != null) {
             return fromEnv;
         }
-        return pref.get("default_mysql_password", "Admin*21");
+        String prefVal = pref.get("default_mysql_password", null);
+        if (prefVal != null && !prefVal.isBlank()) {
+            return prefVal;
+        }
+        throw new IllegalStateException(
+            "Database password not configured. Set KAZISAFE_DB_PASSWORD or preference 'default_mysql_password'."
+        );
     }
 
 }

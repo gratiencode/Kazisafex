@@ -86,9 +86,12 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.media.AudioClip;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
+import javafx.stage.Popup;
+import javafx.stage.PopupWindow;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.stage.Window;
 import javafx.util.StringConverter;
 import javafx.animation.FadeTransition;
 import javafx.animation.PauseTransition;
@@ -111,7 +114,7 @@ public class MainUI {
     private static double xOffset = 0;
     private static double yOffset = 0;
     private static final int TOLERANCE_THRESHOLD = 0xFF;
-    private static final java.util.List<Stage> activeToasts =
+    private static final java.util.List<PopupWindow> activeToasts =
         new java.util.concurrent.CopyOnWriteArrayList<>();
     private static final int MAX_VISIBLE_TOASTS = 5;
     public static Stage mainStage;
@@ -858,14 +861,17 @@ public class MainUI {
         // Toast 100% JavaFX : l'ancien composant Swing (raven.toast) cree des
         // fenetres AWT dans le processus JavaFX/GTK et provoquait des crash
         // natifs (SIGSEGV, sortie 139) sous X11 apres le login.
+        // Les toasts ne doivent jamais gêner l'usage de l'UI : ils sont affichés
+        // en bas à droite (hors de la zone de travail) et la fenêtre ne capte
+        // ni le focus clavier ni les clics (voir showToast).
         if (tp.equalsIgnoreCase("warning")) {
-            showToast("warning", message, duration, Pos.CENTER);
+            showToast("warning", message, duration, Pos.BOTTOM_RIGHT);
         } else if (tp.equalsIgnoreCase("error")) {
-            showToast("error", message, duration, Pos.CENTER);
+            showToast("error", message, duration, Pos.BOTTOM_RIGHT);
         } else if (tp.equalsIgnoreCase("success")) {
-            showToast("success", message, duration, Pos.CENTER);
+            showToast("success", message, duration, Pos.BOTTOM_RIGHT);
         } else {
-            showToast("info", message, duration, Pos.CENTER);
+            showToast("info", message, duration, Pos.BOTTOM_RIGHT);
         }
     }
 
@@ -875,7 +881,7 @@ public class MainUI {
         String message,
         double duration
     ) {
-        showToast("info", message, 4, Pos.CENTER);
+        showToast("info", message, 4, Pos.BOTTOM_RIGHT);
     }
 
     private static void showToast(
@@ -900,6 +906,10 @@ public class MainUI {
             label.setFont(new Font("System", 13));
             label.setPadding(new Insets(12, 18, 12, 18));
             label.setMaxWidth(380);
+            // Le toast est purement informatif : il ne doit ni capter le focus,
+            // ni intercepter les clics de souris au-dessus de l'application.
+            label.setMouseTransparent(true);
+            label.setFocusTraversable(false);
             String bg;
             if ("error".equalsIgnoreCase(type)) {
                 bg = "#e74c3c";
@@ -915,38 +925,44 @@ public class MainUI {
                 bg +
                 ";-fx-background-radius: 10;" +
                 "-fx-font-size: 13px;" +
+                "-fx-text-fill: white;" +
                 "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 20, 0.2, 0, 6);"
             );
             StackPane root = new StackPane(label);
+            root.setMouseTransparent(true);
             Scene scene = new Scene(root);
             scene.setFill(Color.TRANSPARENT);
-            Stage stage = new Stage();
             // Garde-fou anti-explosion : au plus MAX_VISIBLE_TOASTS toasts à
             // l'écran. En cas de rafale (ex. burst SSE/WebSocket), on ferme les
             // plus anciens pour ne jamais inonder l'écran.
             int visible = 0;
-            for (Stage s : activeToasts) {
+            for (PopupWindow s : activeToasts) {
                 if (s.isShowing()) {
                     visible++;
                 }
             }
             while (visible >= MAX_VISIBLE_TOASTS && !activeToasts.isEmpty()) {
-                Stage oldest = activeToasts.remove(0);
+                PopupWindow oldest = activeToasts.remove(0);
                 if (oldest.isShowing()) {
-                    oldest.close();
+                    oldest.hide();
                 }
                 visible--;
             }
-            stage.initStyle(StageStyle.TRANSPARENT);
-            stage.setScene(scene);
-            stage.setAlwaysOnTop(true);
+            // Le toast est un Popup (et non une Stage) : une fenêtre Popup ne
+            // vole jamais le focus clavier, ce qui laisse la saisie (POS,
+            // recherche...) pleinement opérationnelle pendant l'affichage.
+            Popup popup = new Popup();
+            popup.setAutoHide(false);
+            popup.setHideOnEscape(false);
+            popup.setConsumeAutoHidingEvents(false);
+            popup.getContent().add(root);
             root.applyCss();
             root.autosize();
             double w = Math.max(root.getWidth(), 1);
             double h = Math.max(root.getHeight(), 1);
             Rectangle2D sb = Screen.getPrimary().getVisualBounds();
             double offset = 0;
-            for (Stage s : activeToasts) {
+            for (PopupWindow s : activeToasts) {
                 if (s.isShowing()) {
                     offset += h + 10;
                 }
@@ -959,12 +975,25 @@ public class MainUI {
                 x = sb.getMinX() + (sb.getWidth() - w) / 2.0;
                 y = sb.getMinY() + (sb.getHeight() - h) / 2.0 - offset;
             }
-            stage.setX(x);
-            stage.setY(y);
-            activeToasts.add(stage);
-            stage.show();
-            stage.setX(x);
-            stage.setY(y);
+            activeToasts.add(popup);
+            // Owner = fenêtre principale : le toast reste au-dessus d'elle mais
+            // sans jamais la bloquer. Si la fenêtre principale n'existe pas encore
+            // (ex. clôture pendant l'init de l'UI), on retombe sur la première
+            // fenêtre visible (écran de connexion) ; sinon on ignore le toast.
+            Window owner = mainStage;
+            if (owner == null) {
+                for (Window win : Window.getWindows()) {
+                    if (win.isShowing()) {
+                        owner = win;
+                        break;
+                    }
+                }
+            }
+            if (owner == null) {
+                activeToasts.remove(popup);
+                return;
+            }
+            popup.show(owner, x, y);
             PauseTransition wait = new PauseTransition(
                 Duration.seconds(Math.max(1, durationSeconds))
             );
@@ -976,8 +1005,8 @@ public class MainUI {
                 fade.setFromValue(1.0);
                 fade.setToValue(0.0);
                 fade.setOnFinished(f -> {
-                    activeToasts.remove(stage);
-                    stage.close();
+                    activeToasts.remove(popup);
+                    popup.hide();
                 });
                 fade.play();
             });

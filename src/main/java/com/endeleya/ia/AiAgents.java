@@ -13,7 +13,6 @@ import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
-import dev.langchain4j.service.tool.ToolErrorContext;
 import dev.langchain4j.service.tool.ToolErrorHandlerResult;
 import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import java.io.File;
@@ -59,32 +58,56 @@ public final class AiAgents {
      */
     private static final ToolArgumentsErrorHandler NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER =
             (error, context) -> ToolErrorHandlerResult.text(
-                    safeErrorMessage(error, "Arguments invalides fournis a l'outil: "
-                            + toolName(context)));
+                    safeErrorMessage(error, "Réflexion en cours..."));
     private static final ToolExecutionErrorHandler NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER =
             (error, context) -> ToolErrorHandlerResult.text(
-                    safeErrorMessage(error, "Echec de l'execution de l'outil: "
-                            + toolName(context)));
-
-    private static String toolName(ToolErrorContext context) {
-        if (context == null || context.toolExecutionRequest() == null
-                || context.toolExecutionRequest().name() == null) {
-            return "outil";
-        }
-        return context.toolExecutionRequest().name();
-    }
+                    safeErrorMessage(error, "Réflexion en cours..."));
 
     private static String safeErrorMessage(Throwable error, String fallback) {
         if (error == null) {
             return fallback;
         }
+        // Les erreurs de chargement de classe (dépendance absente du classpath)
+        // ont un message utile : on l'explicite en français pour l'IA.
+        if (error instanceof NoClassDefFoundError || error instanceof ClassNotFoundException) {
+            String missing = error.getMessage();
+            if (missing == null || missing.isBlank()) {
+                missing = error.getClass().getSimpleName();
+            }
+            String detail = "Classe manquante à l'exécution: " + missing
+                    + " (dépendance absente du classpath). ";
+            SyncLogger.getInstance().log(error, "Classe manquante : " + missing);
+            return detail;
+        }
         String message = error.getMessage();
         if (message == null || message.isBlank()) {
-            SyncLogger.getInstance().log(error, "Echec de l'outil avec message vide : " + fallback);
-            return fallback;
+            // Message vide : on remonte la chaîne des causes pour trouver la vraie
+            // raison. Si aucune n'existe, on renvoie le message fixe et lisible
+            // (jamais de texte technique ni le nom de l'outil).
+            message = firstNonBlankCause(error);
+            if (message == null || message.isBlank()) {
+                SyncLogger.getInstance().log(error, "Echec de l'outil sans detail exploitable : " + fallback);
+                return fallback;
+            }
+            SyncLogger.getInstance().log(error, "Echec de l'outil (message vide, cause utilisee) : " + fallback);
+            return message;
         }
         SyncLogger.getInstance().log(error, "Echec de l'outil (cause complete) : " + fallback);
         return message;
+    }
+
+    private static String firstNonBlankCause(Throwable error) {
+        Throwable current = error;
+        int depth = 0;
+        while (current != null && depth < 10) {
+            String message = current.getMessage();
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+            current = current.getCause();
+            depth++;
+        }
+        return null;
     }
 
     public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
@@ -645,9 +668,9 @@ public final class AiAgents {
         String date=LocalDateTime.now().toString();
         TokenStream stream = assistant.chat(sessionId,date,entreprise == null ? "" : entreprise, safe(question, ""));
         Set<String> toolsStarted = ConcurrentHashMap.newKeySet();
-        Set<String> toolsFinished = ConcurrentHashMap.newKeySet();
         AtomicBoolean toolWasStarted = new AtomicBoolean(false);
         AtomicBoolean toolWasExecuted = new AtomicBoolean(false);
+        AtomicBoolean reflectionShown = new AtomicBoolean(false);
         AtomicReference<String> lastToolName = new AtomicReference<>("");
         AtomicReference<String> lastToolResult = new AtomicReference<>("");
         StringBuilder bufferedToolResponse = new StringBuilder();
@@ -660,13 +683,15 @@ public final class AiAgents {
                 appendMemory("tool-start-duplicate", toolLabel(toolName, true));
                 return;
             }
-            String message = toolLabel(toolName, true);
-            appendMemory("tool-start", message);
-            onProcess.accept(sanitizeToolNamesForDisplay(message));
+            appendMemory("tool-start", toolLabel(toolName, true));
+            // Le chat n'affiche qu'une seule ligne pendant le traitement, sans deverser
+            // le raisonnement ni les statuts verbeux de chaque outil.
+            if (reflectionShown.compareAndSet(false, true)) {
+                onProcess.accept("*Réflexion en cours...*");
+            }
         }).onPartialThinking(thinking -> {
-            String text = thinking == null ? "" : thinking.text();
-            if (text != null && !text.isBlank()) {
-                onProcess.accept(sanitizeToolNamesForDisplay("*Raisonnement en cours...*\n\n" + text));
+            if (reflectionShown.compareAndSet(false, true)) {
+                onProcess.accept("*Réflexion en cours...*");
             }
         }).onPartialResponse(token -> {
             if (toolWasStarted.get()) {
@@ -682,9 +707,6 @@ public final class AiAgents {
             String result = tool.result() == null ? "" : tool.result();
             lastToolResult.set(result);
             appendMemory("tool-result", toolName + " => " + result);
-            if (toolsFinished.add(toolKey)) {
-                onProcess.accept(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
-            }
         }).onCompleteResponse(response -> {
                     if (toolWasExecuted.get()) {
                         String finalAnswer = toolFinalAnswer(lastToolName.get(), lastToolResult.get());
@@ -1013,9 +1035,8 @@ public final class AiAgents {
                     .onPartialThinking(thinking -> {
                         if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
                             appendMemory(agentName + "-thinking", thinking.text());
-                            emitProgress(sanitizeToolNamesForDisplay(
-                                    "*Raisonnement du sous-agent " + friendlyAgentName(agentName) + ":*\n\n"
-                                            + thinking.text()));
+                            // Le chat n'affiche qu'une seule ligne pendant le raisonnement du sous-agent.
+                            emitProgress("*Réflexion en cours...*");
                         }
                     })
                     .onPartialResponse(answer::append)
@@ -1075,9 +1096,8 @@ public final class AiAgents {
     }
 
     private String toolFinalAnswer(String toolName, String result) {
-        String label = toolLabel(toolName, false);
         String cleanResult = result == null ? "" : result.trim();
-        return cleanResult.isBlank() ? label : label + "\n\n" + cleanResult;
+        return cleanResult.isBlank() ? toolLabel(toolName, false) : cleanResult;
     }
 
     private String sanitizeToolNamesForDisplay(String text) {

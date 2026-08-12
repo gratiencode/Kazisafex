@@ -1,9 +1,11 @@
 package data;
 
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreRemove;
 import jakarta.persistence.PreUpdate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import services.ManagedSessionFactory;
 import tools.MemoryGuard;
@@ -161,29 +163,42 @@ public class SyncOutboxListener {
         String finalPayload,
         Object entity
     ) throws Exception {
+        // La région et l'entreprise sont lues sur le MÊME nœud de préférences que
+        // le backfill et la synchronisation (tools.SyncEngine) : l'ancienne lecture
+        // sur le nœud data.SyncOutboxListener ne contenait jamais la région écrite
+        // par l'UI et retombait sur "Unknown", rendant les enregistrements de
+        // l'outbox invisibles au backfill (filtre région "Goma") → doublons.
         String eUid = java.util.prefs.Preferences.userNodeForPackage(
-            SyncOutboxListener.class
+            tools.SyncEngine.class
         ).get("eUid", null);
         String region = java.util.prefs.Preferences.userNodeForPackage(
-            SyncOutboxListener.class
-        ).get("region", "Unknown");
+            tools.SyncEngine.class
+        ).get("region", "Goma");
 
         LocalDateTime updatedAt = getUpdatedAt(entity);
 
+        // Upsert : on réutilise le dernier enregistrement PENDING/UNSYNCED/FAILED
+        // de la même entité au lieu d'en insérer un nouveau à chaque mutation.
+        // Sans cela, chaque modification créait un doublon (PERSIST + UPDATE +
+        // UPDATE...) jamais consolidé par le backfill.
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
-                SyncOutbox outbox = new SyncOutbox();
-                outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
-                outbox.setTableName(finalType);
-                outbox.setEntityId(finalEntityId);
+                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                if (outbox == null) {
+                    outbox = new SyncOutbox();
+                    outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
+                    outbox.setTableName(finalType);
+                    outbox.setEntityId(finalEntityId);
+                    outbox.setCreatedAt(LocalDateTime.now());
+                    outbox.setEntrepriseId(eUid);
+                    outbox.setStatus("PENDING");
+                    outbox.setRetryCount(0);
+                    em.persist(outbox);
+                }
                 outbox.setAction(action);
                 outbox.setPayload(finalPayload);
-                outbox.setCreatedAt(LocalDateTime.now());
                 outbox.setUpdatedAt(updatedAt);
-                outbox.setEntrepriseId(eUid);
                 outbox.setRegion(region);
-                outbox.setStatus("PENDING");
-                em.persist(outbox);
                 return null;
             }).get(); // Block the outbox executor thread to preserve sequence
             return;
@@ -196,18 +211,22 @@ public class SyncOutboxListener {
                 tx.begin();
             }
             try {
-                SyncOutbox outbox = new SyncOutbox();
-                outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
-                outbox.setTableName(finalType);
-                outbox.setEntityId(finalEntityId);
+                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                if (outbox == null) {
+                    outbox = new SyncOutbox();
+                    outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
+                    outbox.setTableName(finalType);
+                    outbox.setEntityId(finalEntityId);
+                    outbox.setCreatedAt(LocalDateTime.now());
+                    outbox.setEntrepriseId(eUid);
+                    outbox.setStatus("PENDING");
+                    outbox.setRetryCount(0);
+                    em.persist(outbox);
+                }
                 outbox.setAction(action);
                 outbox.setPayload(finalPayload);
-                outbox.setCreatedAt(LocalDateTime.now());
                 outbox.setUpdatedAt(updatedAt);
-                outbox.setEntrepriseId(eUid);
                 outbox.setRegion(region);
-                outbox.setStatus("PENDING");
-                em.persist(outbox);
                 if (!activeTx) {
                     tx.commit();
                 }
@@ -218,6 +237,35 @@ public class SyncOutboxListener {
                 throw e;
             }
         });
+    }
+
+    private SyncOutbox findPendingOutbox(
+        EntityManager em,
+        String tableName,
+        String entityId
+    ) {
+        try {
+            List<SyncOutbox> results = em
+                .createQuery(
+                    "SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.entityId = :entityId AND s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt DESC",
+                    SyncOutbox.class
+                )
+                .setParameter("tableName", tableName)
+                .setParameter("entityId", entityId)
+                .setMaxResults(1)
+                .getResultList();
+            return results.isEmpty() ? null : results.get(0);
+        } catch (Exception e) {
+            SyncLogger
+                .getInstance()
+                .log(
+                    e,
+                    "SyncOutboxListener: failed to find pending outbox record",
+                    tableName,
+                    entityId
+                );
+            return null;
+        }
     }
 
     private LocalDateTime getUpdatedAt(Object entity) {

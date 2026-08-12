@@ -483,6 +483,7 @@ public class MainuiController implements Initializable {
         localPath = MainUI.cPath("/Media/Update");
         MainUI.cPath(File.separator + "datastore");
         MainUI.cPath("/Media/ia/gratien");
+        tools.KazisafeGuide.ensureGuides();
         MainUI.cPath("/Media/proc/logs");
         pref.put("ksf_version", tools.Constants.APP_VERSION);
         taux = CurrencyConverter.activeRate();
@@ -2359,16 +2360,13 @@ public class MainuiController implements Initializable {
                 @Override
                 public void run() {
                     try {
-                        Desktop.getDesktop().open(
-                            new File("./Kazisafe guide d'utilisation.pdf")
-                        );
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } catch (java.lang.IllegalArgumentException ex) {
+                        tools.KazisafeGuide.openGuidePdf();
+                    } catch (IOException | RuntimeException ex) {
+                        ex.printStackTrace();
                         MainUI.notify(
                             null,
                             "Erreur",
-                            "Le fichier d'aide n'existe plus ou son nom \"Kazisafe guide d'utilisation.pdf\" d'origine a été modifié",
+                            "Impossible d'ouvrir le guide d'utilisation: " + ex.getMessage(),
                             4,
                             "error"
                         );
@@ -2412,7 +2410,7 @@ public class MainuiController implements Initializable {
             }
 
             if (PlatformUtil.isWindows()) {
-                Runtime.getRuntime().exec(downloaded.getAbsolutePath());
+                new ProcessBuilder(downloaded.getAbsolutePath()).start();
                 if (newModule != null && newModule.getVersion() != null) {
                     pref.put("ksf_version", newModule.getVersion());
                 }

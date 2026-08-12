@@ -11,9 +11,24 @@
         <maven.compiler.release>25</maven.compiler.release>
         <javafx.version>22.0.2</javafx.version>
         <hikaricp.version>5.1.0</hikaricp.version>
+        <jackson.version>2.18.2</jackson.version>
         <!-- Tests exécutés uniquement à la demande : -Dtests.skip=false -->
         <tests.skip>true</tests.skip>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <!-- Épingle byte-buddy à 1.17.8 (compatible Java 25) sans changer le
+            scope runtime transitif déclaré par Hibernate 6.6 : sinon la résolution
+            "nearest-wins" avec un scope test retire byte-buddy du classpath
+            d'exécution et Hibernate échoue en NoClassDefFoundError
+            (net.bytebuddy.description.type.TypeDefinition). -->
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>1.17.8</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -104,19 +119,19 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.19.0</version>
+            <version>${jackson.version}</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.19.0</version>
+            <version>${jackson.version}</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
-            <version>2.19.0</version>
+            <version>${jackson.version}</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -249,7 +264,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>2.19.0</version>
+            <version>${jackson.version}</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -400,12 +415,9 @@
             <version>5.20.0</version>
             <scope>test</scope>
         </dependency>
-        <!-- Byte Buddy (Mockito) : on force la version compatible Java 25, sinon
-        la 1.15.11 transitée par Hibernate (runtime) gagne la résolution et
-        Mockito ne peut pas créer ses mocks sur JDK 25+. -->
         <dependency>
             <groupId>net.bytebuddy</groupId>
-            <artifactId>byte-buddy</artifactId>
+            <artifactId>byte-buddy-agent</artifactId>
             <version>1.17.8</version>
             <scope>test</scope>
         </dependency>

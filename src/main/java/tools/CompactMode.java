@@ -594,7 +594,7 @@ public class CompactMode {
     private Response<Vente> saveVenteByHttp(Vente vente, Client client, CompteTresor tresor, String transaction,
             List<LigneVente> venteItems) throws IOException {
         try {
-            ObjectMapper obm = new ObjectMapper();
+            ObjectMapper obm = data.core.KazisafeServiceFactory.mapper();
             String ligneventes = obm.writeValueAsString(toSaleItemHelper(venteItems));
             System.out.println("Sale Item Helper " + ligneventes);
             VenteHelper hlp = new VenteHelper();

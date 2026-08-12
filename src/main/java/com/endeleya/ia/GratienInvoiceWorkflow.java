@@ -32,7 +32,7 @@ public class GratienInvoiceWorkflow {
 
     private final OllamaModelFallback model = new OllamaModelFallback(0.0, Duration.ofMinutes(5),
             VISION_MODEL_NAME, TEXT_MODEL_NAME);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = data.core.KazisafeServiceFactory.mapper();
     private final GratienTools tools;
 
     {

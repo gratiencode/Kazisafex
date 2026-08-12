@@ -209,11 +209,8 @@ public final class RedisBootstrap {
 
     private static boolean commandExists(String name) {
         try {
-            Process process = new ProcessBuilder("bash", "-c", "command -v " + name)
-                    .redirectErrorStream(true)
-                    .start();
-            return process.waitFor(10, TimeUnit.SECONDS) && process.exitValue() == 0;
-        } catch (IOException | InterruptedException ex) {
+            return which(name) != null;
+        } catch (Exception ex) {
             return false;
         }
     }
@@ -237,19 +234,32 @@ public final class RedisBootstrap {
                 return path;
             }
         }
-        try {
-            Process process = new ProcessBuilder("bash", "-c", "command -v " + name)
-                    .redirectErrorStream(true)
-                    .start();
-            if (process.waitFor(10, TimeUnit.SECONDS) && process.exitValue() == 0) {
-                String path = new String(process.getInputStream().readAllBytes(),
-                        StandardCharsets.UTF_8).trim();
-                if (!path.isEmpty()) {
-                    return path;
+        // Fallback: search PATH entries for an executable with this name.
+        String fromPath = which(name);
+        if (fromPath != null) {
+            return fromPath;
+        }
+        return null;
+    }
+
+    private static String which(String name) {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isEmpty()) {
+            return null;
+        }
+        for (String dir : pathEnv.split(File.pathSeparator)) {
+            try {
+                File candidate = new File(dir, name);
+                if (candidate.canExecute()) {
+                    return candidate.getAbsolutePath();
                 }
+                // On Unix, allow common extensions/variants
+                File candidateSh = new File(dir, name + ".sh");
+                if (candidateSh.canExecute()) {
+                    return candidateSh.getAbsolutePath();
+                }
+            } catch (Exception ignored) {
             }
-        } catch (IOException | InterruptedException ex) {
-            // ignore, binary introuvable
         }
         return null;
     }

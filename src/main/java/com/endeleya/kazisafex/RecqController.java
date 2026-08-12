@@ -299,11 +299,14 @@ public class RecqController implements Initializable {
     private ObservableList<Destocker> filter(List<Destocker> lds, List<Produit> produit, String region) {
         ObservableList<Destocker> fxl = FXCollections.observableArrayList();
         for (Destocker d : lds) {
-            if (d.getObservation().equalsIgnoreCase("Déclassement de stock")) {
+            if (d == null || d.getProductId() == null) {
+                continue;
+            }
+            if (d.getObservation() != null && d.getObservation().equalsIgnoreCase("Déclassement de stock")) {
                 continue;
             }
             if (!PermissionRegistry.hasGlobalAccess()) {
-                if (d.getDestination().equals(region)) {
+                if (d.getDestination() != null && d.getDestination().equals(region)) {
                     Produit p = Util.findProduit(produit, d.getProductId().getUid());
                     d.setProductId(p);
                     fxl.add(d);
@@ -476,12 +479,32 @@ public class RecqController implements Initializable {
                 List<Mesure> lms = MesureDelegate.findMesureByProduit(choosenPro.getUid());
                 cbx_mesure_req.setItems(FXCollections.observableArrayList(lms));
                 cbx_choose_mesure_vente.setItems(FXCollections.observableArrayList(lms));
+                cbx_mesure_req.getSelectionModel().selectFirst();
+                cbx_choose_mesure_vente.getSelectionModel().selectFirst();
                 tf_quant_req.setText(String.valueOf(destocker.getQuantite()));
                 if (tf_numlot_req != null) {
                     tf_numlot_req.setText(destocker.getNumlot());
                 }
                 if (tf_cout_achat_req != null) {
                     tf_cout_achat_req.setText(String.valueOf(destocker.getCoutAchat()));
+                }
+                if (tf_obs_req != null) {
+                    tf_obs_req.setText(destocker.getObservation() == null ? "" : destocker.getObservation());
+                }
+                if (destocker.getDateDestockage() != null) {
+                    dpk_date_req.setValue(destocker.getDateDestockage().toLocalDate());
+                }
+                if (!dpk_date_expiry_req.isDisabled() && destocker.getNumlot() != null) {
+                    List<Stocker> stks = StockerDelegate.findStockerByProduitLot(choosenPro.getUid(), destocker.getNumlot());
+                    if (stks != null && !stks.isEmpty() && stks.get(0) != null) {
+                        Stocker st = stks.get(0);
+                        if (st.getStockAlerte() > 0) {
+                            tf_alerte_req.setText(String.valueOf(st.getStockAlerte()));
+                        }
+                        if (st.getDateExpir() != null) {
+                            dpk_date_expiry_req.setValue(st.getDateExpir());
+                        }
+                    }
                 }
 
             }

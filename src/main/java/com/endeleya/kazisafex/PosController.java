@@ -4580,6 +4580,10 @@ public class PosController implements Initializable {
         if ("Achat".equals(prov)) {
             // on affiche le dialogue de DELIVERY_DLG
             MainUI.floatDialog(tools.Constants.DELIVERY_DLG, 600, 468, null, kazisafe, entreprise, null, Constants.POS);
+        } else if ("Entrepot".equals(prov)) {
+            // on affiche directement le RECQ_DLG pour l'approvisionnement depuis l'entrepot
+            MainUI.floatDialog(tools.Constants.RECQ_DLG, 716, 746, null, kazisafe,
+                    new Object[] { tools.Constants.ACTION_CREATE, null, entreprise, prov, null });
         } else {
             // on affiche le RECQ_DLG
             addRequestItem(event);

@@ -51,6 +51,7 @@ public class Destocker extends BaseModel implements Serializable {
     private LocalDateTime dateDestockage;
     private String reference;
     private String destination;
+    @Column(name = "coutAchat")
     private double coutAchat;
     private double quantite;
     private String libelle;

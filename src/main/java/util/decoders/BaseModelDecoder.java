@@ -461,8 +461,8 @@ public class BaseModelDecoder implements Decoder.Text<BaseModel> {
                     return bill;
                 case BULKMODEL:
                     String datax = String.valueOf(vmap.get("object"));
-                     ObjectMapper obm = new ObjectMapper();
-            
+                    ObjectMapper obm = data.core.KazisafeServiceFactory.mapper();
+
                 try {
                     List<Object> objes = obm.readValue(datax, List.class);
                     BulkModel bm = new BulkModel();

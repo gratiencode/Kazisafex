@@ -63,7 +63,7 @@ public class ListEncoder implements Encoder.Text<List<Object>> {
     @Override
     public String encode(List<Object> objects) throws EncodeException {
         try {
-            ObjectMapper obm = new ObjectMapper();
+            ObjectMapper obm = data.core.KazisafeServiceFactory.mapper();
 //            obm.setSerializationInclusion();
             StringBuilder sb=new StringBuilder();
             Object objt = objects.get(0);

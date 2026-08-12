@@ -163,7 +163,7 @@ public class UpdateManager {
                 command = new String[]{"/bin/bash", scriptPath};
             }
 
-            Runtime.getRuntime().exec(command);
+            new ProcessBuilder(command).inheritIO().start();
             prefs.put(PREF_VERSION, "");
 
         } catch (Exception e) {
