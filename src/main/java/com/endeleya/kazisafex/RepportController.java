@@ -1141,7 +1141,7 @@ public class RepportController implements Initializable {
             return;
         }
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
 
     }
 

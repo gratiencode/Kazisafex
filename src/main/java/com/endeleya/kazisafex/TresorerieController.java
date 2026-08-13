@@ -766,9 +766,9 @@ public class TresorerieController implements Initializable {
         txt_reference_trans.setText("Reference: " + math);
         txt_reference_dep.setText("Reference: " + math);
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_region);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_compte);
-        RegionRegistry.selectSavedRegion(pref, cbx_rgion_deps);
+        RegionRegistry.bindSavedRegion(pref, cbx_region, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_compte, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_rgion_deps, regions);
         if (cbx_region_compte.getValue() == null && !cbx_region_compte.getItems().isEmpty()) {
             cbx_region_compte.getSelectionModel().selectFirst();
         }

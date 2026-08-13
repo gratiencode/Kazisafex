@@ -66,7 +66,9 @@ public abstract class FinancialStatementAgregate implements Serializable {
         if (uid == null) {
             uid = UUID.randomUUID().toString().toLowerCase().replace("-", "");
         }
-        updatedAt = LocalDateTime.now();
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
     }
 
     public String getUid() {

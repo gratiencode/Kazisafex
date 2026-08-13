@@ -34,27 +34,27 @@ import tools.Tables;
 @Table(name = "vente")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Vente.findSet", query = "SELECT DISTINCT  v FROM Vente v ORDER BY v.dateVente DESC "),
-    @NamedQuery(name = "Vente.findAll", query = "SELECT DISTINCT  v FROM Vente v WHERE v.observation != :draft ORDER BY v.dateVente DESC "),
-    @NamedQuery(name = "Vente.findByUid", query = "SELECT DISTINCT  v FROM Vente v WHERE v.uid = :uid"),
-    @NamedQuery(name = "Vente.findByReference", query = "SELECT DISTINCT  v FROM Vente v WHERE v.reference = :reference"),
-    @NamedQuery(name = "Vente.findByRegion", query = "SELECT DISTINCT  v FROM Vente v WHERE v.region = :region"),
-    @NamedQuery(name = "Vente.findByDateVente", query = "SELECT DISTINCT  v FROM Vente v WHERE v.dateVente = :dateVente"),
-    @NamedQuery(name = "Vente.findByDateVenteInterval", query = "SELECT DISTINCT  v FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Vente.findBySumUSD", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Vente.findBySumCDF", query = "SELECT DISTINCT  SUM(v.montantCdf) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Vente.findBySumDebt", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Vente.findByMontantUsd", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantUsd = :montantUsd"),
-    @NamedQuery(name = "Vente.findByMontantCdf", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantCdf = :montantCdf"),
-    @NamedQuery(name = "Vente.findBySumUSDRegioError writing JSON-B serialized object.n", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
-    @NamedQuery(name = "Vente.findBySumCDFRegion", query = "SELECT DISTINCT  SUM(v.montantCdf) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
-    @NamedQuery(name = "Vente.findBySumDebtRegion", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
-    @NamedQuery(name = "Vente.findByEcheance", query = "SELECT DISTINCT  v FROM Vente v WHERE v.echeance = :echeance"),
-    @NamedQuery(name = "Vente.findByPayment", query = "SELECT DISTINCT  v FROM Vente v WHERE v.payment = :payment"),
-    @NamedQuery(name = "Vente.findByLatitude", query = "SELECT DISTINCT  v FROM Vente v WHERE v.latitude = :latitude"),
-    @NamedQuery(name = "Vente.findByLongitude", query = "SELECT DISTINCT  v FROM Vente v WHERE v.longitude = :longitude"),
-    @NamedQuery(name = "Vente.findByMontantDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantDette = :montantDette"),
-    @NamedQuery(name = "Vente.findByDeviseDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.deviseDette = :deviseDette")})
+        @NamedQuery(name = "Vente.findSet", query = "SELECT DISTINCT  v FROM Vente v ORDER BY v.dateVente DESC "),
+        @NamedQuery(name = "Vente.findAll", query = "SELECT DISTINCT  v FROM Vente v WHERE v.observation != :draft ORDER BY v.dateVente DESC "),
+        @NamedQuery(name = "Vente.findByUid", query = "SELECT DISTINCT  v FROM Vente v WHERE v.uid = :uid"),
+        @NamedQuery(name = "Vente.findByReference", query = "SELECT DISTINCT  v FROM Vente v WHERE v.reference = :reference"),
+        @NamedQuery(name = "Vente.findByRegion", query = "SELECT DISTINCT  v FROM Vente v WHERE v.region = :region"),
+        @NamedQuery(name = "Vente.findByDateVente", query = "SELECT DISTINCT  v FROM Vente v WHERE v.dateVente = :dateVente"),
+        @NamedQuery(name = "Vente.findByDateVenteInterval", query = "SELECT DISTINCT  v FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Vente.findBySumUSD", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Vente.findBySumCDF", query = "SELECT DISTINCT  SUM(v.montantCdf) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Vente.findBySumDebt", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Vente.findByMontantUsd", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantUsd = :montantUsd"),
+        @NamedQuery(name = "Vente.findByMontantCdf", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantCdf = :montantCdf"),
+        @NamedQuery(name = "Vente.findBySumUSDRegioError writing JSON-B serialized object.n", query = "SELECT DISTINCT  SUM(v.montantUsd) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
+        @NamedQuery(name = "Vente.findBySumCDFRegion", query = "SELECT DISTINCT  SUM(v.montantCdf) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
+        @NamedQuery(name = "Vente.findBySumDebtRegion", query = "SELECT DISTINCT  SUM(v.montantDette) FROM Vente v WHERE v.dateVente BETWEEN :date1 AND :date2 AND v.region = :region"),
+        @NamedQuery(name = "Vente.findByEcheance", query = "SELECT DISTINCT  v FROM Vente v WHERE v.echeance = :echeance"),
+        @NamedQuery(name = "Vente.findByPayment", query = "SELECT DISTINCT  v FROM Vente v WHERE v.payment = :payment"),
+        @NamedQuery(name = "Vente.findByLatitude", query = "SELECT DISTINCT  v FROM Vente v WHERE v.latitude = :latitude"),
+        @NamedQuery(name = "Vente.findByLongitude", query = "SELECT DISTINCT  v FROM Vente v WHERE v.longitude = :longitude"),
+        @NamedQuery(name = "Vente.findByMontantDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.montantDette = :montantDette"),
+        @NamedQuery(name = "Vente.findByDeviseDette", query = "SELECT DISTINCT  v FROM Vente v WHERE v.deviseDette = :deviseDette") })
 
 public class Vente extends BaseModel implements Serializable {
 
@@ -96,7 +96,9 @@ public class Vente extends BaseModel implements Serializable {
     @PrePersist
     @PreUpdate
     protected void doBeforeUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Vente() {
@@ -108,7 +110,8 @@ public class Vente extends BaseModel implements Serializable {
         this.type = Tables.VENTE.name();
     }
 
-    public Vente(Integer uid, String reference, LocalDateTime dateVente, double montantUsd, double montantCdf, String payment, String libelle, String observation) {
+    public Vente(Integer uid, String reference, LocalDateTime dateVente, double montantUsd, double montantCdf,
+            String payment, String libelle, String observation) {
         this.uid = uid;
         this.reference = reference;
         this.dateVente = dateVente;

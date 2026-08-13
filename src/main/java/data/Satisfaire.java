@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.Basic;
@@ -30,12 +31,12 @@ import java.util.UUID;
 @Entity
 @Table(name = "satisfaire")
 @NamedQueries({
-    @NamedQuery(name = "Satisfaire.findAll", query = "SELECT s FROM Satisfaire s"),
-    @NamedQuery(name = "Satisfaire.findByUid", query = "SELECT s FROM Satisfaire s WHERE s.uid = :uid"),
-    @NamedQuery(name = "Satisfaire.findByDate", query = "SELECT s FROM Satisfaire s WHERE s.date = :date"),
-    @NamedQuery(name = "Satisfaire.findByEtatCommande", query = "SELECT s FROM Satisfaire s WHERE s.etatCommande = :etatCommande"),
-    @NamedQuery(name = "Satisfaire.findByComment", query = "SELECT s FROM Satisfaire s WHERE s.comment = :comment"),
-    @NamedQuery(name = "Satisfaire.findByRegion", query = "SELECT s FROM Satisfaire s WHERE s.region = :region")})
+        @NamedQuery(name = "Satisfaire.findAll", query = "SELECT s FROM Satisfaire s"),
+        @NamedQuery(name = "Satisfaire.findByUid", query = "SELECT s FROM Satisfaire s WHERE s.uid = :uid"),
+        @NamedQuery(name = "Satisfaire.findByDate", query = "SELECT s FROM Satisfaire s WHERE s.date = :date"),
+        @NamedQuery(name = "Satisfaire.findByEtatCommande", query = "SELECT s FROM Satisfaire s WHERE s.etatCommande = :etatCommande"),
+        @NamedQuery(name = "Satisfaire.findByComment", query = "SELECT s FROM Satisfaire s WHERE s.comment = :comment"),
+        @NamedQuery(name = "Satisfaire.findByRegion", query = "SELECT s FROM Satisfaire s WHERE s.region = :region") })
 
 public class Satisfaire implements Serializable {
 
@@ -77,7 +78,9 @@ public class Satisfaire implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public LocalDateTime getDeletedAt() {

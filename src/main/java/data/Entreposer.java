@@ -33,18 +33,18 @@ import java.util.UUID;
 @Entity
 @Table(name = "entreposer")
 @NamedQueries({
-    @NamedQuery(name = "Entreposer.findAll", query = "SELECT e FROM Entreposer e"),
-    @NamedQuery(name = "Entreposer.findByUid", query = "SELECT e FROM Entreposer e WHERE e.uid = :uid"),
-    @NamedQuery(name = "Entreposer.findByDate", query = "SELECT e FROM Entreposer e WHERE e.date = :date"),
-    @NamedQuery(name = "Entreposer.findByExpiryDate", query = "SELECT e FROM Entreposer e WHERE e.expiryDate = :expiryDate"),
-    @NamedQuery(name = "Entreposer.findByNumlot", query = "SELECT e FROM Entreposer e WHERE e.numlot = :numlot"),
-    @NamedQuery(name = "Entreposer.findByQuantite", query = "SELECT e FROM Entreposer e WHERE e.quantite = :quantite"),
-    @NamedQuery(name = "Entreposer.findByComment", query = "SELECT e FROM Entreposer e WHERE e.comment = :comment"),
-    @NamedQuery(name = "Entreposer.findByRegion", query = "SELECT e FROM Entreposer e WHERE e.region = :region"),
-    @NamedQuery(name = "Entreposer.findByQualite", query = "SELECT e FROM Entreposer e WHERE e.qualite = :qualite"),
-    @NamedQuery(name = "Entreposer.findByCout", query = "SELECT e FROM Entreposer e WHERE e.cout = :cout"),
-    @NamedQuery(name = "Entreposer.findByDevise", query = "SELECT e FROM Entreposer e WHERE e.devise = :devise"),
-    @NamedQuery(name = "Entreposer.findByNiveauFabrication", query = "SELECT e FROM Entreposer e WHERE e.niveauFabrication = :niveauFabrication")})
+        @NamedQuery(name = "Entreposer.findAll", query = "SELECT e FROM Entreposer e"),
+        @NamedQuery(name = "Entreposer.findByUid", query = "SELECT e FROM Entreposer e WHERE e.uid = :uid"),
+        @NamedQuery(name = "Entreposer.findByDate", query = "SELECT e FROM Entreposer e WHERE e.date = :date"),
+        @NamedQuery(name = "Entreposer.findByExpiryDate", query = "SELECT e FROM Entreposer e WHERE e.expiryDate = :expiryDate"),
+        @NamedQuery(name = "Entreposer.findByNumlot", query = "SELECT e FROM Entreposer e WHERE e.numlot = :numlot"),
+        @NamedQuery(name = "Entreposer.findByQuantite", query = "SELECT e FROM Entreposer e WHERE e.quantite = :quantite"),
+        @NamedQuery(name = "Entreposer.findByComment", query = "SELECT e FROM Entreposer e WHERE e.comment = :comment"),
+        @NamedQuery(name = "Entreposer.findByRegion", query = "SELECT e FROM Entreposer e WHERE e.region = :region"),
+        @NamedQuery(name = "Entreposer.findByQualite", query = "SELECT e FROM Entreposer e WHERE e.qualite = :qualite"),
+        @NamedQuery(name = "Entreposer.findByCout", query = "SELECT e FROM Entreposer e WHERE e.cout = :cout"),
+        @NamedQuery(name = "Entreposer.findByDevise", query = "SELECT e FROM Entreposer e WHERE e.devise = :devise"),
+        @NamedQuery(name = "Entreposer.findByNiveauFabrication", query = "SELECT e FROM Entreposer e WHERE e.niveauFabrication = :niveauFabrication") })
 
 public class Entreposer extends BaseModel implements Serializable {
 
@@ -114,14 +114,16 @@ public class Entreposer extends BaseModel implements Serializable {
 
     public Entreposer() {
     }
-    
+
     @PrePersist
     @PreUpdate
-    public void presave(){
-        if(this.uid==null){
-            this.uid=UUID.randomUUID().toString().replace("-","").toLowerCase();
+    public void presave() {
+        if (this.uid == null) {
+            this.uid = UUID.randomUUID().toString().replace("-", "").toLowerCase();
         }
-        this.updatedAt=LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Entreposer(String uid) {

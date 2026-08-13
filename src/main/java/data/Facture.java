@@ -36,15 +36,15 @@ import tools.Tables;
 
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Facture.findAll", query = "SELECT DISTINCT  f FROM Facture f"),
-    @NamedQuery(name = "Facture.findByUid", query = "SELECT DISTINCT  f FROM Facture f WHERE f.uid = :uid"),
-    @NamedQuery(name = "Facture.findByNumero", query = "SELECT DISTINCT  f FROM Facture f WHERE f.numero = :numero"),
-    @NamedQuery(name = "Facture.findByStartDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.startDate = :startDate"),
-    @NamedQuery(name = "Facture.findByEndDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.endDate = :endDate"),
-    @NamedQuery(name = "Facture.findByStatus", query = "SELECT DISTINCT  f FROM Facture f WHERE f.status = :status"),
-    @NamedQuery(name = "Facture.findByTotalamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.totalamount = :totalamount"),
-    @NamedQuery(name = "Facture.findByPayedamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.payedamount = :payedamount"),
-    @NamedQuery(name = "Facture.findByRegion", query = "SELECT DISTINCT  f FROM Facture f WHERE f.region = :region")})
+        @NamedQuery(name = "Facture.findAll", query = "SELECT DISTINCT  f FROM Facture f"),
+        @NamedQuery(name = "Facture.findByUid", query = "SELECT DISTINCT  f FROM Facture f WHERE f.uid = :uid"),
+        @NamedQuery(name = "Facture.findByNumero", query = "SELECT DISTINCT  f FROM Facture f WHERE f.numero = :numero"),
+        @NamedQuery(name = "Facture.findByStartDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.startDate = :startDate"),
+        @NamedQuery(name = "Facture.findByEndDate", query = "SELECT DISTINCT  f FROM Facture f WHERE f.endDate = :endDate"),
+        @NamedQuery(name = "Facture.findByStatus", query = "SELECT DISTINCT  f FROM Facture f WHERE f.status = :status"),
+        @NamedQuery(name = "Facture.findByTotalamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.totalamount = :totalamount"),
+        @NamedQuery(name = "Facture.findByPayedamount", query = "SELECT DISTINCT  f FROM Facture f WHERE f.payedamount = :payedamount"),
+        @NamedQuery(name = "Facture.findByRegion", query = "SELECT DISTINCT  f FROM Facture f WHERE f.region = :region") })
 
 public class Facture extends BaseModel implements Serializable {
 
@@ -56,21 +56,16 @@ public class Facture extends BaseModel implements Serializable {
     private String uid;
     @Column(name = "numero")
     private String numero;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd"
-    )
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     @Column(name = "start_date", columnDefinition = "DATE")
     private LocalDate startDate;
-    @JsonFormat(
-            shape = JsonFormat.Shape.STRING,
-            pattern = "yyyy-MM-dd"
-    )
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     @Column(name = "end_date", columnDefinition = "DATE")
     private LocalDate endDate;
     @Column(name = "status")
     private String status;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "totalamount")
     private Double totalamount;
     @Column(name = "payedamount")
@@ -92,7 +87,9 @@ public class Facture extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Facture() {

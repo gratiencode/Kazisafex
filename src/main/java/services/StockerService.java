@@ -861,21 +861,18 @@ public class StockerService implements StockerStorage {
         if (region == null) return;
         List<data.Produit> produits = delegates.ProduitDelegate.findProduits();
         for (data.Produit p : produits) {
-            // Rectify the empty lot for each product to ensure we have at least one record if stock exists
-            rectifyStockDepotByLot(p, "", region, 0, null);
-            
-            // Also find all distinct lots and rectify them
+            // Only create aggregates for products that actually have stocker rows:
+            // a product without stock must not generate an empty-lot zero aggregate.
             List<Stocker> stockers = findStockerByProduit(p.getUid(), region);
-            if (stockers != null) {
-                java.util.Set<String> lots = new java.util.HashSet<>();
-                for (Stocker s : stockers) {
-                    if (s.getNumlot() != null && !s.getNumlot().isBlank()) {
-                        lots.add(s.getNumlot());
-                    }
-                }
-                for (String lot : lots) {
-                    rectifyStockDepotByLot(p, lot, region, 0, null);
-                }
+            if (stockers == null || stockers.isEmpty()) {
+                continue;
+            }
+            java.util.Set<String> lots = new java.util.HashSet<>();
+            for (Stocker s : stockers) {
+                lots.add(s.getNumlot() == null ? "" : s.getNumlot());
+            }
+            for (String lot : lots) {
+                rectifyStockDepotByLot(p, lot, region, 0, null);
             }
         }
     }

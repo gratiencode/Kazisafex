@@ -3,7 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data; import com.fasterxml.jackson.annotation.JsonFormat;
+package data;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -41,15 +43,15 @@ import tools.Tables;
 @Table(name = "livraison")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Livraison.findAll", query = "SELECT DISTINCT  l FROM Livraison l ORDER BY l.dateLivr DESC"),
-    @NamedQuery(name = "Livraison.findByUid", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.uid = :uid"),
-    @NamedQuery(name = "Livraison.findByDateLivr", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.dateLivr = :dateLivr"),
-    @NamedQuery(name = "Livraison.findByReference", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.reference = :reference")})
+        @NamedQuery(name = "Livraison.findAll", query = "SELECT DISTINCT  l FROM Livraison l ORDER BY l.dateLivr DESC"),
+        @NamedQuery(name = "Livraison.findByUid", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.uid = :uid"),
+        @NamedQuery(name = "Livraison.findByDateLivr", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.dateLivr = :dateLivr"),
+        @NamedQuery(name = "Livraison.findByReference", query = "SELECT DISTINCT  l FROM Livraison l WHERE l.reference = :reference") })
 
 public class Livraison extends BaseModel implements Serializable {
 
     private String numPiece;
-    @JsonFormat(shape=JsonFormat.Shape.STRING, pattern="yyyy-MM-dd")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate dateLivr;
     private String reference;
     private String libelle;
@@ -69,16 +71,16 @@ public class Livraison extends BaseModel implements Serializable {
     @Id
     private String uid;
     @OneToMany(mappedBy = "livraisId")
-     @JsonBackReference(value = "liv-stk")
+    @JsonBackReference(value = "liv-stk")
     private List<Stocker> stockerList;
-     @JsonBackReference(value = "liv-entrpoz")
+    @JsonBackReference(value = "liv-entrpoz")
     @OneToMany(mappedBy = "livraisonId")
     private List<Entreposer> entreposerList;
-     @JsonBackReference(value = "liv-satisf")
+    @JsonBackReference(value = "liv-satisf")
     @OneToMany(mappedBy = "livraisonId")
     private List<Satisfaire> satisfaireList;
     @ManyToOne(optional = false)
-    
+
     private Fournisseur fournId;
 
     @PrePersist
@@ -87,7 +89,9 @@ public class Livraison extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Livraison() {
@@ -130,7 +134,6 @@ public class Livraison extends BaseModel implements Serializable {
         this.dateLivr = dateLivr;
     }
 
-    
     public List<Stocker> getStockerList() {
         return stockerList;
     }
@@ -244,7 +247,6 @@ public class Livraison extends BaseModel implements Serializable {
         this.observation = observation;
     }
 
-    
     public List<Entreposer> getEntreposerList() {
         return entreposerList;
     }

@@ -41,10 +41,10 @@ import java.util.UUID;
 @Table(name = "periode")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Periode.findAll", query = "SELECT DISTINCT  c FROM Periode c ORDER BY c.dateFin DESC"),
-    @NamedQuery(name = "Periode.findByUid", query = "SELECT DISTINCT  c FROM Periode c WHERE c.uid = :uid"),
-    @NamedQuery(name = "Periode.findByComment", query = "SELECT DISTINCT  c FROM Periode c WHERE c.comment = :comment"),
-    @NamedQuery(name = "Periode.findByMouvement", query = "SELECT DISTINCT  c FROM Periode c WHERE c.mouvement = :mouvement")})
+        @NamedQuery(name = "Periode.findAll", query = "SELECT DISTINCT  c FROM Periode c ORDER BY c.dateFin DESC"),
+        @NamedQuery(name = "Periode.findByUid", query = "SELECT DISTINCT  c FROM Periode c WHERE c.uid = :uid"),
+        @NamedQuery(name = "Periode.findByComment", query = "SELECT DISTINCT  c FROM Periode c WHERE c.comment = :comment"),
+        @NamedQuery(name = "Periode.findByMouvement", query = "SELECT DISTINCT  c FROM Periode c WHERE c.mouvement = :mouvement") })
 
 public class Periode extends BaseModel implements Serializable {
 
@@ -60,7 +60,7 @@ public class Periode extends BaseModel implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd")
     @Column(name = "date_fin")
     private LocalDate dateFin;
-    
+
     @Column(name = "now")
     private LocalDateTime now;
     @Column(name = "comment")
@@ -101,7 +101,9 @@ public class Periode extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public String getUid() {
@@ -224,7 +226,9 @@ public class Periode extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "Periode{" + "productId=" + productId + ", dateDebut=" + dateDebut + ", dateFin=" + dateFin + ", comment=" + comment + ", mouvement=" + mouvement + ", stockInitial=" + stockInitial + ", stockFinal=" + stockFinal + ", ecart=" + ecart + ", mesureId=" + mesureId + '}';
+        return "Periode{" + "productId=" + productId + ", dateDebut=" + dateDebut + ", dateFin=" + dateFin
+                + ", comment=" + comment + ", mouvement=" + mouvement + ", stockInitial=" + stockInitial
+                + ", stockFinal=" + stockFinal + ", ecart=" + ecart + ", mesureId=" + mesureId + '}';
     }
 
     public LocalDateTime getNow() {

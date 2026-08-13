@@ -3,7 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data; import com.fasterxml.jackson.annotation.JsonFormat;
+package data;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -13,7 +15,8 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;  import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.NamedQueries;
@@ -23,11 +26,11 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.util.UUID;
- import org.hibernate.annotations.UuidGenerator; import jakarta.xml.bind.annotation.XmlRootElement;
+import org.hibernate.annotations.UuidGenerator;
+import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 import java.time.LocalDateTime;
 import tools.Tables;
-
 
 /**
  *
@@ -35,20 +38,20 @@ import tools.Tables;
  */
 @Entity
 @Table(name = "client_organisation")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "ClientOrganisation.findAll", query = "SELECT DISTINCT  c FROM ClientOrganisation c")
-    , @NamedQuery(name = "ClientOrganisation.findByUid", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.uid = :uid")
-    , @NamedQuery(name = "ClientOrganisation.findByRegion", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.region = :region")
-    , @NamedQuery(name = "ClientOrganisation.findByNomOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.nomOrganisation LIKE :nomOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByAdresse", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.adresse = :adresse")
-    , @NamedQuery(name = "ClientOrganisation.findByDomaineOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.domaineOrganisation = :domaineOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByPhoneOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.phoneOrganisation = :phoneOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByWebsiteOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.websiteOrganisation = :websiteOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByEmailOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.emailOrganisation = :emailOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByRccmOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.rccmOrganisation = :rccmOrganisation")
-    , @NamedQuery(name = "ClientOrganisation.findByBoitePostalOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.boitePostalOrganisation = :boitePostalOrganisation")})
+        @NamedQuery(name = "ClientOrganisation.findAll", query = "SELECT DISTINCT  c FROM ClientOrganisation c"),
+        @NamedQuery(name = "ClientOrganisation.findByUid", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.uid = :uid"),
+        @NamedQuery(name = "ClientOrganisation.findByRegion", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.region = :region"),
+        @NamedQuery(name = "ClientOrganisation.findByNomOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.nomOrganisation LIKE :nomOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByAdresse", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.adresse = :adresse"),
+        @NamedQuery(name = "ClientOrganisation.findByDomaineOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.domaineOrganisation = :domaineOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByPhoneOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.phoneOrganisation = :phoneOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByWebsiteOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.websiteOrganisation = :websiteOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByEmailOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.emailOrganisation = :emailOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByRccmOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.rccmOrganisation = :rccmOrganisation"),
+        @NamedQuery(name = "ClientOrganisation.findByBoitePostalOrganisation", query = "SELECT DISTINCT  c FROM ClientOrganisation c WHERE c.boitePostalOrganisation = :boitePostalOrganisation") })
 
 public class ClientOrganisation extends BaseModel implements Serializable {
 
@@ -56,7 +59,7 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-  
+
     private String uid;
     @Column(name = "region")
     private String region;
@@ -76,18 +79,19 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     private String rccmOrganisation;
     @Column(name = "boite_postal_organisation")
     private String boitePostalOrganisation;
-    
+
     @OneToMany(mappedBy = "clientOrganisationId")
     private List<ClientAppartenir> clientAppartenirList;
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
-     private LocalDateTime deletedAt;
+    private LocalDateTime deletedAt;
     @Column(name = "updated_at", columnDefinition = "DATETIME")
     private LocalDateTime updatedAt;
 
     public LocalDateTime getDeletedAt() {
         return deletedAt;
     }
- public void setDeletedAt(LocalDateTime deletedAt) {
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
     }
 
@@ -95,24 +99,20 @@ public class ClientOrganisation extends BaseModel implements Serializable {
         return updatedAt;
     }
 
-
-   public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
 
-    
-
-    
     @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
+    protected void onDataOperation() {
+        if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-         this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
-
-   
 
     public ClientOrganisation() {
         this.type = Tables.CLIENTORGANISATION.name();
@@ -120,11 +120,9 @@ public class ClientOrganisation extends BaseModel implements Serializable {
 
     public ClientOrganisation(String uid) {
         this.uid = uid;
-         this.type = Tables.CLIENTORGANISATION.name();
+        this.type = Tables.CLIENTORGANISATION.name();
     }
 
-    
-    
     public String getUid() {
         return uid;
     }
@@ -205,20 +203,13 @@ public class ClientOrganisation extends BaseModel implements Serializable {
         this.boitePostalOrganisation = boitePostalOrganisation;
     }
 
-   
-     
-     public List<ClientAppartenir> getClientAppartenirList() {
+    public List<ClientAppartenir> getClientAppartenirList() {
         return clientAppartenirList;
     }
 
     public void setClientAppartenirList(List<ClientAppartenir> clientAppartenirList) {
         this.clientAppartenirList = clientAppartenirList;
     }
-
-   
-       
-
-
 
     @Override
     public int hashCode() {
@@ -244,5 +235,5 @@ public class ClientOrganisation extends BaseModel implements Serializable {
     public String toString() {
         return "entities.ClientOrganisation[ uid=" + uid + " ]";
     }
-    
+
 }

@@ -309,7 +309,7 @@ public class ClotureController implements Initializable {
             }
         });
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_region);
+        RegionRegistry.bindSavedRegion(pref, cbx_region, regions);
         initTable();
         olc.setAll(PeriodeDelegate.findPeriodes());
         tf_cloture_recherche.textProperty().addListener(new ChangeListener<String>() {

@@ -305,7 +305,7 @@ public class StoreformController implements Initializable {
         String maindev = CurrencyConverter.mainCurrency();
 //         cbx_devise_price.getSelectionModel().select(maindev);
         RegionRegistry.loadAndSync(pref, ksf, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
 
         ComboBoxAutoCompletion<Produit> comx = new ComboBoxAutoCompletion<>(cbx_choose_produit_stk);
 
@@ -804,7 +804,7 @@ public class StoreformController implements Initializable {
             return;
         }
         LocalDate d=stocker.getDateExpir();
-        ksf.syncStockage(stocker.getUid(),(stocker.getDateStocker() == null ? "" : stocker.getDateStocker().toString()), 
+        ksf.syncStockage(stocker.getUid(), Constants.Datetime.utcString(stocker.getDateStocker()), 
                 Double.toString(stocker.getCoutAchat()),(d == null ? "" : d.toString()), 
                 Double.toString(stocker.getStockAlerte()),Double.toString(stocker.getQuantite()), stocker.getLibelle(), 
                 stocker.getLocalisation(), stocker.getRegion(), Double.toString(stocker.getPrixAchatTotal()),
@@ -840,7 +840,7 @@ public class StoreformController implements Initializable {
             @Field("productId") String productId,
             @Field("numlot") String numlot
          */
-        ksf.syncDestocker(ds.getUid(), Constants.DATE_HEURE_FORMATTER.format(ds.getDateDestockage()),ds.getReference(),
+        ksf.syncDestocker(ds.getUid(), Constants.Datetime.utcString(ds.getDateDestockage()),ds.getReference(),
                 ds.getDestination(), ds.getRegion(), Double.toString(ds.getCoutAchat()), Double.toString(ds.getQuantite()),
                 ds.getLibelle(), ds.getObservation(), ds.getMesureId().getUid(), ds.getProductId().getUid(), ds.getNumlot())
                 .enqueue(new Callback<Destocker>() {
@@ -875,7 +875,7 @@ public class StoreformController implements Initializable {
             @Field("numlot") String numlot
          */
         String dateReq = req.getDate() != null
-                ? Constants.DATE_HEURE_FORMATTER.format(req.getDate())
+                ? Constants.Datetime.utcString(req.getDate())
                 : "";
         String dateExp = req.getDateExpiry() != null
                 ? Constants.DATE_ONLY_FORMATTER.format(req.getDateExpiry())

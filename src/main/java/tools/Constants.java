@@ -233,6 +233,20 @@ public class Constants {
 
     public static class Datetime {
 
+        public static LocalDateTime toUtc(LocalDateTime local) {
+            if (local == null) {
+                return null;
+            }
+            return local.atZone(ZoneId.systemDefault()).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        }
+
+        public static String utcString(LocalDateTime local) {
+            if (local == null) {
+                return "";
+            }
+            return DATE_HEURE_FORMATTER.format(toUtc(local));
+        }
+
         public static String format(Date d) {
             SimpleDateFormat dateF = new SimpleDateFormat(
                 "yyyy-MM-dd HH:mm:ss"

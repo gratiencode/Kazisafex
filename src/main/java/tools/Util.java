@@ -4000,8 +4000,8 @@ public class Util {
                     refRow.createCell(1).setCellValue(
                             ref.getDateDestockage() == null ? "" : ref.getDateDestockage().toLocalDate().toString());
                     refRow.createCell(2).setCellValue("SOUS-TOTAUX : " + ref.getLignes() + " ligne(s)");
-                    refRow.createCell(3).setCellValue(ref.getQuantite());
-                    refRow.createCell(4).setCellValue(ref.getCoutAchat());
+                    refRow.createCell(3).setCellValue("-");
+                    refRow.createCell(4).setCellValue("-");
                     refRow.createCell(5).setCellValue(ref.getCoutTotal());
                     refRow.createCell(6).setCellValue(ref.getDestination() == null ? "" : ref.getDestination());
                     refRow.createCell(7).setCellValue(ref.getRegion() == null ? "" : ref.getRegion());

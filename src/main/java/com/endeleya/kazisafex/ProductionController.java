@@ -689,12 +689,12 @@ public class ProductionController implements Initializable {
                     }
                 });
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_depot);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_intrant);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_intraposage);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_prod);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_deprod);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_dest_deprod);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_depot, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_intrant, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_intraposage, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_prod, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_deprod, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_dest_deprod, regions);
         cbx_produits_prod.getSelectionModel().selectFirst();
         cbx_produits_prod.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Produit> observable, Produit oldValue, Produit newValue) -> {
             Produit pr = newValue;

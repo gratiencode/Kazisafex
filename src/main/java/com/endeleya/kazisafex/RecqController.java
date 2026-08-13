@@ -850,7 +850,7 @@ public class RecqController implements Initializable {
 
     private boolean trySaveRecquis(Recquisition req) throws IOException {
         String dateReq = req.getDate() != null
-                ? Constants.DATE_HEURE_FORMATTER.format(req.getDate())
+                ? Constants.Datetime.utcString(req.getDate())
                 : "";
         String dateExp = req.getDateExpiry() != null
                 ? Constants.DATE_ONLY_FORMATTER.format(req.getDateExpiry())

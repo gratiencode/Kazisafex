@@ -73,7 +73,6 @@ public class StockDepotAgregate extends BaseModel implements Serializable {
     @ManyToOne
     private Mesure mesureId;
 
-
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
     private LocalDateTime deletedAt;
 
@@ -95,7 +94,9 @@ public class StockDepotAgregate extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
         // Calculate stock value
         this.valeurStock = this.quantite * this.coutAchat;
     }

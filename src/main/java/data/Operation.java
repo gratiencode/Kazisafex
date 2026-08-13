@@ -37,19 +37,19 @@ import tools.Tables;
 @Table(name = "operation")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Operation.findAll", query = "SELECT DISTINCT  o FROM Operation o ORDER BY o.date DESC"),
-    @NamedQuery(name = "Operation.findByUid", query = "SELECT DISTINCT  o FROM Operation o WHERE o.uid = :uid"),
-    @NamedQuery(name = "Operation.findByReferenceOp", query = "SELECT DISTINCT  o FROM Operation o WHERE o.referenceOp = :referenceOp"),
-    @NamedQuery(name = "Operation.findByRegion", query = "SELECT DISTINCT  o FROM Operation o WHERE o.region = :region"),
-    @NamedQuery(name = "Operation.findByMontantUsd", query = "SELECT DISTINCT  o FROM Operation o WHERE o.montantUsd = :montantUsd"),
-    @NamedQuery(name = "Operation.findByMontantCdf", query = "SELECT DISTINCT  o FROM Operation o WHERE o.montantCdf = :montantCdf"),
-    @NamedQuery(name = "Operation.findByDate", query = "SELECT DISTINCT  o FROM Operation o WHERE o.date = :date"),
-    @NamedQuery(name = "Operation.findSumUSDByDateIntervalRegion", query = "SELECT DISTINCT  SUM(o.montantUsd) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2 AND o.region = :region"),
-    @NamedQuery(name = "Operation.findSumCDFByDateIntervalRegion", query = "SELECT DISTINCT  SUM(o.montantCdf) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2 AND o.region = :region"),
-    @NamedQuery(name = "Operation.findSumUSDByDateInterval", query = "SELECT DISTINCT  SUM(o.montantUsd) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Operation.findSumCDFByDateInterval", query = "SELECT DISTINCT  SUM(o.montantCdf) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2"),
-    @NamedQuery(name = "Operation.findByMouvement", query = "SELECT DISTINCT  o FROM Operation o WHERE o.mouvement = :mouvement"),
-    @NamedQuery(name = "Operation.findByImputation", query = "SELECT DISTINCT  o FROM Operation o WHERE o.imputation = :imputation")})
+        @NamedQuery(name = "Operation.findAll", query = "SELECT DISTINCT  o FROM Operation o ORDER BY o.date DESC"),
+        @NamedQuery(name = "Operation.findByUid", query = "SELECT DISTINCT  o FROM Operation o WHERE o.uid = :uid"),
+        @NamedQuery(name = "Operation.findByReferenceOp", query = "SELECT DISTINCT  o FROM Operation o WHERE o.referenceOp = :referenceOp"),
+        @NamedQuery(name = "Operation.findByRegion", query = "SELECT DISTINCT  o FROM Operation o WHERE o.region = :region"),
+        @NamedQuery(name = "Operation.findByMontantUsd", query = "SELECT DISTINCT  o FROM Operation o WHERE o.montantUsd = :montantUsd"),
+        @NamedQuery(name = "Operation.findByMontantCdf", query = "SELECT DISTINCT  o FROM Operation o WHERE o.montantCdf = :montantCdf"),
+        @NamedQuery(name = "Operation.findByDate", query = "SELECT DISTINCT  o FROM Operation o WHERE o.date = :date"),
+        @NamedQuery(name = "Operation.findSumUSDByDateIntervalRegion", query = "SELECT DISTINCT  SUM(o.montantUsd) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2 AND o.region = :region"),
+        @NamedQuery(name = "Operation.findSumCDFByDateIntervalRegion", query = "SELECT DISTINCT  SUM(o.montantCdf) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2 AND o.region = :region"),
+        @NamedQuery(name = "Operation.findSumUSDByDateInterval", query = "SELECT DISTINCT  SUM(o.montantUsd) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Operation.findSumCDFByDateInterval", query = "SELECT DISTINCT  SUM(o.montantCdf) FROM Operation o WHERE o.date BETWEEN :date1 AND :date2"),
+        @NamedQuery(name = "Operation.findByMouvement", query = "SELECT DISTINCT  o FROM Operation o WHERE o.mouvement = :mouvement"),
+        @NamedQuery(name = "Operation.findByImputation", query = "SELECT DISTINCT  o FROM Operation o WHERE o.imputation = :imputation") })
 
 public class Operation extends BaseModel implements Serializable {
 
@@ -105,7 +105,9 @@ public class Operation extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Operation() {
@@ -252,7 +254,7 @@ public class Operation extends BaseModel implements Serializable {
     public String toString() {
         return "entities.Operation[ uid=" + uid + " ]";
     }
-    
+
     public List<Imputer> getImputerList() {
         return imputerList;
     }

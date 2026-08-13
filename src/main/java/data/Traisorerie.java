@@ -33,14 +33,14 @@ import tools.Tables;
 @Entity
 @Table(name = "traisorerie")
 @NamedQueries({
-    @NamedQuery(name = "Traisorerie.findAll", query = "SELECT DISTINCT  t FROM Traisorerie t ORDER BY t.date DESC"),
-    @NamedQuery(name = "Traisorerie.findByUid", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.uid = :uid"),
-    @NamedQuery(name = "Traisorerie.findByReference", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.reference = :reference"),
-    @NamedQuery(name = "Traisorerie.findByRegion", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.region = :region ORDER BY t.date DESC"),
-    @NamedQuery(name = "Traisorerie.findByDate", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.date = :date"),
-    @NamedQuery(name = "Traisorerie.findByMontantUsd", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantUsd = :montantUsd"),
-    @NamedQuery(name = "Traisorerie.findByMontantCdf", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantCdf = :montantCdf"),
-    @NamedQuery(name = "Traisorerie.findByTypeTresorerie", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.typeTresorerie = :typeTresorerie")})
+        @NamedQuery(name = "Traisorerie.findAll", query = "SELECT DISTINCT  t FROM Traisorerie t ORDER BY t.date DESC"),
+        @NamedQuery(name = "Traisorerie.findByUid", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.uid = :uid"),
+        @NamedQuery(name = "Traisorerie.findByReference", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.reference = :reference"),
+        @NamedQuery(name = "Traisorerie.findByRegion", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.region = :region ORDER BY t.date DESC"),
+        @NamedQuery(name = "Traisorerie.findByDate", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.date = :date"),
+        @NamedQuery(name = "Traisorerie.findByMontantUsd", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantUsd = :montantUsd"),
+        @NamedQuery(name = "Traisorerie.findByMontantCdf", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.montantCdf = :montantCdf"),
+        @NamedQuery(name = "Traisorerie.findByTypeTresorerie", query = "SELECT DISTINCT  t FROM Traisorerie t WHERE t.typeTresorerie = :typeTresorerie") })
 
 public class Traisorerie extends BaseModel implements Serializable {
 
@@ -55,10 +55,10 @@ public class Traisorerie extends BaseModel implements Serializable {
     private String libelle;
     private double montantUsd;
     private double montantCdf;
-    @Column(name = "soldeCdf",columnDefinition = "DOUBLE")
-    private Double soldeCdf=0d;
-    @Column(name = "soldeUsd",columnDefinition = "DOUBLE")
-    private Double soldeUsd=0d;
+    @Column(name = "soldeCdf", columnDefinition = "DOUBLE")
+    private Double soldeCdf = 0d;
+    @Column(name = "soldeUsd", columnDefinition = "DOUBLE")
+    private Double soldeUsd = 0d;
     private String mouvement;
     private String typeTresorerie;
     @JoinColumn(name = "tresor_id", referencedColumnName = "uid")
@@ -78,7 +78,9 @@ public class Traisorerie extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public LocalDateTime getDeletedAt() {
@@ -94,7 +96,8 @@ public class Traisorerie extends BaseModel implements Serializable {
         this.type = Tables.TRAISORERIE.name();
     }
 
-    public Traisorerie(String uid, String reference, LocalDateTime date, String libelle, double montantUsd, double montantCdf, String mouvement, String typeTresorerie) {
+    public Traisorerie(String uid, String reference, LocalDateTime date, String libelle, double montantUsd,
+            double montantCdf, String mouvement, String typeTresorerie) {
         this.uid = uid;
         this.reference = reference;
         this.date = date;
@@ -246,7 +249,5 @@ public class Traisorerie extends BaseModel implements Serializable {
     public void setSoldeCdf(Double soldeCdf) {
         this.soldeCdf = soldeCdf;
     }
-    
-    
 
 }

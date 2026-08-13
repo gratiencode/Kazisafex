@@ -5,12 +5,6 @@
  */
 package data;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.Column;
 import java.io.Serializable;
 import jakarta.persistence.Entity;
@@ -78,7 +72,9 @@ public class Destocker extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Destocker() {
@@ -165,7 +161,7 @@ public class Destocker extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "entities.Destocker[ uid=" + uid + " ]";
+        return "entities.Destocker[ uid=" + uid + ", coutAchat=" + coutAchat + " ]";
     }
 
     public String getRegion() {

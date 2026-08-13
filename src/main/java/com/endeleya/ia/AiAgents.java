@@ -666,6 +666,7 @@ public final class AiAgents {
         startForCurrentSession();
         appendMemory("user", safe(question, ""));
         String date=LocalDateTime.now().toString();
+        GratienTools.setCurrentSessionId(sessionId);
         TokenStream stream = assistant.chat(sessionId,date,entreprise == null ? "" : entreprise, safe(question, ""));
         Set<String> toolsStarted = ConcurrentHashMap.newKeySet();
         AtomicBoolean toolWasStarted = new AtomicBoolean(false);

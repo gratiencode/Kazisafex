@@ -3,7 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data; import com.fasterxml.jackson.annotation.JsonFormat;
+package data;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -30,13 +32,13 @@ import tools.Tables;
 @Entity
 @Table(name = "ligne_vente")
 @NamedQueries({
-    @NamedQuery(name = "LigneVente.findAll", query = "SELECT DISTINCT  l FROM LigneVente l"),
-    @NamedQuery(name = "LigneVente.findByUid", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.uid = :uid"),
-    @NamedQuery(name = "LigneVente.findByClientId", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.clientId = :clientId"),
-    @NamedQuery(name = "LigneVente.findByQuantite", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.quantite = :quantite"),
-    @NamedQuery(name = "LigneVente.findByMontantUsd", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantUsd = :montantUsd"),
-    @NamedQuery(name = "LigneVente.findByMontantCdf", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantCdf = :montantCdf"),
-    @NamedQuery(name = "LigneVente.findByPrixUnit", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.prixUnit = :prixUnit")})
+        @NamedQuery(name = "LigneVente.findAll", query = "SELECT DISTINCT  l FROM LigneVente l"),
+        @NamedQuery(name = "LigneVente.findByUid", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.uid = :uid"),
+        @NamedQuery(name = "LigneVente.findByClientId", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.clientId = :clientId"),
+        @NamedQuery(name = "LigneVente.findByQuantite", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.quantite = :quantite"),
+        @NamedQuery(name = "LigneVente.findByMontantUsd", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantUsd = :montantUsd"),
+        @NamedQuery(name = "LigneVente.findByMontantCdf", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.montantCdf = :montantCdf"),
+        @NamedQuery(name = "LigneVente.findByPrixUnit", query = "SELECT DISTINCT  l FROM LigneVente l WHERE l.prixUnit = :prixUnit") })
 
 public class LigneVente extends BaseModel implements Serializable {
 
@@ -69,14 +71,17 @@ public class LigneVente extends BaseModel implements Serializable {
     protected void onDataOperation() {
         if (this.uid == null) {
             this.uid = System.currentTimeMillis() + 101;
-        } 
-        this.updatedAt=LocalDateTime.now();
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
-    
-     
+
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt=LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public LigneVente() {
@@ -185,7 +190,8 @@ public class LigneVente extends BaseModel implements Serializable {
     public String toString() {
         return "entities.LigneVente[ uid=" + uid + " produit = " + productId + " \nquantite ="
                 + " " + quantite + " mesure = " + mesureId + "\n"
-                + " montant usd = " + montantUsd + " montant cdf = " + montantCdf + " prix unit = " + prixUnit + " clientid = " + clientId + "  ]";
+                + " montant usd = " + montantUsd + " montant cdf = " + montantCdf + " prix unit = " + prixUnit
+                + " clientid = " + clientId + "  ]";
     }
 
     public double getQuantite() {

@@ -9,13 +9,8 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.Persistence;
 import java.io.File;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -31,8 +26,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import org.eclipse.persistence.config.EntityManagerProperties;
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
 import services.utils.SecurePreferences;
 import tools.MemoryGuard;
 import tools.SyncEngine;
@@ -517,7 +510,7 @@ public class ManagedSessionFactory {
         if (fromEnv != null) {
             return fromEnv;
         }
-        String prefVal = pref.get("default_mysql_password", null);
+        String prefVal = pref.get("default_mysql_password", "Admin*21");
         if (prefVal != null && !prefVal.isBlank()) {
             return prefVal;
         }

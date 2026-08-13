@@ -36,14 +36,14 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "PrixDeVente.findAll", query = "SELECT DISTINCT  p FROM PrixDeVente p"),
-    @NamedQuery(name = "PrixDeVente.findByUid", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.uid = :uid"),
-    @NamedQuery(name = "PrixDeVente.findByQMin", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmin = :qMin"),
-    @NamedQuery(name = "PrixDeVente.findByQMax", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmax = :qMax"),
-    @NamedQuery(name = "PrixDeVente.findByPrixUnitaire", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.prixUnitaire = :prixUnitaire"),
-    @NamedQuery(name = "PrixDeVente.findByQuantiteInterval", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmin <= :quantiteInterval AND p.qmax >= :quantiteInterval"),
-    @NamedQuery(name = "PrixDeVente.findByDevise", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.devise = :devise"),
-    @NamedQuery(name = "PrixDeVente.findByPourcentParCunit", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.pourcentParCunit = :pourcentParCunit")})
+        @NamedQuery(name = "PrixDeVente.findAll", query = "SELECT DISTINCT  p FROM PrixDeVente p"),
+        @NamedQuery(name = "PrixDeVente.findByUid", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.uid = :uid"),
+        @NamedQuery(name = "PrixDeVente.findByQMin", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmin = :qMin"),
+        @NamedQuery(name = "PrixDeVente.findByQMax", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmax = :qMax"),
+        @NamedQuery(name = "PrixDeVente.findByPrixUnitaire", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.prixUnitaire = :prixUnitaire"),
+        @NamedQuery(name = "PrixDeVente.findByQuantiteInterval", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.qmin <= :quantiteInterval AND p.qmax >= :quantiteInterval"),
+        @NamedQuery(name = "PrixDeVente.findByDevise", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.devise = :devise"),
+        @NamedQuery(name = "PrixDeVente.findByPourcentParCunit", query = "SELECT DISTINCT  p FROM PrixDeVente p WHERE p.pourcentParCunit = :pourcentParCunit") })
 
 public class PrixDeVente extends BaseModel implements Serializable {
 
@@ -51,7 +51,8 @@ public class PrixDeVente extends BaseModel implements Serializable {
     @Id
     @Column(name = "uid", updatable = false, nullable = false)
     private String uid;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "q_min")
     private double qmin;
     @Column(name = "q_max")
@@ -79,7 +80,9 @@ public class PrixDeVente extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public PrixDeVente() {

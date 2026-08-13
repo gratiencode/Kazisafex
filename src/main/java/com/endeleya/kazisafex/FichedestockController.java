@@ -150,7 +150,7 @@ public class FichedestockController implements Initializable {
         regions = FXCollections.observableArrayList();
         cbx_regions.setItems(regions); 
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
         table_fiche_stock.setItems(ficheItems);
         mzrs = FXCollections.observableArrayList(MesureDelegate.findMesureByProduit(produit.getUid()));
         cbx_choose_mesure.setItems(mzrs);

@@ -1,6 +1,5 @@
 package data;
 
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
@@ -31,18 +30,18 @@ import tools.Tables;
 @Table(name = "produit")
 @XmlRootElement
 @NamedQueries(value = {
-    @NamedQuery(name = "Produit.findAll", query = "SELECT DISTINCT  p FROM Produit p ORDER BY p.dateCreation DESC"),
-    @NamedQuery(name = "Produit.findByUid", query = "SELECT DISTINCT  p FROM Produit p WHERE p.uid = :uid"),
-    @NamedQuery(name = "Produit.findByCodeBar", query = "SELECT DISTINCT  p FROM Produit p WHERE p.codebar = :codeBar"),
-    @NamedQuery(name = "Produit.findByModele", query = "SELECT DISTINCT  p FROM Produit p WHERE p.modele = :modele"),
-    @NamedQuery(name = "Produit.findByTaille", query = "SELECT DISTINCT  p FROM Produit p WHERE p.taille = :taille"),
-    @NamedQuery(name = "Produit.findByCouleur", query = "SELECT DISTINCT  p FROM Produit p WHERE p.couleur = :couleur"),
-    @NamedQuery(name = "Produit.findByMethodeInventaire", query = "SELECT DISTINCT  p FROM Produit p WHERE p.methodeInventaire = :methodeInventaire"),
-    @NamedQuery(name = "Produit.findByDateCreation", query = "SELECT DISTINCT  p FROM Produit p WHERE p.dateCreation = :dateCreation")})
+        @NamedQuery(name = "Produit.findAll", query = "SELECT DISTINCT  p FROM Produit p ORDER BY p.dateCreation DESC"),
+        @NamedQuery(name = "Produit.findByUid", query = "SELECT DISTINCT  p FROM Produit p WHERE p.uid = :uid"),
+        @NamedQuery(name = "Produit.findByCodeBar", query = "SELECT DISTINCT  p FROM Produit p WHERE p.codebar = :codeBar"),
+        @NamedQuery(name = "Produit.findByModele", query = "SELECT DISTINCT  p FROM Produit p WHERE p.modele = :modele"),
+        @NamedQuery(name = "Produit.findByTaille", query = "SELECT DISTINCT  p FROM Produit p WHERE p.taille = :taille"),
+        @NamedQuery(name = "Produit.findByCouleur", query = "SELECT DISTINCT  p FROM Produit p WHERE p.couleur = :couleur"),
+        @NamedQuery(name = "Produit.findByMethodeInventaire", query = "SELECT DISTINCT  p FROM Produit p WHERE p.methodeInventaire = :methodeInventaire"),
+        @NamedQuery(name = "Produit.findByDateCreation", query = "SELECT DISTINCT  p FROM Produit p WHERE p.dateCreation = :dateCreation") })
 public class Produit extends BaseModel implements Serializable {
 
     private String codebar;
-    
+
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "image", columnDefinition = "BLOB")
     @JsonIgnore
@@ -53,7 +52,7 @@ public class Produit extends BaseModel implements Serializable {
     private String taille;
     private String couleur;
     private String methodeInventaire;
-   
+
     @Column(name = "dateCreation", columnDefinition = "DATETIME")
     private LocalDateTime dateCreation;
     private static final long serialVersionUID = 1;
@@ -138,10 +137,13 @@ public class Produit extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
-    public Produit(String nomProduit, String marque, String modele, String taille, String couleur, String methodeInventaire, LocalDateTime dateCreation, String uid, String codebar) {
+    public Produit(String nomProduit, String marque, String modele, String taille, String couleur,
+            String methodeInventaire, LocalDateTime dateCreation, String uid, String codebar) {
         this.nomProduit = nomProduit;
         this.marque = marque;
         this.modele = modele;

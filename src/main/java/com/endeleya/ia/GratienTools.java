@@ -117,6 +117,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.Normalizer;
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -189,12 +190,15 @@ public class GratienTools {
     private static final Map<String, MysqlReplicationPlan> MYSQL_REPLICATION_PLANS = new ConcurrentHashMap<>();
     private static final Map<String, String> MYSQL_ROOT_PASSWORD_TOKENS = new ConcurrentHashMap<>();
     private static final Map<String, WorkflowCancellationRequest> WORKFLOW_CANCELLATION_REQUESTS = new ConcurrentHashMap<>();
+    private static final Map<String, PlanConfirmationRequest> PLAN_CONFIRMATION_REQUESTS = new ConcurrentHashMap<>();
     private static final Map<String, ToolExecutionResult> RECENT_TOOL_EXECUTIONS = new ConcurrentHashMap<>();
     private static final long TOOL_EXECUTION_TTL_MS = 120_000L;
     private static final long WORKFLOW_CANCELLATION_TTL_MS = 180_000L;
+    private static final long PLAN_CONFIRMATION_TTL_MS = 300_000L;
     private static final long ACTIVE_WORKFLOW_MAX_AGE_MS = 30 * 60_000L;
     public static final String SECURE_MYSQL_PASSWORD_REQUEST = "KAZISAFE_SECURE_MYSQL_PASSWORD_REQUEST";
     private static final String SECURE_MYSQL_PASSWORD_TOKEN_PREFIX = "secure:mysql:";
+    private volatile String currentSessionId;
 
     @Tool("Insère en base la nouvelle category donnee en parametre")
     public String createCategory(@P("newcategory") String newcategory) {
@@ -754,6 +758,67 @@ public class GratienTools {
         long remainingSeconds = Math.max(0L, (request.expiresAtMs() - System.currentTimeMillis()) / 1000L);
         return "Confirmation en attente pour " + request.workflowId()
                 + " (" + request.type() + "), temps restant " + remainingSeconds + " seconde(s).";
+    }
+
+    /**
+     * Session courante du chat, injectee par AiAgents avant chaque requete afin
+     * que les outils de planification/confirmation fonctionnent sans avoir a
+     * transmettre un sessionId peu fiable de l'LLM.
+     */
+    public void setCurrentSessionId(String sessionId) {
+        this.currentSessionId = sessionId == null || sessionId.isBlank() ? null : normalizeToolKey(sessionId);
+    }
+
+    private void cleanupPlanConfirmationRequests() {
+        long now = System.currentTimeMillis();
+        PLAN_CONFIRMATION_REQUESTS.entrySet().removeIf(e -> e.getValue().expiresAtMs() < now);
+    }
+
+    public boolean hasPendingPlanConfirmation() {
+        cleanupPlanConfirmationRequests();
+        return currentSessionId != null && PLAN_CONFIRMATION_REQUESTS.containsKey(currentSessionId);
+    }
+
+    public String pendingPlanConfirmationState() {
+        cleanupPlanConfirmationRequests();
+        if (currentSessionId == null) {
+            return "Aucune session active pour un plan.";
+        }
+        PlanConfirmationRequest request = PLAN_CONFIRMATION_REQUESTS.get(currentSessionId);
+        if (request == null) {
+            return "Aucun plan en attente de confirmation.";
+        }
+        long remainingSeconds = Math.max(0L, (request.expiresAtMs() - System.currentTimeMillis()) / 1000L);
+        return "Plan " + request.status() + " en attente, temps restant " + remainingSeconds + " seconde(s).";
+    }
+
+    /**
+     * Verrou material de confirmation du plan: refuse l'execution d'un outil
+     * tant que le plan propose pour la session n'a pas ete confirme par
+     * l'utilisateur. Renvoie null si l'execution est autorisee, sinon un message
+     * de refus a renvoyer comme resultat d'outil.
+     */
+    private String gatePlanConfirmation(String toolName) {
+        cleanupPlanConfirmationRequests();
+        if (currentSessionId == null) {
+            return null;
+        }
+        PlanConfirmationRequest request = PLAN_CONFIRMATION_REQUESTS.get(currentSessionId);
+        if (request == null) {
+            return null;
+        }
+        if ("CONFIRMED".equals(request.status())) {
+            PLAN_CONFIRMATION_REQUESTS.remove(currentSessionId);
+            return null;
+        }
+        if ("REJECTED".equals(request.status())) {
+            return "Le plan d'exécution a été refusé: l'outil `" + toolName
+                    + "` ne sera pas exécuté. Re-formulez votre demande ou proposez un nouveau plan.";
+        }
+        return "⛔ Plan d'exécution en attente de confirmation: l'outil `" + toolName
+                + "` ne sera PAS exécuté tant que l'utilisateur n'aura pas confirmé le plan. "
+                + "Présentez le plan à l'utilisateur, arrêtez-vous et attendez sa réponse. "
+                + "Quand il répond `oui`, appelez `answerPlanExecution` avant de relancer cet outil.";
     }
 
     @Tool("Cree la vente et ses lignes de vente pour une sortie enregistree dans un workflow")
@@ -2806,6 +2871,9 @@ public class GratienTools {
     private record WorkflowCancellationRequest(String sessionId, String workflowId, String type, long createdAtMs, long expiresAtMs) {
     }
 
+    private record PlanConfirmationRequest(String sessionId, String planText, String status, long createdAtMs, long expiresAtMs) {
+    }
+
     private record WorkflowTarget(String workflowId, String type, long createdAtMs) {
 
         private String typeLabel() {
@@ -3893,6 +3961,112 @@ public class GratienTools {
             return byCodebar;
         }
         return findExistingProduct(value);
+    }
+
+    private String clientSummary(Client client) {
+        if (client == null) {
+            return "client inconnu";
+        }
+        return "**" + safe(client.getNomClient(), "?") + "** (téléphone: " + safe(client.getPhone(), "?")
+                + ", type: " + safe(client.getTypeClient(), "Client") + ")";
+    }
+
+    private Client resolveClient(String query) {
+        String value = safe(query, "").trim();
+        if (value.isBlank()) {
+            return null;
+        }
+        Client byUid = ClientDelegate.findClient(value);
+        if (byUid != null) {
+            return byUid;
+        }
+        List<Client> byPhone = ClientDelegate.findClientByPhone(value);
+        if (byPhone != null && !byPhone.isEmpty()) {
+            return byPhone.get(0);
+        }
+        List<Client> all = ClientDelegate.findClients();
+        if (all != null) {
+            String key = normalizeToolKey(value);
+            for (Client client : all) {
+                if (client != null && client.getNomClient() != null
+                        && normalizeToolKey(client.getNomClient()).equals(key)) {
+                    return client;
+                }
+            }
+        }
+        return null;
+    }
+
+    private ClientOrganisation resolveClientOrganisation(String query) {
+        String value = safe(query, "").trim();
+        if (value.isBlank()) {
+            return null;
+        }
+        ClientOrganisation byUid = ClientOrganisationDelegate.findClientOrganisation(value);
+        if (byUid != null) {
+            return byUid;
+        }
+        List<ClientOrganisation> all = ClientOrganisationDelegate.findClientOrganisations();
+        if (all != null) {
+            String key = normalizeToolKey(value);
+            for (ClientOrganisation org : all) {
+                if (org != null && org.getNomOrganisation() != null
+                        && normalizeToolKey(org.getNomOrganisation()).equals(key)) {
+                    return org;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Inventaire resolveInventaire(String query, String region) {
+        String value = safe(query, "").trim();
+        if (!value.isBlank()) {
+            Inventaire byUid = InventaireDelegate.findInventaire(value);
+            if (byUid != null) {
+                return byUid;
+            }
+            Inventaire byCode = InventaireDelegate.findInventaireByCode(value);
+            if (byCode != null) {
+                return byCode;
+            }
+        }
+        List<Inventaire> nonClosed = InventaireDelegate.findNonClosed();
+        if (nonClosed != null && !nonClosed.isEmpty()) {
+            for (Inventaire inv : nonClosed) {
+                if (inv != null && (region == null || region.isBlank() || region.equalsIgnoreCase(inv.getRegion()))) {
+                    return inv;
+                }
+            }
+            return nonClosed.get(0);
+        }
+        return InventaireDelegate.findLastInventory();
+    }
+
+    private LocalDate parseLocalDate(String value, LocalDate fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private LocalDateTime parseLocalDateTime(String value, LocalDateTime fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return LocalDateTime.parse(value.trim());
+        } catch (Exception ex) {
+            try {
+                return LocalDate.parse(value.trim()).atTime(0, 0);
+            } catch (Exception ex2) {
+                return fallback;
+            }
+        }
     }
 
     private boolean productExistsInCatalogList(Produit product) {
@@ -7621,10 +7795,299 @@ public class GratienTools {
         });
     }
 
-    @Tool("Planifie avant toute action la séquence d'outils et de workflows que Gratien exécutera pour une tâche complexe. Appelez cet outil dès qu'une demande nécessite plusieurs étapes ou combine stock entrepôt, destockage, analyse business ou ajustement d'inventaire. Présentez le plan à l'utilisateur et attendez sa confirmation avant d'exécuter le premier outil.")
+    @Tool("Planifie avant toute action la séquence d'outils et de workflows que Gratien exécutera pour une tâche complexe. Appelez cet outil dès qu'une demande nécessite plusieurs étapes ou combine stock entrepôt, destockage, analyse business, ajustement d'inventaire, création client, pointage de présence ou comptage d'inventaire. Présentez le plan à l'utilisateur, STOPS, et attendez sa confirmation avant d'exécuter le premier outil.")
     public String planExecution(@P("Description complète de la tâche à planifier") String taskDescription) {
-        return buildExecutionPlan(taskDescription);
+        String plan = buildExecutionPlan(taskDescription);
+        if (plan.startsWith("Je n'ai pas identifié") || plan.startsWith("Veuillez préciser")) {
+            return plan;
+        }
+        cleanupPlanConfirmationRequests();
+        String sessionKey = currentSessionId;
+        if (sessionKey == null) {
+            return plan;
+        }
+        long now = System.currentTimeMillis();
+        PLAN_CONFIRMATION_REQUESTS.put(sessionKey,
+                new PlanConfirmationRequest(sessionKey, plan, "PENDING", now, now + PLAN_CONFIRMATION_TTL_MS));
+        return plan + "\n\n⚠️ **Aucune action ne sera exécutée tant que vous n'aurez pas confirmé ce plan.** "
+                + "Répondez `oui` pour confirmer et lancer l'exécution, ou `non` pour l'annuler.";
     }
+
+    @Tool("Réponse de l'utilisateur au plan d'exécution proposé par planExecution: `oui` pour confirmer le plan et lancer l'exécution, `non` pour le refuser et n'exécuter aucune action. Appelez cet outil dès que l'utilisateur répond oui ou non à un plan présenté.")
+    public String answerPlanExecution(@P("Réponse de l'utilisateur: oui pour confirmer le plan, non pour l'annuler") String answer) {
+        cleanupPlanConfirmationRequests();
+        String sessionKey = currentSessionId;
+        if (sessionKey == null) {
+            return "Aucune session active pour confirmer un plan.";
+        }
+        PlanConfirmationRequest request = PLAN_CONFIRMATION_REQUESTS.get(sessionKey);
+        if (request == null) {
+            return "Aucun plan en attente de confirmation. Soit le plan a expiré, soit aucune planification n'a été proposée. Re-formulez la demande pour obtenir un nouveau plan.";
+        }
+        if (System.currentTimeMillis() > request.expiresAtMs()) {
+            PLAN_CONFIRMATION_REQUESTS.remove(sessionKey);
+            return "Le délai de confirmation du plan (5 minutes) est dépassé. Re-formulez votre demande pour obtenir un nouveau plan.";
+        }
+        if (!isPositiveConfirmation(answer)) {
+            PLAN_CONFIRMATION_REQUESTS.put(sessionKey,
+                    new PlanConfirmationRequest(sessionKey, request.planText(), "REJECTED", request.createdAtMs(), request.expiresAtMs()));
+            return "Plan annulé: aucune action ne sera exécutée. Dites à Gratien ce que vous souhaitez modifier ou reformuler.";
+        }
+        PLAN_CONFIRMATION_REQUESTS.put(sessionKey,
+                new PlanConfirmationRequest(sessionKey, request.planText(), "CONFIRMED", request.createdAtMs(), request.expiresAtMs()));
+        return "Plan confirmé. Gratien exécute maintenant les étapes prévues dans l'ordre.";
+    }
+
+    @Tool("Cree un nouveau client (table client): nom obligatoire, telephone, email, adresse, type de client et client parent optionnels. Dedoublonne par nom + telephone: si un client identique existe deja, il est retourne sans creation.")
+    public String createClient(
+            @P("Nom du client (obligatoire)") String name,
+            @P("Telephone du client (facultatif)") String phone,
+            @P("Email du client (facultatif)") String email,
+            @P("Adresse du client (facultatif)") String adresse,
+            @P("Type de client, ex: Client, Grossiste, Decharge, Fournisseur (facultatif, defaut: Client)") String typeClient,
+            @P("Uid du client parent pour un sous-client (facultatif)") String parentUid) {
+        String gate = gatePlanConfirmation("createClient");
+        if (gate != null) {
+            return gate;
+        }
+        String nameValue = safe(name, "").trim();
+        if (nameValue.isBlank()) {
+            return "Le nom du client est obligatoire.";
+        }
+        String phoneValue = safe(phone, "").trim();
+        return executeOnce("createClient", nameValue + "|" + phoneValue, () -> {
+            if (!phoneValue.isBlank()) {
+                List<Client> byPhone = ClientDelegate.findClientByPhone(phoneValue);
+                if (byPhone != null) {
+                    for (Client existing : byPhone) {
+                        if (existing != null && normalizeToolKey(existing.getNomClient()).equals(normalizeToolKey(nameValue))) {
+                            return "Un client identique existe déjà (même nom et téléphone): " + clientSummary(existing)
+                                    + ". Aucune création inutile.";
+                        }
+                    }
+                }
+            }
+            List<Client> all = ClientDelegate.findClients();
+            if (all != null) {
+                for (Client existing : all) {
+                    if (existing != null && existing.getNomClient() != null
+                            && normalizeToolKey(existing.getNomClient()).equals(normalizeToolKey(nameValue))
+                            && phoneValue.isBlank()) {
+                        return "Un client portant ce nom existe déjà: " + clientSummary(existing)
+                                + ". Aucune création inutile.";
+                    }
+                }
+            }
+            Client client = new Client(DataId.generate());
+            client.setNomClient(nameValue);
+            client.setPhone(phoneValue.isBlank() ? "N/A-" + client.getUid().substring(0, 8) : phoneValue);
+            client.setEmail(safe(email, ""));
+            client.setAdresse(safe(adresse, ""));
+            client.setTypeClient(safe(typeClient, "Client"));
+            if (parentUid != null && !parentUid.isBlank()) {
+                Client parent = ClientDelegate.findClient(parentUid.trim());
+                if (parent != null) {
+                    client.setParentId(parent);
+                }
+            }
+            Client saved = ClientDelegate.saveClient(client);
+            syncCreate(saved, Tables.CLIENT);
+            return "Client créé avec succès: **" + saved.getNomClient() + "** (téléphone: " + saved.getPhone()
+                    + ", type: " + saved.getTypeClient() + ").";
+        });
+    }
+
+    @Tool("Cree une organisation client (table client_organisation): nom obligatoire, telephone, email, adresse, domaine, site web, RCCM et boite postale optionnels. Dedoublonne par nom + telephone.")
+    public String createClientOrganisation(
+            @P("Nom de l'organisation (obligatoire)") String nomOrganisation,
+            @P("Telephone de l'organisation (facultatif)") String phoneOrganisation,
+            @P("Email de l'organisation (facultatif)") String emailOrganisation,
+            @P("Adresse de l'organisation (facultatif)") String adresse,
+            @P("Domaine d'activite de l'organisation (facultatif)") String domaineOrganisation,
+            @P("Site web de l'organisation (facultatif)") String websiteOrganisation,
+            @P("RCCM de l'organisation (facultatif)") String rccmOrganisation,
+            @P("Boite postale de l'organisation (facultatif)") String boitePostalOrganisation,
+            @P("Region de l'organisation (facultatif)") String region) {
+        String gate = gatePlanConfirmation("createClientOrganisation");
+        if (gate != null) {
+            return gate;
+        }
+        String nameValue = safe(nomOrganisation, "").trim();
+        if (nameValue.isBlank()) {
+            return "Le nom de l'organisation est obligatoire.";
+        }
+        String phoneValue = safe(phoneOrganisation, "").trim();
+        return executeOnce("createClientOrganisation", nameValue + "|" + phoneValue, () -> {
+            List<ClientOrganisation> all = ClientOrganisationDelegate.findClientOrganisations();
+            if (all != null) {
+                for (ClientOrganisation existing : all) {
+                    if (existing == null || existing.getNomOrganisation() == null) {
+                        continue;
+                    }
+                    boolean sameName = normalizeToolKey(existing.getNomOrganisation()).equals(normalizeToolKey(nameValue));
+                    boolean samePhone = !phoneValue.isBlank() && existing.getPhoneOrganisation() != null
+                            && normalizeToolKey(existing.getPhoneOrganisation()).equals(normalizeToolKey(phoneValue));
+                    if (sameName && (samePhone || phoneValue.isBlank())) {
+                        return "Une organisation identique existe déjà: **" + existing.getNomOrganisation()
+                                + "** (téléphone: " + safe(existing.getPhoneOrganisation(), "?") + "). Aucune création inutile.";
+                    }
+                }
+            }
+            ClientOrganisation org = new ClientOrganisation(DataId.generate());
+            org.setNomOrganisation(nameValue);
+            org.setPhoneOrganisation(safe(phoneValue, ""));
+            org.setEmailOrganisation(safe(emailOrganisation, ""));
+            org.setAdresse(safe(adresse, ""));
+            org.setDomaineOrganisation(safe(domaineOrganisation, ""));
+            org.setWebsiteOrganisation(safe(websiteOrganisation, ""));
+            org.setRccmOrganisation(safe(rccmOrganisation, ""));
+            org.setBoitePostalOrganisation(safe(boitePostalOrganisation, ""));
+            org.setRegion(stockRegion(region));
+            ClientOrganisation saved = ClientOrganisationDelegate.saveClientOrganisation(org);
+            syncCreate(saved, Tables.CLIENTORGANISATION);
+            return "Organisation client créée avec succès: **" + saved.getNomOrganisation() + "** (téléphone: "
+                    + safe(saved.getPhoneOrganisation(), "?") + ").";
+        });
+    }
+
+    @Tool("Associe un client a une organisation (table client_appartenir): indiquez le client (nom ou telephone) et l'organisation (nom) ainsi qu'une date d'appartenance optionnelle. Cree l'appartenance si elle n'existe pas deja.")
+    public String createClientAppartenir(
+            @P("Client: uid, nom ou telephone") String client,
+            @P("Organisation: uid ou nom exact") String organisation,
+            @P("Date d'appartenance yyyy-MM-dd (facultatif, defaut: aujourd'hui)") String date,
+            @P("Region (facultatif)") String region) {
+        String gate = gatePlanConfirmation("createClientAppartenir");
+        if (gate != null) {
+            return gate;
+        }
+        String clientQuery = safe(client, "").trim();
+        String orgQuery = safe(organisation, "").trim();
+        if (clientQuery.isBlank() || orgQuery.isBlank()) {
+            return "Le client et l'organisation sont obligatoires.";
+        }
+        return executeOnce("createClientAppartenir", clientQuery + "|" + orgQuery, () -> {
+            Client resolvedClient = resolveClient(clientQuery);
+            if (resolvedClient == null) {
+                return "Client introuvable pour '" + clientQuery + "'. Utilisez `createClient` pour le créer, ou indiquez un nom/téléphone exact.";
+            }
+            ClientOrganisation resolvedOrg = resolveClientOrganisation(orgQuery);
+            if (resolvedOrg == null) {
+                return "Organisation introuvable pour '" + organisation + "'. Utilisez `createClientOrganisation` pour la créer, ou indiquez le nom exact.";
+            }
+            String usedRegion = stockRegion(region);
+            List<ClientAppartenir> existingLinks = ClientAppartenirDelegate.findAppartenanceFor(resolvedClient.getUid());
+            if (existingLinks != null) {
+                for (ClientAppartenir link : existingLinks) {
+                    if (link != null && link.getClientOrganisationId() != null
+                            && link.getClientOrganisationId().getUid().equals(resolvedOrg.getUid())) {
+                        return "Ce client est déjà rattaché à l'organisation **" + resolvedOrg.getNomOrganisation() + "**.";
+                    }
+                }
+            }
+            ClientAppartenir link = new ClientAppartenir(DataId.generate());
+            link.setClientId(resolvedClient);
+            link.setClientOrganisationId(resolvedOrg);
+            link.setDateAppartenir(parseLocalDate(date, LocalDate.now()));
+            link.setRegion(usedRegion);
+            ClientAppartenir saved = ClientAppartenirDelegate.saveClientAppartenir(link);
+            syncCreate(saved, Tables.CLIENTAPPARTENIR);
+            return "Client **" + resolvedClient.getNomClient() + "** rattaché à l'organisation **"
+                    + resolvedOrg.getNomOrganisation() + "** avec succès (depuis " + saved.getDateAppartenir() + ").";
+        });
+    }
+
+    @Tool("Enregistre un pointage de presence d'un agent (table presence): agentId et nom obligatoires, type CHECK_IN ou CHECK_OUT, date/heure optionnelle, region, entreprise et empreinte optionnels.")
+    public String createPresence(
+            @P("Identifiant de l'agent (obligatoire)") String agentId,
+            @P("Nom de l'agent (obligatoire)") String agentNom,
+            @P("Prenom de l'agent (facultatif)") String agentPrenom,
+            @P("Type de pointage: CHECK_IN ou CHECK_OUT (facultatif, defaut: CHECK_IN)") String type,
+            @P("Date et heure du pointage yyyy-MM-dd'T'HH:mm (facultatif, defaut: maintenant)") String timestamp,
+            @P("Region (facultatif)") String region,
+            @P("Entreprise (facultatif)") String entreprise,
+            @P("Empreinte (hash fingerprint, facultatif)") String fingerprintHash) {
+        String gate = gatePlanConfirmation("createPresence");
+        if (gate != null) {
+            return gate;
+        }
+        String agentIdValue = safe(agentId, "").trim();
+        String agentNameValue = safe(agentNom, "").trim();
+        if (agentIdValue.isBlank() || agentNameValue.isBlank()) {
+            return "L'identifiant et le nom de l'agent sont obligatoires.";
+        }
+        return executeOnce("createPresence", agentIdValue + "|" + safe(type, "CHECK_IN").trim().toLowerCase(Locale.ROOT), () -> {
+            String typeValue = normalizeToolKey(safe(type, "CHECK_IN"));
+            if (!typeValue.equals("check_in") && !typeValue.equals("check_out")) {
+                typeValue = "check_in";
+            }
+            Presence presence = new Presence();
+            presence.setAgentId(agentIdValue);
+            presence.setAgentNom(agentNameValue);
+            presence.setAgentPrenom(safe(agentPrenom, ""));
+            presence.setTypePresence(typeValue.equals("check_in") ? "CHECK_IN" : "CHECK_OUT");
+            presence.setTimestamp(parseLocalDateTime(timestamp, LocalDateTime.now()));
+            presence.setRegion(stockRegion(region));
+            presence.setEntreprise(safe(entreprise, pref.get("eUid", "")));
+            presence.setFingerprintHash(safe(fingerprintHash, ""));
+            Presence saved = PresenceDelegate.savePresence(presence);
+            syncCreate(saved, Tables.PRESENCE);
+            return "Pointage enregistré pour **" + agentNameValue + "** (" + presence.getTypePresence() + ") à "
+                    + presence.getTimestamp() + ".";
+        });
+    }
+
+    @Tool("Enregistre un comptage d'inventaire (table compter): inventaire (uid ou code), produit (uid/code-barres/nom), quantite comptee, unite de mesure, lot, cout d'achat et date d'expiration optionnels. Le stock est ajuste automatiquement selon l'ecart entre quantite physique et theorique.")
+    public String createCompter(
+            @P("Inventaire: uid ou code inventaire, sinon dernier inventaire en cours") String inventaire,
+            @P("Produit: uid, code-barres ou nom exact") String product,
+            @P("Quantite comptee dans l'unite de mesure") double quantity,
+            @P("Unite de mesure, ex: Pièce (facultatif)") String measure,
+            @P("Numero de lot (facultatif)") String lot,
+            @P("Cout d'achat unitaire (facultatif)") double coutAchat,
+            @P("Date d'expiration yyyy-MM-dd (facultatif)") String dateExpiration,
+            @P("Observation (facultatif)") String observation,
+            @P("Region (defaut: region active)") String region) {
+        String gate = gatePlanConfirmation("createCompter");
+        if (gate != null) {
+            return gate;
+        }
+        Produit prod = findProductByUidCodebarOrName(product);
+        if (prod == null) {
+            return "Produit introuvable. Utilisez `findProductCandidates` pour retrouver le produit exact avant de réessayer.";
+        }
+        String usedRegion = stockRegion(region);
+        String usedLot = safe(lot, "LOT-" + System.currentTimeMillis());
+        String key = prod.getUid() + "|" + usedRegion + "|" + usedLot + "|" + safe(inventaire, "");
+        return executeOnce("createCompter", key, () -> {
+            Inventaire inv = resolveInventaire(inventaire, usedRegion);
+            if (inv == null) {
+                return "Inventaire introuvable. Créez un inventaire ou indiquez son uid/code exact.";
+            }
+            Mesure unit = resolveMeasureForProduct(prod, measure);
+            if (unit == null) {
+                return "Aucune mesure trouvée pour le produit '" + prod.getNomProduit()
+                        + "'. Enregistrez ses mesures d'abord via `createProductMeasures`.";
+            }
+            double qty = quantity > 0 ? quantity : 0d;
+            Compter compter = new Compter(DataId.generate());
+            compter.setInventaireId(inv);
+            compter.setProductId(prod);
+            compter.setMesureId(unit);
+            compter.setQuantite(qty);
+            compter.setDateCount(LocalDateTime.now());
+            compter.setRegion(usedRegion);
+            compter.setNumlot(usedLot);
+            compter.setCoutAchat(coutAchat > 0 ? coutAchat : 0d);
+            compter.setDateExpiration(parseLocalDate(dateExpiration, null));
+            compter.setObservation(safe(observation, "Comptage via Gratien"));
+            compter.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
+            Compter saved = CompterDelegate.createCompter(compter);
+            syncCreate(saved, Tables.COMPTER);
+            return "Comptage enregistré pour **" + prod.getNomProduit() + "**: " + qty + " " + safe(unit.getDescription(), "unité")
+                    + " sur l'inventaire " + inv.getCodeInventaire() + " (lot " + usedLot + "). Écart et stock ajustés automatiquement.";
+        });
+    }
+
 
     @Tool("Cree un approvisionnement de stock destine a l'ENTREPOT (table Stocker): produit, quantite recue, cout d'achat unitaire, lot et date d'expiration. Une livraison fournisseur est creee ou reutilisee automatiquement. Utilisez ceci uniquement pour le stock du depot, pas pour le magasin.")
     public String createStockForWarehouse(
@@ -7640,6 +8103,10 @@ public class GratienTools {
             @P("Prix de vente estime (facultatif)") double prixVenteEstime,
             @P("Reference de livraison (facultatif)") String reference,
             @P("Observation (facultatif)") String observation) {
+        String gate = gatePlanConfirmation("createStockForWarehouse");
+        if (gate != null) {
+            return gate;
+        }
         String key = safe(product, "") + "|" + quantity + "|" + safe(measure, "") + "|" + coutAchat + "|" + safe(lot, "")
                 + "|" + safe(expiryDate, "") + "|" + safe(region, "");
         return executeOnce("createStockForWarehouse", key, () -> {
@@ -7702,6 +8169,10 @@ public class GratienTools {
             @P("Region (defaut: region active)") String region,
             @P("Cout d'achat unitaire (facultatif, sinon celui du lot)") double coutAchat,
             @P("Observation (facultatif)") String observation) {
+        String gate = gatePlanConfirmation("executeDestockage");
+        if (gate != null) {
+            return gate;
+        }
         String key = safe(product, "") + "|" + quantity + "|" + safe(measure, "") + "|" + safe(destination, "")
                 + "|" + safe(lot, "") + "|" + safe(region, "");
         return executeOnce("executeDestockage", key, () -> {
@@ -7756,6 +8227,10 @@ public class GratienTools {
             @P("Date debut yyyy-MM-dd (defaut: debut du mois en cours)") String start,
             @P("Date fin yyyy-MM-dd (defaut: aujourd'hui)") String end,
             @P("Region optionnelle. Une autre region est acceptee seulement avec un role ALL_ACCESS ou Trader") String region) {
+        String gate = gatePlanConfirmation("globalBusinessAnalysis");
+        if (gate != null) {
+            return gate;
+        }
         String key = safe(start, "") + "|" + safe(end, "") + "|" + safe(region, "");
         return executeOnce("globalBusinessAnalysis", key, () -> {
             try {
@@ -7788,6 +8263,10 @@ public class GratienTools {
             @P("Region (defaut: region active)") String region,
             @P("Reference (facultatif)") String reference,
             @P("Observation (facultatif)") String observation) {
+        String gate = gatePlanConfirmation("adjustStockDepotAndShop");
+        if (gate != null) {
+            return gate;
+        }
         String key = safe(product, "") + "|" + ecart + "|" + safe(location, "") + "|" + safe(lot, "") + "|" + safe(region, "");
         return executeOnce("adjustStockDepotAndShop", key, () -> {
             if (ecart == 0) {
@@ -7827,8 +8306,20 @@ public class GratienTools {
         if (containsAny(task, new String[]{"ajust", "correction", "inventaire", "ecart", "écart", "rectif", "retour"})) {
             plan.append("| ").append(++step).append(" | `adjustStockDepotAndShop` | Corriger l'écart d'inventaire du dépôt (Stocker/Destocker) ou du magasin (Recquisition/LigneVente) |\n");
         }
+        if (containsAny(task, new String[]{"client", "fidele", "fidèle", "grossiste", "decharge", "décharge", "prospect"})) {
+            plan.append("| ").append(++step).append(" | `createClient` | Créer le client (nom, téléphone, type) avec dédoublonnage par nom et téléphone |\n");
+        }
+        if (containsAny(task, new String[]{"organisation", "client organisation", "appartenir", "rattach", "structure"})) {
+            plan.append("| ").append(++step).append(" | `createClientOrganisation` + `createClientAppartenir` | Créer l'organisation puis rattacher le client (client_appartenir) |\n");
+        }
+        if (containsAny(task, new String[]{"presence", "présence", "pointage", "check in", "checkin", "check out", "checkout", "agent"})) {
+            plan.append("| ").append(++step).append(" | `createPresence` | Enregistrer le pointage de présence (CHECK_IN/CHECK_OUT) de l'agent |\n");
+        }
+        if (containsAny(task, new String[]{"comptage", "compter", "inventaire physique", "recompte", "recompté", "physique"})) {
+            plan.append("| ").append(++step).append(" | `createCompter` | Enregistrer le comptage physique produit par produit; l'écart et le stock sont ajustés automatiquement |\n");
+        }
         if (step == 0) {
-            return "Je n'ai pas identifié d'étape métier claire dans cette demande. Précisez l'opération souhaitée (création de stock entrepôt, destockage, analyse business ou ajustement d'inventaire) afin que je puisse planifier les outils à utiliser.";
+            return "Je n'ai pas identifié d'étape métier claire dans cette demande. Précisez l'opération souhaitée (création de stock entrepôt, destockage, analyse business, ajustement d'inventaire, création client, pointage ou comptage) afin que je puisse planifier les outils à utiliser.";
         }
         plan.append("\nJe commence dès votre confirmation (`oui`).");
         return plan.toString();

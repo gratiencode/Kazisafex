@@ -2,8 +2,10 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
-package data;import com.fasterxml.jackson.annotation.JsonBackReference;
- import com.fasterxml.jackson.annotation.JsonFormat;
+package data;
+
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
@@ -31,14 +33,14 @@ import java.util.UUID;
 @Entity
 @Table(name = "repartir")
 @NamedQueries({
-    @NamedQuery(name = "Repartir.findAll", query = "SELECT r FROM Repartir r"),
-    @NamedQuery(name = "Repartir.findByUid", query = "SELECT r FROM Repartir r WHERE r.uid = :uid"),
-    @NamedQuery(name = "Repartir.findByCoutAchat", query = "SELECT r FROM Repartir r WHERE r.coutAchat = :coutAchat"),
-    @NamedQuery(name = "Repartir.findByDevise", query = "SELECT r FROM Repartir r WHERE r.devise = :devise"),
-    @NamedQuery(name = "Repartir.findByQuantite", query = "SELECT r FROM Repartir r WHERE r.quantite = :quantite"),
-    @NamedQuery(name = "Repartir.findByDate", query = "SELECT r FROM Repartir r WHERE r.date = :date"),
-    @NamedQuery(name = "Repartir.findByRegion", query = "SELECT r FROM Repartir r WHERE r.region = :region"),
-    @NamedQuery(name = "Repartir.findByNumlot", query = "SELECT r FROM Repartir r WHERE r.numlot = :numlot")})
+        @NamedQuery(name = "Repartir.findAll", query = "SELECT r FROM Repartir r"),
+        @NamedQuery(name = "Repartir.findByUid", query = "SELECT r FROM Repartir r WHERE r.uid = :uid"),
+        @NamedQuery(name = "Repartir.findByCoutAchat", query = "SELECT r FROM Repartir r WHERE r.coutAchat = :coutAchat"),
+        @NamedQuery(name = "Repartir.findByDevise", query = "SELECT r FROM Repartir r WHERE r.devise = :devise"),
+        @NamedQuery(name = "Repartir.findByQuantite", query = "SELECT r FROM Repartir r WHERE r.quantite = :quantite"),
+        @NamedQuery(name = "Repartir.findByDate", query = "SELECT r FROM Repartir r WHERE r.date = :date"),
+        @NamedQuery(name = "Repartir.findByRegion", query = "SELECT r FROM Repartir r WHERE r.region = :region"),
+        @NamedQuery(name = "Repartir.findByNumlot", query = "SELECT r FROM Repartir r WHERE r.numlot = :numlot") })
 
 public class Repartir extends BaseModel implements Serializable {
 
@@ -49,7 +51,8 @@ public class Repartir extends BaseModel implements Serializable {
     @Size(min = 1, max = 255)
     @Column(name = "uid")
     private String uid;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "cout_achat")
     private Double coutAchat;
     @Size(max = 100)
@@ -89,7 +92,9 @@ public class Repartir extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Repartir() {

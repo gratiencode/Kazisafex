@@ -38,18 +38,18 @@ import java.util.UUID;
 @Entity
 @Table(name = "production")
 @NamedQueries({
-    @NamedQuery(name = "Production.findAll", query = "SELECT p FROM Production p"),
-    @NamedQuery(name = "Production.findByUid", query = "SELECT p FROM Production p WHERE p.uid = :uid"),
-    @NamedQuery(name = "Production.findByNumlot", query = "SELECT p FROM Production p WHERE p.numlot = :numlot"),
-    @NamedQuery(name = "Production.findByDateDebut", query = "SELECT p FROM Production p WHERE p.dateDebut = :dateDebut"),
-    @NamedQuery(name = "Production.findByDateFin", query = "SELECT p FROM Production p WHERE p.dateFin = :dateFin"),
-    @NamedQuery(name = "Production.findByDatePeremption", query = "SELECT p FROM Production p WHERE p.datePeremption = :datePeremption"),
-    @NamedQuery(name = "Production.findByDateFabrication", query = "SELECT p FROM Production p WHERE p.dateFabrication = :dateFabrication"),
-    @NamedQuery(name = "Production.findByQuantitePrevu", query = "SELECT p FROM Production p WHERE p.quantitePrevu = :quantitePrevu"),
-    @NamedQuery(name = "Production.findByQualitePrevu", query = "SELECT p FROM Production p WHERE p.qualitePrevu = :qualitePrevu"),
-    @NamedQuery(name = "Production.findByComment", query = "SELECT p FROM Production p WHERE p.comment = :comment"),
-    @NamedQuery(name = "Production.findByRegion", query = "SELECT p FROM Production p WHERE p.region = :region"),
-    @NamedQuery(name = "Production.findByEtat", query = "SELECT p FROM Production p WHERE p.etat = :etat")})
+        @NamedQuery(name = "Production.findAll", query = "SELECT p FROM Production p"),
+        @NamedQuery(name = "Production.findByUid", query = "SELECT p FROM Production p WHERE p.uid = :uid"),
+        @NamedQuery(name = "Production.findByNumlot", query = "SELECT p FROM Production p WHERE p.numlot = :numlot"),
+        @NamedQuery(name = "Production.findByDateDebut", query = "SELECT p FROM Production p WHERE p.dateDebut = :dateDebut"),
+        @NamedQuery(name = "Production.findByDateFin", query = "SELECT p FROM Production p WHERE p.dateFin = :dateFin"),
+        @NamedQuery(name = "Production.findByDatePeremption", query = "SELECT p FROM Production p WHERE p.datePeremption = :datePeremption"),
+        @NamedQuery(name = "Production.findByDateFabrication", query = "SELECT p FROM Production p WHERE p.dateFabrication = :dateFabrication"),
+        @NamedQuery(name = "Production.findByQuantitePrevu", query = "SELECT p FROM Production p WHERE p.quantitePrevu = :quantitePrevu"),
+        @NamedQuery(name = "Production.findByQualitePrevu", query = "SELECT p FROM Production p WHERE p.qualitePrevu = :qualitePrevu"),
+        @NamedQuery(name = "Production.findByComment", query = "SELECT p FROM Production p WHERE p.comment = :comment"),
+        @NamedQuery(name = "Production.findByRegion", query = "SELECT p FROM Production p WHERE p.region = :region"),
+        @NamedQuery(name = "Production.findByEtat", query = "SELECT p FROM Production p WHERE p.etat = :etat") })
 
 public class Production extends BaseModel implements Serializable {
 
@@ -64,6 +64,7 @@ public class Production extends BaseModel implements Serializable {
     public LocalDateTime getDeletedAt() {
         return deletedAt;
     }
+
     @Basic(optional = false)
     @NotNull
     @Size(min = 1, max = 100)
@@ -77,7 +78,8 @@ public class Production extends BaseModel implements Serializable {
     private LocalDate datePeremption;
     @Column(name = "date_fabrication")
     private LocalDate dateFabrication;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "quantite_prevu")
     private Double quantitePrevu;
     @Size(max = 100)
@@ -120,7 +122,9 @@ public class Production extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Production() {

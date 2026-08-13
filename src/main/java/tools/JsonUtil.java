@@ -5,7 +5,6 @@
  */
 package tools;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import utilities.ImageProduit;
 import java.io.StringReader;
@@ -45,20 +44,11 @@ import data.Taxe;
 import data.Taxer;
 import data.BulkModel;
 import data.Periode;
-import data.Depot;
 import data.Commande;
 import data.CommandeLister;
-import data.Matiere;
-import data.MatiereSku;
-import data.Production;
-import data.Repartir;
-import data.Imputer;
-import data.Entreposer;
 import data.Satisfaire;
 import data.Refresher;
 import data.Permission;
-import data.Immobilisation;
-import data.Presence;
 import data.FingerprintMapping;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -78,7 +68,6 @@ import data.MatiereSku;
 import data.Presence;
 import data.Entreprise;
 import data.Employee;
-import java.util.prefs.Preferences;
 
 /**
  *

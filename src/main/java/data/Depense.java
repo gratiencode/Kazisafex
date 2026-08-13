@@ -4,6 +4,7 @@
  * and open the template in the editor.
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import java.io.Serializable;
 import java.util.List;
@@ -32,10 +33,10 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Depense.findAll", query = "SELECT DISTINCT  d FROM Depense d"),
-    @NamedQuery(name = "Depense.findByUid", query = "SELECT DISTINCT  d FROM Depense d WHERE d.uid = :uid"),
-    @NamedQuery(name = "Depense.findByNomDepense", query = "SELECT DISTINCT  d FROM Depense d WHERE d.nomDepense = :nomDepense"),
-    @NamedQuery(name = "Depense.findByRegion", query = "SELECT DISTINCT  d FROM Depense d WHERE d.region = :region")})
+        @NamedQuery(name = "Depense.findAll", query = "SELECT DISTINCT  d FROM Depense d"),
+        @NamedQuery(name = "Depense.findByUid", query = "SELECT DISTINCT  d FROM Depense d WHERE d.uid = :uid"),
+        @NamedQuery(name = "Depense.findByNomDepense", query = "SELECT DISTINCT  d FROM Depense d WHERE d.nomDepense = :nomDepense"),
+        @NamedQuery(name = "Depense.findByRegion", query = "SELECT DISTINCT  d FROM Depense d WHERE d.region = :region") })
 
 public class Depense extends BaseModel implements Serializable {
 
@@ -52,7 +53,7 @@ public class Depense extends BaseModel implements Serializable {
     @OneToMany(mappedBy = "depenseId")
     private List<Operation> operationList;
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
-     private LocalDateTime deletedAt;
+    private LocalDateTime deletedAt;
     @Column(name = "updated_at", columnDefinition = "DATETIME")
     private LocalDateTime updatedAt;
 
@@ -69,14 +70,18 @@ public class Depense extends BaseModel implements Serializable {
     @PrePersist
     protected void onDataOperation() {
         if (this.uid == null) {
-             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
+            this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
- 
+
     @PreUpdate
     protected void onUpdate() {
-       this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Depense(String uid) {
@@ -133,7 +138,6 @@ public class Depense extends BaseModel implements Serializable {
         this.region = region;
     }
 
-    
     public List<Operation> getOperationList() {
         return operationList;
     }
@@ -178,15 +182,8 @@ public class Depense extends BaseModel implements Serializable {
         return updatedAt;
     }
 
-
-   public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-   
-
- 
- 
-  
 
 }

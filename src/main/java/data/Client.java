@@ -41,19 +41,24 @@ import tools.Tables;
 @Table(name = "client")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Client.findAll", query = "SELECT DISTINCT  c FROM Client c"),
-    @NamedQuery(name = "Client.findByUid", query = "SELECT DISTINCT  c FROM Client c WHERE c.uid = :uid"),
-    @NamedQuery(name = "Client.findByPhone", query = "SELECT DISTINCT  c FROM Client c WHERE c.phone = :phone"),
-    @NamedQuery(name = "Client.findByNomClient", query = "SELECT DISTINCT  c FROM Client c WHERE c.nomClient = :nomClient"),
-    @NamedQuery(name = "Client.findByPhoneName", query = "SELECT DISTINCT  c FROM Client c WHERE c.phone = :phone AND c.nomClient = :nom"),
-    @NamedQuery(name = "Client.findByTypeClient", query = "SELECT DISTINCT  c FROM Client c WHERE c.typeClient = :typeClient")})
+        @NamedQuery(name = "Client.findAll", query = "SELECT DISTINCT  c FROM Client c"),
+        @NamedQuery(name = "Client.findByUid", query = "SELECT DISTINCT  c FROM Client c WHERE c.uid = :uid"),
+        @NamedQuery(name = "Client.findByPhone", query = "SELECT DISTINCT  c FROM Client c WHERE c.phone = :phone"),
+        @NamedQuery(name = "Client.findByNomClient", query = "SELECT DISTINCT  c FROM Client c WHERE c.nomClient = :nomClient"),
+        @NamedQuery(name = "Client.findByPhoneName", query = "SELECT DISTINCT  c FROM Client c WHERE c.phone = :phone AND c.nomClient = :nom"),
+        @NamedQuery(name = "Client.findByTypeClient", query = "SELECT DISTINCT  c FROM Client c WHERE c.typeClient = :typeClient") })
 
 public class Client extends BaseModel implements Serializable {
 
-    // @Pattern(regexp="^\\(?(\\d{3})\\)?[- ]?(\\d{3})[- ]?(\\d{4})$", message="Invalid phone/fax format, should be as xxx-xxx-xxxx")//if the field contains phone or fax number consider using this annotation to enforce field validation
+    // @Pattern(regexp="^\\(?(\\d{3})\\)?[- ]?(\\d{3})[- ]?(\\d{4})$",
+    // message="Invalid phone/fax format, should be as xxx-xxx-xxxx")//if the field
+    // contains phone or fax number consider using this annotation to enforce field
+    // validation
     @Column(name = "phone")
     private String phone;
-    // @Pattern(regexp="[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", message="Invalid email")//if the field contains email address consider using this annotation to enforce field validation
+    // @Pattern(regexp="[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?",
+    // message="Invalid email")//if the field contains email address consider using
+    // this annotation to enforce field validation
     @Lob
     @Column(name = "email")
     private String email;
@@ -117,7 +122,9 @@ public class Client extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Client() {

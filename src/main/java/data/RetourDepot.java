@@ -4,6 +4,7 @@
  * and open the template in the editor.
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -34,17 +35,17 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "RetourDepot.findAll", query = "SELECT DISTINCT  r FROM RetourDepot r"),
-    @NamedQuery(name = "RetourDepot.findByUid", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.uid = :uid"),
-    @NamedQuery(name = "RetourDepot.findByRegionProv", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionProv = :regionProv"),
-    @NamedQuery(name = "RetourDepot.findByCoutAchat", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.coutAchat = :coutAchat"),
-    @NamedQuery(name = "RetourDepot.findByQuantite", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.quantite = :quantite"),
-    @NamedQuery(name = "RetourDepot.findByDate", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.date = :date"),
-    @NamedQuery(name = "RetourDepot.findByRegion", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.region = :region"),
-    @NamedQuery(name = "RetourDepot.findByMotif", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.motif = :motif"),
-    @NamedQuery(name = "RetourDepot.findByNumlot", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.numlot = :numlot"),
-    @NamedQuery(name = "RetourDepot.findByLocalisation", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.localisation = :localisation"),
-    @NamedQuery(name = "RetourDepot.findByRegionDest", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionDest = :regionDest")})
+        @NamedQuery(name = "RetourDepot.findAll", query = "SELECT DISTINCT  r FROM RetourDepot r"),
+        @NamedQuery(name = "RetourDepot.findByUid", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.uid = :uid"),
+        @NamedQuery(name = "RetourDepot.findByRegionProv", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionProv = :regionProv"),
+        @NamedQuery(name = "RetourDepot.findByCoutAchat", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.coutAchat = :coutAchat"),
+        @NamedQuery(name = "RetourDepot.findByQuantite", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.quantite = :quantite"),
+        @NamedQuery(name = "RetourDepot.findByDate", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.date = :date"),
+        @NamedQuery(name = "RetourDepot.findByRegion", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.region = :region"),
+        @NamedQuery(name = "RetourDepot.findByMotif", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.motif = :motif"),
+        @NamedQuery(name = "RetourDepot.findByNumlot", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.numlot = :numlot"),
+        @NamedQuery(name = "RetourDepot.findByLocalisation", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.localisation = :localisation"),
+        @NamedQuery(name = "RetourDepot.findByRegionDest", query = "SELECT DISTINCT  r FROM RetourDepot r WHERE r.regionDest = :regionDest") })
 
 public class RetourDepot extends BaseModel implements Serializable {
 
@@ -57,13 +58,14 @@ public class RetourDepot extends BaseModel implements Serializable {
     @Basic(optional = false)
     @Column(name = "region_prov")
     private String regionProv;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "cout_achat")
     private Double coutAchat;
     @Column(name = "quantite")
     private Double quantite;
     @Column(name = "date_")
-    
+
     private LocalDateTime date;
     @Column(name = "region")
     private String region;
@@ -77,15 +79,15 @@ public class RetourDepot extends BaseModel implements Serializable {
     private String regionDest;
     @JoinColumn(name = "destocker_id", referencedColumnName = "uid")
     @ManyToOne
-    
+
     private Destocker destockerId;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    
+
     private Mesure mesureId;
     @JoinColumn(name = "recquisition_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    
+
     private Recquisition recquisitionId;
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
     private LocalDateTime deletedAt;
@@ -106,7 +108,9 @@ public class RetourDepot extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public RetourDepot(String uid) {

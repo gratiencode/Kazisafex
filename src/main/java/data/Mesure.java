@@ -40,10 +40,10 @@ import tools.Tables;
 @Table(name = "mesure")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Mesure.findAll", query = "SELECT DISTINCT  m FROM Mesure m"),
-    @NamedQuery(name = "Mesure.findByUid", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.uid = :uid"),
-    @NamedQuery(name = "Mesure.findByDescription", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.description = :description"),
-    @NamedQuery(name = "Mesure.findByQuantContenu", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.quantContenu = :quantContenu")})
+        @NamedQuery(name = "Mesure.findAll", query = "SELECT DISTINCT  m FROM Mesure m"),
+        @NamedQuery(name = "Mesure.findByUid", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.uid = :uid"),
+        @NamedQuery(name = "Mesure.findByDescription", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.description = :description"),
+        @NamedQuery(name = "Mesure.findByQuantContenu", query = "SELECT DISTINCT  m FROM Mesure m WHERE m.quantContenu = :quantContenu") })
 //
 public class Mesure extends BaseModel implements Serializable {
 
@@ -102,7 +102,9 @@ public class Mesure extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Mesure() {
@@ -200,7 +202,8 @@ public class Mesure extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "entities.Mesure[ uid=" + uid + ", description =" + this.description + ", quantcontenu =" + this.quantContenu + "]";
+        return "entities.Mesure[ uid=" + uid + ", description =" + this.description + ", quantcontenu ="
+                + this.quantContenu + "]";
     }
 
     public String getDescription() {

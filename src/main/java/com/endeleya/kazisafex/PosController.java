@@ -5453,12 +5453,15 @@ public class PosController implements Initializable {
 
                         List<Vente> ventes = VenteDelegate.findVentes();
                         List<Vente> lrst = new ArrayList<>();
+                        Set<Integer> seenVentes = new HashSet<>();
                         for (Vente v : ventes) {
-                            Client c = ClientDelegate.findClient(v.getClientId().getUid());
+                            Client c = v.getClientId() == null ? null
+                                    : ClientDelegate.findClient(v.getClientId().getUid());
                             String bill = v.getReference() + " "
-                                    + (v.getDateVente().toString()) + " "
-                                    + "" + (c == null ? "Anonyme" : (c.getNomClient() + " " + c.getPhone())) + " "
-                                    + c.getEmail();
+                                    + (v.getDateVente() == null ? "" : v.getDateVente().toString()) + " "
+                                    + (c == null ? "Anonyme"
+                                            : (c.getNomClient() + " " + c.getPhone() + " "
+                                                    + (c.getEmail() == null ? "" : c.getEmail())));
                             List<LigneVente> lgv = v.getLigneVenteList();
                             List<LigneVente> lgvs = lgv == null ? LigneVenteDelegate.findByReference(v.getUid())
                                     : lgv;
@@ -5469,11 +5472,13 @@ public class PosController implements Initializable {
                                         + " " + p.getMarque() + " " + p.getModele() + " "
                                         + p.getNomProduit() + " " + p.getTaille()).toUpperCase();
                                 if ((bill + " " + pred).toUpperCase().contains(query.toUpperCase())) {
-                                    lrst.add(v);
+                                    if (seenVentes.add(v.getUid())) {
+                                        lrst.add(v);
+                                    }
                                 }
                             }
                         }
-                        fillSaleHistory();
+                        fillSaleHistory(lrst);
 
                     });
                 } else if (tab_mag_inv.isSelected()) {
@@ -5780,8 +5785,8 @@ public class PosController implements Initializable {
         prodx = FXCollections.observableArrayList();
         String meth = pref.get("meth", "FIFO");
         loadRegionsLocally();
-        RegionRegistry.selectSavedRegion(pref, cbx_region_retour_depot);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_rupture);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_retour_depot, regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_rupture, regions);
         // Executors.newSingleThreadExecutor()
         // .execute(() -> {
         // JpaStorage dbase = JpaStorage.getInstance();
@@ -5863,8 +5868,8 @@ public class PosController implements Initializable {
                 }
                 cbx_region_maginv.setItems(regions);
                 cbx_region_venthist.setItems(regions);
-                RegionRegistry.selectSavedRegion(pref, cbx_region_maginv);
-                RegionRegistry.selectSavedRegion(pref, cbx_region_venthist);
+                RegionRegistry.bindSavedRegion(pref, cbx_region_maginv, regions);
+                RegionRegistry.bindSavedRegion(pref, cbx_region_venthist, regions);
                 cbx_region_maginv.setVisible(traderOrAll);
                 cbx_region_venthist.setVisible(traderOrAll);
                 cbx_region_rupture.setVisible(traderOrAll);
@@ -7143,13 +7148,7 @@ public class PosController implements Initializable {
         cbx_etat_inv_compter.setItems(states);
         cbx_region_inv_compter.setItems(regions);
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        regions.addListener((javafx.beans.Observable observable) -> {
-            String selectedRegion = cbx_region_inv_compter.getValue();
-            if (selectedRegion == null || !regions.contains(selectedRegion)) {
-                RegionRegistry.selectSavedRegion(pref, cbx_region_inv_compter);
-            }
-        });
-        RegionRegistry.selectSavedRegion(pref, cbx_region_inv_compter);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_inv_compter, regions);
 
         MainUI.setPattern(dpk_date_today_compter);
         MainUI.setPattern(dpk_date_exp_compter);

@@ -292,7 +292,7 @@ public class AgentController implements Initializable {
                     }
                 });
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_region_affect);
+        RegionRegistry.bindSavedRegion(pref, cbx_region_affect, regions);
         refreshAgent(entr.getUid());
         refreshRoles();
         loadPresences();

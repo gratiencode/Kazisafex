@@ -36,13 +36,13 @@ import tools.Tables;
 @Table(name = "fournisseur")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Fournisseur.findAll", query = "SELECT DISTINCT  f FROM Fournisseur f"),
-    @NamedQuery(name = "Fournisseur.findByUid", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.uid = :uid"),
-    @NamedQuery(name = "Fournisseur.findWithPhone", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone = :phone"),
-    @NamedQuery(name = "Fournisseur.findByIdentif", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.identification = :ident"),
-    @NamedQuery(name = "Fournisseur.findByNameAdresse", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone = :nomForn AND f.adresse = :adrss"),
-    @NamedQuery(name = "Fournisseur.findByName", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.nomFourn LIKE :nomFourniss"),
-    @NamedQuery(name = "Fournisseur.findByPhone", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone LIKE :phone")})
+        @NamedQuery(name = "Fournisseur.findAll", query = "SELECT DISTINCT  f FROM Fournisseur f"),
+        @NamedQuery(name = "Fournisseur.findByUid", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.uid = :uid"),
+        @NamedQuery(name = "Fournisseur.findWithPhone", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone = :phone"),
+        @NamedQuery(name = "Fournisseur.findByIdentif", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.identification = :ident"),
+        @NamedQuery(name = "Fournisseur.findByNameAdresse", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone = :nomForn AND f.adresse = :adrss"),
+        @NamedQuery(name = "Fournisseur.findByName", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.nomFourn LIKE :nomFourniss"),
+        @NamedQuery(name = "Fournisseur.findByPhone", query = "SELECT DISTINCT  f FROM Fournisseur f WHERE f.phone LIKE :phone") })
 
 public class Fournisseur extends BaseModel implements Serializable {
 
@@ -52,7 +52,10 @@ public class Fournisseur extends BaseModel implements Serializable {
     private String adresse;
     @Column(name = "identification")
     private String identification;
-    // @Pattern(regexp="^\\(?(\\d{3})\\)?[- ]?(\\d{3})[- ]?(\\d{4})$", message="Invalid phone/fax format, should be as xxx-xxx-xxxx")//if the field contains phone or fax number consider using this annotation to enforce field validation
+    // @Pattern(regexp="^\\(?(\\d{3})\\)?[- ]?(\\d{3})[- ]?(\\d{4})$",
+    // message="Invalid phone/fax format, should be as xxx-xxx-xxxx")//if the field
+    // contains phone or fax number consider using this annotation to enforce field
+    // validation
     @Column(name = "phone")
     private String phone;
 
@@ -77,7 +80,9 @@ public class Fournisseur extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Fournisseur() {

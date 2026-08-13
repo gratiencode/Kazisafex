@@ -90,9 +90,9 @@ public interface StockerStorage {
     public void rectifyStockDepot(data.Produit produit, LocalDate dte, String region, double coutAch);
 
     /**
-     * Rectifies stock_depot_agregate for a specific product/lot combination.
-     * Computes: stockInitial + SUM(stocker[numlot]) - SUM(destocker[numlot])
-     * and upserts the aggregate row.
+     * Rectifies stock_depot_agregate for a specific product/lot combination.Computes: stockInitial + SUM(stocker[numlot]) - SUM(destocker[numlot])
+ and upserts the aggregate row.
+     * @param produit
      */
     public void rectifyStockDepotByLot(data.Produit produit, String numlot, String region, double coutAch, java.time.LocalDate dateExpir);
 

@@ -12,6 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.scene.control.ComboBox;
 import retrofit2.Call;
@@ -74,7 +75,7 @@ public final class RegionRegistry {
             items = FXCollections.observableArrayList();
             comboBox.setItems(items);
         }
-        String currentRegion = normalize(pref.get(REGION_PREF, null));
+        String currentRegion = getSavedRegion(pref);
         if (currentRegion != null && items.contains(currentRegion)) {
             comboBox.getSelectionModel().select(currentRegion);
             return;
@@ -82,6 +83,32 @@ public final class RegionRegistry {
         if (!items.isEmpty()) {
             comboBox.getSelectionModel().selectFirst();
         }
+    }
+
+    /**
+     * Source unique de la region sauvegardee. Toute valeur de region choisie par
+     * l'utilisateur dans les ComboBox doit provenir de cette methode.
+     */
+    public static String getSavedRegion(Preferences pref) {
+        return pref == null ? null : normalize(pref.get(REGION_PREF, null));
+    }
+
+    /**
+     * Selectionne la region sauvegardee dans la ComboBox et restaure
+     * automatiquement cette selection apres toute mise a jour asynchrone de la
+     * liste source (unification du comportement pour tous les controleurs).
+     */
+    public static void bindSavedRegion(Preferences pref, ComboBox<String> comboBox, ObservableList<String> source) {
+        if (comboBox == null || source == null) {
+            return;
+        }
+        selectSavedRegion(pref, comboBox);
+        source.addListener((ListChangeListener<String>) c -> {
+            String selected = comboBox.getValue();
+            if (selected == null || !source.contains(selected)) {
+                selectSavedRegion(pref, comboBox);
+            }
+        });
     }
 
     public static List<String> loadLocal(Preferences pref) {

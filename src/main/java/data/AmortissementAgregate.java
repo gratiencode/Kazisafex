@@ -47,13 +47,14 @@ public class AmortissementAgregate implements Serializable {
     @ManyToOne
     private Immobilisation immobilisationId;
 
-
     @PrePersist
     protected void onCreate() {
         if (uid == null || uid.isBlank()) {
             uid = UUID.randomUUID().toString().toLowerCase().replace("-", "");
         }
-        updatedAt = LocalDateTime.now();
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
     }
 
     public String getUid() {

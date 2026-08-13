@@ -841,7 +841,7 @@ public class ProduitsController implements Initializable {
                 });
 
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
         // sync mez
         // refreshFromCloud();
         instance = this;

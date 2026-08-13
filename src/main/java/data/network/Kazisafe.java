@@ -364,11 +364,11 @@ public interface Kazisafe {
     @PATCH("destockage/x-sync")
     Call<Destocker> syncDestocker(
         @Field("uid") String uid,
-        @Field("datedestok") String date,
+        @Field("date") String date,
         @Field("reference") String reference,
         @Field("destination") String destination,
         @Field("region") String region,
-        @Field("coutAch") String coutAch,
+        @Field("coutAchat") String coutAch,
         @Field("quantite") String quantite,
         @Field("libelle") String libelle,
         @Field("observation") String observation,

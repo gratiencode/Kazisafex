@@ -4,12 +4,13 @@
  * and open the template in the editor.
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.io.Serializable;
 
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
-  import jakarta.persistence.Entity;
+import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -24,20 +25,19 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import tools.Tables;
 
-
 /**
  *
  * @author eroot
  */
 @Entity
 @Table(name = "client_appartenir")
- @XmlRootElement
+@XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "ClientAppartenir.findAll", query = "SELECT DISTINCT  c FROM ClientAppartenir c")
-    , @NamedQuery(name = "ClientAppartenir.findByUid", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.uid = :uid")
-    , @NamedQuery(name = "ClientAppartenir.findByDateAppartenir", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.dateAppartenir = :dateAppartenir")
-    , @NamedQuery(name = "ClientAppartenir.findByRegion", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.region = :region")})
+        @NamedQuery(name = "ClientAppartenir.findAll", query = "SELECT DISTINCT  c FROM ClientAppartenir c"),
+        @NamedQuery(name = "ClientAppartenir.findByUid", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.uid = :uid"),
+        @NamedQuery(name = "ClientAppartenir.findByDateAppartenir", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.dateAppartenir = :dateAppartenir"),
+        @NamedQuery(name = "ClientAppartenir.findByRegion", query = "SELECT DISTINCT  c FROM ClientAppartenir c WHERE c.region = :region") })
 
 public class ClientAppartenir extends BaseModel implements Serializable {
 
@@ -45,46 +45,40 @@ public class ClientAppartenir extends BaseModel implements Serializable {
     @Id
     @Basic(optional = false)
     @Column(name = "uid", updatable = false, nullable = false)
-  
+
     private String uid;
-    @JsonFormat(
-        shape = JsonFormat.Shape.STRING,
-        pattern = "yyyy-MM-dd"
-    )
-    @Column(name = "date_appartenir",columnDefinition = "DATE")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    @Column(name = "date_appartenir", columnDefinition = "DATE")
     private LocalDate dateAppartenir;
     @Column(name = "region")
     private String region;
     @JoinColumn(name = "client_id", referencedColumnName = "uid")
     @ManyToOne
-    
+
     private Client clientId;
     @JoinColumn(name = "client_organisation_id", referencedColumnName = "uid")
     @ManyToOne
-    
+
     private ClientOrganisation clientOrganisationId;
     @Column(name = "deleted_at", columnDefinition = "DATETIME")
-     private LocalDateTime deletedAt;
+    private LocalDateTime deletedAt;
     @Column(name = "updated_at", columnDefinition = "DATETIME")
     private LocalDateTime updatedAt;
-    
 
-    
-  
-   @PrePersist
+    @PrePersist
     @PreUpdate
-    protected void onDataOperation(){
-        if(this.uid==null){
+    protected void onDataOperation() {
+        if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-         this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public ClientAppartenir() {
         this.type = Tables.CLIENTAPPARTENIR.name();
     }
-    
-    
 
     public ClientAppartenir(String uid) {
         this.uid = uid;
@@ -131,10 +125,6 @@ public class ClientAppartenir extends BaseModel implements Serializable {
         this.clientOrganisationId = clientOrganisationId;
     }
 
-   
-  
-  
-
     @Override
     public int hashCode() {
         int hash = 0;
@@ -163,7 +153,8 @@ public class ClientAppartenir extends BaseModel implements Serializable {
     public LocalDateTime getDeletedAt() {
         return deletedAt;
     }
- public void setDeletedAt(LocalDateTime deletedAt) {
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
     }
 
@@ -171,10 +162,8 @@ public class ClientAppartenir extends BaseModel implements Serializable {
         return updatedAt;
     }
 
-
-   public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
 
-    
 }

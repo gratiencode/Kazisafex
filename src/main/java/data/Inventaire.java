@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.Column;
@@ -30,12 +31,12 @@ import java.util.UUID;
 @Table(name = "inventaire")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Inventaire.findAll", query = "SELECT DISTINCT  i FROM Inventaire i ORDER BY i.dateFin DESC"),
-    @NamedQuery(name = "Inventaire.findByUid", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.uid = :uid"),
-    @NamedQuery(name = "Inventaire.findByRegion", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.region = :region"),
-    @NamedQuery(name = "Inventaire.findByComment", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.comment = :comment"),
-    @NamedQuery(name = "Inventaire.findByCodeInventaire", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.codeInventaire= :codeInventaire"),
-    @NamedQuery(name = "Inventaire.findByEtat", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.etat = :etat")})
+        @NamedQuery(name = "Inventaire.findAll", query = "SELECT DISTINCT  i FROM Inventaire i ORDER BY i.dateFin DESC"),
+        @NamedQuery(name = "Inventaire.findByUid", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.uid = :uid"),
+        @NamedQuery(name = "Inventaire.findByRegion", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.region = :region"),
+        @NamedQuery(name = "Inventaire.findByComment", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.comment = :comment"),
+        @NamedQuery(name = "Inventaire.findByCodeInventaire", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.codeInventaire= :codeInventaire"),
+        @NamedQuery(name = "Inventaire.findByEtat", query = "SELECT DISTINCT  i FROM Inventaire i WHERE i.etat = :etat") })
 
 public class Inventaire extends BaseModel implements Serializable {
 
@@ -48,7 +49,7 @@ public class Inventaire extends BaseModel implements Serializable {
     private String comment;
     @Column(name = "code_inventaire")
     private String codeInventaire;
-    
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     @Column(name = "date_fin", columnDefinition = "DATE")
     private LocalDate dateFin;
@@ -65,9 +66,9 @@ public class Inventaire extends BaseModel implements Serializable {
     @Column(name = "updated_at", columnDefinition = "DATETIME")
     private LocalDateTime updatedAt;
     @Column(name = "valeur_total")
-    private double valeurTotal=0;
+    private double valeurTotal = 0;
     @Column(name = "valeur_total_ecart")
-    private Double valeurTotalEcart=0d;
+    private Double valeurTotalEcart = 0d;
 
     public Inventaire() {
     }
@@ -78,10 +79,13 @@ public class Inventaire extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
-    public Inventaire(String uid, String etat, String comment, String codeInventaire, LocalDate dateFin, LocalDate dateDebut, String region) {
+    public Inventaire(String uid, String etat, String comment, String codeInventaire, LocalDate dateFin,
+            LocalDate dateDebut, String region) {
         this.uid = uid;
         this.etat = etat;
         this.comment = comment;
@@ -151,7 +155,6 @@ public class Inventaire extends BaseModel implements Serializable {
         this.region = region;
     }
 
-    
     public List<Compter> getCompterList() {
         return compterList;
     }
@@ -184,7 +187,8 @@ public class Inventaire extends BaseModel implements Serializable {
 
     @Override
     public String toString() {
-        return "Inventaire{" + "uid=" + uid + ", etat=" + etat + ", comment=" + comment + ", codeInventaire=" + codeInventaire + ", dateFin=" + dateFin + ", dateDebut=" + dateDebut + ", region=" + region + '}';
+        return "Inventaire{" + "uid=" + uid + ", etat=" + etat + ", comment=" + comment + ", codeInventaire="
+                + codeInventaire + ", dateFin=" + dateFin + ", dateDebut=" + dateDebut + ", region=" + region + '}';
     }
 
     public LocalDateTime getDeletedAt() {
@@ -219,5 +223,4 @@ public class Inventaire extends BaseModel implements Serializable {
         this.valeurTotalEcart = valeurTotalEcart;
     }
 
-    
 }

@@ -227,7 +227,7 @@ public class DestockController implements Initializable {
         lisstocker = FXCollections.observableArrayList();
 
         RegionRegistry.loadAndSync(pref, kazisafe, regions, List.of("Déclassement de stock"));
-        RegionRegistry.selectSavedRegion(pref, cbx_destination_dstk);
+        RegionRegistry.bindSavedRegion(pref, cbx_destination_dstk, regions);
         cbx_choose_mesure_dstk.setItems(lismesure);
         txt_reference_dstk.setText(ref);
         tb_destock_list.setItems(lsdin);
@@ -869,7 +869,7 @@ public class DestockController implements Initializable {
                         saveDestockerWithRetry(saved);
                         savedList.add(saved);
                         count++;
-
+                        System.out.println("SAVED DESTO-"+saved.toString());
                         String pId = saved.getProductId() != null ? saved.getProductId().getUid() : "";
                         String lot = saved.getNumlot() != null ? saved.getNumlot() : "";
                         String reg = saved.getRegion() != null ? saved.getRegion() : "";
@@ -1102,7 +1102,7 @@ public class DestockController implements Initializable {
     }
 
     private boolean trySaveDestocker(Destocker ds) throws IOException {
-        return kazisafe.syncDestocker(ds.getUid(), ds.getDateDestockage().toString(), ds.getReference(), ds.getDestination(), ds.getRegion(), Double.toString(ds.getCoutAchat()), Double.toString(ds.getQuantite()), ds.getLibelle(), ds.getObservation(), ds.getMesureId().getUid(), ds.getProductId().getUid(), ds.getNumlot()).execute().code() == 200;
+        return kazisafe.syncDestocker(ds.getUid(), Constants.Datetime.utcString(ds.getDateDestockage()), ds.getReference(), ds.getDestination(), ds.getRegion(), Double.toString(ds.getCoutAchat()), Double.toString(ds.getQuantite()), ds.getLibelle(), ds.getObservation(), ds.getMesureId().getUid(), ds.getProductId().getUid(), ds.getNumlot()).execute().code() == 200;
     }
 
     private void sendProduitIfNotExist(Produit p, List<Mesure> m) {

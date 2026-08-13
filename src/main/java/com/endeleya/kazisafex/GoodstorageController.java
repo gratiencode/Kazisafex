@@ -78,6 +78,7 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeTableCell;
 import javafx.scene.control.TreeTableColumn;
 import javafx.scene.control.TreeTableView;
 import javafx.scene.control.TextField;
@@ -364,6 +365,7 @@ public class GoodstorageController implements Initializable {
     private boolean tabLivraisonLoaded = false;
     private boolean tabDestockLoaded = false;
     private boolean tabInventLoaded = false;
+    private boolean depotBackfillTriggered = false;
     private int starting = 0;
     private int rowsDataCount = 20;
     private int rowsDataCount1 = 20;
@@ -764,7 +766,7 @@ public class GoodstorageController implements Initializable {
         });
 
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_regions);
+        RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
         setupDestockRefReport();
         cbx_regions.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
@@ -808,7 +810,7 @@ public class GoodstorageController implements Initializable {
         }
         dstkReportRegions.setAll("Tout");
         dstkReportRegions.addAll(regions);
-        RegionRegistry.selectSavedRegion(pref, cbx_dstk_region);
+        RegionRegistry.bindSavedRegion(pref, cbx_dstk_region, dstkReportRegions);
         populateDstkDestinations();
         refreshDestockRefReport();
     }
@@ -864,7 +866,7 @@ public class GoodstorageController implements Initializable {
                 .collect(Collectors.groupingBy(
                         d -> d.getReference() == null || d.getReference().isBlank() ? "Sans référence" : d.getReference(),
                         LinkedHashMap::new, Collectors.toList()));
-        double grandQte = 0, grandCout = 0;
+        double grandCout = 0;
         int grandLignes = 0;
         for (Map.Entry<String, List<Destocker>> e : grouped.entrySet()) {
             List<Destocker> lines = e.getValue();
@@ -901,15 +903,13 @@ public class GoodstorageController implements Initializable {
                 refNode.getChildren().add(new TreeItem<>(leaf));
             }
             root.getChildren().add(refNode);
-            grandQte += qte;
             grandCout += cout;
             grandLignes += lines.size();
         }
         tree_dstk_ref.setRoot(root);
         tree_dstk_ref.setShowRoot(false);
         String totalText = String.format(java.util.Locale.US, "%s : %.2f", bundle.getString("xtotal"), grandCout);
-        lbl_dstk_ref_total.setText(totalText + "   |   " + String.format(bundle.getString("xitems"), grandLignes)
-                + "   |   Qte : " + String.format(java.util.Locale.US, "%.2f", grandQte));
+        lbl_dstk_ref_total.setText(totalText + "   |   " + String.format(bundle.getString("xitems"), grandLignes));
     }
 
     private void configDestockRefTable() {
@@ -956,7 +956,7 @@ public class GoodstorageController implements Initializable {
                 return null;
             }
             if (v.getNiveau() == DestockItem.Niveau.REFERENCE) {
-                return new SimpleStringProperty(String.format(java.util.Locale.US, "%.2f", v.getQuantite()));
+                return new SimpleStringProperty("-");
             }
             Destocker d = v.getDestocker();
             String mes = (d != null && d.getMesureId() != null && d.getMesureId().getDescription() != null)
@@ -969,6 +969,23 @@ public class GoodstorageController implements Initializable {
                 return null;
             }
             return new SimpleDoubleProperty(v.getCoutAchat());
+        });
+        trcol_dstk_coutachat.setCellFactory(col -> new TreeTableCell<>() {
+            @Override
+            protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setText(null);
+                    return;
+                }
+                DestockItem v = getTreeTableRow() != null && getTreeTableRow().getTreeItem() != null
+                        ? getTreeTableRow().getTreeItem().getValue() : null;
+                if (v != null && v.getNiveau() == DestockItem.Niveau.REFERENCE) {
+                    setText("-");
+                } else {
+                    setText(String.format(java.util.Locale.US, "%.2f", item == null ? 0d : item.doubleValue()));
+                }
+            }
         });
         trcol_dstk_cout.setCellValueFactory(param -> {
             DestockItem v = param.getValue().getValue();
@@ -1040,8 +1057,11 @@ public class GoodstorageController implements Initializable {
             } else {
                 try {
                     String selectedRegion = cbx_regions == null ? null : cbx_regions.getValue();
+                    String savedRegion = RegionRegistry.getSavedRegion(pref);
                     loadInventaireDepot(Util.filterNoNullMesure(products),
-                            selectedRegion == null || selectedRegion.isBlank() ? region : selectedRegion);
+                            selectedRegion == null || selectedRegion.isBlank()
+                                    ? (savedRegion != null && !savedRegion.isBlank() ? savedRegion : region)
+                                    : selectedRegion);
                 } catch (Exception ex) {
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -1380,8 +1400,10 @@ public class GoodstorageController implements Initializable {
                 valStock = totalValueFinal;
                 applyDepotInventoryFilters();
 
-                // If nothing was loaded, trigger a backfill to ensure null/blank lot aggregates are created
-                if (loadedItems.isEmpty()) {
+                // If nothing was loaded, trigger a backfill once to ensure aggregates exist.
+                // The flag prevents the backfill/loadInv loop when the region has no stock at all.
+                if (loadedItems.isEmpty() && !depotBackfillTriggered) {
+                    depotBackfillTriggered = true;
                     ManagedSessionFactory.runInBackground(() -> {
                         try {
                             StockerDelegate.backfillDepotAggregates(effectiveRegion);

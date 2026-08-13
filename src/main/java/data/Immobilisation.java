@@ -131,7 +131,9 @@ public class Immobilisation extends BaseModel implements java.io.Serializable {
     @PrePersist
     @PreUpdate
     public void updateTimeStamps() {
-        updatedAt = System.currentTimeMillis();
+        if (updatedAt == null) {
+            updatedAt = System.currentTimeMillis();
+        }
     }
 
     public double dotationMensuelleUsd() {

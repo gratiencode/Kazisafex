@@ -3,7 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package data; import com.fasterxml.jackson.annotation.JsonFormat;
+package data;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -35,13 +37,13 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "RetourMagasin.findAll", query = "SELECT DISTINCT  r FROM RetourMagasin r"),
-    @NamedQuery(name = "RetourMagasin.findByUid", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.uid = :uid"),
-    @NamedQuery(name = "RetourMagasin.findByPrixVente", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.prixVente = :prixVente"),
-    @NamedQuery(name = "RetourMagasin.findByQuantite", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.quantite = :quantite"),
-    @NamedQuery(name = "RetourMagasin.findByDate", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.date = :date"),
-    @NamedQuery(name = "RetourMagasin.findByReferenceVente", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.referenceVente = :referenceVente"),
-    @NamedQuery(name = "RetourMagasin.findByMotif", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.motif = :motif")})
+        @NamedQuery(name = "RetourMagasin.findAll", query = "SELECT DISTINCT  r FROM RetourMagasin r"),
+        @NamedQuery(name = "RetourMagasin.findByUid", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.uid = :uid"),
+        @NamedQuery(name = "RetourMagasin.findByPrixVente", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.prixVente = :prixVente"),
+        @NamedQuery(name = "RetourMagasin.findByQuantite", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.quantite = :quantite"),
+        @NamedQuery(name = "RetourMagasin.findByDate", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.date = :date"),
+        @NamedQuery(name = "RetourMagasin.findByReferenceVente", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.referenceVente = :referenceVente"),
+        @NamedQuery(name = "RetourMagasin.findByMotif", query = "SELECT DISTINCT  r FROM RetourMagasin r WHERE r.motif = :motif") })
 
 public class RetourMagasin extends BaseModel implements Serializable {
 
@@ -51,13 +53,14 @@ public class RetourMagasin extends BaseModel implements Serializable {
     @Column(name = "uid", updatable = false, nullable = false)
 
     private String uid;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "prix_vente")
     private Double prixVente;
     @Column(name = "quantite")
     private Double quantite;
     @Column(name = "date_")
-    
+
     private LocalDateTime date;
     @Basic(optional = false)
     @Column(name = "reference_vente")
@@ -73,15 +76,15 @@ public class RetourMagasin extends BaseModel implements Serializable {
 
     @JoinColumn(name = "client_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    
+
     private Client clientId;
     @JoinColumn(name = "ligne_vente_id", referencedColumnName = "uid")
     @ManyToOne
-    
+
     private LigneVente ligneVenteId;
     @JoinColumn(name = "mesure_id", referencedColumnName = "uid")
     @ManyToOne(optional = false)
-    
+
     private Mesure mesureId;
 
     public LocalDateTime getDeletedAt() {
@@ -98,7 +101,9 @@ public class RetourMagasin extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public RetourMagasin(String uid) {

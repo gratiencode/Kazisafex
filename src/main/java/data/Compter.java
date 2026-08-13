@@ -36,11 +36,11 @@ import java.util.UUID;
 @Table(name = "compter")
 @XmlRootElement
 @NamedQueries({
-    @NamedQuery(name = "Compter.findAll", query = "SELECT DISTINCT  c FROM Compter c "),
-    @NamedQuery(name = "Compter.findByUid", query = "SELECT DISTINCT  c FROM Compter c WHERE c.uid = :uid"),
-    @NamedQuery(name = "Compter.findByRegion", query = "SELECT DISTINCT  c FROM Compter c WHERE c.region = :region"),
-    @NamedQuery(name = "Compter.findByNumlot", query = "SELECT DISTINCT  c FROM Compter c WHERE c.numlot= :numlot"),
-    @NamedQuery(name = "Compter.findByEtat", query = "SELECT DISTINCT  c FROM Compter c WHERE c.timestamp = :timestamp")})
+        @NamedQuery(name = "Compter.findAll", query = "SELECT DISTINCT  c FROM Compter c "),
+        @NamedQuery(name = "Compter.findByUid", query = "SELECT DISTINCT  c FROM Compter c WHERE c.uid = :uid"),
+        @NamedQuery(name = "Compter.findByRegion", query = "SELECT DISTINCT  c FROM Compter c WHERE c.region = :region"),
+        @NamedQuery(name = "Compter.findByNumlot", query = "SELECT DISTINCT  c FROM Compter c WHERE c.numlot= :numlot"),
+        @NamedQuery(name = "Compter.findByEtat", query = "SELECT DISTINCT  c FROM Compter c WHERE c.timestamp = :timestamp") })
 
 public class Compter extends BaseModel implements Serializable {
 
@@ -88,7 +88,9 @@ public class Compter extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public Compter(String uid) {
@@ -225,5 +227,5 @@ public class Compter extends BaseModel implements Serializable {
     public void setObservation(String observation) {
         this.observation = observation;
     }
- 
+
 }

@@ -4,6 +4,7 @@
  * and open the template in the editor.
  */
 package data;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -36,14 +37,14 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "Aretirer.findAll", query = "SELECT DISTINCT  a FROM Aretirer a"),
-    @NamedQuery(name = "Aretirer.findByUid", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.uid = :uid"),
-    @NamedQuery(name = "Aretirer.findByNumlot", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.numlot = :numlot"),
-    @NamedQuery(name = "Aretirer.findByPrixVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.prixVente = :prixVente"),
-    @NamedQuery(name = "Aretirer.findByQuantite", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.quantite = :quantite"),
-    @NamedQuery(name = "Aretirer.findByDate", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.date = :date"),
-    @NamedQuery(name = "Aretirer.findByReferenceVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.referenceVente = :referenceVente")})
- 
+        @NamedQuery(name = "Aretirer.findAll", query = "SELECT DISTINCT  a FROM Aretirer a"),
+        @NamedQuery(name = "Aretirer.findByUid", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.uid = :uid"),
+        @NamedQuery(name = "Aretirer.findByNumlot", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.numlot = :numlot"),
+        @NamedQuery(name = "Aretirer.findByPrixVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.prixVente = :prixVente"),
+        @NamedQuery(name = "Aretirer.findByQuantite", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.quantite = :quantite"),
+        @NamedQuery(name = "Aretirer.findByDate", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.date = :date"),
+        @NamedQuery(name = "Aretirer.findByReferenceVente", query = "SELECT DISTINCT  a FROM Aretirer a WHERE a.referenceVente = :referenceVente") })
+
 public class Aretirer extends BaseModel implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -56,7 +57,8 @@ public class Aretirer extends BaseModel implements Serializable {
     private String numlot;
     @Column(name = "status")
     private String status;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "prix_vente")
     private Double prixVente;
     @Column(name = "quantite")
@@ -90,7 +92,9 @@ public class Aretirer extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public LocalDateTime getDeletedAt() {

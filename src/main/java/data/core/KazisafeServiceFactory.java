@@ -3,14 +3,20 @@ package data.core;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
-import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
+import java.io.IOException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -24,6 +30,8 @@ import retrofit2.Retrofit;
 import data.helpers.Token;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -124,6 +132,40 @@ public class KazisafeServiceFactory {
         .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
         .toFormatter();
 
+    public static LocalDateTime toUtc(LocalDateTime local) {
+        if (local == null) return null;
+        return local.atZone(ZoneId.systemDefault()).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+    }
+
+    public static LocalDateTime fromUtc(LocalDateTime utc) {
+        if (utc == null) return null;
+        return utc.atZone(ZoneOffset.UTC).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    static class UtcLocalDateTimeSerializer extends JsonSerializer<LocalDateTime> {
+        @Override
+        public void serialize(LocalDateTime value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+            if (value == null) {
+                gen.writeNull();
+                return;
+            }
+            gen.writeString(toUtc(value).format(flexibleFormatter));
+        }
+    }
+
+    static class UtcLocalDateTimeDeserializer extends JsonDeserializer<LocalDateTime> {
+        @Override
+        public LocalDateTime deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+            if (p.currentToken() == JsonToken.VALUE_NULL) {
+                return null;
+            }
+            String s = p.getValueAsString();
+            if (s == null || s.isBlank()) {
+                return null;
+            }
+            return fromUtc(LocalDateTime.parse(s, flexibleFormatter));
+        }
+    }
 
     public static ObjectMapper mapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -133,9 +175,9 @@ public class KazisafeServiceFactory {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         JavaTimeModule module = new JavaTimeModule();
         module.addSerializer(LocalDate.class, new LocalDateSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        module.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(flexibleFormatter));
+        module.addSerializer(LocalDateTime.class, new UtcLocalDateTimeSerializer());
         module.addDeserializer(LocalDate.class, new LocalDateDeserializer(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        module.addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer(flexibleFormatter));
+        module.addDeserializer(LocalDateTime.class, new UtcLocalDateTimeDeserializer());
         mapper.registerModule(module);
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);

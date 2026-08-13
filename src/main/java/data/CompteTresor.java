@@ -33,14 +33,14 @@ import tools.Tables;
 @XmlRootElement
 
 @NamedQueries({
-    @NamedQuery(name = "CompteTresor.findAll", query = "SELECT DISTINCT  c FROM CompteTresor c"),
-    @NamedQuery(name = "CompteTresor.findByUid", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.uid = :uid"),
-    @NamedQuery(name = "CompteTresor.findByIntitule", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.intitule = :intitule"),
-    @NamedQuery(name = "CompteTresor.findByTypeCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.typeCompte = :typeCompte"),
-    @NamedQuery(name = "CompteTresor.findByNumeroCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.numeroCompte = :numeroCompte"),
-    @NamedQuery(name = "CompteTresor.findByBankName", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.bankName = :bankName"),
-    @NamedQuery(name = "CompteTresor.findBySoldeMinimum", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.soldeMinimum = :soldeMinimum"),
-    @NamedQuery(name = "CompteTresor.findByRegion", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.region = :region")})
+        @NamedQuery(name = "CompteTresor.findAll", query = "SELECT DISTINCT  c FROM CompteTresor c"),
+        @NamedQuery(name = "CompteTresor.findByUid", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.uid = :uid"),
+        @NamedQuery(name = "CompteTresor.findByIntitule", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.intitule = :intitule"),
+        @NamedQuery(name = "CompteTresor.findByTypeCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.typeCompte = :typeCompte"),
+        @NamedQuery(name = "CompteTresor.findByNumeroCompte", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.numeroCompte = :numeroCompte"),
+        @NamedQuery(name = "CompteTresor.findByBankName", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.bankName = :bankName"),
+        @NamedQuery(name = "CompteTresor.findBySoldeMinimum", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.soldeMinimum = :soldeMinimum"),
+        @NamedQuery(name = "CompteTresor.findByRegion", query = "SELECT DISTINCT  c FROM CompteTresor c WHERE c.region = :region") })
 
 public class CompteTresor extends BaseModel implements Serializable {
 
@@ -71,7 +71,8 @@ public class CompteTresor extends BaseModel implements Serializable {
     @Column(name = "uid", updatable = false, nullable = false)
 
     private String uid;
-    // @Max(value=?)  @Min(value=?)//if you know range of your decimal fields consider using these annotations to enforce field validation
+    // @Max(value=?) @Min(value=?)//if you know range of your decimal fields
+    // consider using these annotations to enforce field validation
     @Column(name = "solde_minimum")
     private Double soldeMinimum;
 
@@ -85,7 +86,9 @@ public class CompteTresor extends BaseModel implements Serializable {
         if (this.uid == null) {
             this.uid = UUID.randomUUID().toString().toLowerCase().replaceAll("-", "");
         }
-        this.updatedAt = LocalDateTime.now();
+        if (this.updatedAt == null) {
+            this.updatedAt = LocalDateTime.now();
+        }
     }
 
     public CompteTresor(String uid) {
