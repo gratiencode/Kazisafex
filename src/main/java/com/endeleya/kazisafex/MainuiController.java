@@ -242,6 +242,15 @@ public class MainuiController implements Initializable {
     private Pane update_pane;
 
     @FXML
+    private Label label_update_title;
+
+    @FXML
+    private Hyperlink browser_download_link;
+
+    private final java.util.concurrent.atomic.AtomicBoolean updateDownloadInProgress =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    @FXML
     private ImageView img_profile, app_image;
 
     @FXML
@@ -480,6 +489,9 @@ public class MainuiController implements Initializable {
         douwnload_update_pgi.setVisible(false);
         download_update_pgb.setVisible(false);
         install_update_link.setVisible(false);
+        if (browser_download_link != null) {
+            browser_download_link.setVisible(false);
+        }
         localPath = MainUI.cPath("/Media/Update");
         MainUI.cPath(File.separator + "datastore");
         MainUI.cPath("/Media/ia/gratien");
@@ -2454,6 +2466,10 @@ public class MainuiController implements Initializable {
             return;
         }
 
+        if (updateDownloadInProgress.get()) {
+            return;
+        }
+
         String filename = resolveUpdateFilename();
         if (filename == null || filename.isBlank()) {
             MainUI.notify(
@@ -2466,22 +2482,40 @@ public class MainuiController implements Initializable {
             return;
         }
 
+        updateDownloadInProgress.set(true);
         Task<Void> downTask = new DownloadTask(filename, localPath);
         downTask
             .stateProperty()
             .addListener((observable, oldValue, newValue) -> {
                 if (newValue == Worker.State.SUCCEEDED) {
+                    updateDownloadInProgress.set(false);
                     downloadedUpdateFilePath =
                         localPath + File.separator + filename;
                     install_update_link.setVisible(true);
+                    // La mise a jour sera appliquee automatiquement au prochain
+                    // demarrage de l'application (voir Main.applyPendingUpdateAtStartup).
+                    try {
+                        tools.UpdateManager um = new tools.UpdateManager(kazisafe);
+                        um.storePendingUpdate(
+                            downloadedUpdateFilePath,
+                            newModule == null ? null : newModule.getVersion()
+                        );
+                    } catch (Exception ex) {
+                        Logger.getLogger(MainuiController.class.getName()).log(
+                            Level.WARNING,
+                            "Impossible de memoriser la mise a jour en attente",
+                            ex
+                        );
+                    }
                     MainUI.notify(
                         null,
                         "Succes",
-                        "Mise a jour telechargee avec succes.",
-                        4,
+                        "Mise a jour telechargee. Elle sera installee au prochain redemarrage de Kazisafe.",
+                        6,
                         "info"
                     );
                 } else if (newValue == Worker.State.FAILED) {
+                    updateDownloadInProgress.set(false);
                     Throwable ex = downTask.getException();
                     String msg =
                         ex != null
@@ -2522,6 +2556,31 @@ public class MainuiController implements Initializable {
             return "Kazisafe-MacOS.zip";
         }
         return "Kazisafe-Linux.zip";
+    }
+
+    private String resolveUpdateDownloadUrl() {
+        return "https://cloud.kazisafe.com/download/" + resolveUpdateFilename();
+    }
+
+    @FXML
+    private void openBrowserDownload(Event e) {
+        try {
+            Desktop.getDesktop().browse(URI.create(resolveUpdateDownloadUrl()));
+        } catch (IOException ex) {
+            Logger.getLogger(MainuiController.class.getName()).log(
+                Level.SEVERE,
+                null,
+                ex
+            );
+            MainUI.notify(
+                null,
+                "Erreur",
+                "Impossible d'ouvrir le navigateur. Lien: " +
+                    resolveUpdateDownloadUrl(),
+                6,
+                "error"
+            );
+        }
     }
 
     private void installTooltips() {
@@ -2806,15 +2865,51 @@ public class MainuiController implements Initializable {
                         Platform.runLater(() -> {
                             newModule = module;
                             update_pane.setVisible(true);
+                            String newVersion = module.getVersion() == null
+                                    ? "?"
+                                    : module.getVersion();
+                            label_version.setText(
+                                "Version " +
+                                    newVersion +
+                                    " disponible (actuelle: " +
+                                    pref.get("ksf_version", tools.Constants.APP_VERSION) +
+                                    ")"
+                            );
+                            if (label_update_title != null) {
+                                label_update_title.setText(
+                                    "Mise à jour disponible — v" + newVersion
+                                );
+                            }
+                            if (browser_download_link != null) {
+                                browser_download_link.setVisible(true);
+                                browser_download_link.setTooltip(
+                                    new Tooltip(resolveUpdateDownloadUrl())
+                                );
+                            }
                             MainUI.notify(
                                 null,
                                 "Mise a jour",
                                 "Version " +
-                                    module.getVersion() +
-                                    " disponible. Cliquez sur l'icone de telechargement.",
+                                    newVersion +
+                                    " disponible. Telechargement automatique...",
                                 2,
                                 "info"
                             );
+                            // Telechargement automatique sans action de l'utilisateur,
+                            // sauf si la mise a jour est deja telechargee et attend
+                            // son installation au prochain demarrage.
+                            tools.UpdateManager um = new tools.UpdateManager(kazisafe);
+                            if (!um.hasPendingUpdate()) {
+                                downloadUpdate(null);
+                            } else {
+                                MainUI.notify(
+                                    null,
+                                    "Mise a jour",
+                                    "Mise a jour deja telechargee. Elle sera installee au prochain redemarrage de Kazisafe.",
+                                    5,
+                                    "info"
+                                );
+                            }
                         });
                     }
 

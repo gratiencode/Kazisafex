@@ -19,6 +19,20 @@ public class Main {
     private static final String SW_FALLBACK_MARKER = "kazisafe.software.renderer";
 
     public static void main(String[] args) {
+        // Mise a jour automatique: si une mise a jour a ete telechargee au
+        // demarrage precedent, on la remplace dans le dossier d'installation
+        // puis on se relance (le script s'occupe de copier le jar et de rouvrir
+        // l'application). Rien ne doit tourner ici avant cette verification.
+        try {
+            tools.UpdateManager updater = new tools.UpdateManager(null);
+            if (updater.applyPendingUpdateAtStartup()) {
+                return;
+            }
+        } catch (Throwable t) {
+            System.err.println("[Kazisafex] Verification de mise a jour en attente impossible : "
+                    + (t.getMessage() == null ? t.toString() : t.getMessage()));
+        }
+
         boolean alreadyInSoftwareMode = Boolean.getBoolean(SW_FALLBACK_MARKER)
                 || System.getProperty("prism.order") != null;
 

@@ -18,6 +18,8 @@ public class UpdateManager {
     private static final String UPDATE_URL = "https://cloud.kazisafe.com/download";
     private static final String JAR_NAME = "Kazisafex.jar";
     private static final String PREF_VERSION = "ksf_version";
+    private static final String PREF_PENDING_UPDATE = "ksf_pending_update";
+    private static final String PREF_PENDING_VERSION = "ksf_pending_version";
 
     private final Kazisafe kazisafe;
     private final Preferences prefs;
@@ -53,6 +55,55 @@ public class UpdateManager {
                 listener.onError(e.getMessage());
             }
         }).start();
+    }
+
+    /**
+     * Conserve la mise a jour telechargee pour l'application au prochain
+     * demarrage de l'application.
+     */
+    public void storePendingUpdate(String downloadedFilePath, String newVersion) {
+        prefs.put(PREF_PENDING_UPDATE, downloadedFilePath);
+        if (newVersion != null && !newVersion.isBlank()) {
+            prefs.put(PREF_PENDING_VERSION, newVersion);
+        }
+    }
+
+    /**
+     * Vrai si une mise a jour telechargee attend son application au prochain
+     * demarrage.
+     */
+    public boolean hasPendingUpdate() {
+        String path = prefs.get(PREF_PENDING_UPDATE, "");
+        return path != null && !path.isBlank() && new File(path).exists();
+    }
+
+    /**
+     * Si une mise a jour a ete telechargee au demarrage precedent, la remplace
+     * dans le dossier d'installation et relance l'application. A appeler au tout
+     * debut du processus (avant l'initialisation de l'UI).
+     *
+     * @return true si une mise a jour a ete appliquee (le processus doit se terminer
+     * pour laisser le script de relance prendre le relais)
+     */
+    public boolean applyPendingUpdateAtStartup() {
+        String path = prefs.get(PREF_PENDING_UPDATE, "");
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+        File pending = new File(path);
+        if (!pending.exists() || !pending.isFile()) {
+            prefs.remove(PREF_PENDING_UPDATE);
+            prefs.remove(PREF_PENDING_VERSION);
+            return false;
+        }
+        String newVersion = prefs.get(PREF_PENDING_VERSION, "");
+        if (newVersion != null && !newVersion.isBlank()) {
+            prefs.put(PREF_VERSION, newVersion);
+        }
+        scheduleRestart(pending.getAbsolutePath());
+        prefs.remove(PREF_PENDING_UPDATE);
+        prefs.remove(PREF_PENDING_VERSION);
+        return true;
     }
 
     public void downloadJar(Module module, DownloadProgressListener listener) {

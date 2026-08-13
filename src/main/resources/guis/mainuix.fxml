@@ -554,43 +554,44 @@
                                           <DropShadow />
                                        </effect>
                                     </AnchorPane>
-                                    <Pane fx:id="update_pane" layoutX="671.0" layoutY="584.0" prefHeight="80.0" prefWidth="388.0" style="-fx-background-color: white; -fx-background-radius: 9;" visible="false" AnchorPane.bottomAnchor="7.0" AnchorPane.rightAnchor="14.0">
-                                       <effect>
-                                          <DropShadow />
-                                       </effect>
-                                       <children>
-                                          <Label layoutX="60.0" layoutY="5.0" text="Mise à jour disponible">
-                                             <font>
-                                                <Font name="System Bold" size="13.0" />
-                                             </font>
-                                          </Label>
-                                          <Label fx:id="label_version" layoutX="60.0" layoutY="22.0" text="Version 1.00_21">
-                                             <font>
-                                                <Font size="11.0" />
-                                             </font>
-                                          </Label>
-                                          <Label fx:id="label_status" layoutX="438.0" layoutY="12.0" text="    " textFill="#b9b1b1" />
-                                          <Hyperlink fx:id="install_update_link" layoutX="63.0" layoutY="52.0" onAction="#installUpdate" prefHeight="22.0" prefWidth="230.0" text="Installer le mise à jour téléchargé" underline="true" />
-                                          <ProgressBar fx:id="download_update_pgb" layoutX="61.0" layoutY="39.0" prefHeight="12.0" prefWidth="275.0" progress="0.0" style="-fx-background-color: #44cef5;" />
-                                          <ProgressIndicator fx:id="douwnload_update_pgi" layoutX="348.0" layoutY="36.0" prefHeight="40.0" prefWidth="35.0" progress="0.0" />
-                                          <ImageView fx:id="download_imgbtn" fitHeight="32.0" fitWidth="48.0" layoutX="13.0" layoutY="22.0" onMouseClicked="#downloadUpdate" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../icons/update.png" />
-                                             </image>
-                                             <cursor>
-                                                <Cursor fx:constant="HAND" />
-                                             </cursor>
-                                          </ImageView>
-                                          <ImageView fitHeight="18.0" fitWidth="16.0" layoutX="356.0" layoutY="5.0" onMouseClicked="#closeUpdate" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../icons/close_blk.png" />
-                                             </image>
-                                             <cursor>
-                                                <Cursor fx:constant="HAND" />
-                                             </cursor>
-                                          </ImageView>
-                                       </children>
-                                    </Pane>
+                                     <Pane fx:id="update_pane" layoutX="671.0" layoutY="584.0" prefHeight="100.0" prefWidth="470.0" style="-fx-background-color: white; -fx-background-radius: 9;" visible="false" AnchorPane.bottomAnchor="7.0" AnchorPane.rightAnchor="14.0">
+                                        <effect>
+                                           <DropShadow />
+                                        </effect>
+                                        <children>
+                                           <Label fx:id="label_update_title" layoutX="60.0" layoutY="5.0" text="Mise à jour disponible">
+                                              <font>
+                                                 <Font name="System Bold" size="13.0" />
+                                              </font>
+                                           </Label>
+                                           <Label fx:id="label_version" layoutX="60.0" layoutY="22.0" text="Vérification de la dernière version...">
+                                              <font>
+                                                 <Font size="11.0" />
+                                              </font>
+                                           </Label>
+                                           <Label fx:id="label_status" layoutX="438.0" layoutY="12.0" text="    " textFill="#b9b1b1" />
+                                           <Hyperlink fx:id="install_update_link" layoutX="63.0" layoutY="74.0" onAction="#installUpdate" prefHeight="22.0" prefWidth="230.0" text="Installer la mise à jour téléchargée" underline="true" />
+                                           <Hyperlink fx:id="browser_download_link" layoutX="300.0" layoutY="74.0" onAction="#openBrowserDownload" prefHeight="22.0" prefWidth="160.0" text="Télécharger dans le navigateur" underline="true" />
+                                           <ProgressBar fx:id="download_update_pgb" layoutX="61.0" layoutY="52.0" prefHeight="12.0" prefWidth="275.0" progress="0.0" style="-fx-background-color: #44cef5;" />
+                                           <ProgressIndicator fx:id="douwnload_update_pgi" layoutX="348.0" layoutY="49.0" prefHeight="40.0" prefWidth="35.0" progress="0.0" />
+                                           <ImageView fx:id="download_imgbtn" fitHeight="32.0" fitWidth="48.0" layoutX="13.0" layoutY="28.0" onMouseClicked="#downloadUpdate" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                              <image>
+                                                 <Image url="@../icons/update.png" />
+                                              </image>
+                                              <cursor>
+                                                 <Cursor fx:constant="HAND" />
+                                              </cursor>
+                                           </ImageView>
+                                           <ImageView fitHeight="18.0" fitWidth="16.0" layoutX="438.0" layoutY="5.0" onMouseClicked="#closeUpdate" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true">
+                                              <image>
+                                                 <Image url="@../icons/close_blk.png" />
+                                              </image>
+                                              <cursor>
+                                                 <Cursor fx:constant="HAND" />
+                                              </cursor>
+                                           </ImageView>
+                                        </children>
+                                     </Pane>
                                  </children>
                               </AnchorPane>
                            </children>
