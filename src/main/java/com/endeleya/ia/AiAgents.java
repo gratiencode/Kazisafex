@@ -1,6 +1,9 @@
 package com.endeleya.ia;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -149,6 +152,7 @@ public final class AiAgents {
     private final GratienSaleWorkflow saleWorkflow;
     private final GratienExpenseWorkflow expenseWorkflow;
     private final RedisMemoryStore memoryStore;
+    private final LangChainRedisChatMemoryStore chatMemoryStore;
     private final ChatMemoryProvider memoryProvider;
     private final GratienAgent assistant;
     private final ProductCreatorAgent productCreatorAgent;
@@ -176,10 +180,12 @@ public final class AiAgents {
     private AiAgents() {
         // GratienTools est partage avec le workflow pour garder un seul point d'acces aux actions base/metier.
         this.GratienTools = new GratienTools();
-        // La memoire Redis garde le contexte par entreprise/utilisateur avec fallback local.
-        // La meme limite est appliquee sur Redis et sur InMemoryStorage (fallback).
-        this.memoryStore = new RedisMemoryStore(MAX_MEMORY_MESSAGES);
-        this.memoryProvider = memoryProvider(memoryStore);
+        // Memoire UNIQUE: celle lue par le LLM via LangChain4j (cle langchain:).
+        // La capacite du store doit depasser le seuil de compactage afin qu'aucun
+        // message ne soit evince silencieusement avant la synthese.
+        this.memoryStore = new RedisMemoryStore(MAX_MEMORY_MESSAGES + COMPACTION_THRESHOLD);
+        this.chatMemoryStore = new LangChainRedisChatMemoryStore(memoryStore, MAX_MEMORY_MESSAGES + COMPACTION_THRESHOLD);
+        this.memoryProvider = memoryProvider(chatMemoryStore);
         StreamingChatModel oschatmodel = OllamaStreamingChatModel.builder()
                 .baseUrl(OLLAMA_BASE_URL)
                 .modelName(MODEL_NAME)
@@ -664,7 +670,6 @@ public final class AiAgents {
     public void streamGeneral(String question, String entreprise, Consumer<String> onToken,
             Consumer<String> onProcess, Runnable onComplete, Consumer<Throwable> onError) {
         startForCurrentSession();
-        appendMemory("user", safe(question, ""));
         String date=LocalDateTime.now().toString();
         GratienTools.setCurrentSessionId(sessionId);
         TokenStream stream = assistant.chat(sessionId,date,entreprise == null ? "" : entreprise, safe(question, ""));
@@ -738,25 +743,59 @@ public final class AiAgents {
     }
 
     public void appendMemory(String role, String content) {
+        if (content == null || content.isBlank()) {
+            return;
+        }
         if (streamingActive.get()) {
-            // Pendant un streaming on ne bloque jamais : on reporte le compactage a la fin.
-            memoryStore.append(sessionId, role, content);
+            // Pendant un streaming, la memoire unique est deja tenue a jour par
+            // LangChain4j (MessageWindowChatMemory). On ne fait que signaler une
+            // eventuale limite atteinte, le compactage est reporte a la fin.
             if (memoryAtLimit()) {
                 compactionPending.set(true);
             }
             return;
         }
-        // Hors streaming : a chaque limite atteinte, la prochaine ecriture evincerait
-        // le plus ancien message. On compacte AVANT d'ajouter afin qu'aucun message ne
-        // soit perdu et que le contexte compacte reste le message numero 1.
+        // Hors streaming : on n'ecrit dans la memoire unique lue par le LLM que
+        // les veritables echanges conversationnels (user/assistant/system).
+        // Les evenements internes (tool-start, agent-*, thinking, error...) n'ont
+        // pas vocation a etre memorises.
+        if (!isConversationalRole(role)) {
+            return;
+        }
         if (memoryAtLimit()) {
             maybeCompactMemory();
         }
-        memoryStore.append(sessionId, role, content);
+        List<ChatMessage> messages = new ArrayList<>(chatMemoryStore.getMessages(sessionId));
+        messages.add(toChatMessage(role, content));
+        chatMemoryStore.updateMessages(sessionId, messages);
+    }
+
+    private boolean isConversationalRole(String role) {
+        return "user".equals(role) || "assistant".equals(role) || "system".equals(role);
     }
 
     public List<String> recentMemory(int limit) {
-        return memoryStore.recent(sessionId, Math.min(limit, MAX_MEMORY_MESSAGES));
+        List<ChatMessage> messages = chatMemoryStore.getMessages(sessionId);
+        int from = Math.max(0, messages.size() - Math.max(1, limit));
+        List<String> recent = new ArrayList<>();
+        for (int i = from; i < messages.size(); i++) {
+            recent.add(memoryRole(messages.get(i)) + "|" + memoryContent(messages.get(i)));
+        }
+        return recent;
+    }
+
+    private ChatMessage toChatMessage(String role, String content) {
+        String normalized = role == null ? "" : role;
+        switch (normalized) {
+            case "user":
+                return UserMessage.from(content);
+            case "assistant":
+                return AiMessage.from(content);
+            case "system":
+                return SystemMessage.from(content);
+            default:
+                return SystemMessage.from("[" + normalized + "] " + content);
+        }
     }
 
     /**
@@ -894,7 +933,7 @@ public final class AiAgents {
         }
         synchronized (compactionLock) {
             try {
-                List<String> raw = memoryStore.recentRaw(sessionId, MAX_MEMORY_MESSAGES);
+                List<ChatMessage> raw = chatMemoryStore.getMessages(sessionId);
                 if (raw.size() < MAX_MEMORY_MESSAGES) {
                     return;
                 }
@@ -906,23 +945,25 @@ public final class AiAgents {
     }
 
     /**
-     * Vrai des que la memoire est pleine : la prochaine ecriture evincerait un message.
+     * Vrai des que la memoire de chat reelle (langchain:) est pleine : la
+     * prochaine ecriture evincerait un message sans synthese.
      */
     private boolean memoryAtLimit() {
-        return memoryStore.recentRaw(sessionId, MAX_MEMORY_MESSAGES).size() >= MAX_MEMORY_MESSAGES;
+        return chatMemoryStore.getMessages(sessionId).size() >= MAX_MEMORY_MESSAGES;
     }
 
-    private void compactMemory(List<String> raw) {
+    private void compactMemory(List<ChatMessage> raw) {
         compacting.set(true);
         emitCompactionSignal(
                 "\uD83E\uDDD1\u200D\uD83D\uDCBB Gratien compacte sa mémoire pour ne garder que l'essentiel... "
                         + "Les messages reçus pendant ce temps seront traités juste après.");
         try {
             String summary = summarize(raw);
-            // Eviction: la memoire est entierement purgee, seul le contexte compacte subsiste.
-            List<String> renewed = new ArrayList<>();
-            renewed.add(RedisMemoryStore.serializePayload("system", COMPACTION_MARKER + summary));
-            memoryStore.replaceRaw(sessionId, renewed);
+            // Eviction: la memoire de chat reelle est entierement purgee, seul le
+            // contexte compacte subsiste en message system numero 1.
+            List<ChatMessage> renewed = new ArrayList<>();
+            renewed.add(SystemMessage.from(COMPACTION_MARKER + summary));
+            chatMemoryStore.updateMessages(sessionId, renewed);
             LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": purgee, "
                     + renewed.size() + " message de contexte compacte en numero 1.");
             emitCompactionSignal("\u2705 Mémoire compactée.");
@@ -931,12 +972,11 @@ public final class AiAgents {
         }
     }
 
-    private String summarize(List<String> raw) {
+    private String summarize(List<ChatMessage> raw) {
         StringBuilder transcript = new StringBuilder();
-        for (String payload : raw) {
-            String[] parts = RedisMemoryStore.parsePayload(payload);
-            String role = parts[0];
-            String content = parts[1];
+        for (ChatMessage message : raw) {
+            String role = memoryRole(message);
+            String content = memoryContent(message);
             if (content == null || content.isBlank()) {
                 continue;
             }
@@ -966,6 +1006,35 @@ public final class AiAgents {
         return deterministicSummary(conversation);
     }
 
+    private String memoryRole(ChatMessage message) {
+        if (message instanceof SystemMessage) {
+            return "system";
+        }
+        if (message instanceof UserMessage) {
+            return "user";
+        }
+        if (message instanceof AiMessage) {
+            return "assistant";
+        }
+        return "tool";
+    }
+
+    private String memoryContent(ChatMessage message) {
+        if (message instanceof SystemMessage system) {
+            return system.text();
+        }
+        if (message instanceof UserMessage user) {
+            return user.hasSingleText() ? user.singleText() : user.toString();
+        }
+        if (message instanceof AiMessage ai) {
+            return ai.text();
+        }
+        if (message instanceof ToolExecutionResultMessage tool) {
+            return (tool.toolName() == null ? "" : tool.toolName()) + " => " + tool.text();
+        }
+        return message == null ? "" : message.toString();
+    }
+
     private String deterministicSummary(String conversation) {
         String compact = conversation.trim().replace("\n", " | ");
         return compact.length() > 1500 ? compact.substring(0, 1500) + "..." : compact;
@@ -993,11 +1062,14 @@ public final class AiAgents {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).trim();
     }
 
-    private ChatMemoryProvider memoryProvider(RedisMemoryStore store) {
-        LangChainRedisChatMemoryStore chatMemoryStore = new LangChainRedisChatMemoryStore(store);
+    private ChatMemoryProvider memoryProvider(LangChainRedisChatMemoryStore chatMemoryStore) {
+        // Marge de securite au-dessus du seuil de compactage (MAX_MEMORY_MESSAGES):
+        // MessageWindowChatMemory ne doit jamais evincer silencieusement un message
+        // avant que maybeCompactMemory n'ait pu synthetiser la conversation.
+        int windowMax = MAX_MEMORY_MESSAGES + COMPACTION_THRESHOLD;
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(MAX_MEMORY_MESSAGES)
+                .maxMessages(windowMax)
                 .chatMemoryStore(chatMemoryStore)
                 .build();
     }
@@ -1018,37 +1090,41 @@ public final class AiAgents {
         AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicReference<String> lastToolResult = new AtomicReference<>("");
         try {
-            appendMemory("agent-start", agentName + " lance son execution.");
             emitProgress("\uD83E\uDD16 Sous-agent " + friendlyAgentName(agentName) + " : analyse de la tâche...");
-            streamSupplier.get()
-                    .beforeToolExecution(tool -> {
-                        String toolName = tool.request() == null ? "outil" : tool.request().name();
-                        appendMemory(agentName + "-tool-start", "Execution outil " + toolName);
-                        emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, true)));
-                    })
-                    .onToolExecuted(tool -> {
-                        String toolName = tool.request() == null ? "outil" : tool.request().name();
-                        String result = tool.result() == null ? "" : tool.result();
-                        lastToolResult.set(result);
-                        appendMemory(agentName + "-tool-result", toolName + " => " + result);
-                        emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
-                    })
-                    .onPartialThinking(thinking -> {
-                        if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
-                            appendMemory(agentName + "-thinking", thinking.text());
-                            // Le chat n'affiche qu'une seule ligne pendant le raisonnement du sous-agent.
-                            emitProgress("*Réflexion en cours...*");
-                        }
-                    })
-                    .onPartialResponse(answer::append)
-                    .onCompleteResponse(response -> latch.countDown())
-                    .onError(ex -> {
-                        error.set(ex);
-                        latch.countDown();
-                    })
-                    .start();
-            if (!latch.await(5, TimeUnit.MINUTES)) {
-                throw new IllegalStateException(agentName + " n'a pas termine dans le delai attendu");
+            // Pendant l'execution synchrone du sous-agent, la memoire unique est
+            // geree par LangChain4j (comme pour le chat principal) : appendMemory
+            // devient no-op et signale seulement une eventuelle limite atteinte.
+            streamingActive.set(true);
+            try {
+                streamSupplier.get()
+                        .beforeToolExecution(tool -> {
+                            String toolName = tool.request() == null ? "outil" : tool.request().name();
+                            emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, true)));
+                        })
+                        .onToolExecuted(tool -> {
+                            String toolName = tool.request() == null ? "outil" : tool.request().name();
+                            String result = tool.result() == null ? "" : tool.result();
+                            lastToolResult.set(result);
+                            emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
+                        })
+                        .onPartialThinking(thinking -> {
+                            if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
+                                // Le chat n'affiche qu'une seule ligne pendant le raisonnement du sous-agent.
+                                emitProgress("*Réflexion en cours...*");
+                            }
+                        })
+                        .onPartialResponse(answer::append)
+                        .onCompleteResponse(response -> latch.countDown())
+                        .onError(ex -> {
+                            error.set(ex);
+                            latch.countDown();
+                        })
+                        .start();
+                if (!latch.await(5, TimeUnit.MINUTES)) {
+                    throw new IllegalStateException(agentName + " n'a pas termine dans le delai attendu");
+                }
+            } finally {
+                streamingActive.set(false);
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -1058,8 +1134,6 @@ public final class AiAgents {
             // Un echec d'agent ne doit jamais tuer le thread de streaming Gratien :
             // on renvoie un message lisible a la place (le fallback reste utilisable).
             LOGGER.log(Level.WARNING, agentName + " a echoue", ex);
-            appendMemory(agentName + "-error", safeErrorMessage(ex,
-                    "L'agent " + agentName + " a rencontre un probleme."));
             return safeErrorMessage(ex, "L'agent " + agentName + " a rencontre un probleme.");
         }
         if (error.get() != null) {

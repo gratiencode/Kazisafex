@@ -13,16 +13,22 @@ import java.util.List;
 
 public class LangChainRedisChatMemoryStore implements ChatMemoryStore {
 
-    private static final int MAX_MESSAGES = 40;
+    private static final int DEFAULT_MAX_MESSAGES = 40;
     private final RedisMemoryStore redisMemoryStore;
+    private final int maxMessages;
 
     public LangChainRedisChatMemoryStore(RedisMemoryStore redisMemoryStore) {
+        this(redisMemoryStore, DEFAULT_MAX_MESSAGES);
+    }
+
+    public LangChainRedisChatMemoryStore(RedisMemoryStore redisMemoryStore, int maxMessages) {
         this.redisMemoryStore = redisMemoryStore;
+        this.maxMessages = Math.max(1, maxMessages);
     }
 
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
-        List<String> payloads = redisMemoryStore.recentRaw(redisKey(memoryId), MAX_MESSAGES);
+        List<String> payloads = redisMemoryStore.recentRaw(redisKey(memoryId), maxMessages);
         List<ChatMessage> messages = new ArrayList<>();
         for (String payload : payloads) {
             ChatMessage message = deserialize(payload);
