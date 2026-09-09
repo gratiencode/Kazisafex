@@ -63,6 +63,25 @@ public class LigneVenteDelegate {
         return getStorage().findByReference(uid);
     }
 
+    /**
+     * Hard-delete physique (DELETE) des lignes de vente soft-deleted (deletedAt
+     * non nul) pour la vente donnee. Utilise lors de la finalisation d'un
+     * brouillon (Drafted -&gt; vente normale) dans PaymentController afin de ne
+     * conserver que les lignes actives.
+     */
+    public static void hardDeleteSoftDeletedByReference(int venteUid) {
+        try {
+            services.ManagedSessionFactory.executeWrite(em -> {
+                em.createNativeQuery(
+                        "DELETE FROM ligne_vente WHERE reference_uid = :uid AND deleted_at IS NOT NULL")
+                        .setParameter("uid", venteUid).executeUpdate();
+                return true;
+            });
+        } catch (Exception e) {
+            tools.SyncLogger.getInstance().log(e, "LigneVenteDelegate.hardDeleteSoftDeletedByReference");
+        }
+    }
+
     public static List<LigneVente> findByProduitWithLot(String uid, String numlot) {
         return getStorage().findByProduitWithLot(uid, numlot);
     }

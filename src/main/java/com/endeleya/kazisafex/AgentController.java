@@ -48,6 +48,7 @@ import retrofit2.Response;
 import tools.Constants;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import data.helpers.Role;
 import data.network.Kazisafe;
 import delegates.PermissionDelegate;
@@ -343,6 +344,7 @@ public class AgentController implements Initializable {
                     MainUI.notify(null, "", value, 5, "error");
                 }
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "AgentController.addPerm");
                 Logger.getLogger(AgentController.class.getName()).log(Level.SEVERE, null, ex);
             }
 
@@ -372,6 +374,7 @@ public class AgentController implements Initializable {
                     System.out.println("permission supprimee " + exec.body());
                 }
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "AgentController.removePerm");
                 Logger.getLogger(AgentController.class.getName()).log(Level.SEVERE, null, ex);
             }
             notallowed.addAll(choosenPermission);
@@ -750,6 +753,7 @@ public class AgentController implements Initializable {
         try {
             return Role.valueOf(selectedValue).name();
         } catch (IllegalArgumentException ex) {
+            SyncLogger.getInstance().log(ex, "AgentController.resolveSelectedRoleName");
             int displayIndex = cbx_roles_agents.getItems().indexOf(selectedValue);
             Role displayRole = getRole(displayIndex);
             return displayRole != null ? displayRole.name() : selectedValue;
@@ -799,6 +803,7 @@ public class AgentController implements Initializable {
                 return;
             }
         } catch (IllegalArgumentException ex) {
+            SyncLogger.getInstance().log(ex, "AgentController.selectRoleByName");
             // fall through to display-label matching
         }
         int displayIndex = cbx_roles_agents.getItems().indexOf(roleName);

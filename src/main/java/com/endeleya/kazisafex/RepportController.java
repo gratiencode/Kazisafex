@@ -94,6 +94,7 @@ import tools.PurchaseByProduct;
 import tools.PurchaseByMonth;
 import tools.ExpenseByImputation;
 import javafx.scene.control.RadioButton;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -821,6 +822,7 @@ public class RepportController implements Initializable {
                         Desktop.getDesktop().open(xlsrep);
                     }
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportExpenses");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -914,6 +916,7 @@ public class RepportController implements Initializable {
                         Desktop.getDesktop().open(xlsrep);
                     }
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportAchFourn");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -937,6 +940,7 @@ public class RepportController implements Initializable {
                         Desktop.getDesktop().open(xlsrep);
                     }
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportAchProd");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -960,6 +964,7 @@ public class RepportController implements Initializable {
                         Desktop.getDesktop().open(xlsrep);
                     }
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportAchMois");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1342,6 +1347,7 @@ public class RepportController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsrep);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.genPerCategory");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1357,6 +1363,7 @@ public class RepportController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsrep);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.genPerClient");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1618,6 +1625,7 @@ public class RepportController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsrep);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportSalePerProducReport");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1812,6 +1820,7 @@ public class RepportController implements Initializable {
             Files.write(file, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "RepportController.saveImmobilisationsCache");
             Logger.getLogger(RepportController.class.getName()).log(Level.FINE, ex.getMessage(), ex);
         }
     }
@@ -1832,6 +1841,7 @@ public class RepportController implements Initializable {
                 lbl_imo_status.setText("Mode hors ligne: " + cached.size() + " element(s)");
             });
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "RepportController.loadImmobilisationsCache");
             Logger.getLogger(RepportController.class.getName()).log(Level.FINE, ex.getMessage(), ex);
             Platform.runLater(() -> lbl_imo_status.setText("Echec chargement hors ligne"));
         }
@@ -1967,6 +1977,7 @@ public class RepportController implements Initializable {
                 DataCache.put(cacheKey, data);
                 applyFinancialData(data);
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "RepportController.loadFinancialStatements");
                 Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE,
                         "Erreur de chargement des états financiers", ex);
                 Platform.runLater(() -> MainUI.notify(null, "Erreur",
@@ -2155,6 +2166,7 @@ public class RepportController implements Initializable {
                 Platform.runLater(() -> MainUI.notify(null, "PDF",
                         "Rapport financier généré : " + file.getName(), 4, "info"));
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "RepportController.exportFinancialStatementPdf");
                 Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 Platform.runLater(() -> MainUI.notify(null, "Erreur", "Echec de génération du PDF demandé", 4,
                         "error"));

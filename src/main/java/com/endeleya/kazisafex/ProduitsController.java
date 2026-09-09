@@ -150,6 +150,7 @@ import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import java.awt.Color;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -497,6 +498,7 @@ public class ProduitsController implements Initializable {
             }
             img_codebar.setImage(new Image(is));
         } catch (IOException | java.lang.IllegalArgumentException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitsController.showcodebar");
             if (ex instanceof java.lang.IllegalArgumentException) {
                 ByteArrayOutputStream stream = createQR(text, "UTF-8", 250, 250);
                 is = new ByteArrayInputStream(stream.toByteArray());
@@ -517,10 +519,13 @@ public class ProduitsController implements Initializable {
             baos.flush();
             return baos;
         } catch (WriterException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitsController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         } catch (UnsupportedEncodingException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitsController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitsController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -542,11 +547,13 @@ public class ProduitsController implements Initializable {
             printer.cut(EscPos.CutMode.FULL);
             printer.close();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitsController.printBCWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             try {
                 pos.close();
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitsController.printBCWithThermal");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -704,12 +711,14 @@ public class ProduitsController implements Initializable {
                         try {
                             Desktop.getDesktop().open(f);
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "ProduitsController.downloadProductXls");
                             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }).start();
                 }
 
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitsController.downloadProductXls");
                 MainUI.notify(null, "Erreur", "Impossible de générer le fichier : " + ex.getMessage(), 4, "error");
                 Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -994,6 +1003,7 @@ public class ProduitsController implements Initializable {
                             img_vu_selected_pro.setImage(image);
                             Util.centerImage(img_vu_selected_pro);
                         } catch (FileNotFoundException ex) {
+                            SyncLogger.getInstance().log(ex, "ProduitsController.initialize");
                             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
                         }
 
@@ -1024,6 +1034,7 @@ public class ProduitsController implements Initializable {
             int limit = Math.min(offset + rowsDataCount, produitsList.size());
             table.setItems(FXCollections.observableArrayList(produitsList.subList(offset, limit)));
         } catch (java.lang.IllegalArgumentException e) {
+            SyncLogger.getInstance().log(e, "ProduitsController.createDataPage");
             pagination.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
@@ -1314,6 +1325,7 @@ public class ProduitsController implements Initializable {
                                             }
                                         }
                                     } catch (Exception e) {
+                                        SyncLogger.getInstance().log(e, "ProduitsController.nextImport");
                                         System.err.println("Erreur format date ligne " + row.getRowNum() + " : " + e.getMessage());
                                     }
                                 }
@@ -1381,6 +1393,7 @@ public class ProduitsController implements Initializable {
                         });
 
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "ProduitsController.nextImport");
                         Platform.runLater(() -> {
                             MainUI.notify(null, "Erreur!", "Échec de l'importation : " + ex.getMessage(), 4, "error");
                             pane_wait_import.setVisible(false);
@@ -1551,6 +1564,7 @@ public class ProduitsController implements Initializable {
                         xlsvisible = false;
                         pane_wait_import.setVisible(false);
                     } catch (IllegalStateException ex) {
+                        SyncLogger.getInstance().log(ex, "ProduitsController.nextImport");
                         MainUI.notify(null, "Erreur", "Importation échouée, format des cellules non supporté", 4,
                                 "error");
                         ex.printStackTrace();

@@ -55,6 +55,7 @@ import tools.DataCache;
 import tools.FileUtils;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Util;
 import static tools.Util.centerImage;
 import data.helpers.Role;
@@ -163,6 +164,7 @@ public class EntrepriseController implements Initializable {
             img_logo_eze.setImage(image);
             Util.centerImage(img_logo_eze);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "EntrepriseController.setup");
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
         List<String> cachedRegions = DataCache.get("entreprise-regions");
@@ -306,11 +308,13 @@ public class EntrepriseController implements Initializable {
                 img_logo_eze.setImage(image);
                 centerImage(img_logo_eze);
             } catch (FileNotFoundException ex) {
+                SyncLogger.getInstance().log(ex, "EntrepriseController.chooseLogo");
                 Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
             } finally {
                 try {
                     fis.close();
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "EntrepriseController.chooseLogo");
                     Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }

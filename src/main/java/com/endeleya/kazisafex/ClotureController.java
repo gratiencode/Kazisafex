@@ -75,6 +75,7 @@ import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -304,6 +305,7 @@ public class ClotureController implements Initializable {
                     double ecart = data - stockFinal;
                     txt_cloture_ecart.setText("Ecart entre stock final theorique et initial physique : " + ecart);
                 } catch (NumberFormatException e) {
+                    SyncLogger.getInstance().log(e, "ClotureController.initUi");
                     MainUI.notify(null, "Votre attention", "Vous devez mettre uniquement les chiffres", 8, "error");
                 }
             }

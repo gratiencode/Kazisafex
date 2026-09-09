@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.prefs.Preferences;
 import retrofit2.Response;
+import tools.SyncLogger;
 
 public class UpdateManager {
 
@@ -52,6 +53,7 @@ public class UpdateManager {
                     listener.onError("Erreur serveur: " + response.code());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "UpdateManager.checkForUpdate");
                 listener.onError(e.getMessage());
             }
         }).start();
@@ -136,6 +138,7 @@ public class UpdateManager {
                     listener.onComplete(filePath);
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "UpdateManager.downloadJar");
                 if (listener != null) {
                     listener.onError(e.getMessage());
                 }
@@ -158,7 +161,7 @@ public class UpdateManager {
             if (PlatformUtil.isWindows()) {
                 scriptPath = updateScriptDir + File.separator + "update.bat";
                 String installDir = System.getenv("ProgramFiles") + File.separator
-                        + "kazisafe-win" + File.separator + "app";
+                        + "Kazisafe-win" + File.separator + "app";
                 String jarPath = installDir + File.separator + JAR_NAME;
 
                 StringBuilder sb = new StringBuilder();
@@ -172,7 +175,7 @@ public class UpdateManager {
                 sb.append("    exit /b 1\n");
                 sb.append(")\n");
                 sb.append("echo Mise a jour reussie!\n");
-                sb.append("start \"\" \"").append(installDir).append(File.separator).append("Kazisafex.exe\"\n");
+                sb.append("start \"\" \"").append(installDir).append(File.separator).append("Kazisafe-win.exe\"\n");
                 sb.append("del \"%~f0\"\n");
                 Files.writeString(Paths.get(scriptPath), sb.toString());
                 command = new String[]{"cmd", "/c", "start", "/min", scriptPath};
@@ -218,6 +221,7 @@ public class UpdateManager {
             prefs.put(PREF_VERSION, "");
 
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "UpdateManager.scheduleRestart");
             System.err.println("Erreur lors de la preparation de la mise a jour: " + e.getMessage());
         }
     }

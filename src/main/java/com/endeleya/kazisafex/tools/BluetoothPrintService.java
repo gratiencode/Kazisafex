@@ -154,6 +154,7 @@ public class BluetoothPrintService implements PrintService {
                 }
                 out.flush();
             } catch (IOException e) {
+                tools.SyncLogger.getInstance().log(e, "BluetoothPrintService.print");
                 throw new PrintException("Bluetooth printing failed: " + e.getMessage(), e);
             } finally {
                 if (out != null) try { out.close(); } catch (IOException e) {}

@@ -164,6 +164,7 @@ public class SerialPrintService implements PrintService {
                     // Wait a bit for the printer to process
                     Thread.sleep(500);
                 } catch (IOException | InterruptedException e) {
+                    tools.SyncLogger.getInstance().log(e, "SerialPrintService.print");
                     throw new PrintException("Serial printing failed: " + e.getMessage(), e);
                 } finally {
                     port.closePort();

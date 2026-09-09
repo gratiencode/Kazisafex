@@ -13,6 +13,7 @@ import javafx.collections.FXCollections;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
+import tools.SyncLogger;
 
 public final class FinancialTableBinder {
 
@@ -84,6 +85,7 @@ public final class FinancialTableBinder {
             ResourceBundle bundle = ResourceBundle.getBundle("bundles." + lang, new Locale.Builder().setLanguage(lang).build());
             return bundle.containsKey(key) ? bundle.getString(key) : fallback;
         } catch (MissingResourceException | IllegalArgumentException ex) {
+            SyncLogger.getInstance().log(ex, "FinancialTableBinder.label");
             return fallback;
         }
     }

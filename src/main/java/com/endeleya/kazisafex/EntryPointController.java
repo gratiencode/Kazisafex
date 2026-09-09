@@ -55,6 +55,7 @@ import tools.Constants;
 import tools.MainUI;
 import tools.NetLoockup;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Util;
 
 /**
@@ -151,6 +152,7 @@ public class EntryPointController implements Initializable {
                 "info"
             );
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "EntryPointController.createPort");
             MainUI.notify(
                 null,
                 "Erreur",
@@ -279,6 +281,9 @@ public class EntryPointController implements Initializable {
         genResult.setRegion(region);
         genResult.setRole(rl);
         genResult.setPhone(uname);
+        // Restaure l'identifiant utilisateur persisté au login pour que la photo
+        // de profil se recharge meme apres le rétablissement d'une session maintenue.
+        genResult.setUserId(pref.get("userid", null));
         Platform.runLater(() -> {
             Screen scr = Screen.getPrimary();
             double height = scr.getVisualBounds().getHeight();
@@ -369,6 +374,7 @@ public class EntryPointController implements Initializable {
                                 }
                                 pref.put("eUid", lr.getEntrepriseId());
                                 pref.put("uname", lr.getPhone());
+                                pref.put("userid", lr.getUserId());
                                 pref.put("region", lr.getRegion());
                                 pref.put("token", lr.getToken());
                                 pref.put("ucontract", lr.getUserContract());
@@ -410,6 +416,7 @@ public class EntryPointController implements Initializable {
                     }
                 });
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "EntryPointController.synchronousLogin");
                 Platform.runLater(() -> {
                     pane_progress.setVisible(false);
                 });
@@ -438,6 +445,7 @@ public class EntryPointController implements Initializable {
                     genResult.setToken(token);
                     genResult.setEntrepriseId(euid);
                     genResult.setRole(rl);
+                    genResult.setUserId(pref.get("userid", null));
                     Platform.runLater(
                         new Runnable() {
                             @Override
@@ -482,6 +490,7 @@ public class EntryPointController implements Initializable {
                 message = extractMessageFromErrorBody(raw);
             }
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "EntryPointController.readableLoginError");
             Logger.getLogger(EntryPointController.class.getName()).log(
                 Level.WARNING,
                 "Lecture du message d'erreur login impossible",
@@ -514,6 +523,7 @@ public class EntryPointController implements Initializable {
             }
             return message == null ? trimmed : String.valueOf(message);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "EntryPointController.extractMessageFromErrorBody");
             return trimmed;
         }
     }
@@ -727,7 +737,9 @@ public class EntryPointController implements Initializable {
                 Desktop.getDesktop().browse(
                     URI.create("https://www.endeleya.com")
                 );
-            } catch (IOException e) {}
+            } catch (IOException e) {
+                SyncLogger.getInstance().log(e, "EntryPointController.gotoEndeleya");
+            }
         }).start();
     }
 
@@ -739,6 +751,7 @@ public class EntryPointController implements Initializable {
                     URI.create("https://cloud.kazisafe.com/signup")
                 );
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "EntryPointController.createNewAccount");
                 Logger.getLogger(EntryPointController.class.getName()).log(
                     Level.SEVERE,
                     null,
@@ -757,6 +770,7 @@ public class EntryPointController implements Initializable {
                     new URI("https://cloud.kazisafe.com/recover-password")
                 );
             } catch (URISyntaxException | IOException ex) {
+                SyncLogger.getInstance().log(ex, "EntryPointController.recoverPassword");
                 Logger.getLogger(EntryPointController.class.getName()).log(
                     Level.SEVERE,
                     null,

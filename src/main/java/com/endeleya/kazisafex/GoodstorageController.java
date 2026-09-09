@@ -131,6 +131,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
 import tools.DataId;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -776,6 +777,7 @@ public class GoodstorageController implements Initializable {
                     try {
                         loadInventaireDepot(products, newValue);
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "GoodstorageController.initialize");
                         Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
@@ -832,6 +834,7 @@ public class GoodstorageController implements Initializable {
             cbx_dstk_destination.getSelectionModel()
                     .select(current != null && dstkDestinations.contains(current) ? current : "Tout");
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "GoodstorageController.setupDestockRefReport");
             Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -1028,6 +1031,7 @@ public class GoodstorageController implements Initializable {
                     Desktop.getDesktop().open(xlsInv);
                 }
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "GoodstorageController.exportDestockRefReport");
                 Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }).start();
@@ -1052,6 +1056,7 @@ public class GoodstorageController implements Initializable {
                 try {
                     loadInventaireDepot(Util.filterNoNullMesure(products), region);
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "GoodstorageController.loadInv");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             } else {
@@ -1063,6 +1068,7 @@ public class GoodstorageController implements Initializable {
                                     ? (savedRegion != null && !savedRegion.isBlank() ? savedRegion : region)
                                     : selectedRegion);
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "GoodstorageController.loadInv");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1092,6 +1098,7 @@ public class GoodstorageController implements Initializable {
                 }
             });
         } catch (java.lang.NullPointerException e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.populateSupplier");
 
         }
     }
@@ -1410,6 +1417,7 @@ public class GoodstorageController implements Initializable {
                             // Refresh again after backfill
                             loadInv();
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "GoodstorageController.loadInv");
                             e.printStackTrace();
                         }
                     });
@@ -1645,6 +1653,7 @@ public class GoodstorageController implements Initializable {
         try {
             return Integer.parseInt(input_txt_criteres_mens.getText() == null ? "0" : input_txt_criteres_mens.getText().trim());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.parseMonthsFilter");
             return 0;
         }
     }
@@ -2840,6 +2849,7 @@ public class GoodstorageController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "GoodstorageController.exportInventaitaire");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -3068,6 +3078,7 @@ public class GoodstorageController implements Initializable {
             try {
                 Desktop.getDesktop().open(report);
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "GoodstorageController.exportSupplierDebtStatement");
                 Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }).start();
@@ -3110,6 +3121,7 @@ public class GoodstorageController implements Initializable {
         try {
             return Double.parseDouble(value == null ? "0" : value.trim());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.safeAmount");
             return 0d;
         }
     }
@@ -3147,6 +3159,7 @@ public class GoodstorageController implements Initializable {
                         }
                     }
                 } catch (Exception e) {
+                    SyncLogger.getInstance().log(e, "GoodstorageController.refreshFinAccount");
                     e.printStackTrace();
                 } finally {
                     javafx.application.Platform.runLater(() -> {
@@ -3216,6 +3229,7 @@ public class GoodstorageController implements Initializable {
             List<Stocker> find = StockerDelegate.findStockers(offset, limit.intValue());
             table_stockage.setItems(FXCollections.observableArrayList(find));
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.createStockagePage");
             pagination.setPageCount(Math.max(1, pgindex));
             System.out.println("createStockagePage - page suivante non disponible");
         }
@@ -3236,6 +3250,7 @@ public class GoodstorageController implements Initializable {
             }
             table1.setItems(FXCollections.observableArrayList(filteredFind));
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.createDestockagePage");
             pagination1.setPageCount(Math.max(1, pgindex));
             System.out.println("createDestockagePage - page suivante non disponible");
         }
@@ -3253,6 +3268,7 @@ public class GoodstorageController implements Initializable {
                 table11.setItems(FXCollections.observableArrayList(source.subList(offset, limit)));
             }
         } catch (java.lang.IllegalArgumentException e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.createInventoryPage");
             pagination11.setPageCount(Math.max(1, pgindex));
             System.out.println("createInventoryPage - page suivante non disponible");
         }
@@ -3437,6 +3453,7 @@ public class GoodstorageController implements Initializable {
                         }
 
                     } catch (IOException ex) {
+                        SyncLogger.getInstance().log(ex, "GoodstorageController.refreshLivraisonByHttp");
                         Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                         Platform.runLater(() -> {
                             pane_wait_import.setVisible(false);
@@ -3504,6 +3521,7 @@ public class GoodstorageController implements Initializable {
                             System.out.println("Destockers enregistrees");
                         }
                     } catch (IOException ex) {
+                        SyncLogger.getInstance().log(ex, "GoodstorageController.refreshDestockerByHttp");
                         Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                     }
 
@@ -3516,12 +3534,14 @@ public class GoodstorageController implements Initializable {
                 try {
                     LivraisonDelegate.saveLivraison(liv);
                 } catch (IllegalStateException e) {
+                    SyncLogger.getInstance().log(e, "GoodstorageController.saveLivraisonForcely");
                     FournisseurDelegate.saveFournisseur(f);
                     liv.setFournId(f);
                     throw e;
                 }
             }, 5);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.saveLivraisonForcely");
             System.err.println("Erreur sauvegarde livraison: " + e.getMessage());
         }
     }
@@ -3533,6 +3553,7 @@ public class GoodstorageController implements Initializable {
                     Stocker saved = StockerDelegate.saveStocker(s);
                     StockerDelegate.rectifyStockDepotByLot(saved.getProductId(), saved.getNumlot(), saved.getRegion(), saved.getCoutAchat(), saved.getDateExpir());
                 } catch (IllegalStateException e) {
+                    SyncLogger.getInstance().log(e, "GoodstorageController.saveStockForcely");
                     FournisseurDelegate.saveFournisseur(f);
                     liv.setFournId(f);
                     LivraisonDelegate.saveLivraison(liv);
@@ -3541,6 +3562,7 @@ public class GoodstorageController implements Initializable {
                 }
             }, 5);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "GoodstorageController.saveStockForcely");
             System.err.println("Erreur sauvegarde stock: " + e.getMessage());
         }
     }

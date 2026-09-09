@@ -78,6 +78,7 @@ import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Tables;
 import tools.Util;
 import java.awt.Desktop;
@@ -1087,7 +1088,7 @@ public class StoreformController implements Initializable {
                     coutLigne = qt * cu;
                     txt_somme_ct_lot1.setText("Total : " + coutLigne);
                 } catch (NumberFormatException e) {
-
+                    SyncLogger.getInstance().log(e, "StoreformController.initialize");
                 }
             }
         });
@@ -1103,6 +1104,7 @@ public class StoreformController implements Initializable {
                     coutLigne = qt * cu;
                     txt_somme_ct_lot1.setText("Total : " + coutLigne);
                 } catch (NumberFormatException e) {
+                    SyncLogger.getInstance().log(e, "StoreformController.initialize");
 //                    e.printStackTrace();
                 }
             }
@@ -1231,6 +1233,7 @@ public class StoreformController implements Initializable {
         try {
             Desktop.getDesktop().browse(new URI("https://nunua.markets"));
         } catch (IOException | URISyntaxException ex) {
+            SyncLogger.getInstance().log(ex, "StoreformController.openNunua");
             Logger.getLogger(StoreformController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }

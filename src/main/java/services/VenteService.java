@@ -402,7 +402,7 @@ public class VenteService implements VenteStorage {
     public List<Vente> findDraftedCarts() {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM vente v WHERE v.observation = ? ");
+            sb.append("SELECT * FROM vente v WHERE v.observation = ? AND (v.deleted_at IS NULL) ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Vente.class);
@@ -509,7 +509,7 @@ public class VenteService implements VenteStorage {
     public List<Vente> findDraftedCarts(String region) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM vente v WHERE v.observation = ? AND v.region = ? ");
+            sb.append("SELECT * FROM vente v WHERE v.observation = ? AND v.region = ? AND (v.deleted_at IS NULL) ");
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
                     Query query = em.createNativeQuery(sb.toString(), Vente.class);

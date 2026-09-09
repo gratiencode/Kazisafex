@@ -41,7 +41,7 @@ public class RetourMagasinEncoder implements Encoder.Text<RetourMagasin> {
                 .add("priority", oper.getPriority())
                 .add("counter", oper.getCounter())
                 .add("quantite", oper.getQuantite())
-                .add("date", oper.getDate().toString())
+                .add("date", tools.Constants.Datetime.utcString(oper.getDate()))
                 .add("clientId", Json.createObjectBuilder().add("uid", oper.getClientId().getUid()).build())
                 .add("ligneVenteId", Json.createObjectBuilder().add("uid", oper.getLigneVenteId().getUid()).build())
                 .add("mesureId", Json.createObjectBuilder().add("uid", oper.getMesureId().getUid()).build());

@@ -2,6 +2,7 @@ package tools;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import tools.SyncLogger;
 
 /**
  * Calcul bidirectionnel USD/CDF pour paiements et recouvrements.
@@ -195,6 +196,7 @@ public final class RecoveryPaymentCalculator {
         try {
             return Double.parseDouble(text.trim());
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "RecoveryPaymentCalculator.parseInput");
             return 0;
         }
     }

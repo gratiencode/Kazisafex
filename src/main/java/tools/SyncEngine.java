@@ -19,6 +19,7 @@ import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.scene.control.Label;
 import services.BackgroundSyncService;
+import tools.SyncLogger;
 
 /**
  *
@@ -75,6 +76,7 @@ public class SyncEngine {
                     services.SyncOutboxService.APPLIED_RETENTION_DAYS);
             System.out.println("SyncEngine: Old outbox records purged.");
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "SyncEngine.setup.purgeOldRecords");
             System.err.println(
                     "SyncEngine: Outbox purge failed: " + e.getMessage());
         }
@@ -83,6 +85,7 @@ public class SyncEngine {
         try {
             services.SyncOutboxService.startBackfillingBackground();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "SyncEngine.setup.startBackfillingBackground");
             System.err.println("SyncEngine: Failed to start backfilling: " + e.getMessage());
         }
 
@@ -275,6 +278,7 @@ public class SyncEngine {
             backgroundSyncService.requestCycle();
             System.out.println("BackgroundSyncService: Started manually.");
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "SyncEngine.syncWithHttpProtocol");
             Logger.getLogger(SyncEngine.class.getName()).log(
                     Level.SEVERE,
                     null,
@@ -298,6 +302,7 @@ public class SyncEngine {
             backgroundSyncService.requestCycle();
             return "finish";
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "SyncEngine.syncInBackground");
             return "error : " + e.getMessage();
         }
     }

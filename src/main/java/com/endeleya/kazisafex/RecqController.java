@@ -107,6 +107,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 import retrofit2.Response;
 import tools.FileUtils;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -596,6 +597,7 @@ public class RecqController implements Initializable {
                     double amount = Double.parseDouble(tf_prix_de_vente.getText());
                     txt_equivalent_req.setText(CurrencyConverter.equivalentLabel(amount, cbx_devise_price.getValue()));
                 } catch (NumberFormatException | IllegalStateException e) {
+                    SyncLogger.getInstance().log(e, "RecqController.initialize");
                     txt_equivalent_req.setText("");
                 }
             }
@@ -629,6 +631,7 @@ public class RecqController implements Initializable {
                     double qt = Double.parseDouble(newValue);
                     txt_somme_ct_lot1.setText("Total : " + (qt * cu));
                 } catch (NumberFormatException e) {
+                    SyncLogger.getInstance().log(e, "RecqController.initialize");
 
                 }
             }
@@ -644,6 +647,7 @@ public class RecqController implements Initializable {
                     double cu = Double.parseDouble(newValue);
                     txt_somme_ct_lot1.setText("Total : " + (qt * cu));
                 } catch (NumberFormatException e) {
+                    SyncLogger.getInstance().log(e, "RecqController.initialize");
 
                 }
             }
@@ -809,6 +813,7 @@ public class RecqController implements Initializable {
                     throw new Exception("Recquisition non enregistrée");
                 }, MAX_RETRY);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "RecqController.saveRecqusitionByHttp");
                 System.err.println("Erreur lors de l'enregistrement du stock " + e.getMessage());
             }
         });
@@ -831,8 +836,10 @@ public class RecqController implements Initializable {
                     throw new Exception("Prix non enregistré, code=" + code);
                 }, MAX_RETRY);
             } catch (InterruptedException ex) {
+                SyncLogger.getInstance().log(ex, "RecqController.savePriceByHttp");
                 Logger.getLogger(RecqController.class.getName()).log(Level.SEVERE, null, ex);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "RecqController.savePriceByHttp");
                 System.out.println("Erreur sauvegarde prix: " + e.getMessage());
             }
         });
@@ -875,6 +882,7 @@ public class RecqController implements Initializable {
         try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
             return FileUtils.readAllBytes(is);
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "RecqController.loadDefaultImage");
             System.err.println("Erreur lors du chargement de l'image par défaut" + e.getMessage());
             return new byte[0];
         }
@@ -893,6 +901,7 @@ public class RecqController implements Initializable {
                 System.err.println("Erreur lors de l'enregistrement du produit : " + response.code());
             }
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "RecqController.saveProduitByHttp");
             System.err.println("Erreur lors de l'enregistrement du produit" + e.getMessage());
         }
     }
@@ -1102,6 +1111,7 @@ public class RecqController implements Initializable {
         try {
             Desktop.getDesktop().browse(new URI("https://nunua.markets"));
         } catch (IOException | URISyntaxException ex) {
+            SyncLogger.getInstance().log(ex, "RecqController.openNunua");
             Logger.getLogger(StoreformController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }

@@ -36,6 +36,11 @@ public class SyncRetryHandler {
                 lastException = e;
                 System.err.println("SyncRetryHandler: échec tentative " + (attempt + 1) + "/" + maxRetries
                         + " pour " + entityName + " (" + entityId + "): " + e.getMessage());
+                if (isPermanent(e)) {
+                    SyncLogger.getInstance().log(lastException,
+                            "SyncRetryHandler: erreur defininitive (serialisation/conversion) non retentee", entityName, entityId);
+                    throw lastException;
+                }
                 if (attempt < maxRetries - 1) {
                     long delay = BASE_DELAY_MS * (long) Math.pow(2, attempt);
                     try {
@@ -68,6 +73,11 @@ public class SyncRetryHandler {
                 lastException = e;
                 System.err.println("SyncRetryHandler: échec tentative " + (attempt + 1) + "/" + maxRetries
                         + " pour " + entityName + " (" + entityId + "): " + e.getMessage());
+                if (isPermanent(e)) {
+                    SyncLogger.getInstance().log(lastException,
+                            "SyncRetryHandler: erreur defininitive (serialisation/conversion) non retentee", entityName, entityId);
+                    throw lastException;
+                }
                 if (attempt < maxRetries - 1) {
                     long delay = BASE_DELAY_MS * (long) Math.pow(2, attempt);
                     try {
@@ -82,5 +92,33 @@ public class SyncRetryHandler {
         SyncLogger.getInstance().log(lastException, "SyncRetryHandler: échec après " + maxRetries + " tentatives",
                 entityName, entityId);
         throw lastException;
+    }
+
+    /**
+     * Detecte une erreur <em>definitive</em> (non transitoire) : un echec de
+     * serialisation/conversion du corps HTTP, typiquement reporter par
+     * Retrofit/Jackson sous la forme "Unable to convert X to RequestBody" (y
+     * compris la {@code JsonProcessingException} sous-jacente). Ce type d'erreur
+     * est un bug de code : il ne se resoudra jamais par une nouvelle tentative,
+     * donc on abandonne immediatement au lieu de faire X retries inutiles avec
+     * backoff.
+     *
+     * On se base sur le nom de classe (pas de dependance compile-time vers
+     * Jackson ici) et sur le message signature de Retrofit.
+     *
+     * @return {@code true} si l'erreur est definitive (a ne pas retenter).
+     */
+    private static boolean isPermanent(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            String cn = c.getClass().getName();
+            if (cn.startsWith("com.fasterxml.jackson.core") || cn.startsWith("com.fasterxml.jackson.databind")) {
+                return true;
+            }
+            String msg = c.getMessage();
+            if (msg != null && msg.contains("Unable to convert ") && msg.contains(" to RequestBody")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

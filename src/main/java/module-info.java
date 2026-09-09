@@ -59,6 +59,7 @@ module com.endeleya.kazisafex {
     opens services.dialect to org.hibernate.orm.core;
     opens data.finance to com.fasterxml.jackson.databind;
     opens data.helpers to com.fasterxml.jackson.databind;
+    opens data.dto to com.fasterxml.jackson.databind, retrofit2, retrofit2.converter.jackson;
     opens delegates to javafx.base, com.fasterxml.jackson.databind;
     opens styles to javafx.graphics;
     opens guis to javafx.fxml;

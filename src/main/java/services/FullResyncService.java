@@ -163,6 +163,13 @@ public class FullResyncService {
                             statusUpdater.accept("Erreur de synchronisation locale (HTTP " + response.code() + ").");
                             break;
                         }
+                        // yield point: give the FX thread time to process events
+                        try {
+                            java.util.concurrent.TimeUnit.MILLISECONDS.sleep(80);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
                     }
 
                     if (processedInLoop == 0) {

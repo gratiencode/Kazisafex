@@ -170,6 +170,7 @@ import tools.SyncEngine;
 import tools.Tables;
 import tools.TopTen;
 import tools.Util;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -615,6 +616,7 @@ public class MainuiController implements Initializable {
             JSObject window = (JSObject) webE.executeScript("window");
             window.setMember("kazisafeChat", chatBridge);
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.exposeChatBridge");
             Logger.getLogger(MainuiController.class.getName()).log(
                 Level.FINE,
                 "Chat bridge not ready",
@@ -902,7 +904,9 @@ public class MainuiController implements Initializable {
                 }
             );
             ag.reportInBackground();
-        } catch (java.lang.RuntimeException e) {}
+        } catch (java.lang.RuntimeException e) {
+            SyncLogger.getInstance().log(e, "MainuiController.cloturer");
+        }
     }
 
     private void setSyncMessage(String message) {
@@ -1841,6 +1845,7 @@ public class MainuiController implements Initializable {
                 PermissionRegistry.renewPermissions(tosave);
                 UserRoleRegistry.saveRole(pref, loginResult.getRole());
             } catch (JsonProcessingException ex) {
+                SyncLogger.getInstance().log(ex, "MainuiController.initializePermissions");
                 Logger.getLogger(MainuiController.class.getName()).log(
                     Level.SEVERE,
                     null,
@@ -2007,6 +2012,7 @@ public class MainuiController implements Initializable {
                                     "png"
                                 );
                             } catch (Exception eDisk) {
+                                SyncLogger.getInstance().log(eDisk, "MainuiController.initializeImages");
                                 Logger.getLogger(
                                     MainuiController.class.getName()
                                 ).log(
@@ -2037,6 +2043,7 @@ public class MainuiController implements Initializable {
                             img_company_logo.setClip(clip);
                             centerImage(img_company_logo);
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "MainuiController.initializeImages");
                             img_company_logo.setVisible(false);
                             Logger.getLogger(
                                 MainuiController.class.getName()
@@ -2374,6 +2381,7 @@ public class MainuiController implements Initializable {
                     try {
                         tools.KazisafeGuide.openGuidePdf();
                     } catch (IOException | RuntimeException ex) {
+                        SyncLogger.getInstance().log(ex, "MainuiController.runhelp");
                         ex.printStackTrace();
                         MainUI.notify(
                             null,
@@ -2430,7 +2438,9 @@ public class MainuiController implements Initializable {
             } else {
                 try {
                     Desktop.getDesktop().open(downloaded.getParentFile());
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                    SyncLogger.getInstance().log(ignored, "MainuiController.installUpdate");
+                }
                 MainUI.notify(
                     null,
                     "Info",
@@ -2440,6 +2450,7 @@ public class MainuiController implements Initializable {
                 );
             }
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.installUpdate");
             Logger.getLogger(MainuiController.class.getName()).log(
                 Level.SEVERE,
                 null,
@@ -2501,6 +2512,7 @@ public class MainuiController implements Initializable {
                             newModule == null ? null : newModule.getVersion()
                         );
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "MainuiController.downloadUpdate");
                         Logger.getLogger(MainuiController.class.getName()).log(
                             Level.WARNING,
                             "Impossible de memoriser la mise a jour en attente",
@@ -2567,6 +2579,7 @@ public class MainuiController implements Initializable {
         try {
             Desktop.getDesktop().browse(URI.create(resolveUpdateDownloadUrl()));
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.openBrowserDownload");
             Logger.getLogger(MainuiController.class.getName()).log(
                 Level.SEVERE,
                 null,
@@ -2848,6 +2861,7 @@ public class MainuiController implements Initializable {
                 );
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "MainuiController.initGratienContext");
             System.err.println(
                 "Erreur lors de l'initialisation du contexte Gratien: " +
                     e.getMessage()
@@ -2925,6 +2939,7 @@ public class MainuiController implements Initializable {
                 }
             );
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "MainuiController.checkForUpdates");
             System.err.println("Erreur de mise a jour: " + e.getMessage());
         }
     }
@@ -3438,6 +3453,7 @@ public class MainuiController implements Initializable {
                 int parsed = Integer.parseInt(value);
                 return parsed <= 0 ? 3306 : parsed;
             } catch (NumberFormatException ex) {
+                SyncLogger.getInstance().log(ex, "MainuiController.parsePort");
                 return 3306;
             }
         }
@@ -3457,6 +3473,7 @@ public class MainuiController implements Initializable {
             Path pathf = Paths.get(path + File.separator + "compressedImg.jpg");
             return Files.write(pathf, fichbyte).toAbsolutePath().toFile();
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "MainuiController.compress");
             return null;
         }
     }
@@ -3550,6 +3567,7 @@ public class MainuiController implements Initializable {
             );
             return preview;
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.createAttachmentPreview");
             return null;
         }
     }
@@ -3609,6 +3627,7 @@ public class MainuiController implements Initializable {
                 return dataImageMarkdown(file.getName(), out.toByteArray());
             }
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.attachmentImageMarkdown");
             return attachmentIconMarkdown(file);
         }
     }
@@ -3658,6 +3677,7 @@ public class MainuiController implements Initializable {
             }
             return dataImageMarkdown(file.getName(), input.readAllBytes());
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainuiController.attachmentIconMarkdown");
             return "`FICHIER`";
         }
     }

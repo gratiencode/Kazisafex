@@ -38,6 +38,7 @@ import tools.Constants;
 import tools.DataId;
 import tools.MainUI;
 import tools.Tables;
+import tools.SyncLogger;
 import tools.Util;
 
 /**
@@ -139,6 +140,7 @@ public class MezureController implements Initializable {
                 MainUI.notify(null, "Succes", "Mesure du produit enregistre avec succes", 3, "Info");
             }
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "MezureController.save");
             e.printStackTrace();
         }
     }

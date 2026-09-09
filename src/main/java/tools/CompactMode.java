@@ -7,8 +7,6 @@ package tools;
 import com.endeleya.kazisafex.MainuiController;
 import com.endeleya.kazisafex.PaymentController;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fazecast.jSerialComm.SerialPort;
 import com.github.anastaciocintra.escpos.EscPos;
 import com.github.anastaciocintra.escpos.EscPosConst;
@@ -28,7 +26,8 @@ import data.Mesure;
 import data.Produit;
 import data.ProduitHelper;
 import data.Vente;
-import data.VenteHelper;
+import data.dto.SyncErrorResponse;
+import data.dto.UpsyncErrorParser;
 import data.helpers.Role;
 import services.utils.PermissionRegistry;
 import data.network.Kazisafe;
@@ -75,6 +74,10 @@ import javax.print.PrintService;
 import org.apache.commons.lang3.time.DateUtils;
 import org.controlsfx.tools.Platform;
 import retrofit2.Response;
+import tools.SyncLogger;
+import tools.sync.CallFactory;
+import tools.sync.MissingParentHealer;
+import tools.sync.VenteDtoSyncer;
 
 /**
  *
@@ -92,6 +95,7 @@ public class CompactMode {
     static String REGION;
     private double somme;
     Kazisafe kazisafe;
+    private final VenteDtoSyncer venteSync = new VenteDtoSyncer();
     private Printer defaultPrinter;
     private int title_s, identite_s, body_s, line_dashes;
     private Entreprise entreprise;
@@ -534,36 +538,32 @@ public class CompactMode {
                             }
                             int reponse = rep.code();
                             System.out.println("Reponse de vente " + reponse);
-                            if (reponse == 417) {
-                                // client
-                                System.out.println("T3 Client " + reponse + " " + client.getPhone());
-                                List<Client> cs = ClientDelegate.findClientByPhone(client.getPhone());
-                                if (!cs.isEmpty()) {
-                                    System.err.println("Clients is Empty");
-                                    Client c = cs.get(0);
-                                    boolean client_saved = saveClientByHttp(c);
-                                    System.out.println("Client enregistre : " + (client_saved ? "OK" : "OOps! error"));
-                                } else {
-                                    Client sc = ClientDelegate.saveClient(client);
-                                    System.out.println("Save clt " + sc.getPhone());
-                                }
-                            } else if (reponse == 412) {
-                                // compte tresor
-                                System.out.println("T3 Compte Tresor " + reponse);
-                                List<CompteTresor> comptes = CompteTresorDelegate
-                                        .findByNumeroCompte(ct.getNumeroCompte());
-                                if (!comptes.isEmpty()) {
-                                    System.err.println("After if compte tres");
-                                    CompteTresor compte = comptes.get(0);
-                                    // saveCompte(compte);
-                                    // Executors.newCachedThreadPool()
-                                    // .submit(() -> {
-                                    Util.sync(compte, Constants.ACTION_CREATE, Tables.COMPTETRESOR);
-                                    // });
-                                }
-                            } else if (reponse == 200) {
+                            if (reponse == 200) {
                                 System.out.println("Vente enregistree au serveur avec succes");
                                 break;
+                            }
+                            if (CallFactory.isHealable(reponse)) {
+                                SyncErrorResponse err = parseErrorBody(rep);
+                                if (err != null && (err.getMissingUid() == null || err.getMissingUid().isBlank())) {
+                                    if (reponse == 417 && client != null) {
+                                        err.setMissingUid(client.getUid());
+                                    } else if (reponse == 412 && ct != null) {
+                                        err.setMissingUid(ct.getUid());
+                                    }
+                                }
+                                boolean healed = heal(err);
+                                if (!healed && reponse == 417 && client != null) {
+                                    healed = MissingParentHealer.getInstance().healClientEntity(kazisafe, client);
+                                    System.out.println("T3 Client repousse en repli : " + (healed ? "OK" : "echec"));
+                                }
+                                if (!healed && reponse == 412 && ct != null) {
+                                    healed = MissingParentHealer.getInstance().healCompteTresorEntity(kazisafe, ct);
+                                    System.out.println("T3 CompteTresor repousse en repli : " + (healed ? "OK" : "echec"));
+                                }
+                                if (!healed && (reponse == 460 || reponse == 461)) {
+                                    healProduitsOf(lignes);
+                                }
+                                System.out.println("T3333333333 Healing code=" + reponse + " => " + (healed ? "OK" : "echec"));
                             } else {
                                 System.out.println("Reponse par defaut " + reponse);
                             }
@@ -572,9 +572,11 @@ public class CompactMode {
                             try {
                                 TimeUnit.MILLISECONDS.sleep(200 * (long) Math.pow(2, retries)); // Delai exponentiel
                             } catch (InterruptedException e) {
+                                SyncLogger.getInstance().log(e, "CompactMode.tryToSaveSale.sleep");
                                 Thread.currentThread().interrupt();
                             }
-                        } catch (IOException ex) {
+                        } catch (Exception ex) {
+                            SyncLogger.getInstance().log(ex, "CompactMode.tryToSaveSale");
                             System.out.println("T3 ERROR " + ex.getMessage());
                             Logger.getLogger(PaymentController.class.getName()).log(Level.INFO, null, ex);
                             break;
@@ -584,31 +586,52 @@ public class CompactMode {
                 });
     }
 
-    private boolean saveClientByHttp(Client clt) throws IOException {
-        Response<Client> exec = kazisafe.saveByForm(clt.getUid(), clt.getNomClient(), clt.getPhone(),
-                clt.getTypeClient(), clt.getEmail(), clt.getAdresse(), clt.getParentId().getUid())
-                .execute();
-        return exec.code() == 200;
+    private SyncErrorResponse parseErrorBody(Response<?> rep) {
+        try {
+            String body = rep.errorBody() != null ? rep.errorBody().string() : "";
+            System.out.println("T3 body=" + body);
+            return UpsyncErrorParser.parse(body);
+        } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "CompactMode.parseErrorBody");
+            return null;
+        }
+    }
+
+    private boolean heal(SyncErrorResponse err) {
+        try {
+            return err != null && MissingParentHealer.getInstance().heal(kazisafe, err);
+        } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "CompactMode.heal");
+            return false;
+        }
+    }
+
+    private void healProduitsOf(List<LigneVente> lignes) {
+        MissingParentHealer healer = MissingParentHealer.getInstance();
+        for (LigneVente ligne : lignes) {
+            if (ligne.getProductId() == null || ligne.getProductId().getUid() == null) {
+                continue;
+            }
+            SyncErrorResponse err = new SyncErrorResponse();
+            err.setMissingType("PRODUIT");
+            err.setMissingUid(ligne.getProductId().getUid());
+            try {
+                healer.heal(kazisafe, err);
+            } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "CompactMode.healProduitsOf");
+            }
+        }
     }
 
     private Response<Vente> saveVenteByHttp(Vente vente, Client client, CompteTresor tresor, String transaction,
             List<LigneVente> venteItems) throws IOException {
-        try {
-            ObjectMapper obm = data.core.KazisafeServiceFactory.mapper();
-            String ligneventes = obm.writeValueAsString(toSaleItemHelper(venteItems));
-            System.out.println("Sale Item Helper " + ligneventes);
-            VenteHelper hlp = new VenteHelper();
-            hlp.setTransactionId(transaction);
-            hlp.setTresor(tresor);
-            hlp.setClient(client);
-            hlp.setLigneVentes(venteItems);
-            hlp.setVente(vente);
-            Response<Vente> exe = kazisafe.syncSale(hlp).execute();
-            return exe;
-        } catch (JsonProcessingException ex) {
-            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+        if (this.kazisafe == null || vente == null) {
+            return null;
         }
-        return null;
+        if (vente.getClientId() == null && client != null) {
+            vente.setClientId(client);
+        }
+        return this.venteSync.pushSale(this.kazisafe, vente, client, transaction, venteItems);
     }
 
     private List<SaleItemHelper> toSaleItemHelper(Collection<LigneVente> lvs) {
@@ -652,6 +675,7 @@ public class CompactMode {
         try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
             return FileUtils.readAllBytes(is);
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "CompactMode.loadDefaultImage");
             System.err.println("Erreur lors du chargement de l'image par défaut" + e.getMessage());
             return new byte[0];
         }
@@ -667,6 +691,7 @@ public class CompactMode {
                 System.err.println("Erreur lors de l'enregistrement du produit : " + response.code());
             }
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "CompactMode.saveProduitByHttp");
             System.err.println("Erreur lors de l'enregistrement du produit" + e.getMessage());
         }
     }
@@ -697,7 +722,7 @@ public class CompactMode {
             PrintService ps = PrinterOutputStream.getPrintServiceByName(printerName);
             pos = new PrinterOutputStream(ps);
             EscPos printer = new EscPos(pos);
-            printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP863_Canadian_French);
+            printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP437_USA_Standard_Europe);
             Style title = new Style().setJustification(EscPosConst.Justification.Center).setFontSize(
                     title_s == 1 ? Style.FontSize._1 : title_s == 2 ? Style.FontSize._2 : Style.FontSize._3,
                     title_s == 1 ? Style.FontSize._1 : title_s == 2 ? Style.FontSize._2 : Style.FontSize._3);
@@ -720,16 +745,16 @@ public class CompactMode {
                     .setJustification(EscPosConst.Justification.Left_Default);
             Style centerbold = new Style().setJustification(EscPosConst.Justification.Center).setBold(true);
             File f = FileUtils.pointFile(entreprise.getUid() + ".png");
-            if (f != null) {
-                RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
-                imgWrapper.setJustification(EscPosConst.Justification.Center);
-                // printer.feed(1);
-                BufferedImage bimg = ImageIO.read(f);
-                Bitonal bitonal = new BitonalThreshold(100);
-                EscPosImage posimg = new EscPosImage(new CoffeeImageImpl(bimg), bitonal);
-
+            if (f != null && f.exists()) {
                 try {
-                    printer.write(imgWrapper, posimg);
+                    BufferedImage bimg = ImageIO.read(f);
+                    if (bimg != null) {
+                        RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
+                        imgWrapper.setJustification(EscPosConst.Justification.Center);
+                        Bitonal bitonal = new BitonalThreshold(100);
+                        EscPosImage posimg = new EscPosImage(new CoffeeImageImpl(bimg), bitonal);
+                        printer.write(imgWrapper, posimg);
+                    }
                 } catch (Exception e) {
                     MainUI.notify(null, "Attention",
                             "Veuillez mettre un bon logo (125X125px) au moins, pour votre facture", 3, "warning");
@@ -738,16 +763,20 @@ public class CompactMode {
             }
 
             printer.feed(1);
-            printer.writeLF(title, entreprise.getNomEntreprise() == null ? entrepName : entreprise.getNomEntreprise());
-            String idnat = entreprise.getIdNat() == null ? idNat : entreprise.getIdNat();
-            String impot = entreprise.getNumeroImpot() == null ? nif : entreprise.getNumeroImpot();
-            String phones = entreprise.getPhones() == null ? phonez : entreprise.getPhones();
-            String stateId = "RCCM." + entreprise.getIdentification() + " " + (idnat == null ? "" : "ID NAT." + idnat)
-                    + (impot == null ? ""
-                            : " NIF." + impot
-                                    + "\nAdresse : " + entreprise.getAdresse() + "\n"
-                                    + (phones == null || phones.equals("-") ? "" : "Tel :" + phones));
-            printer.writeLF(centerbold, stateId);
+            String companyName = entreprise.getNomEntreprise() == null || entreprise.getNomEntreprise().isBlank() ? entrepName : entreprise.getNomEntreprise();
+            printer.writeLF(title, companyName);
+            String rccmVal = entreprise.getIdentification() == null || entreprise.getIdentification().isBlank() ? rccm : entreprise.getIdentification();
+            String idnat = entreprise.getIdNat() == null || entreprise.getIdNat().isBlank() ? idNat : entreprise.getIdNat();
+            String impot = entreprise.getNumeroImpot() == null || entreprise.getNumeroImpot().isBlank() ? nif : entreprise.getNumeroImpot();
+            String adresseVal = entreprise.getAdresse() == null || entreprise.getAdresse().isBlank() ? adresse : entreprise.getAdresse();
+            String phones = entreprise.getPhones() == null || entreprise.getPhones().isBlank() || entreprise.getPhones().equals("-") ? phonez : entreprise.getPhones();
+            StringBuilder stateId = new StringBuilder();
+            if (rccmVal != null && !rccmVal.isBlank()) stateId.append("RCCM.").append(rccmVal);
+            if (idnat != null && !idnat.isBlank() && !idnat.equals("Aucun")) stateId.append(" ID NAT.").append(idnat);
+            if (impot != null && !impot.isBlank() && !impot.equals("Aucun")) stateId.append(" NIF.").append(impot);
+            if (adresseVal != null && !adresseVal.isBlank() && !adresseVal.equals("aucune")) stateId.append("\nAdresse : ").append(adresseVal);
+            if (phones != null && !phones.isBlank()) stateId.append("\nTel: ").append(phones);
+            printer.writeLF(centerbold, stateId.toString());
             if (entreprise.getWebsite() != null) {
                 printer.writeLF(identite, entreprise.getWebsite());
             }
@@ -774,15 +803,17 @@ public class CompactMode {
             boolean printMod = pref.getBoolean("print_modele", true);
             double total = 0;
             for (LigneVente ligne : lignes) {
-                double prixdeventeunitaircdf = ligne.getPrixUnit();
-                total += ligne.getMontantCdf();
+                double prixdeventeunitaircdf = ligne.getPrixUnit() != null ? ligne.getPrixUnit() : 0.0;
+                total += CurrencyConverter.legacyUsdFromStorage(ligne.getMontantUsd(), ligne.getMontantCdf());
                 Produit p = ligne.getProductId();
-                String concatenatedProductName = p.getNomProduit() + " " + (printSup ? p.getMarque() : "") + " "
-                        + (printMod ? p.getModele() : "") + " " + p.getTaille();
+                String productName = p != null ? p.getNomProduit() + " " + (printSup ? (p.getMarque() != null ? p.getMarque() : "") : "") + " "
+                        + (printMod ? (p.getModele() != null ? p.getModele() : "") : "") + " " + (p.getTaille() != null ? p.getTaille() : "") : "Produit inconnu";
+                String qteMesure = ligne.getQuantite() + " " + (ligne.getMesureId() != null ? ligne.getMesureId().getDescription() : "");
+                double lineTotal = CurrencyConverter.legacyUsdFromStorage(ligne.getMontantUsd(), ligne.getMontantCdf());
                 heads += String.format("""
                         %-4s  %-18s   %-10s   %-10s
-                        """, ligne.getQuantite() + " " + ligne.getMesureId().getDescription(), concatenatedProductName,
-                        prixdeventeunitaircdf, ligne.getMontantUsd());
+                        """, qteMesure, productName,
+                        prixdeventeunitaircdf, lineTotal);
 
             }
             System.out.println("La factura " + heads);
@@ -860,11 +891,13 @@ public class CompactMode {
             printer.cut(EscPos.CutMode.FULL);
             printer.close();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "CompactMode.printWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             try {
                 pos.close();
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "CompactMode.printWithThermal.finally");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }

@@ -41,6 +41,7 @@ import tools.DataCache;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Util;
 
 public class ImmobilisationController implements Initializable {
@@ -360,6 +361,7 @@ public class ImmobilisationController implements Initializable {
             try {
                 Thread.sleep(250);
             } catch (InterruptedException ex) {
+                SyncLogger.getInstance().log(ex, "ImmobilisationController.openAmortissement");
             }
             javafx.application.Platform.runLater(() -> {
                 RepportController controller = RepportController.getInstance();
@@ -433,6 +435,7 @@ public class ImmobilisationController implements Initializable {
         try {
             return Double.parseDouble(value == null ? "" : value.trim());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "ImmobilisationController.parse");
             MainUI.notify(null, "Validation", "La valeur de ce champs doit etre en chiffre uniquement", 3, "error");
             return fallback;
         }

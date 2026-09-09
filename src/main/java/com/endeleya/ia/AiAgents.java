@@ -19,6 +19,9 @@ import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
 import dev.langchain4j.service.tool.ToolErrorHandlerResult;
 import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -135,6 +138,9 @@ public final class AiAgents {
     private static final int MAX_MEMORY_MESSAGES = 40;
     private static final int COMPACTION_THRESHOLD = 10;
     private static final String COMPACTION_MARKER = "[Contexte compacte] ";
+    private static final java.io.File MEMORY_FILE = new java.io.File(
+            java.nio.file.Paths.get(System.getProperty("user.dir"), "Media", "ia", "gratien").toString(),
+            "MEMORY.md");
     private static final String SUMMARY_SYSTEM_PROMPT = """
             Tu es l'agent de memoire de Gratien, assistant de Kazisafe.
             Resume en francais la conversation ci-dessous en conservant les faits importants:
@@ -964,12 +970,48 @@ public final class AiAgents {
             List<ChatMessage> renewed = new ArrayList<>();
             renewed.add(SystemMessage.from(COMPACTION_MARKER + summary));
             chatMemoryStore.updateMessages(sessionId, renewed);
+            persistMemoryToFile(raw, summary);
             LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": purgee, "
                     + renewed.size() + " message de contexte compacte en numero 1.");
             emitCompactionSignal("\u2705 Mémoire compactée.");
         } finally {
             compacting.set(false);
         }
+    }
+
+    /**
+     * Ecrit l'historique complet + le resume de compactage dans MEMORY.md
+     * pour que Gratien puisse recharger son contexte a chaque demarrage.
+     */
+    private void persistMemoryToFile(List<ChatMessage> rawMessages, String summary) {
+        try {
+            File dir = MEMORY_FILE.getParentFile();
+            if (dir != null && !dir.exists()) dir.mkdirs();
+            StringBuilder md = new StringBuilder();
+            md.append("# Memoire de Gratien — Synthese du contexte\n\n");
+            md.append("## Dernier compactage: ").append(LocalDateTime.now()).append("\n\n");
+            md.append("## Resume compacte\n\n").append(summary).append("\n\n");
+            md.append("## Historique des echanges\n\n");
+            for (ChatMessage msg : rawMessages) {
+                String role = memoryRole(msg);
+                String content = memoryContent(msg);
+                if (content == null || content.isBlank()) continue;
+                if (content.length() > 800) content = content.substring(0, 800) + "...";
+                md.append("**").append(role).append("**: ").append(content.replace("\n", " ")).append("\n\n");
+            }
+            Files.writeString(MEMORY_FILE.toPath(), md.toString(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            LOGGER.log(Level.WARNING, "Ecriture MEMORY.md impossible", ex);
+        }
+    }
+
+    public static String loadMemoryContext() {
+        if (MEMORY_FILE.exists()) {
+            try {
+                return Files.readString(MEMORY_FILE.toPath(), StandardCharsets.UTF_8);
+            } catch (IOException ignored) {}
+        }
+        return "";
     }
 
     private String summarize(List<ChatMessage> raw) {

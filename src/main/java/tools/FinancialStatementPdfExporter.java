@@ -22,6 +22,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import utilities.PDFUtils;
+import tools.SyncLogger;
 
 public final class FinancialStatementPdfExporter {
 
@@ -211,6 +212,7 @@ public final class FinancialStatementPdfExporter {
                 PDImageXObject logo = PDImageXObject.createFromFile(logoFile.getPath(), document);
                 contentStream.drawImage(logo, pageW - 110, pageH - 95, 70, 70);
             } catch (Exception ignored) {
+                SyncLogger.getInstance().log(ignored, "FinancialStatementPdfExporter.drawHeader");
             }
         }
 

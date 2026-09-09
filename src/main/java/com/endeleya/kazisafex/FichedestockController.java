@@ -58,6 +58,7 @@ import tools.FicheItem;
 import services.RepportService;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Util;
 import tools.Constants;
 import data.helpers.Role;
@@ -356,6 +357,7 @@ public class FichedestockController implements Initializable {
                 try {
                     Desktop.getDesktop().open(file);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "FichedestockController.exportFiche");
                     Logger.getLogger(FichedestockController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }

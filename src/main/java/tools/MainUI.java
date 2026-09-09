@@ -104,6 +104,7 @@ import javafx.util.Duration;
 import services.PlatformUtil;
 
 //import utilities.LoginResult;
+import tools.SyncLogger;
 
 /**
  *
@@ -175,6 +176,7 @@ public class MainUI {
             ismax = true;
             return true;
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.loadMainView");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
                 "Echec chargement vue principale",
@@ -260,6 +262,7 @@ public class MainUI {
                 new AudioClip(url.toExternalForm()).play();
             }
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.playSyncSound");
             System.err.print(ex);
         }
     }
@@ -725,14 +728,76 @@ public class MainUI {
                 stage.setX(event.getScreenX() - xOffset);
                 stage.setY(event.getScreenY() - yOffset);
             });
+            // Le dialogue ne doit jamais perdre le focus tant qu'il est affiché :
+            // à l'ouverture, le focus va au premier contrôle focusable ; si la
+            // fenêtre le retrouve par la suite (retour Alt-Tab, fenêtre système
+            // qui passe devant), on ré-attribue le focus au contrôle déjà actif.
+            // (Modality APPLICATION_MODAL interdit par ailleurs à toute autre
+            // fenêtre de l'application de voler le focus.)
+            final Node[] lastFocused = { null };
+            stage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+                if (isFocused && stage.isShowing()) {
+                    Node owner = scene.getFocusOwner();
+                    if (owner != null && owner.getScene() == scene && owner.isVisible()) {
+                        owner.requestFocus();
+                    } else {
+                        grantFocus(load);
+                    }
+                }
+            });
+            // Garde-fou anti-perte de focus : dès que le focus passe à null dans
+            // un dialogue visible (ex. un bouton enfoncé rend invisible le volet
+            // qui portait le focus, comme le volet prix de vente du destock), on
+            // le ré-attribue au dernier contrôle encore visible de la fenêtre.
+            scene.focusOwnerProperty().addListener((obs, oldNode, newNode) -> {
+                if (!stage.isShowing()) {
+                    return;
+                }
+                if (newNode != null) {
+                    lastFocused[0] = newNode;
+                    return;
+                }
+                Node target = lastFocused[0];
+                if (target == null || target.getScene() != scene || !target.isVisible()) {
+                    target = firstFocusable(load);
+                }
+                if (target != null) {
+                    final Node toFocus = target;
+                    Platform.runLater(toFocus::requestFocus);
+                }
+            });
             stage.showAndWait();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.floatDialog");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
                 null,
                 ex
             );
         }
+    }
+
+    private static void grantFocus(Node root) {
+        Node target = firstFocusable(root);
+        (target == null ? root : target).requestFocus();
+    }
+
+    private static Node firstFocusable(Node root) {
+        if (root == null) {
+            return null;
+        }
+        if (root.isFocusTraversable() && root.isVisible()) {
+            return root;
+        }
+        if (root instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                Node found = firstFocusable(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     public static Initializable getLoadedController(
@@ -747,6 +812,7 @@ public class MainUI {
             fxmlLoader.load();
             return fxmlLoader.getController();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.getLoadedController");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
                 null,
@@ -842,6 +908,7 @@ public class MainUI {
             AnchorPane.setTopAnchor(main, 64.0);
             return main;
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.getPage");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
                 null,
@@ -1012,6 +1079,7 @@ public class MainUI {
             });
             wait.play();
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "MainUI.showToast");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
                 null,

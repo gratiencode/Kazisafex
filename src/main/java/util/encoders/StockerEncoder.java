@@ -58,7 +58,7 @@ public class StockerEncoder implements Encoder.Text<Stocker> {
                 .add("quantite", ins.getQuantite())
                 .add("localisation", ins.getLocalisation() == null ? "" : ins.getLocalisation())
                 .add("stockAlerte", ins.getStockAlerte())
-                .add("dateStocker", Constants.DATE_HEURE_FORMATTER.format(ins.getDateStocker()))
+                .add("dateStocker", Constants.Datetime.utcString(ins.getDateStocker()))
                 .add("livraisId", Json.createObjectBuilder()
                         .add("uid", ins.getLivraisId().getUid()).build())
                 .add("mesureId", Json.createObjectBuilder()

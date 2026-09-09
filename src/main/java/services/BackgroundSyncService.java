@@ -187,6 +187,7 @@ public class BackgroundSyncService extends Service<Void> {
         return new Task<Void>() {
             @Override
             protected Void call() throws Exception {
+                Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
                 while (!isCancelled()) {
                     if (isPaused()) {
                         publishStatus("Sync paused.");
@@ -332,6 +333,8 @@ public class BackgroundSyncService extends Service<Void> {
                                     } else {
                                         System.err.println("[SYNC-UPSYNC] Chunk failed; continuing with the rest of the queue.");
                                     }
+                                    // yield point between upsync chunks
+                                    safeSleepMillis(50);
                                 }
 
                                 cycleApplied += appliedThisPass;

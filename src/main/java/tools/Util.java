@@ -49,6 +49,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import tools.SyncLogger;
 import java.util.prefs.Preferences;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
@@ -923,16 +924,22 @@ public class Util {
                     result.add(t);
                 }
             } catch (NoSuchMethodException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (SecurityException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (InstantiationException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (IllegalAccessException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (IllegalArgumentException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (InvocationTargetException ex) {
+                SyncLogger.getInstance().log(ex, "Util.filterObject");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -1190,9 +1197,11 @@ public class Util {
         try {
             quint.setV(date);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.findByDate");
             try {
                 quint.setV(date);
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "Util.findByDate");
             }
         }
         quint.setW(ventesDuJour);
@@ -1543,8 +1552,10 @@ public class Util {
             }
             return result;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.importInventoryFromExcelFile");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.importInventoryFromExcelFile");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -1690,8 +1701,10 @@ public class Util {
             }
             return result;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.importFromExcel");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.importFromExcel");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -1737,6 +1750,7 @@ public class Util {
                             }
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone codebarr", 5,
                                 "error");
                     }
@@ -1754,6 +1768,7 @@ public class Util {
 
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone nom du produit", 5,
                                 "error");
                     }
@@ -1765,6 +1780,7 @@ public class Util {
                             produit.setMarque(m3);
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone marque", 5, "error");
                     }
                     break;
@@ -1775,6 +1791,7 @@ public class Util {
                             produit.setModele(m4);
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone modele", 5, "error");
                     }
 
@@ -1786,6 +1803,7 @@ public class Util {
                             produit.setTaille(m5);
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone taille/concentration",
                                 5, "error");
                     }
@@ -1797,6 +1815,7 @@ public class Util {
                             produit.setCouleur(m6);
                         }
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "Util.proceedImport");
                         MainUI.notify(null, "Erreur ", "Erreur " + e.getMessage() + " sur collone couleur", 5, "error");
                     }
                     break;
@@ -1809,6 +1828,7 @@ public class Util {
                                 recq.setNumlot(value);
                                 destock.setNumlot(value);
                             } catch (Exception e) {
+                                SyncLogger.getInstance().log(e, "Util.proceedImport");
                                 MainUI.notify(null, "Error", "Erreur num-lot " + e.getMessage(), 5, "error");
                             }
                         }
@@ -1819,6 +1839,7 @@ public class Util {
                             recq.setNumlot(value);
                             destock.setNumlot(value);
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "Util.proceedImport");
                             MainUI.notify(null, "Error", "Erreur num-lot " + e.getMessage(), 5, "error");
                         }
                     }
@@ -1841,6 +1862,7 @@ public class Util {
                             recq.setMesureId(mesure);
                             destock.setMesureId(mesure);
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "Util.proceedImport");
                             MainUI.notify(null, "Error", "Erreur mesure " + e.getMessage(), 5, "error");
                         }
                     } else {
@@ -1860,6 +1882,7 @@ public class Util {
                                 destock.setQuantite(value);
                                 recq.setQuantite(value);
                             } catch (Exception e) {
+                                SyncLogger.getInstance().log(e, "Util.proceedImport");
                                 MainUI.notify(null, "Error", "Erreur num-lot " + e.getMessage(), 5, "error");
                             }
                         }
@@ -2115,8 +2138,10 @@ public class Util {
             }
 
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.help");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.help");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return llis;
@@ -2197,8 +2222,10 @@ public class Util {
             }
             return result;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.readProductFromExcel");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.readProductFromExcel");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -2215,6 +2242,7 @@ public class Util {
             img.setImage(image);
             centerImage(img);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.setResourceImage");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -2232,6 +2260,7 @@ public class Util {
             imgvu.setImage(image);
             centerImage(imgvu);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.installPicture");
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -2362,12 +2391,9 @@ public class Util {
             return 0;
         }
         String target = CurrencyConverter.normalize(dev == null ? CurrencyConverter.mainCurrency() : dev);
-        double rst = 0;
-        for (LigneVente lv : lvs) {
-            rst += CurrencyConverter.amountFromLegacyStorage(
-                    lv.getMontantUsd(), lv.getMontantCdf(), target);
-        }
-        return CurrencyConverter.round(rst);
+        double totalUsd = lvs.stream().mapToDouble(l -> CurrencyConverter.legacyUsdFromStorage(
+                l.getMontantUsd(), l.getMontantCdf())).sum();
+        return CurrencyConverter.round(CurrencyConverter.fromUsd(totalUsd, target));
     }
 
     public static PrixDeVente findPrice(List<PrixDeVente> ps, String uid) {
@@ -2401,6 +2427,7 @@ public class Util {
                 }
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.findPrice");
         }
         return null;
     }
@@ -3415,6 +3442,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsInventory");
             e.printStackTrace();
         }
         return null;
@@ -3472,6 +3500,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsRecquisition");
             e.printStackTrace();
         }
         return null;
@@ -3565,6 +3594,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsTransactions");
             e.printStackTrace();
         }
         return null;
@@ -3636,12 +3666,14 @@ public class Util {
             workbook.write(fos);
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsDepensesRealisees");
             e.printStackTrace();
         } finally {
             if (fos != null) {
                 try {
                     fos.close();
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "Util.exportXlsDepensesRealisees");
                     ex.printStackTrace();
                 }
             }
@@ -3706,6 +3738,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsAgregatedDepenses");
             e.printStackTrace();
         }
         return null;
@@ -3840,6 +3873,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsLivraison");
             e.printStackTrace();
         }
         return null;
@@ -3960,6 +3994,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSales");
             e.printStackTrace();
         }
         return null;
@@ -4038,6 +4073,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsDestockByReference");
             e.printStackTrace();
         }
         return null;
@@ -4165,6 +4201,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsReports");
             e.printStackTrace();
         }
         return null;
@@ -4241,6 +4278,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSalePerProductReports");
             e.printStackTrace();
         }
         return null;
@@ -4294,6 +4332,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSalePerCategory");
             e.printStackTrace();
         }
         return null;
@@ -4362,6 +4401,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSalePerClient");
             e.printStackTrace();
         }
         return null;
@@ -4411,6 +4451,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsPurchasesBySupplier");
             e.printStackTrace();
         }
         return null;
@@ -4460,6 +4501,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsPurchasesByProduct");
             e.printStackTrace();
         }
         return null;
@@ -4505,6 +4547,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsPurchasesByMonth");
             e.printStackTrace();
         }
         return null;
@@ -4550,6 +4593,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsExpenseByImputation");
             e.printStackTrace();
         }
         return null;
@@ -5135,6 +5179,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsInventoryMagasin");
             e.printStackTrace();
         }
         return null;
@@ -5304,6 +5349,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsPhysicalInventory");
             e.printStackTrace();
         }
         return null;
@@ -5401,8 +5447,10 @@ public class Util {
             b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFicheStock");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFicheStock");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5452,6 +5500,7 @@ public class Util {
             workbook.write(output);
             return file;
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportXlsFicheStock");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             return null;
         }
@@ -5488,8 +5537,10 @@ public class Util {
             b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFicheDebiteurs");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFicheDebiteurs");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5535,8 +5586,10 @@ public class Util {
             b.close();
             return file;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFRecouvrementClient");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "Util.exportPDFRecouvrementClient");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -5859,6 +5912,7 @@ public class Util {
                 fos.close();
                 return file;
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "Util.exportRelevee");
                 e.printStackTrace();
             }
         } else if (type.equalsIgnoreCase("pdf")) {
@@ -5890,8 +5944,10 @@ public class Util {
                 b.close();
                 return file;
             } catch (FileNotFoundException ex) {
+                SyncLogger.getInstance().log(ex, "Util.exportRelevee");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "Util.exportRelevee");
                 Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -6060,6 +6116,7 @@ public class Util {
             fos.close();
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportPerimees");
             e.printStackTrace();
         }
         return null;
@@ -6138,6 +6195,7 @@ public class Util {
                 }
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsAmortissement");
             e.printStackTrace();
         }
     }
@@ -6186,6 +6244,7 @@ public class Util {
             }
             Desktop.getDesktop().open(file);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSuppliersDebt");
             e.printStackTrace();
         }
     }
@@ -6265,6 +6324,7 @@ public class Util {
             }
             Desktop.getDesktop().open(file);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsSupplierStatement");
             e.printStackTrace();
         }
     }
@@ -6343,12 +6403,14 @@ public class Util {
                     try {
                         Desktop.getDesktop().open(file);
                     } catch (IOException ex) {
+                        SyncLogger.getInstance().log(ex, "Util.exportXlsExpiredStock");
                         Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }).start();
             }
             workbook.close();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsExpiredStock");
             e.printStackTrace();
         }
     }
@@ -6447,6 +6509,7 @@ public class Util {
                 }
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsFinancialStates");
             e.printStackTrace();
         }
     }
@@ -6505,6 +6568,7 @@ public class Util {
             workbook.close();
 
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsAttendance");
             e.printStackTrace();
         }
     }
@@ -6594,6 +6658,7 @@ public class Util {
                 }
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsClientStatement");
             e.printStackTrace();
         }
     }
@@ -6644,6 +6709,7 @@ public class Util {
                             contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
                         }
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "Util.exportPdfClientStatement");
                         // Silent logo failure
                     }
 
@@ -6744,6 +6810,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportPdfClientStatement");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
             return null;
         }
@@ -6794,6 +6861,7 @@ public class Util {
                             contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
                         }
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "Util.exportPdfSupplierStatement");
                         // Silent logo failure
                     }
 
@@ -6893,6 +6961,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportPdfSupplierStatement");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
             return null;
         }
@@ -6943,6 +7012,7 @@ public class Util {
                             contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
                         }
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "Util.exportPdfSuppliersDebt");
                     }
 
                     pdf.addTextLine("Liste des Dettes Fournisseurs", 25, pageH - 98, hbold, 28, java.awt.Color.DARK_GRAY);
@@ -7029,6 +7099,7 @@ public class Util {
             }
             return file;
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportPdfSuppliersDebt");
             Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, e);
             return null;
         }
@@ -7042,6 +7113,7 @@ public class Util {
         try {
             url = URI.create(KazisafeServiceFactory.BASE_URL).toURL();
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "Util.isInternetAndBaseApiReachable");
             return false;
         }
         for (String method : new String[]{"HEAD", "GET"}) {
@@ -7058,6 +7130,7 @@ public class Util {
                     return true;
                 }
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "Util.isInternetAndBaseApiReachable");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.FINE,
                         "BASE_URL (" + method + ") non joignable: " + ex.getMessage());
             } finally {

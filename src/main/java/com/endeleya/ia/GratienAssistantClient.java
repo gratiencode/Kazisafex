@@ -307,6 +307,13 @@ public final class GratienAssistantClient {
                 ctx.append(Files.readString(AGENT_FILE.toPath(), StandardCharsets.UTF_8)).append("\n\n");
             } catch (IOException ignored) {}
         }
+        String memoryCtx = AiAgents.loadMemoryContext();
+        if (!memoryCtx.isEmpty()) {
+            try {
+                ctx.append("## Memoire anterieure de Gratien\n")
+                        .append(memoryCtx).append("\n\n");
+            } catch (Exception ignored) {}
+        }
         if (USER_FILE.exists()) {
             try {
                 ctx.append("## Instructions personnalisees de l'utilisateur\n")

@@ -63,6 +63,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.prefs.Preferences;
 import utilities.ImageProduit;
+import tools.SyncLogger;
 
 /**
  *
@@ -1146,6 +1147,7 @@ public class WsClientEndpoint extends Endpoint {
                         });
                     }
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "WsClientEndpoint.onMessage");
                     ex.printStackTrace();
                 }
                 });

@@ -5,7 +5,6 @@
  */
 package com.endeleya.kazisafex;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import delegates.CompteTresorDelegate;
 import delegates.FactureDelegate;
 import delegates.OperationDelegate;
@@ -90,7 +89,6 @@ import data.Traisorerie;
 import data.Depense;
 import data.LigneVente;
 import data.Vente;
-import data.VenteHelper;
 import data.helpers.Mouvment;
 import data.BaseModel;
 import retrofit2.Call;
@@ -112,6 +110,7 @@ import data.helpers.Role;
 import data.helpers.TypeTraisorerie;
 import data.network.Kazisafe;
 import javafx.scene.layout.HBox;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -331,6 +330,7 @@ public class TresorerieController implements Initializable {
     static double soldecdf, soldeusd;
     String math;
     Kazisafe kazisafe;
+    private final tools.sync.VenteDtoSyncer venteSync = new tools.sync.VenteDtoSyncer();
     private final java.util.concurrent.ExecutorService syncExecutor =
             Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "Kazisafe-Treasury-SSE");
@@ -468,6 +468,7 @@ public class TresorerieController implements Initializable {
         try {
             cpt.setSoldeMinimum(soldeMin.getText().isEmpty() ? 0 : Double.parseDouble(soldeMin.getText()));
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "TresorerieController.saveCompteTr");
             MainUI.notify(null, "Erreur", "Le solde doit etre en chiffre svp", 3, "error");
             return;
         }
@@ -1471,7 +1472,8 @@ public class TresorerieController implements Initializable {
                             .submit(() -> {
                                 try {
                                     modifyVenteByHttp(updrst, venteACredit.getClientId());
-                                } catch (IOException ex) {
+                                } catch (Exception ex) {
+                                    SyncLogger.getInstance().log(ex, "TresorerieController.createTransaction");
                                     Logger.getLogger(TresorerieController.class.getName()).log(Level.SEVERE, null, ex);
                                 }
                                 System.err.println("Upd result local " + updrst.getReference());
@@ -1678,6 +1680,7 @@ public class TresorerieController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "TresorerieController.exportTransactions");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -1703,40 +1706,23 @@ public class TresorerieController implements Initializable {
 
     private boolean saveCashByHttp(Traisorerie tr) {
         try {
-            Response<Traisorerie> excuted = kazisafe.saveCash(tr).execute();
-            return excuted.isSuccessful();
+            return this.venteSync.pushTraisorerie(this.kazisafe, tr);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "TresorerieController.saveCashByHttp");
             return false;
         }
     }
 
     private Response<Vente> modifyVenteByHttp(Vente vente, Client client) throws IOException {
-        try {
-            VenteHelper hlp = new VenteHelper();
-            hlp.setClient(client);
-            hlp.setVente(vente);
-            Response<Vente> exe = kazisafe.modifySale(hlp).execute();
-            System.out.println("Vente modify response Http : " + exe);
-            return exe;
-        } catch (JsonProcessingException ex) {
-            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return null;
+        return this.venteSync.pushSale(this.kazisafe, vente, client, null, null);
     }
 
     private void saveCompteTresorByHttp(CompteTresor ctr) {
-        kazisafe.saveCompteTesor(ctr.getUid(), ctr).enqueue(new Callback<CompteTresor>() {
-            @Override
-            public void onResponse(Call<CompteTresor> call, Response<CompteTresor> rspns) {
-                System.out.println("Compte Tresor " + rspns.message());
-                if (rspns.isSuccessful()) {
-                    System.out.println("Tresorerie saved on server");
-                }
-            }
-
-            @Override
-            public void onFailure(Call<CompteTresor> call, Throwable thrwbl) {
-                thrwbl.printStackTrace();
+        syncExecutor.submit(() -> {
+            try {
+                this.venteSync.pushCompteTresor(this.kazisafe, ctr);
+            } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "TresorerieController.saveCompteTresorByHttp");
             }
         });
     }
@@ -1878,6 +1864,7 @@ public class TresorerieController implements Initializable {
                         MainUI.notify(null, "Erreur", "Erreur lors de l'export des dépenses", 3, "error");
                     }
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "TresorerieController.exportDepensesRealisees");
                     Logger.getLogger(TresorerieController.class.getName()).log(Level.SEVERE, null, ex);
                     MainUI.notify(null, "Erreur", "Erreur lors de l'export des dépenses", 3, "error");
                 }

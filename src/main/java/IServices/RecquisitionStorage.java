@@ -234,6 +234,35 @@ public interface RecquisitionStorage {
     public StockAgregate updateStockAgregate(StockAgregate sa);
 
     public StockAgregate findStockAgregate(String prod, String numlot, String region, boolean destryed);
-    
+
+    /**
+     * Vue SQL pour l'onglet POS : une ligne par produit, tous les calculs de
+     * stock (somme des lots, lot exposé selon la méthode) réalisés dans le
+     * SGBD via des JOINs. Colonne de l'Object[] :
+     * 0 uid, 1 codebar, 2 nomproduit, 3 marque, 4 modele, 5 taille,
+     * 6 categoryid_uid, 7 pieces (somme latest-per-lot), 8 numlot (lot exposé),
+     * 9 date_expiration, 10 cout_achat, 11 mesure_id du lot exposé,
+     * 12 quantcontenu de cette mesure, 13 description, 14 uid petite mesure,
+     * 15 quantcontenu petite mesure.
+     */
+    public List<Object[]> loadPosStockView(String region, String meth, boolean global);
+
+    /** Recquisitions (scope région) : uid, product_id, numlot, date, dateExpiry. */
+    public List<Object[]> loadHeaderRecqs(String region);
+
+    /** Recquisitions globales : uid, product_id, numlot, date, dateExpiry. */
+    public List<Object[]> loadAllRecqs();
+
+    /** Entrées par (product_id, numlot) en pièces (hors référence RTR), scope région. */
+    public List<Object[]> loadRecqLotEntrees(String region);
+
+    /** Sorties par (product_id, numlot) en pièces via ligne_vente/vente, scope région. */
+    public List<Object[]> loadLigneVenteLotSorties(String region);
+
+    /** Retours par (product_id, numlot) en pièces via retour_depot, scope région. */
+    public List<Object[]> loadRetourDepotLotReturns(String region);
+
+    /** Lignes prix : uid, q_min, prix_unitaire, mesureid_uid, recquisition_id. */
+    public List<Object[]> loadPriceRows();
 
 }

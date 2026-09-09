@@ -31,15 +31,26 @@ public class MesureService implements MesureStorage {
     public boolean isExists(String uid) {
         String jpql = "SELECT CASE WHEN COUNT(c) > 0 THEN TRUE ELSE FALSE END "
                 + "FROM Mesure c WHERE c.uid = :id";
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+        try {
+            if (ManagedSessionFactory.isEmbedded()) {
+                return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, Boolean.class)
+                        .setParameter("id", uid)
+                        .getSingleResult());
+            }
+            return ManagedSessionFactory.getEntityManager()
+                    .createQuery(jpql, Boolean.class)
                     .setParameter("id", uid)
-                    .getSingleResult());
+                    .setFlushMode(jakarta.persistence.FlushModeType.COMMIT)
+                    .getSingleResult();
+        } catch (NoResultException e) {
+            return false;
+        } catch (Exception e) {
+            // Un simple test d'existence ne doit jamais faire echouer le
+            // downsync (ex: auto-flush d'un produit encore transient). On
+            // retombe alors sur le chemin "dependance manquante" / insertion.
+            System.out.println("[MesureService.isExists] echec lookup uid=" + uid);
+            return false;
         }
-        return ManagedSessionFactory.getEntityManager()
-                .createQuery(jpql, Boolean.class)
-                .setParameter("id", uid)
-                .getSingleResult();
     }
 
     public MesureService() {

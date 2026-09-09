@@ -111,6 +111,7 @@ import tools.SyncEngine;
 import tools.Util;
 import tools.FileUtils;
 import utilities.ImageProduit;
+import tools.SyncLogger;
 import tools.Tables;
 
 /**
@@ -246,7 +247,7 @@ public class ProduitItemController implements Initializable {
                     q = q.replace(" ", "+");
                     Desktop.getDesktop().browse(URI.create("https://www.google.com/search?q=" + q + "&source=lnms&tbm=isch"));
                 } catch (Exception e) {
-
+                    SyncLogger.getInstance().log(e, "ProduitItemController.serchImgOnGoogle");
                 }
             }
         }).start();
@@ -273,6 +274,7 @@ public class ProduitItemController implements Initializable {
             String mes = cbx_descr_mzr.getValue() + ":" + tf_quant_mzr.getText();
             addMesure(mes);
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.perfom");
             MainUI.notify(null, "Erreur", "Entrer la quantite valide (des chiffres)", 4, "error");
         }
     }
@@ -328,6 +330,7 @@ public class ProduitItemController implements Initializable {
             }
             img_codebar.setImage(new Image(is));
         } catch (IOException | java.lang.IllegalArgumentException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.showcodebar");
             if (ex instanceof java.lang.IllegalArgumentException) {
                 ByteArrayOutputStream stream = createQR(text, "UTF-8", 250, 250);
                 is = new ByteArrayInputStream(stream.toByteArray());
@@ -348,10 +351,13 @@ public class ProduitItemController implements Initializable {
             baos.flush();
             return baos;
         } catch (WriterException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         } catch (UnsupportedEncodingException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.createQR");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
@@ -373,11 +379,13 @@ public class ProduitItemController implements Initializable {
             printer.cut(EscPos.CutMode.FULL);
             printer.close();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.printBCWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             try {
                 pos.close();
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitItemController.printBCWithThermal");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -525,6 +533,7 @@ public class ProduitItemController implements Initializable {
             imgvu_product.setImage(image);
             Util.centerImage(imgvu_product);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.setProduct");
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
         setInitData(null);
@@ -558,6 +567,7 @@ public class ProduitItemController implements Initializable {
 //                    Util.syncImage(imgp);
                 }
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitItemController.modifierSelectedProduit");
                 Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }).start();
@@ -572,6 +582,7 @@ public class ProduitItemController implements Initializable {
                 p.setImage(pixa);
             }
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.modifierSelectedProduit");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         }
         p.setCategoryId(cbx_choose_category.getValue());
@@ -714,11 +725,13 @@ public class ProduitItemController implements Initializable {
                 imgvu_product.setImage(image);
                 centerImage(imgvu_product);
             } catch (FileNotFoundException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitItemController.browseFiles");
                 Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
             } finally {
                 try {
                     fis.close();
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "ProduitItemController.browseFiles");
                     Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -750,8 +763,10 @@ public class ProduitItemController implements Initializable {
                         }
                         Thread.sleep(1000);
                     } catch (InterruptedException ex) {
+                        SyncLogger.getInstance().log(ex, "ProduitItemController.selectAuto");
                         Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
                     } catch (FileNotFoundException ex) {
+                        SyncLogger.getInstance().log(ex, "ProduitItemController.selectAuto");
                         Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
                     } finally {
                         try {
@@ -759,6 +774,7 @@ public class ProduitItemController implements Initializable {
                                 fis.close();
                             }
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "ProduitItemController.selectAuto");
                             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
@@ -869,6 +885,7 @@ public class ProduitItemController implements Initializable {
             }
             tile_pn_mesures.getChildren().clear();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "ProduitItemController.saveProduct");
             Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -1033,6 +1050,7 @@ public class ProduitItemController implements Initializable {
             try {
                 imageBytes = FileUtils.readFromFile(choosenFile);
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ProduitItemController.sendProduitIfNotExist");
                 Logger.getLogger(ProduitItemController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -1051,6 +1069,7 @@ public class ProduitItemController implements Initializable {
         try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
             return FileUtils.readAllBytes(is);
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "ProduitItemController.loadDefaultImage");
             System.err.println("Erreur lors du chargement de l'image par défaut" + e.getMessage());
             return new byte[0];
         }
@@ -1066,6 +1085,7 @@ public class ProduitItemController implements Initializable {
                 System.err.println("Erreur lors de l'enregistrement du produit : " + response.code());
             }
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "ProduitItemController.saveProduitByHttps");
             System.err.println("Erreur lors de l'enregistrement du produit" + e.getMessage());
         }
     }

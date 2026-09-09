@@ -127,6 +127,7 @@ import util.encoders.TraisorerieEncoder;
 import util.encoders.VenteEncoder;
 import util.listencoders.ListEncoder;
 import utilities.ImageProduit;
+import tools.SyncLogger;
 
 /**
  *
@@ -154,6 +155,7 @@ public class SyncEndpoint {
             instance = this;
             pref.putInt("exit", 0);
         } catch (NoSuchAlgorithmException ex) {
+            SyncLogger.getInstance().log(ex, "SyncEndpoint.<init>");
             Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, null, ex);
         }
 
@@ -189,8 +191,10 @@ public class SyncEndpoint {
                 }
             });
         } catch (DeploymentException ex) {
+            SyncLogger.getInstance().log(ex, "SyncEndpoint.connect");
             Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "SyncEndpoint.connect");
             MainUI.notify(null, "Erreur", "Veuillez vérifier la qualité de votre connection internet", 6, "error");
             Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -203,8 +207,10 @@ public class SyncEndpoint {
                 this.session.getBasicRemote().sendObject(model);
             }
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "SyncEndpoint.sendObject");
             Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, e.getMessage());
         } catch (EncodeException ex) {
+            SyncLogger.getInstance().log(ex, "SyncEndpoint.sendObject");
             Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -216,6 +222,7 @@ public class SyncEndpoint {
                 try {
                     session.close();
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "SyncEndpoint.closeSession");
                     Logger.getLogger(SyncEndpoint.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }

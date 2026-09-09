@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import services.ClotureCallback;
+import services.utils.PermissionRegistry;
+import tools.SyncLogger;
 import utilities.Peremption;
 
 /**
@@ -81,8 +83,10 @@ public class Agregator {
                         finish = futur.get();
                         notifyFinish(finish, "stock-cloture");
                     } catch (InterruptedException ex) {
+                        SyncLogger.getInstance().log(ex, "Agregator.agregate");
                         Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
                     } catch (ExecutionException ex) {
+                        SyncLogger.getInstance().log(ex, "Agregator.agregate");
                         Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 });
@@ -163,7 +167,20 @@ public class Agregator {
                         finish = true;
                         notifyFinish(finish, "stock-cloture");
 
+                        // Les lots viennent d'être agrégés : invalide la vue POS mise
+                        // en cache puis la rechauffe pour que l'onglet POS reflète les
+                        // quantités/lots fraîchement clôturés.
+                        try {
+                            PosViewCache.invalidateAll();
+                            PosViewCache.warm(region,
+                                    pref.get("meth", "fifo"),
+                                    PermissionRegistry.hasGlobalAccess());
+                        } catch (Exception warmEx) {
+                            SyncLogger.getInstance().log(warmEx, "Agregator.warmPosView");
+                        }
+
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "Agregator.agregateDateRange");
                         Logger.getLogger(Agregator.class.getName()).log(Level.SEVERE, null, ex);
                         notifyFinish(false, "stock-cloture");
                     }

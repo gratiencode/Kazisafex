@@ -9,6 +9,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import tools.SyncLogger;
 
 /**
  * Utilitaire centralisé de protection mémoire pour tous les threads du projet.
@@ -154,6 +155,7 @@ public final class MemoryGuard {
             es.shutdown();
             return f;
         } catch (RejectedExecutionException e) {
+            SyncLogger.getInstance().log(e, "MemoryGuard.submit");
             LOG.log(Level.WARNING, "[MemoryGuard] submit refusé : " + e.getMessage());
             return null;
         }
@@ -175,6 +177,7 @@ public final class MemoryGuard {
             es.shutdown();
             return f;
         } catch (RejectedExecutionException e) {
+            SyncLogger.getInstance().log(e, "MemoryGuard.submit");
             LOG.log(Level.WARNING, "[MemoryGuard] submit refusé : " + e.getMessage());
             return null;
         }

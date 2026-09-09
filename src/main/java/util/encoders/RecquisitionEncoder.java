@@ -45,7 +45,7 @@ public class RecquisitionEncoder implements Encoder.Text<Recquisition> {
                 .add("region", ins.getRegion())
                 .add("quantite", ins.getQuantite())
                 .add("stockAlert", ins.getStockAlert() == null ? 0 : ins.getStockAlert())
-                .add("date", Constants.DATE_HEURE_FORMATTER.format(ins.getDate()))
+                .add("date", Constants.Datetime.utcString(ins.getDate()))
                 .add("mesureId", Json.createObjectBuilder()
                         .add("uid", ins.getMesureId().getUid()).build())
                 .add("productId", Json.createObjectBuilder()

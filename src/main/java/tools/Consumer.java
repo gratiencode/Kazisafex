@@ -55,6 +55,7 @@ import data.RetourMagasin;
 import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
+import tools.SyncLogger;
 
 /**
  *
@@ -82,6 +83,7 @@ public class Consumer implements Runnable {
                 TimeUnit.SECONDS.sleep(2);
                 System.out.println("Consumer Thread - " + Thread.currentThread().getName() + " " + elt);
             } catch (InterruptedException ex) {
+                SyncLogger.getInstance().log(ex, "Consumer.run");
                 Logger.getLogger(Consumer.class.getName()).log(Level.SEVERE, null, ex);
             }
         }

@@ -62,6 +62,7 @@ import tools.NotificationHandler;
 import tools.SyncEngine;
 import tools.Tables;
 import tools.Util;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -484,6 +485,7 @@ public class SuppliersController implements Initializable {
                             try {
                                 Desktop.getDesktop().open(f);
                             } catch (Exception ex) {
+                                SyncLogger.getInstance().log(ex, "SuppliersController.exportSuppliersDebtPdf");
                                 Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
                             }
                         }
@@ -510,6 +512,7 @@ public class SuppliersController implements Initializable {
                         try {
                             Desktop.getDesktop().open(file);
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "SuppliersController.exportSupplierDebtToPdf");
                             Logger.getLogger(SuppliersController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }

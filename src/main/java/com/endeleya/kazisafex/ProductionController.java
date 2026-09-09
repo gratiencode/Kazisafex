@@ -107,6 +107,7 @@ import tools.DataCache;
 import tools.DataId;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class

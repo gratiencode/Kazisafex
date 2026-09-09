@@ -200,6 +200,13 @@ public final class CurrencyConverter {
         return fromUsd(totalUsd, targetCurrency);
     }
 
+    public static double legacyUsdFromStorage(double usd, double cdf) {
+        if (usd > 0 && cdf > 0) {
+            return usd;
+        }
+        return usd + toUsd(cdf, CDF);
+    }
+
     public static String equivalentLabel(double amount, String fromCurrency) {
         String from = normalize(fromCurrency);
         String target = CDF.equals(from) ? USD : CDF;
@@ -224,6 +231,34 @@ public final class CurrencyConverter {
 
     public static double round(double value) {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+    }
+
+    public static String formatCompact(double amount) {
+        double abs = Math.abs(amount);
+        String prefix = amount < 0 ? "-" : "";
+        if (abs >= 1_000_000_000) {
+            double val = abs / 1_000_000_000;
+            String s = String.format(Locale.ROOT, "%.1f", val);
+            if (s.endsWith(".0")) s = s.substring(0, s.length() - 2);
+            return prefix + s + "B";
+        }
+        if (abs >= 1_000_000) {
+            double val = abs / 1_000_000;
+            String s = String.format(Locale.ROOT, "%.1f", val);
+            if (s.endsWith(".0")) s = s.substring(0, s.length() - 2);
+            return prefix + s + "M";
+        }
+        if (abs >= 1_000) {
+            double val = abs / 1_000;
+            String s = String.format(Locale.ROOT, "%.1f", val);
+            if (s.endsWith(".0")) s = s.substring(0, s.length() - 2);
+            return prefix + s + "K";
+        }
+        return prefix + String.format(Locale.ROOT, "%.2f", abs);
+    }
+
+    public static String formatPriceCompact(double amount, String currency) {
+        return symbol(currency) + formatCompact(amount);
     }
 
     public static BigDecimal roundMoney(BigDecimal value) {

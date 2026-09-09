@@ -34,7 +34,7 @@ public class AbonnementEncoder implements Encoder.Text<Abonnement>{
                 .add("typeAbonnement",obj.getTypeAbonnement())
                 .add("nombreOperation",obj.getNombreOperation())
                 .add("etat",obj.getEtat())
-                .add("dateAbonnement",Constants.dateFormater.format(obj.getDateAbonnement()))
+                .add("dateAbonnement",Constants.Datetime.utcString(obj.getDateAbonnement()))
                 .add("type", Tables.ABONNEMENT.name())
                 .add("action", "read")
                 .add("priority", obj.getPriority())

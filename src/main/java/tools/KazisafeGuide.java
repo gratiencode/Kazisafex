@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.prefs.Preferences;
+import tools.SyncLogger;
 
 /**
  * Gestion des guides d'utilisation Kazisafe.
@@ -116,6 +117,7 @@ public final class KazisafeGuide {
                 }
             }
         } catch (IOException ignored) {
+            SyncLogger.getInstance().log(ignored, "KazisafeGuide.ensureGuides");
         }
     }
 
@@ -128,11 +130,13 @@ public final class KazisafeGuide {
                 return Files.readString(f.toPath(), StandardCharsets.UTF_8);
             }
         } catch (IOException ignored) {
+            SyncLogger.getInstance().log(ignored, "KazisafeGuide.loadGuideFromDisk");
         }
         try (InputStream in = KazisafeGuide.class
                 .getResourceAsStream("/guides/GUIDE_" + l.toUpperCase(Locale.ROOT) + ".md")) {
             return in == null ? "" : new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "KazisafeGuide.loadGuideFromResource");
             return "";
         }
     }

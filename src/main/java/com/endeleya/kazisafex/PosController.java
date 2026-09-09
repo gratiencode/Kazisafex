@@ -63,6 +63,7 @@ import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -182,10 +183,13 @@ import tools.InventoryMagasin;
 import tools.ListViewItem;
 import tools.MainUI;
 import tools.PhysicalInventoryLine;
+import tools.PosViewCache;
 import tools.Rupture;
 import tools.SaleItem;
+import tools.SaleSyncHelper;
 import tools.SyncEngine;
 import tools.Tables;
+import tools.SyncLogger;
 import tools.SyncRetryHandler;
 import tools.Util;
 import utilities.PDFUtils;
@@ -576,8 +580,6 @@ public class PosController implements Initializable {
     @FXML
     TableView<InventoryMagasin> table_inv_mag;
     @FXML
-    TableColumn<InventoryMagasin, String> col_codebar_tInv_mag;
-    @FXML
     TableColumn<InventoryMagasin, String> col_status_tInv_mag;
     @FXML
     TableColumn<InventoryMagasin, String> col_prod_tInv_mag;
@@ -595,6 +597,10 @@ public class PosController implements Initializable {
     TableColumn<InventoryMagasin, String> col_lot_tInv_mag;
     @FXML
     TableColumn<InventoryMagasin, String> col_expiry_tInv_mag;
+    @FXML
+    TableColumn<InventoryMagasin, Boolean> col_select_tInv_mag;
+    @FXML
+    CheckBox chbx_selectall_inv;
     @FXML
     ScrollPane scrollPos;
     @FXML
@@ -670,6 +676,7 @@ public class PosController implements Initializable {
     ObservableList<Produit> lisprod;
     ObservableList<LigneVente> lslgnventes;
     ObservableList<InventoryMagasin> lsinventaire;
+    Set<InventoryMagasin> selectedInventoryItems = new HashSet<>();
     ObservableList<LigneVente> ols_ligvt_retour;
     ObservableList<Mesure> ols_mesure_retour_depot;
     ObservableList<Recquisition> ols_recquis_retour_depot;
@@ -980,6 +987,14 @@ public class PosController implements Initializable {
             l = RecquisitionDelegate.updateRecquisition(liv);// db.updateOnly(liv);
         }
         lsreq.add(l);
+        DataCache.invalidate("pos-products-" + role, "pos-loadreqs-" + role,
+                "pos-calcreq-" + role, "pos-calclv");
+        if (region != null) {
+            DataCache.invalidate("pos-calcreq-" + role + "-" + region);
+        }
+        if (l.getProductId() != null) {
+            refreshProductInCache(l.getProductId());
+        }
     }
 
     public void addPrixDeVente(PrixDeVente liv) {
@@ -1017,6 +1032,35 @@ public class PosController implements Initializable {
                 }
             });
         }
+        if (liv.getRecquisitionId() != null && liv.getRecquisitionId().getProductId() != null) {
+            refreshProductInCache(liv.getRecquisitionId().getProductId());
+        }
+    }
+
+    private void refreshProductInCache(Produit produit) {
+        if (produit == null || produit.getUid() == null) return;
+        if (posItemsCache != null) {
+            for (ListViewItem item : posItemsCache) {
+                if (item.getProduit() != null && item.getProduit().getUid().equals(produit.getUid())) {
+                    double newStock = getRest(produit);
+                    item.setQuantiteRestant(Math.max(0d, newStock));
+                }
+            }
+        }
+        Platform.runLater(() -> {
+            String mode = pref.get("view-mode", "card");
+            if (!mode.equals("card")) {
+                if (posItemsCache != null && !posItemsCache.isEmpty()) {
+                    list_mode_ls.setAll(posItemsCache);
+                }
+                updatePosPagination();
+                refreshSelectedProductStockLabel();
+            } else {
+                if (lisprod != null && !lisprod.isEmpty()) {
+                    renderCards(false);
+                }
+            }
+        });
     }
 
     @FXML
@@ -1065,23 +1109,11 @@ public class PosController implements Initializable {
     private void updateCompactTotals() {
         refreshCurrencyContext();
         String main = CurrencyConverter.mainCurrency();
-        BigDecimal totalMain = BigDecimal.ZERO;
-        for (LigneVente lv : compactMode.getSaleitems()) {
-            totalMain = totalMain.add(BigDecimal.valueOf(
-                    CurrencyConverter.legacyTotalInMainCurrency(lv.getMontantUsd(), lv.getMontantCdf())));
-        }
-        BigDecimal rawUsd = BigDecimal
-                .valueOf(compactMode.getSaleitems().stream().mapToDouble(LigneVente::getMontantUsd).sum());
-        BigDecimal rawCdf = BigDecimal
-                .valueOf(compactMode.getSaleitems().stream().mapToDouble(LigneVente::getMontantCdf).sum());
-        BigDecimal totalUsd = CurrencyConverter.convert(
-                BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(
-                        rawUsd.doubleValue(), rawCdf.doubleValue(), CurrencyConverter.USD)),
-                CurrencyConverter.USD, CurrencyConverter.USD);
-        BigDecimal totalCdf = CurrencyConverter.convert(
-                BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(
-                        rawUsd.doubleValue(), rawCdf.doubleValue(), CurrencyConverter.CDF)),
-                CurrencyConverter.CDF, CurrencyConverter.CDF);
+        BigDecimal totalUsd = BigDecimal.valueOf(compactMode.getSaleitems().stream()
+                .mapToDouble(lv -> CurrencyConverter.legacyUsdFromStorage(lv.getMontantUsd(), lv.getMontantCdf()))
+                .sum());
+        BigDecimal totalMain = CurrencyConverter.fromUsd(totalUsd, main);
+        BigDecimal totalCdf = CurrencyConverter.fromUsd(totalUsd, CurrencyConverter.CDF);
         if (CurrencyConverter.CDF.equals(main)) {
             txt_compact_somme_cdf.setText(CurrencyConverter.formatAmount(totalMain, CurrencyConverter.CDF));
             txt_compact_somme_usd.setText(CurrencyConverter.formatAmount(totalUsd, CurrencyConverter.USD));
@@ -1093,23 +1125,21 @@ public class PosController implements Initializable {
     }
 
     private void updateResteRecu() {
-        BigDecimal rawUsd = BigDecimal
-                .valueOf(compactMode.getSaleitems().stream().mapToDouble(LigneVente::getMontantUsd).sum());
-        BigDecimal rawCdf = BigDecimal
-                .valueOf(compactMode.getSaleitems().stream().mapToDouble(LigneVente::getMontantCdf).sum());
-        BigDecimal totalUsd = BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(rawUsd.doubleValue(),
-                rawCdf.doubleValue(), CurrencyConverter.USD));
-        BigDecimal totalCdf = BigDecimal.valueOf(CurrencyConverter.amountFromLegacyStorage(rawUsd.doubleValue(),
-                rawCdf.doubleValue(), CurrencyConverter.CDF));
+        BigDecimal totalUsd = BigDecimal.valueOf(compactMode.getSaleitems().stream()
+                .mapToDouble(lv -> CurrencyConverter.legacyUsdFromStorage(lv.getMontantUsd(), lv.getMontantCdf()))
+                .sum());
+        BigDecimal totalCdf = CurrencyConverter.fromUsd(totalUsd, CurrencyConverter.CDF);
         double recuUsd = 0;
         double recuCdf = 0;
         try {
             recuUsd = Double.parseDouble(tf_compact_recu_usd.getText());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "PosController.updateResteRecu");
         }
         try {
             recuCdf = Double.parseDouble(tf_compact_recu_cdf.getText());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "PosController.updateResteRecu");
         }
         BigDecimal resteUsd = totalUsd
                 .subtract(BigDecimal.valueOf(recuUsd))
@@ -1226,69 +1256,70 @@ public class PosController implements Initializable {
         theCart.setObservation("Drafted");
         theCart.setClientId(anonym);
         theCart.setDateVente(LocalDateTime.now());
-        theCart.setDeviseDette(CurrencyConverter.mainCurrency());
         theCart.setLatitude(0d);
         theCart.setLongitude(0d);
         String dev = CurrencyConverter.mainCurrency();
         CurrencyConverter.AmountUsdCdf stored = CurrencyConverter.splitForLegacyStorage(savedSum, dev);
+        // Montants conservés pour l'affichage du brouillon dans le tableau POS.
         theCart.setMontantCdf(stored.getCdf());
         theCart.setMontantUsd(stored.getUsd());
 
-        theCart.setMontantDette(0d);
+        // saveCart ne crée aucune opération de trésorerie : le brouillon doit donc
+        // être enregistré comme une vente à crédit (le règlement/caisse se fait au
+        // moment du paiement final via PaymentController).
+        theCart.setDeviseDette(dev);
+        theCart.setMontantDette(savedSum);
         theCart.setPayment(Constants.PAYMENT_CASH);
         theCart.setReference(reference);
         theCart.setRegion(region);
-        Vente v = VenteDelegate.findVente(theCart.getUid());
-        if (theCart != null) {
-            List<LigneVente> ligvs = LigneVenteDelegate.findByReference(theCart.getUid());
-            ligvs.stream().map((ligv) -> {
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(ligv, Constants.ACTION_DELETE, Tables.LIGNEVENTE);
-                        });
-                return ligv;
-            }).forEachOrdered((ligv) -> {
-                List<RetourMagasin> rtrs = RetourMagasinDelegate.findByLigneVente(ligv.getUid());
-                for (RetourMagasin rtr : rtrs) {
-                    RetourMagasinDelegate.deleteRetourMagasin(rtr);
-                    Executors.newCachedThreadPool()
-                            .submit(() -> {
-                                Util.sync(rtr, Constants.ACTION_DELETE, Tables.RETOURMAGASIN);
-                            });
-
-                }
-                LigneVenteDelegate.deleteLigneVente(ligv);
-                Executors.newCachedThreadPool()
-                        .submit(() -> {
-                            Util.sync(ligv, Constants.ACTION_DELETE, Tables.LIGNEVENTE);
-                        });
-            });
-
-            Executors.newCachedThreadPool()
-                    .submit(() -> {
-                        Util.sync(theCart, Constants.ACTION_DELETE, Tables.VENTE);
-                    });
-            VenteDelegate.deleteVente(theCart);
+        // Brouillon modifie : on reinsere un etat propre cote client. Les anciennes
+        // lignes/retours et la vente sont marquees SOFTDELETE (deletedAt) et non
+        // supprimees physiquement, afin de conserver la trace du lien produit<->ligne
+        // (retrouver le produit). La resynchronisation serveur de la vente et de ses
+        // lignes passe par SaleSyncHelper (DTO a plat).
+        LocalDateTime now = LocalDateTime.now();
+        List<LigneVente> ligvs = LigneVenteDelegate.findByReference(theCart.getUid());
+        for (LigneVente ligv : ligvs) {
+            List<RetourMagasin> rtrs = RetourMagasinDelegate.findByLigneVente(ligv.getUid());
+            for (RetourMagasin rtr : rtrs) {
+                rtr.setDeletedAt(now);
+                RetourMagasinDelegate.updateRetourMagasin(rtr);
+            }
+            ligv.setDeletedAt(now);
+            LigneVenteDelegate.updateLigneVente(ligv);
         }
 
-        final Vente vt = VenteDelegate.saveVente(theCart);// db.insertAndSync(theCart);
-        Executors.newCachedThreadPool()
-                .submit(() -> {
-                    Util.sync(vt, Constants.ACTION_CREATE, Tables.VENTE);
-                });
+        // Upsert de la vente : merge si une ligne brouillon existe deja avec cet uid
+        // (mode edition), insert sinon. Le merge avec un objet frais (deletedAt null)
+        // efface le deletedAt d'un eventuel softdelete precedent.
+        Vente existingCart = VenteDelegate.findVente(theCart.getUid());
+        final Vente vt;
+        if (existingCart == null) {
+            vt = VenteDelegate.saveVente(theCart);
+        } else {
+            vt = VenteDelegate.updateVente(theCart);
+        }
 
         for (LigneVente lv : panier_list.getItems()) {
             lv.setReference(theCart);
-            LigneVente l = LigneVenteDelegate.findLigneVente(lv.getUid());
-            Util.sync(LigneVenteDelegate.saveLigneVente(lv), Constants.ACTION_CREATE, Tables.LIGNEVENTE);
+            LigneVenteDelegate.saveLigneVente(lv);
         }
+
+        // À l'instar de PaymentController, le brouillon (observation "Drafted") passe
+        // par le canal DTO (VenteDtoSyncer) qui pousse l'entête ET ses lignes à plat,
+        // avec auto-healing des parents manquants. La vente est poussée comme à crédit
+        // (pas de trésorerie créée ici) ; le règlement/caisse se fait au paiement final.
+        // NB : copie de la liste — le thread de sync est asynchrone et clearCart()
+        // vide le panier juste après, sinon la boucle des lignes n'itère rien.
+        SaleSyncHelper.tryToSaveSale(kazisafe, null, null, anonym, vt,
+                new ArrayList<>(panier_list.getItems()));
 
         savedCarts.add(vt);
         MainUI.notify(null, bundle.getString("success"), bundle.getString("xcartsavedsuccess"), 3, "success");
         pref.putInt("tranzit_bill", -100);
         pref.putInt("_bill_counter_", compteur);
-
         closeFloatingPane(e);
+        clearCart();
     }
 
     public void addLigneVente(LigneVente liv) {
@@ -1379,6 +1410,20 @@ public class PosController implements Initializable {
         role = UserRoleRegistry.getRole(pref);
         token = pref.get("token", null);
         entr = pref.get("eUid", "");
+        // Préchauffage de la vue POS : calculs faits dans le SGBD (JOINs
+        // produits/mesures/stocks), chargement en arrière-plan dès le démarrage
+        // afin que le tableau de l'onglet POS s'affiche instantanément.
+        final String warmRegion = region;
+        final String warmMeth = pref.get("meth", "fifo");
+        Thread posWarmThread = new Thread(() -> {
+            try {
+                PosViewCache.warm(warmRegion, warmMeth, PermissionRegistry.hasGlobalAccess());
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PosController.warmPosView");
+            }
+        }, "pos-view-warm");
+        posWarmThread.setDaemon(true);
+        posWarmThread.start();
         rootView = new TreeItem<>(new SaleItem());
         ttable_ventes_hyst.setRoot(rootView);
         ttable_ventes_hyst.setShowRoot(false);
@@ -1509,6 +1554,7 @@ public class PosController implements Initializable {
                                     delegates.RepportDelegate.refreshMetric(existingSa);
                                 }
                             } catch (Exception saEx) {
+                                SyncLogger.getInstance().log(saEx, "PosController.initialize");
                                 System.err
                                         .println("Error updating SaleAgregate on sale deletion: " + saEx.getMessage());
                             }
@@ -1640,7 +1686,7 @@ public class PosController implements Initializable {
                     }
                     List<Produit> prod = prodx.subList(or, limit);
                     lisprod.addAll(prod);
-                    fillProducts(true, lisprod);
+                    renderCards(true);
                 }
             }
         });
@@ -1930,6 +1976,7 @@ public class PosController implements Initializable {
                         p = ProduitDelegate.findProduit(parts[0]);
                     }
                 } catch (Exception e) {
+                    SyncLogger.getInstance().log(e, "PosController.initRetourHistoryTab");
                 }
             }
             if (p != null) {
@@ -1991,7 +2038,7 @@ public class PosController implements Initializable {
                     Mesure mesure = r.getMesureId();
                     double quantite = r.getQuantite();
                     double montantUsd = price * quantite;
-                    double montantCdf = montantUsd * taux2change;
+                    double montantCdf = 0;
 
                     // 1. Re-insert or find Vente
                     List<Vente> existingVentes = VenteDelegate.findByRef(refBase);
@@ -2010,10 +2057,9 @@ public class PosController implements Initializable {
                     } else {
                         v = existingVentes.get(0);
                         // Update totals
-                        double existingUsd = v.getMontantUsd();
-                        double existingCdf = v.getMontantCdf();
+                        double existingUsd = CurrencyConverter.legacyUsdFromStorage(v.getMontantUsd(), v.getMontantCdf());
                         v.setMontantUsd(existingUsd + montantUsd);
-                        v.setMontantCdf(existingCdf + montantCdf);
+                        v.setMontantCdf(0);
                         VenteDelegate.updateVente(v);
                     }
 
@@ -2075,6 +2121,7 @@ public class PosController implements Initializable {
                             System.out.println("SaleAgregate created for reprise: " + p.getNomProduit());
                         }
                     } catch (Exception saEx) {
+                        SyncLogger.getInstance().log(saEx, "PosController.deleteRetourMagasin");
                         System.err.println("Error updating SaleAgregate on reprise: " + saEx.getMessage());
                     }
 
@@ -2085,6 +2132,7 @@ public class PosController implements Initializable {
                                 "info");
                     });
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.deleteRetourMagasin");
                     ex.printStackTrace();
                     MainUI.notify(null, "Erreur", "Echec de la reprise du retour", 3, "error");
                 }
@@ -2158,6 +2206,7 @@ public class PosController implements Initializable {
                         PDImageXObject logo = PDImageXObject.createFromFile(path, document);
                         contentStream.drawImage(logo, pageW - 114, pageH - 114, 84, 84);
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "PosController.createOrder");
                         Throwable cause = e.getCause();
                         cause.printStackTrace();
                     }
@@ -2291,12 +2340,14 @@ public class PosController implements Initializable {
                     try {
                         Desktop.getDesktop().open(bcmd);
                     } catch (IOException ex) {
+                        SyncLogger.getInstance().log(ex, "PosController.createOrder");
                         Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                     }
 
                 }
             }).start();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PosController.createOrder");
             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -2415,12 +2466,14 @@ public class PosController implements Initializable {
                     try {
                         Desktop.getDesktop().open(bcmd);
                     } catch (IOException ex) {
+                        SyncLogger.getInstance().log(ex, "PosController.createEndedList");
                         Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                     }
 
                 }
             }).start();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PosController.createEndedList");
             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -2705,11 +2758,13 @@ public class PosController implements Initializable {
                         MainUI.notify(null, "Error", "Importation de l'inventaire terminée avec succès ", 3,
                                 "info");
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "PosController.raprocherStock");
                         ex.printStackTrace();
                         System.err.println("Exception dans l'importation inventaire " + ex.getMessage());
                     }
                 });
             } catch (RejectedExecutionException ez) {
+                SyncLogger.getInstance().log(ez, "PosController.raprocherStock");
                 ez.printStackTrace();
             }
 
@@ -2869,6 +2924,7 @@ public class PosController implements Initializable {
                         System.out.println("No SaleAgregate found for: " + elmFinal.getProductId().getNomProduit());
                     }
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.saveRetourMarchandise");
                     System.err.println("Error updating SaleAgregate on return: " + ex.getMessage());
                 }
 
@@ -2898,6 +2954,7 @@ public class PosController implements Initializable {
                             }
                         }
                     } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "PosController.saveRetourMarchandise");
                         System.err
                                 .println("Error updating SaleAgregate on remaining line deletion: " + ex.getMessage());
                     }
@@ -3019,6 +3076,7 @@ public class PosController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.exportSales");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -3050,6 +3108,7 @@ public class PosController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.exportInventoryMag");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -3084,6 +3143,7 @@ public class PosController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.exportRecquisition");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -3103,8 +3163,8 @@ public class PosController implements Initializable {
                 } else {
                     Produit p = ProduitDelegate.findProduit(item.getProductId().getUid());
                     String main = CurrencyConverter.mainCurrency();
-                    double lineTotal = CurrencyConverter.legacyTotalInMainCurrency(
-                            item.getMontantUsd(), item.getMontantCdf());
+                    double lineTotal = CurrencyConverter.fromUsd(CurrencyConverter.legacyUsdFromStorage(
+                            item.getMontantUsd(), item.getMontantCdf()), main);
                     setText(p.getNomProduit() + " " + (p.getMarque() == null ? "" : p.getMarque()) + "-"
                             + (p.getModele() == null ? "" : p.getModele()) + " " + item.getQuantite() + ""
                             + " " + item.getMesureId().getDescription() + " à "
@@ -3117,6 +3177,7 @@ public class PosController implements Initializable {
                     try {
                         is = FileUtils.fileToStream(p.getUid() + ".jpeg");
                     } catch (FileNotFoundException ex) {
+                        SyncLogger.getInstance().log(ex, "PosController.configList");
                         is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
                     }
                     imageView.setImage(new Image(is));
@@ -3498,10 +3559,6 @@ public class PosController implements Initializable {
     }
 
     private void conf() {
-        col_codebar_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
-            InventoryMagasin im = param.getValue();
-            return new SimpleStringProperty(im.getProduit().getCodebar());
-        });
         col_status_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, String> param) -> {
             InventoryMagasin im = param.getValue();
             return new SimpleStringProperty(im.isDestroyed() ? "Déclassé" : "Non déclassé");
@@ -3590,6 +3647,26 @@ public class PosController implements Initializable {
             return new SimpleStringProperty(im.getStockInitial() + " " + mx.getDescription());
         });
 
+        col_select_tInv_mag.setCellValueFactory((TableColumn.CellDataFeatures<InventoryMagasin, Boolean> param) -> {
+            InventoryMagasin im = param.getValue();
+            BooleanProperty bp = im.selectProperty();
+            bp.addListener((obs, oldVal, newVal) -> {
+                if (Boolean.TRUE.equals(newVal)) {
+                    selectedInventoryItems.add(im);
+                } else {
+                    selectedInventoryItems.remove(im);
+                }
+                updateDeclasserButton();
+            });
+            return bp;
+        });
+        col_select_tInv_mag.setCellFactory((TableColumn<InventoryMagasin, Boolean> param) -> {
+            CheckBoxTableCell<InventoryMagasin, Boolean> cell = new CheckBoxTableCell<>();
+            cell.setAlignment(Pos.CENTER);
+            return cell;
+        });
+
+        table_inv_mag.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         table_inv_mag.setRowFactory(tv -> new TableRow<InventoryMagasin>() {
             @Override
             protected void updateItem(InventoryMagasin item, boolean empty) {
@@ -3613,6 +3690,14 @@ public class PosController implements Initializable {
                             setStyle("");
                     }
                 }
+            }
+        });
+        table_inv_mag.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            javafx.scene.Node target = event.getPickResult().getIntersectedNode();
+            if (target instanceof javafx.scene.control.CheckBox) return;
+            InventoryMagasin item = table_inv_mag.getSelectionModel().getSelectedItem();
+            if (item != null) {
+                item.setSelect(!item.isSelect());
             }
         });
     }
@@ -3702,10 +3787,7 @@ public class PosController implements Initializable {
                 return new SimpleStringProperty("—");
             }
             Client c = value.getClient();
-            return new SimpleStringProperty(c == null ? ""
-                    : (c.getPhone() == null || c.getPhone().length() < 8
-                            ? c.getNomClient()
-                            : c.getPhone().equals("09000") ? "Anonyme" : c.getNomClient() + ",Tel:" + c.getPhone()));
+            return new SimpleStringProperty(displayClient(c));
         });
         trcol_totalusd_hyst.setCellValueFactory((TreeTableColumn.CellDataFeatures<SaleItem, Number> param) -> {
             SaleItem value = param.getValue().getValue();
@@ -4042,6 +4124,26 @@ public class PosController implements Initializable {
             return region;
         }
         return loc.get(0).getLocalisation();
+    }
+
+    // Précharge les localisations de tous les produits en UNE seule requête,
+    // puis mappe produit -> localisation (du stocker le plus récent). Élimine
+    // le N+1 de getLocation() qui gelait l'onglet inventaire sur gros catalogues.
+    private Map<String, String> loadLocationByProduct() {
+        Map<String, String> result = new HashMap<>();
+        List<Stocker> all = StockerDelegate.findStockers();
+        if (all == null || all.isEmpty()) {
+            return result;
+        }
+        all.sort(Comparator.comparing(Stocker::getDateStocker, Comparator.nullsLast(Comparator.reverseOrder())));
+        for (Stocker s : all) {
+            Produit p = s.getProductId();
+            if (p == null || p.getUid() == null) {
+                continue;
+            }
+            result.putIfAbsent(p.getUid(), s.getLocalisation());
+        }
+        return result;
     }
 
     private double getQuant(String idpro, boolean entreOuSorti) {
@@ -4569,6 +4671,7 @@ public class PosController implements Initializable {
             try {
                 Desktop.getDesktop().open(report);
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "PosController.exportSupplierDebtStatement");
                 Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }).start();
@@ -4700,6 +4803,7 @@ public class PosController implements Initializable {
         try {
             return Double.parseDouble(value == null ? "0" : value.trim());
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "PosController.safeAmount");
             return 0d;
         }
     }
@@ -4730,6 +4834,15 @@ public class PosController implements Initializable {
     boolean isCard = true;
 
     public void refreshPosUi() {
+        DataCache.invalidate("pos-products-" + role, "pos-loadreqs-" + role,
+                "pos-calcreq-" + role, "pos-calclv", "pos-calcvente-" + role,
+                "pos-recq-" + role);
+        if (region != null) {
+            DataCache.invalidate("pos-calcreq-" + role + "-" + region,
+                    "pos-calcvente-" + role + "-" + region);
+        }
+        posItemsCache = null;
+        PosViewCache.invalidateAll();
         String mode = pref.get("view-mode", "card");
         if (!mode.equals("card")) {
             tbl_list_pro.getSelectionModel().clearSelection();
@@ -4745,8 +4858,9 @@ public class PosController implements Initializable {
         } else {
             list_mode.setVisible(false);
             scrollPos.setVisible(true);
-            // hard
-            fillProducts(true, lisprod);
+            // Vue ListeViewItem préchargée (PosViewCache) : rendu des cartes sans
+            // requête DB par produit sur le thread FX.
+            renderCards(true);
         }
 
     }
@@ -4754,6 +4868,7 @@ public class PosController implements Initializable {
     @FXML
     public void refreshPos(Event e) {
         posItemsCache = null;
+        PosViewCache.invalidateAll();
         tabPosLoaded = false;
         refreshPosUi();
         // Rectification de stock : une seule fois après une synchronisation,
@@ -4795,7 +4910,7 @@ public class PosController implements Initializable {
             list_mode.setVisible(false);
             scrollPos.setVisible(true);
             pref.put("view-mode", "card");
-            fillProducts(true, lisprod);
+            renderCards(true);
         }
     }
 
@@ -4906,6 +5021,119 @@ public class PosController implements Initializable {
         });
     }
 
+    // Carte construite à partir de la vue ListViewItem déjà calculée/cachée :
+    // aucune requête DB par produit (stock, lot, mesure, prix déjà dans l'item).
+    private Node addProduitCard(final ListViewItem item) {
+        Produit p = item == null ? null : item.getProduit();
+        if (p == null || p.getUid() == null) {
+            return null;
+        }
+        Double reste = item.getQuantiteRestant();
+        Mesure m = item.getMesureAchat();
+        if (reste == null || reste <= 0 || m == null || m.getQuantContenu() == null || m.getQuantContenu() <= 0) {
+            return null;
+        }
+        Pane pane = new Pane();
+        pane.setId(p.getUid());
+        pane.setStyle("-fx-background-color: white; -fx-background-radius: 5;");
+        pane.setPadding(new Insets(0, 2, 2, 2));
+        DropShadow dse = new DropShadow();
+        pane.setEffect(dse);
+        pane.setPrefWidth(149);
+        pane.setPrefHeight(142);
+        ImageView imagev = new ImageView();
+        imagev.setId(p.getUid());
+        Label l = new Label();
+        l.setPrefWidth(139);
+        l.setPrefHeight(16);
+        l.setLayoutY(118);
+        l.setLayoutX(5);
+        l.setTextFill(Color.rgb(255, 255, 255));
+        l.setBackground(new Background(
+                new BackgroundFill(Color.rgb(0x7, 0x7, 0xf, 0.3), new CornerRadii(3.0), new Insets(-5.0))));
+        l.setPadding(new Insets(0, 4, 4, 4));
+        imagev.setFitWidth(149);
+        imagev.setFitHeight(122);
+        imagev.setScaleX(1);
+        imagev.setScaleY(1);
+        imagev.setScaleZ(1);
+        imagev.setPreserveRatio(true);
+        imagev.setCursor(Cursor.HAND);
+        l.setText(p.getMarque() + " " + p.getModele() + " " + p.getTaille() + "("
+                + reste + " " + m.getDescription() + ")");
+        Util.installTooltip(l, l.getText());
+        Util.installPicture(imagev, p.getUid() + ".jpeg");
+        pane.getChildren().add(imagev);
+        pane.getChildren().add(l);
+
+        pane.setOnMouseClicked((MouseEvent event) -> {
+            MainUI.floatDialog(tools.Constants.PANIER_DLG, 430, 497, null, kazisafe, p, entreprise, "Create", -1);
+        });
+        imagev.setOnMouseEntered((MouseEvent event) -> {
+            onHoverHome(event);
+        });
+        imagev.setOnMouseExited((MouseEvent event) -> {
+            onOutHome(event);
+        });
+        return pane;
+    }
+
+    // Remplit les cartes depuis la vue ListViewItem déjà préchargée (aucune
+    // requête DB). Repli sur fillProducts(produits) si la cache est vide.
+    private void fillProductsFromCache(boolean reinit, List<ListViewItem> items) {
+        final List<ListViewItem> snapshot = items == null
+                ? List.of()
+                : new ArrayList<>(items);
+        Platform.runLater(() -> {
+            if (reinit) {
+                tile_pane.getChildren().clear();
+            }
+            int added = 0;
+            for (ListViewItem item : snapshot) {
+                Node pane = addProduitCard(item);
+                if (pane != null) {
+                    tile_pane.getChildren().add(pane);
+                    added++;
+                }
+            }
+            if (added == 0 && !snapshot.isEmpty()) {
+                fillProducts(false, snapshot.stream().map(ListViewItem::getProduit)
+                        .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toList()));
+            }
+        });
+    }
+
+    // Rendu des cartes à partir de la vue ListViewItem préchargée (PosViewCache) :
+    // plus aucune requête DB par produit sur le thread FX. Au premier appel, la
+    // vue est construite en arrière-plan puis les cartes sont dessinées.
+    private void renderCards(boolean reinit) {
+        // La vue ListViewItem est statique et survit aux navigations de menu :
+        // au retour sur le POS on ré-affiche immédiatement le cache, sans
+        // refaire aucune requête DB.
+        List<ListViewItem> cached = PosViewCache
+                .getIfLoaded(region, pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
+        if (cached != null && !cached.isEmpty()) {
+            posItemsCache = cached;
+            fillProductsFromCache(reinit, cached);
+            return;
+        }
+        // Cache globl pas (encore) construit : on réutilise la collection déjà
+        // chargée par la vue liste (posItemsCache statique) si elle existe.
+        if (posItemsCache != null && !posItemsCache.isEmpty()) {
+            fillProductsFromCache(reinit, posItemsCache);
+            return;
+        }
+        final boolean fr = reinit;
+        new Thread(() -> {
+            ManagedSessionFactory.runWithCleanup(() -> {
+                List<ListViewItem> normalized = PosViewCache
+                        .getPosView(region, pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
+                posItemsCache = normalized;
+                fillProductsFromCache(fr, normalized);
+            });
+        }, "pos-fill-cards").start();
+    }
+
     public Node findNode(List<Node> nodes, Node id) {
         for (Node node : nodes) {
             if (node.getId().equals(id.getId())) {
@@ -4952,6 +5180,7 @@ public class PosController implements Initializable {
             table_req.setItems(FXCollections.observableArrayList(lsreq.subList(offset, limit)));
             txt_table_req_count.setText(lsreq.size() + " elements");
         } catch (java.lang.IllegalArgumentException e) {
+            SyncLogger.getInstance().log(e, "PosController.createDataPage");
             pagination_req.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
@@ -4968,6 +5197,7 @@ public class PosController implements Initializable {
                 txt_table_hyst_count.setText(rootView.getChildren().size() + " elements");
             }
         } catch (java.lang.IllegalArgumentException e) {
+            SyncLogger.getInstance().log(e, "PosController.createDataPage1");
             // pagination_sale.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
@@ -4981,6 +5211,7 @@ public class PosController implements Initializable {
             table_inv_mag.setItems(FXCollections.observableArrayList(lsinventaire.subList(offset, limit)));
 
         } catch (java.lang.IllegalArgumentException e) {
+            SyncLogger.getInstance().log(e, "PosController.createDataPage2");
             // pagination_inv.setPageCount(pgindex);
             System.out.println("Page suivante non disponible");
         }
@@ -5039,24 +5270,25 @@ public class PosController implements Initializable {
 
     @FXML
     public void declasserInventaire(Event e) {
-        if (filteredInventory != null && !filteredInventory.isEmpty()) {
-            Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Voulez vous vraiment déclasser les éléments séléctionnés", ButtonType.YES, ButtonType.CANCEL);
-            alertdlg.setTitle("Attention!");
-            alertdlg.setHeaderText(null);
+        if (selectedInventoryItems.isEmpty()) {
+            MainUI.notify(null, "Attention", "Veuillez sélectionner au moins un produit à déclasser", 3, "warning");
+            return;
+        }
+        List<InventoryMagasin> toDeclasser = new ArrayList<>(selectedInventoryItems);
+        Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION,
+                "Voulez vous vraiment déclasser " + toDeclasser.size() + " produit(s) sélectionné(s) ?", ButtonType.YES, ButtonType.CANCEL);
+        alertdlg.setTitle("Attention!");
+        alertdlg.setHeaderText(null);
 
-            Optional<ButtonType> showAndWait = alertdlg.showAndWait();
-            if (showAndWait.get() == ButtonType.YES) {
-                pgsIndicator_load_inv.setVisible(true);
-                ManagedSessionFactory.runInBackground(() -> {
-                    System.out.println("inventr " + filteredInventory.size());
-                    processDeclasser(filteredInventory);
-                    Platform.runLater(() -> {
-                        pgsIndicator_load_inv.setVisible(false);
-                    });
+        Optional<ButtonType> showAndWait = alertdlg.showAndWait();
+        if (showAndWait.get() == ButtonType.YES) {
+            pgsIndicator_load_inv.setVisible(true);
+            ManagedSessionFactory.runInBackground(() -> {
+                processDeclasser(toDeclasser);
+                Platform.runLater(() -> {
+                    pgsIndicator_load_inv.setVisible(false);
                 });
-            }
-
+            });
         }
     }
 
@@ -5080,26 +5312,122 @@ public class PosController implements Initializable {
     }
 
     private void processDeclasser(List<InventoryMagasin> items) {
+        String tkn = pref.get("token", null);
+        Kazisafe remoteKsf = (tkn != null && !tkn.isBlank()) ? KazisafeServiceFactory.createService(tkn) : null;
+        Set<String> declassifiedProduits = new java.util.LinkedHashSet<>();
         for (InventoryMagasin im : items) {
             Produit p = im.getProduit();
-            StockAgregate sa = RecquisitionDelegate.findStockAgregate(p.getUid(), im.getLot(), region, false);
-            sa.setDestroyed(true);
-            RecquisitionDelegate.updateStockAgregate(sa);
+            if (p == null || im.getLot() == null) {
+                continue;
+            }
+            declassifyLot(p.getUid(), im.getLot());
             System.out.println("declasement " + p.getNomProduit() + " " + im.getLot());
+            declassifiedProduits.add(p.getUid());
+            if (remoteKsf != null) {
+                try {
+                    remoteKsf.declassifyStock(p.getUid(), im.getLot()).execute();
+                } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.processDeclasser");
+                    System.err.println("Erreur sync declassement: " + ex.getMessage());
+                }
+            }
         }
+        selectedInventoryItems.clear();
         MainUI.notify(null, "Succès!", "Le stock a été déclassé avec succès", 3, "info");
-        populateInv();
+        Platform.runLater(() -> {
+            for (InventoryMagasin im : items) {
+                int idx = lsinventaire.indexOf(im);
+                if (idx >= 0) {
+                    lsinventaire.get(idx).setDestroyed(true);
+                }
+            }
+            applyInventoryFilters();
+        });
+        refreshPosStockAfterDeclass(declassifiedProduits);
     }
 
     private void processDeclasserPeremption(List<Peremption> items) {
+        String tkn = pref.get("token", null);
+        Kazisafe remoteKsf = (tkn != null && !tkn.isBlank()) ? KazisafeServiceFactory.createService(tkn) : null;
+        Set<String> declassifiedProduits = new java.util.LinkedHashSet<>();
         for (Peremption im : items) {
-            StockAgregate sa = RecquisitionDelegate.findStockAgregate(im.getProduitUid(), im.getLot(), region, false);
-            sa.setDestroyed(true);
-            RecquisitionDelegate.updateStockAgregate(sa);
+            if (im.getProduitUid() == null || im.getLot() == null) {
+                continue;
+            }
+            declassifyLot(im.getProduitUid(), im.getLot());
+            declassifiedProduits.add(im.getProduitUid());
+            if (remoteKsf != null) {
+                try {
+                    remoteKsf.declassifyStock(im.getProduitUid(), im.getLot()).execute();
+                } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.processDeclasserPeremption");
+                    System.err.println("Erreur sync declassement: " + ex.getMessage());
+                }
+            }
         }
 
         MainUI.notify(null, "Succès!", "Le stock a été déclassé avec succès", 3, "info");
         enPeremption(null);
+        refreshPosStockAfterDeclass(declassifiedProduits);
+    }
+
+    private void declassifyLot(String produitUid, String lot) {
+        if (produitUid == null || lot == null) {
+            return;
+        }
+        StockAgregate sa = null;
+        try {
+            sa = RecquisitionDelegate.findStockAgregate(produitUid, lot, region, false);
+        } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "PosController.declassifyLot");
+        }
+        if (sa == null) {
+            // Aucun agrégat non détruit (déjà déclassé) : on s'assure au minimum
+            // qu'un marqueur destroyed existe pour ce lot afin de le garder exclu.
+            try {
+                sa = RecquisitionDelegate.findStockAgregate(produitUid, lot, region, true);
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PosController.declassifyLot.destroyedLookup");
+            }
+        }
+        if (sa != null) {
+            sa.setDestroyed(true);
+            RecquisitionDelegate.updateStockAgregate(sa);
+        }
+    }
+
+    /**
+     * Met à jour la quantité affichée dans l'onglet POS (ListViewItem) après un
+     * déclassement de lot : la quantité restante du produit est recalculée à
+     * partir des seuls lots non déclassés, comme le fait la vente dans
+     * {@link PaymentController}.
+     */
+    private void refreshPosStockAfterDeclass(Set<String> produitUids) {
+        if (produitUids == null || produitUids.isEmpty()) {
+            return;
+        }
+        if (posItemsCache != null) {
+            for (ListViewItem item : posItemsCache) {
+                if (item.getProduit() != null && produitUids.contains(item.getProduit().getUid())) {
+                    double newStock = getRest(item.getProduit());
+                    item.setQuantiteRestant(Math.max(0d, newStock));
+                }
+            }
+        }
+        String mode = pref.get("view-mode", "card");
+        Platform.runLater(() -> {
+            if (!mode.equals("card")) {
+                if (posItemsCache != null && !posItemsCache.isEmpty()) {
+                    list_mode_ls.setAll(posItemsCache);
+                }
+                updatePosPagination();
+                refreshSelectedProductStockLabel();
+            } else {
+                if (lisprod != null && !lisprod.isEmpty()) {
+                    renderCards(false);
+                }
+            }
+        });
     }
 
     @FXML
@@ -5137,10 +5465,36 @@ public class PosController implements Initializable {
             return;
         }
 
+        // Vue déjà préchargée au démarrage (chauffée en arrière-plan) : on
+        // l'affiche immédiatement, sans requête ni thread ici.
+        List<ListViewItem> cachedView = PosViewCache
+                .getIfLoaded(region, pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
+        if (cachedView != null && !cachedView.isEmpty()) {
+            posItemsCache = cachedView;
+            Platform.runLater(() -> {
+                List<ListViewItem> toDisplay = cachedView;
+                if (cat != null && !cat.equals("All") && !cat.isEmpty()) {
+                    toDisplay = cachedView.stream()
+                            .filter(item -> item.getProduit() != null && item.getProduit().getCategoryId() != null
+                                    && item.getProduit().getCategoryId().getUid().equals(cat))
+                            .collect(Collectors.toList());
+                }
+                posFilteredList = null;
+                list_mode_ls.setAll(toDisplay);
+                check(toDisplay);
+                updatePosPagination();
+                refreshSelectedProductStockLabel();
+            });
+            return;
+        }
+
         new Thread(() -> {
             ManagedSessionFactory.runWithCleanup(() -> {
-                List<Produit> datalist = ProduitDelegate.findProduits();
-                final List<ListViewItem> normalized = harmonizeUiStockByProduct(datalist);
+                // Vue POS calculée dans le SGBD : produits, mesures et quantités
+                // disponibles obtenus par JOINs SQL (tous les calculs côté base),
+                // préchargée au démarrage de l'application.
+                final List<ListViewItem> normalized = PosViewCache
+                        .getPosView(region, pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
                 posItemsCache = normalized;
                 Platform.runLater(() -> {
                     List<ListViewItem> toDisplay = normalized;
@@ -5375,7 +5729,7 @@ public class PosController implements Initializable {
                     String vu = pref.get("view-mode", "card");
                     if (query.isEmpty()) {
                         if (vu.equals("card")) {
-                            fillProducts(true, lisprod);
+                            renderCards(true);
                         } else {
                             Platform.runLater(() -> {
                                 posFilteredList = null;
@@ -5418,7 +5772,19 @@ public class PosController implements Initializable {
                             }
                             System.err.println("pos pos pos " + resulto.size());
                             if (vu.equals("card")) {
-                                fillProducts(true, resulto);
+                                List<ListViewItem> cached = PosViewCache.getIfLoaded(region,
+                                        pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
+                                if (cached != null && !cached.isEmpty()) {
+                                    java.util.Set<String> uids = resulto.stream().filter(java.util.Objects::nonNull)
+                                            .map(Produit::getUid).collect(java.util.stream.Collectors.toSet());
+                                    List<ListViewItem> filtered = cached.stream()
+                                            .filter(i -> i.getProduit() != null && uids.contains(i.getProduit().getUid()))
+                                            .collect(java.util.stream.Collectors.toList());
+                                    posItemsCache = cached;
+                                    fillProductsFromCache(true, filtered);
+                                } else {
+                                    renderCards(true);
+                                }
                             }
                         }
                     }
@@ -5763,6 +6129,9 @@ public class PosController implements Initializable {
         lslgnventes = FXCollections.observableArrayList();
         regions = FXCollections.observableArrayList();
         list_mode_ls = FXCollections.observableArrayList();
+        if (posItemsCache != null && !posItemsCache.isEmpty()) {
+            list_mode_ls.setAll(posItemsCache);
+        }
         tbl_list_pro.setItems(list_mode_ls);
         ols_ligvt_retour = FXCollections.observableArrayList();
         ols_peremption = FXCollections.observableArrayList();
@@ -5808,9 +6177,9 @@ public class PosController implements Initializable {
                 lsreq.setAll(lsr);
             }
             table_req.setItems(lsreq);
-            calcreq = RecquisitionDelegate.findRecquisitions();
-            calclv = LigneVenteDelegate.findLigneVentes();
-            calcvente = VenteDelegate.findVentes();
+            calcreq = DataCache.getOrLoad("pos-calcreq-" + role, () -> RecquisitionDelegate.findRecquisitions());
+            calclv = DataCache.getOrLoad("pos-calclv", () -> LigneVenteDelegate.findLigneVentes());
+            calcvente = DataCache.getOrLoad("pos-calcvente-" + role, () -> VenteDelegate.findVentes());
         } else {
             List<Recquisition> lsr = (List<Recquisition>) DataCache.get("pos-recq-" + role);
             if (lsr == null) {
@@ -5821,25 +6190,43 @@ public class PosController implements Initializable {
                 lsreq.setAll(lsr);
             }
             table_req.setItems(lsreq);
-            calcreq = RecquisitionDelegate.findRecquisitions(region);
-            calclv = LigneVenteDelegate.findLigneVentes();
-            calcvente = VenteDelegate.findVentes(region);
+            calcreq = DataCache.getOrLoad("pos-calcreq-" + role + "-" + region, () -> RecquisitionDelegate.findRecquisitions(region));
+            calclv = DataCache.getOrLoad("pos-calclv", () -> LigneVenteDelegate.findLigneVentes());
+            calcvente = DataCache.getOrLoad("pos-calcvente-" + role + "-" + region, () -> VenteDelegate.findVentes(region));
         }
 
         // });
+        // Préchauffage unique de la vue ListViewItem (une seule requête grâce au
+        // verrou IN_FLIGHT de PosViewCache). Au retour sur le POS, le cache
+        // statique est ré-affiché immédiatement, sans aucun rechargement.
         ManagedSessionFactory.runInBackground(() -> {
-            List<Object[]> gds = RecquisitionDelegate.findGoods();// db.findGoods();
-            List<Produit> loadedProducts = new ArrayList<>();
-            for (Object[] gd : gds) {
-                Produit pro = ProduitDelegate.findProduit(String.valueOf(gd[1]));
-                if (pro != null) {
-                    loadedProducts.add(pro);
+            PosViewCache.getPosView(region, pref.get("meth", "fifo"), PermissionRegistry.hasGlobalAccess());
+        });
+
+        ManagedSessionFactory.runInBackground(() -> {
+            List<Produit> cachedProducts = (List<Produit>) DataCache.get("pos-products-" + role);
+            List<Produit> loadedProducts;
+            List<Recquisition> loadReqs;
+            if (cachedProducts != null) {
+                loadedProducts = cachedProducts;
+                loadReqs = (List<Recquisition>) DataCache.get("pos-loadreqs-" + role);
+            } else {
+                List<Object[]> gds = RecquisitionDelegate.findGoods();// db.findGoods();
+                loadedProducts = new ArrayList<>();
+                for (Object[] gd : gds) {
+                    Produit pro = ProduitDelegate.findProduit(String.valueOf(gd[1]));
+                    if (pro != null) {
+                        loadedProducts.add(pro);
+                    }
                 }
+                // filterNullRecquisitionProduct();
+                loadReqs = loadReqs(loadedProducts);
+                DataCache.put("pos-products-" + role, loadedProducts);
+                DataCache.put("pos-loadreqs-" + role, loadReqs);
             }
-            // filterNullRecquisitionProduct();
-            List<Recquisition> loadReqs = loadReqs(loadedProducts);
             final String modec = pref.get("view-mode", "card");
             final boolean traderOrAll = PermissionRegistry.hasGlobalAccess();
+            final boolean alreadyLoaded = tabPosLoaded && posItemsCache != null && !posItemsCache.isEmpty();
 
             Platform.runLater(() -> {
                 prodx.clear();
@@ -5851,52 +6238,56 @@ public class PosController implements Initializable {
                 int limit = Math.min(dataLoded, prodx.size());
                 lisprod = FXCollections.observableArrayList(
                         prodx.subList(origin, Math.min(limit, prodx.size())));
-                if (modec.equals("card")) {
-                    fillProducts(false, lisprod);
-                    scrollPos.setVisible(true);
-                    list_mode.setVisible(false);
-                    Util.setResourceImage(btn_view_mode, "list.png");
+                if (alreadyLoaded) {
+                    updatePosPagination();
+                    refreshSelectedProductStockLabel();
                 } else {
-                    scrollPos.setVisible(false);
-                    list_mode.setVisible(true);
-                    fillProductInTable("All");
-                    Util.setResourceImage(btn_view_mode, "bloccard.png");
-                }
-                tabPosLoaded = true;
-                if (treeSaleItems == null) {
+                    if (modec.equals("card")) {
+                        renderCards(false);
+                        scrollPos.setVisible(true);
+                        list_mode.setVisible(false);
+                        Util.setResourceImage(btn_view_mode, "list.png");
+                    } else {
+                        scrollPos.setVisible(false);
+                        list_mode.setVisible(true);
+                        fillProductInTable("All");
+                        Util.setResourceImage(btn_view_mode, "bloccard.png");
+                    }
+                    tabPosLoaded = true;
+                    if (treeSaleItems == null) {
+                        treeSaleItems = FXCollections.observableArrayList();
+                    }
+                    cbx_region_maginv.setItems(regions);
+                    cbx_region_venthist.setItems(regions);
+                    RegionRegistry.bindSavedRegion(pref, cbx_region_maginv, regions);
+                    RegionRegistry.bindSavedRegion(pref, cbx_region_venthist, regions);
+                    cbx_region_maginv.setVisible(traderOrAll);
+                    cbx_region_venthist.setVisible(traderOrAll);
+                    cbx_region_rupture.setVisible(traderOrAll);
                     treeSaleItems = FXCollections.observableArrayList();
-                }
-                cbx_region_maginv.setItems(regions);
-                cbx_region_venthist.setItems(regions);
-                RegionRegistry.bindSavedRegion(pref, cbx_region_maginv, regions);
-                RegionRegistry.bindSavedRegion(pref, cbx_region_venthist, regions);
-                cbx_region_maginv.setVisible(traderOrAll);
-                cbx_region_venthist.setVisible(traderOrAll);
-                cbx_region_rupture.setVisible(traderOrAll);
-                treeSaleItems = FXCollections.observableArrayList();
-                panier_list.setItems(lslgnventes);
-                btn_pay_now.setDisable(lslgnventes.isEmpty());
-                tab_history.selectedProperty().addListener(new ChangeListener<Boolean>() {
-                    @Override
-                    public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue,
-                            Boolean newValue) {
-                        if (newValue && !tabHistoryLoaded) {
-                            tabHistoryLoaded = true;
-                            refreshSales(null);
+                    panier_list.setItems(lslgnventes);
+                    btn_pay_now.setDisable(lslgnventes.isEmpty());
+                    tab_history.selectedProperty().addListener(new ChangeListener<Boolean>() {
+                        @Override
+                        public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue,
+                                Boolean newValue) {
+                            if (newValue && !tabHistoryLoaded) {
+                                tabHistoryLoaded = true;
+                                refreshSales(null);
+                            }
                         }
-                    }
-                });
-                tab_mag_inv.selectedProperty().addListener(new ChangeListener<Boolean>() {
-                    @Override
-                    public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue,
-                            Boolean newValue) {
-                        if (newValue && !tabMagInvLoaded) {
-                            tabMagInvLoaded = true;
-                            populateInv();
+                    });
+                    tab_mag_inv.selectedProperty().addListener(new ChangeListener<Boolean>() {
+                        @Override
+                        public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue,
+                                Boolean newValue) {
+                            if (newValue && !tabMagInvLoaded) {
+                                tabMagInvLoaded = true;
+                                populateInv();
+                            }
                         }
-                    }
-                });
-                tab_requisition.selectedProperty().addListener(new ChangeListener<Boolean>() {
+                    });
+                    tab_requisition.selectedProperty().addListener(new ChangeListener<Boolean>() {
                     @Override
                     public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue,
                             Boolean newValue) {
@@ -5906,6 +6297,8 @@ public class PosController implements Initializable {
                         }
                     }
                 });
+
+                }
 
                 ContextMenu ctx = new ContextMenu();
                 MenuItem addArt = new MenuItem("Ajouter un article");
@@ -6079,13 +6472,28 @@ public class PosController implements Initializable {
             }
         });
 
+        chbx_selectall_inv.selectedProperty().addListener(new ChangeListener<Boolean>() {
+            @Override
+            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
+                ObservableList<InventoryMagasin> items = table_inv_mag.getItems();
+                if (Boolean.TRUE.equals(newValue)) {
+                    items.forEach(im -> im.setSelect(true));
+                    selectedInventoryItems.addAll(items);
+                } else {
+                    items.forEach(im -> im.setSelect(false));
+                    selectedInventoryItems.clear();
+                }
+                updateDeclasserButton();
+            }
+        });
+
         cbx_region_maginv.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null) {
                     region = newValue;
-                    populateInv(newValue, null);
-
+                    final String newReg = newValue;
+                    ManagedSessionFactory.runInBackground(() -> populateInv(newReg, null));
                 }
             }
         });
@@ -6311,6 +6719,44 @@ public class PosController implements Initializable {
         return rst;
     }
 
+    /**
+     * Résout le client à afficher dans l'historique : si la vente ne porte
+     * qu'un stub (référence uid d'un client venu d'un autre terminal et pas
+     * encore matérialisé localement), on charge l'entité complète depuis la
+     * base. Retourne un client non-null pour éviter les colonnes vides.
+     */
+    private Client resolveDisplayClient(Client ref) {
+        if (ref == null) {
+            return null;
+        }
+        if (ref.getUid() != null && (ref.getNomClient() == null || ref.getPhone() == null)) {
+            Client full = ClientDelegate.findClient(ref.getUid());
+            if (full != null && (full.getNomClient() != null || full.getPhone() != null)) {
+                return full;
+            }
+        }
+        return ref;
+    }
+
+    /**
+     * Formate le client d'une ligne d'historique sans jamais lever de NPE
+     * (le client peut être null, ou n'avoir ni nom ni téléphone).
+     */
+    private String displayClient(Client c) {
+        if (c == null) {
+            return "";
+        }
+        String nom = c.getNomClient();
+        String phone = c.getPhone();
+        if (phone == null || phone.length() < 8) {
+            return nom == null || nom.isBlank() ? "" : nom;
+        }
+        if ("09000".equals(phone)) {
+            return "Anonyme";
+        }
+        return nom == null || nom.isBlank() ? phone : nom + ",Tel:" + phone;
+    }
+
     private void populate(List<Vente> sold, String region) {
         // SyncEngine.getInstance().shutdown();
         if (treeSaleItems == null) {
@@ -6326,7 +6772,7 @@ public class PosController implements Initializable {
                 List<LigneVente> lvs = LigneVenteDelegate.findByReference(v.getUid());
                 System.out.println("Today - " + v.getDateVente() + " : " + lvs.size());
                 SaleItem si = new SaleItem();
-                si.setClient(v.getClientId());
+                si.setClient(resolveDisplayClient(v.getClientId()));
                 si.setDate(v.getDateVente());
                 si.setFacture(v.getReference());
                 si.setIdVente(v.getUid());
@@ -6359,7 +6805,7 @@ public class PosController implements Initializable {
                 if (v.getRegion().equals(region)) {
                     List<LigneVente> lvs = LigneVenteDelegate.findByReference(v.getUid());
                     SaleItem si = new SaleItem();
-                    si.setClient(v.getClientId());
+                    si.setClient(resolveDisplayClient(v.getClientId()));
                     si.setDate(v.getDateVente());
                     si.setFacture(v.getReference());
                     si.setIdVente(v.getUid());
@@ -6518,21 +6964,34 @@ public class PosController implements Initializable {
 
     private void populateInv() {
         LocalDate atDate = (dpk_fin_inv_mag != null) ? dpk_fin_inv_mag.getValue() : null;
-        populateInv(region, atDate);
-
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                txt_tbl_inv_mag_count.textProperty().setValue(lsinventaire.size() + " elements");
-            }
+        final String curRegion = region;
+        // Chargement des agrégats + localisations en arrière-plan pour ne pas
+        // geler le thread FX à l'ouverture de l'onglet inventaire.
+        ManagedSessionFactory.runInBackground(() -> {
+            populateInv(curRegion, atDate);
+            Platform.runLater(new Runnable() {
+                @Override
+                public void run() {
+                    txt_tbl_inv_mag_count.textProperty().setValue(lsinventaire.size() + " elements");
+                }
+            });
         });
     }
 
     private void populateInv(String region, LocalDate atDate) {
         lsinventaire.clear();
+        selectedInventoryItems.clear();
+        if (chbx_selectall_inv != null) {
+            chbx_selectall_inv.setSelected(false);
+        }
         this.region = region;
         valTotStock = 0;
         pgsIndicator_load_inv.setVisible(false);
+
+        // Localisations préchargées en UNE seule requête (au lieu d'une requête
+        // par produit via getLocation) : on mappe produit -> localisation du
+        // stocker le plus récent, ce qui supprime le N+1 qui gelait l'onglet.
+        final Map<String, String> locationByProduct = loadLocationByProduct();
 
         List<StockAgregate> aggregates = RepportDelegate.findLatestStockAgregates(region, atDate);
         if (aggregates != null) {
@@ -6552,7 +7011,7 @@ public class PosController implements Initializable {
 
                 double somVal = im.getQuantStock() * im.getCoutAchat();
                 im.setValeurStock(somVal);
-                im.setLocalisation(getLocation(sa.getProductId().getUid()));
+                im.setLocalisation(locationByProduct.getOrDefault(sa.getProductId().getUid(), region));
                 lsinventaire.add(im);
                 valTotStock += somVal;
             }
@@ -6662,9 +7121,14 @@ public class PosController implements Initializable {
                 CurrencyConverter.mainCurrency()));
         txt_tbl_inv_mag_count.setText(filteredInventory.size() + " elements");
 
-        boolean isRouge = cbx_filter_color_inv.getValue() != null && cbx_filter_color_inv.getValue().contains("Rouge");
         if (btn_declasser_inv != null) {
-            btn_declasser_inv.setDisable(!(isRouge && total > 0));
+            btn_declasser_inv.setDisable(selectedInventoryItems.isEmpty());
+        }
+    }
+
+    private void updateDeclasserButton() {
+        if (btn_declasser_inv != null) {
+            btn_declasser_inv.setDisable(selectedInventoryItems.isEmpty());
         }
     }
 
@@ -6927,12 +7391,11 @@ public class PosController implements Initializable {
             MainUI.notify(null, "Erreur", "Veuillez sélectionner un compte trésorerie.", 3, "error");
             return;
         }
-        BigDecimal totalMain = BigDecimal.ZERO;
-        for (LigneVente lv : compactMode.getSaleitems()) {
-            totalMain = totalMain.add(BigDecimal.valueOf(
-                    CurrencyConverter.legacyTotalInMainCurrency(lv.getMontantUsd(), lv.getMontantCdf())));
-        }
+        BigDecimal totalUsd = BigDecimal.valueOf(compactMode.getSaleitems().stream()
+                .mapToDouble(lv -> CurrencyConverter.legacyUsdFromStorage(lv.getMontantUsd(), lv.getMontantCdf()))
+                .sum());
         String main = CurrencyConverter.mainCurrency();
+        BigDecimal totalMain = CurrencyConverter.fromUsd(totalUsd, main);
         CurrencyConverter.AmountUsdCdf stored = CurrencyConverter.splitForLegacyStorage(totalMain.doubleValue(), main);
         Vente vente = new Vente();
         vente.setUid(DataId.generateInt());
@@ -6957,6 +7420,39 @@ public class PosController implements Initializable {
         updateCompactTotals();
         MainUI.notify(null, "Succès", "Vente enregistrée : " + vente.getReference(), 3, "info");
         compactMode.tryToSaveSale(vente.getReference(), ct, client, saved, itemsToSync);
+        updateStockForSoldArticles(itemsToSync);
+    }
+
+    public void updateStockForSoldArticles(List<LigneVente> soldItems) {
+        if (soldItems == null || soldItems.isEmpty()) return;
+        Set<String> soldProductUids = new java.util.LinkedHashSet<>();
+        for (LigneVente lv : soldItems) {
+            if (lv.getProductId() != null && lv.getProductId().getUid() != null) {
+                soldProductUids.add(lv.getProductId().getUid());
+            }
+        }
+        if (posItemsCache != null) {
+            for (ListViewItem item : posItemsCache) {
+                if (item.getProduit() != null && soldProductUids.contains(item.getProduit().getUid())) {
+                    double newStock = getRest(item.getProduit());
+                    item.setQuantiteRestant(Math.max(0d, newStock));
+                }
+            }
+        }
+        String mode = pref.get("view-mode", "card");
+        Platform.runLater(() -> {
+            if (!mode.equals("card")) {
+                if (posItemsCache != null && !posItemsCache.isEmpty()) {
+                    list_mode_ls.setAll(posItemsCache);
+                }
+                updatePosPagination();
+                refreshSelectedProductStockLabel();
+            } else {
+                if (lisprod != null && !lisprod.isEmpty()) {
+                    renderCards(false);
+                }
+            }
+        });
     }
 
     private void check(List<ListViewItem> items) {
@@ -7087,6 +7583,7 @@ public class PosController implements Initializable {
                 input_observ_comptage.clear();
                 refreshValeurCompteeLabels();
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PosController.saveCompter");
                 ex.printStackTrace();
                 MainUI.notify(null, "Erreur", "Une erreur est survenue lors de l'enregistrement.", 3, "error");
             }
@@ -7401,17 +7898,24 @@ public class PosController implements Initializable {
                 });
             } else if (basemodel instanceof Recquisition) {
                 Recquisition req = (Recquisition) basemodel;
-                if (!PrixDeVenteDelegate.findPricesForRecq((String) req.getUid()).isEmpty()) {
-                    this.refreshPosUi();
+                if (req.getProductId() != null) {
+                    refreshProductInCache(req.getProductId());
                 }
             } else if (basemodel instanceof PrixDeVente) {
                 PrixDeVente pv = (PrixDeVente) basemodel;
-                if (RecquisitionDelegate.findRecquisition((String) pv.getRecquisitionId().getUid()) != null) {
-                    this.refreshPosUi();
+                if (pv.getRecquisitionId() != null) {
+                    Recquisition parent = RecquisitionDelegate.findRecquisition((String) pv.getRecquisitionId().getUid());
+                    if (parent != null && parent.getProductId() != null) {
+                        refreshProductInCache(parent.getProductId());
+                    }
                 }
             } else if (basemodel instanceof LigneVente) {
                 LigneVente i = (LigneVente) basemodel;
-                this.refreshPosUi();
+                if (i.getProductId() != null && i.getProductId().getUid() != null) {
+                    Platform.runLater(() -> {
+                        refreshProductInCache(i.getProductId());
+                    });
+                }
             }
             System.out.println(">>>>>>>>>>> index " + index
                     + ">>>>>>>>>>>>>>>>uid enregirte venant de synchronization = " + basemodel.getType());
@@ -7446,6 +7950,7 @@ public class PosController implements Initializable {
 
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "PosController.updateEcartLive");
             // ignore
         }
     }
@@ -7467,6 +7972,7 @@ public class PosController implements Initializable {
                     throw new Exception("Inventaire non enregistré, code=" + response.code());
                 }, 5);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "PosController.saveInventaireByHttp");
                 System.err.println("Erreur inventaire: " + e.getMessage());
             }
         });
@@ -7573,6 +8079,7 @@ public class PosController implements Initializable {
                     closeFuture.get(5, java.util.concurrent.TimeUnit.SECONDS);
                 }
             } catch (Exception ignored) {
+                SyncLogger.getInstance().log(ignored, "PosController.annulerCloture");
             }
             List<Compter> toRollback;
             synchronized (closeCreatedCompters) {
@@ -7583,6 +8090,7 @@ public class PosController implements Initializable {
                 try {
                     CompterDelegate.deleteCompter(c);
                 } catch (Exception ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.annulerCloture");
                     System.err.println("Rollback erreur suppression compter: " + ex.getMessage());
                 }
             }
@@ -7629,6 +8137,7 @@ public class PosController implements Initializable {
                 return true;
             }
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PosController.saveInvHttp");
             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
@@ -7658,6 +8167,7 @@ public class PosController implements Initializable {
                                         MesureDelegate.findMesureByProduit((String) compter.getProductId().getUid()));
                             }
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "PosController.syncCompterHttp");
                             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                             throw ex;
                         }
@@ -7665,6 +8175,7 @@ public class PosController implements Initializable {
                     throw new Exception("Compter non synchronisé, code=" + syncinv.code());
                 }, 5);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "PosController.syncCompterHttp");
                 System.err.println("Erreur sync compter: " + e.getMessage());
             }
         });
@@ -7694,6 +8205,7 @@ public class PosController implements Initializable {
                                         MesureDelegate.findMesureByProduit(compter.getProductId().getUid()));
                             }
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "PosController.syncDeleteCompterHttp");
                             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                             throw ex;
                         }
@@ -7701,6 +8213,7 @@ public class PosController implements Initializable {
                     throw new Exception("Compter delete non synchronisé, code=" + syncinv.code());
                 }, 5);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "PosController.syncDeleteCompterHttp");
                 System.err.println("Erreur sync delete compter: " + e.getMessage());
             }
         });
@@ -7725,16 +8238,19 @@ public class PosController implements Initializable {
                     break block8;
                 }
             } catch (Throwable throwable) {
+                SyncLogger.getInstance().log(throwable, "PosController.loadDefaultImage");
                 try {
                     if (is != null) {
                         try {
                             is.close();
                         } catch (Throwable throwable2) {
+                            SyncLogger.getInstance().log(throwable2, "PosController.loadDefaultImage");
                             throwable.addSuppressed(throwable2);
                         }
                     }
                     throw throwable;
                 } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "PosController.loadDefaultImage");
                     System.err.println("Erreur lors du chargement de l'image par d\u00e9faut" + e.getMessage());
                     return new byte[0];
                 }
@@ -7742,6 +8258,7 @@ public class PosController implements Initializable {
                 try {
                     is.close();
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.loadDefaultImage");
                     Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -7875,6 +8392,7 @@ public class PosController implements Initializable {
                 try {
                     Desktop.getDesktop().open(xlsInv);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PosController.exportInventoryPhys");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -8035,6 +8553,7 @@ public class PosController implements Initializable {
                 throw new Exception("Produit non enregistré, code=" + saveR.code());
             }, 5);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "PosController.sendProduitIfNotExist");
             System.out.println("Erreur sauvegarde produit: " + e.getMessage());
         }
     }

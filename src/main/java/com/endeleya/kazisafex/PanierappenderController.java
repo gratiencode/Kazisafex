@@ -79,6 +79,7 @@ import tools.CurrencyConverter;
 import tools.Constants;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.Util;
 import data.helpers.Role;
 import data.network.Kazisafe;
@@ -232,10 +233,13 @@ public class PanierappenderController implements Initializable {
                 System.out.println("Execution carret on quant");
                 resolve(newValue);
             } catch (NumberFormatException e) {
+                SyncLogger.getInstance().log(e, "PanierappenderController.initialize");
                 System.err.println("NFE error " + e.getMessage());
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "PanierappenderController.initialize");
                 Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PanierappenderController.initialize");
                 Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
             }
         });
@@ -368,7 +372,7 @@ public class PanierappenderController implements Initializable {
         List<PrixDeVente> pvxs = pickPrice(prices, choosenmez, 1);
         if (!pvxs.isEmpty()) {
             PrixDeVente pvx = pvxs.get(0);
-            String dev = pvx.getDevise();
+            dev = pvx.getDevise();
 //                   
             if (dev.equals("CDF")) {
                 tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire()));
@@ -397,6 +401,7 @@ public class PanierappenderController implements Initializable {
         try {
             writeCartItem(text.trim());
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PanierappenderController.setProduit");
             Logger.getLogger(PanierappenderController.class.getName()).log(Level.SEVERE, null, ex);
         }
 
@@ -416,7 +421,7 @@ public class PanierappenderController implements Initializable {
                     txt_total_usd.setText(String.valueOf(tusd));
 
                 } catch (NumberFormatException e) {
-
+                    SyncLogger.getInstance().log(e, "PanierappenderController.initialize");
                 }
             }
         });
@@ -438,7 +443,7 @@ public class PanierappenderController implements Initializable {
                     txt_total_cdf.setText(String.valueOf(tcfd));
                     txt_total_usd.setText(String.valueOf(tusd));
                 } catch (NumberFormatException e) {
-
+                    SyncLogger.getInstance().log(e, "PanierappenderController.initialize");
                 }
             }
         });
@@ -674,6 +679,7 @@ public class PanierappenderController implements Initializable {
         }
         System.out.println("PRIXO");
         String divize = pvx.getDevise();
+        dev = divize;
         if (divize.equals("CDF")) {
             tf_prix_unitr_usd.setText(String.valueOf(BigDecimal.valueOf(pvx.getPrixUnitaire() / taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
             tf_prix_unitr_cdf.setText(String.valueOf(pvx.getPrixUnitaire()));
@@ -973,6 +979,7 @@ public class PanierappenderController implements Initializable {
             PrixDeVente pv = Util.findPrice(prices, choosenmez, d);
             if (pv != null) {
                 String dvz = pv.getDevise();
+                dev = dvz;
                 tf_prix_unitr_cdf.setText(String.valueOf(String.valueOf(dvz.equals("CDF") ? pv.getPrixUnitaire()
                         : BigDecimal.valueOf(pv.getPrixUnitaire() * taux2change).setScale(3, RoundingMode.HALF_EVEN))));
                 tf_prix_unitr_usd.setText(String.valueOf(dvz.equals("USD") ? pv.getPrixUnitaire()
@@ -1005,6 +1012,7 @@ public class PanierappenderController implements Initializable {
                 double pvs = pvx.getPrixUnitaire();
                 double pup = BigDecimal.valueOf(pvs * raport).setScale(3, RoundingMode.HALF_EVEN).doubleValue();
                 String dvz = pvx.getDevise();
+                dev = dvz;
                 tf_prix_unitr_cdf.setText(String.valueOf(dvz.equals("CDF") ? pup
                         : BigDecimal.valueOf(pup * taux2change).setScale(3, RoundingMode.HALF_EVEN).doubleValue()));
                 tf_prix_unitr_usd.setText(String.valueOf(dvz.equals("USD") ? pup
@@ -1026,6 +1034,7 @@ public class PanierappenderController implements Initializable {
 
             }
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "PanierappenderController.applyPrices");
         }
         tf_input_quant.requestFocus();
     }
@@ -1111,13 +1120,14 @@ public class PanierappenderController implements Initializable {
             MainUI.notify(null, bundle.getString("error"), "Prix unitaire invalide.", 4, "error");
             return;
         }
-        double valeurTotalUsd = parseDoubleOrDefault(txt_total_usd.getText(), qr * prixUnitUsd);
-        double valeurTotalCdf = parseDoubleOrDefault(txt_total_cdf.getText(), qr * prixUnitCdf);
-        if (CurrencyConverter.USD.equals(dex)) {
-            valeurTotalCdf = CurrencyConverter.fromUsd(valeurTotalUsd, CurrencyConverter.CDF);
-        } else {
-            valeurTotalUsd = CurrencyConverter.toUsd(valeurTotalCdf, CurrencyConverter.CDF);
-        }
+        String devPrix = CurrencyConverter.normalize(dev);
+        double prixUnitaireMain = CurrencyConverter.CDF.equals(devPrix)
+                ? CurrencyConverter.convert(prixUnitCdf, CurrencyConverter.CDF, dex)
+                : CurrencyConverter.convert(prixUnitUsd, CurrencyConverter.USD, dex);
+        double valeurTotalMain = BigDecimal.valueOf(qr * prixUnitaireMain)
+                .setScale(3, RoundingMode.HALF_EVEN).doubleValue();
+        double valeurTotalUsd = CurrencyConverter.toUsd(valeurTotalMain, dex);
+        double valeurTotalCdf = 0;
 
         // Reprendre la quantite courante juste avant validation pour eviter un stale state.
         resteEnPiece = getCurrentRemainingPieces();
@@ -1144,10 +1154,10 @@ public class PanierappenderController implements Initializable {
                 Optional<ButtonType> showAndWait = alertdlg.showAndWait();
                 if (showAndWait.get() == ButtonType.YES) {
                     qr = kms;
-                    valeurTotalUsd = BigDecimal.valueOf(qr * prixUnitUsd)
+                    valeurTotalMain = BigDecimal.valueOf(qr * prixUnitaireMain)
                             .setScale(3, RoundingMode.HALF_EVEN).doubleValue();
-                    valeurTotalCdf = BigDecimal.valueOf(valeurTotalUsd * taux2change)
-                            .setScale(0, RoundingMode.HALF_EVEN).doubleValue();
+                    valeurTotalUsd = CurrencyConverter.toUsd(valeurTotalMain, dex);
+                    valeurTotalCdf = 0;
 //                    cdf = dex.equals("USD") ? usd * taux2change : cdf;
                 } else if (showAndWait.get() == ButtonType.CANCEL) {
                     return;
@@ -1262,6 +1272,7 @@ public class PanierappenderController implements Initializable {
         try {
             return Double.parseDouble(value.trim());
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "PanierappenderController.parseDoubleOrDefault");
             return fallback;
         }
     }

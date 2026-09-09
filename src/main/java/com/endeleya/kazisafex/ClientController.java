@@ -80,6 +80,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.Priority;
 import data.BaseModel;
+import tools.SyncLogger;
 
 /**
  * FXML Controller class
@@ -458,6 +459,7 @@ public class ClientController implements Initializable {
                                     }
                                 });
                             } catch (Exception ex) {
+                                SyncLogger.getInstance().log(ex, "ClientController.setUp");
                                 javafx.application.Platform.runLater(new Runnable() {
                                     @Override
                                     public void run() {
@@ -936,6 +938,7 @@ public class ClientController implements Initializable {
                                     }
                                 });
                             } catch (Exception ex) {
+                                SyncLogger.getInstance().log(ex, "ClientController.setUp");
                                 javafx.application.Platform.runLater(new Runnable() {
                                     @Override
                                     public void run() {
@@ -1100,6 +1103,7 @@ public class ClientController implements Initializable {
                         try {
                             Desktop.getDesktop().open(f);
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "ClientController.exportClientDebtToPdf");
                             Logger.getLogger(ClientController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }

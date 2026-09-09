@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import tools.SyncLogger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -183,6 +184,7 @@ public class HttpSyncHandler extends Task<Boolean> {
             });
             return failedTables.isEmpty() && failedEndpoints.isEmpty();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "HttpSyncHandler.call");
             updateMessage(
                 (!up
                     ? "Synchronisation distante"
@@ -258,6 +260,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                                 handleSyncResponse(endpoint, execute);
                             }
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "HttpSyncHandler.getDataFromCloud");
                             System.err.println(
                                 "Sync-down error pour " +
                                     endpoint +
@@ -319,6 +322,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                             );
                         }
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "HttpSyncHandler.getDataFromCloud");
                         stillFailed.add(endpoint);
                         SyncLogger.getInstance().log(
                             e,
@@ -334,6 +338,7 @@ public class HttpSyncHandler extends Task<Boolean> {
 
             onComplete.run();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "HttpSyncHandler.getDataFromCloud");
             System.out.println("Sync-down error : " + e.getMessage());
             throw e;
         }
@@ -561,6 +566,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                             }
                         }
                     } catch (jakarta.persistence.EntityNotFoundException enfe) {
+                        SyncLogger.getInstance().log(enfe, "HttpSyncHandler.getDataFromCloud.ligneVente");
                         System.err.println("[DOWNSYNC] LigneVente FK not found, skipping: " + saleitem.getUid() + " - " + enfe.getMessage());
                     }
                 }
@@ -1055,6 +1061,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                                 }
                             }
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "HttpSyncHandler.sendDataToCloud");
                             System.err.println(
                                 "Upsync Error for table " +
                                     t.name() +
@@ -1095,6 +1102,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                             );
                         }
                     } catch (Exception e) {
+                        SyncLogger.getInstance().log(e, "HttpSyncHandler.sendDataToCloud");
                         stillFailed.add(t);
                         System.err.println(
                             "Reprise échouée pour la table " +
@@ -1116,6 +1124,7 @@ public class HttpSyncHandler extends Task<Boolean> {
 
             onComplete.run();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "HttpSyncHandler.sendDataToCloud");
             System.err.println("Upsync Error: " + e.getMessage());
             throw e;
         }
@@ -1554,6 +1563,7 @@ public class HttpSyncHandler extends Task<Boolean> {
                 String base64 = DatatypeConverter.printBase64Binary(pixa);
                 return base64;
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "HttpSyncHandler.productImageToBase64");
                 Logger.getLogger(HttpSyncHandler.class.getName()).log(
                     Level.SEVERE,
                     null,

@@ -7,6 +7,7 @@ import java.net.URL;
 
 import java.net.URLConnection;
 import java.util.concurrent.ScheduledExecutorService;
+import tools.SyncLogger;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 
@@ -36,10 +37,12 @@ public class NetLoockup {
                      NETWORK_STATUS_ON = true;
                     notifyNetwork(true);
                 } catch (MalformedURLException e) {
+                    SyncLogger.getInstance().log(e, "NetLoockup.run");
                     pref.putBoolean(NETWORK_STATUS, NETWORK_STATUS_DEFAULT);
                     notifyNetwork(false);
                     NETWORK_STATUS_ON = false;
                 } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "NetLoockup.run");
                     pref.putBoolean(NETWORK_STATUS, NETWORK_STATUS_DEFAULT);
                     notifyNetwork(false);
                     NETWORK_STATUS_ON = false;

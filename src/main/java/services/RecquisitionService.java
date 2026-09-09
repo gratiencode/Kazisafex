@@ -587,6 +587,9 @@ public class RecquisitionService implements RecquisitionStorage {
                 continue;
             }
             String lotNorm = lot.trim();
+            if (isStockLotDestroyed(productId, lotNorm, region)) {
+                continue;
+            }
             LotPeriodPieces m = computeLotPeriodPiecesNoRegion(productId, lotNorm, dDeb, dFin);
 
             StockAgregate lotAggregate = applyStockAggregateValues(new StockAgregate(DataId.generate()),
@@ -3801,6 +3804,9 @@ public class RecquisitionService implements RecquisitionStorage {
      */
     private void upsertSingleLotStockAggregate(Produit produit, String region, LocalDate datedebut,
             LocalDate datefin, String clotureContext, Mesure unite, String lotNorm, double fallbackUnitCost) {
+        if (isStockLotDestroyed(produit.getUid(), lotNorm, region)) {
+            return;
+        }
         LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, datedebut, datefin);
 
         // Réquisition représentative (la plus récente) pour récupérer coût et date de péremption
@@ -3842,6 +3848,9 @@ public class RecquisitionService implements RecquisitionStorage {
      */
     private void upsertSingleLotStockAggregateNoRegion(Produit produit, LocalDate datedebut,
             LocalDate datefin, String clotureContext, Mesure unite, String lotNorm, double fallbackUnitCost) {
+        if (isStockLotDestroyed(produit.getUid(), lotNorm, null)) {
+            return;
+        }
         LotPeriodPieces m = computeLotPeriodPiecesNoRegion(produit.getUid(), lotNorm, datedebut, datefin);
 
         List<Recquisition> lotRecqs = findRecquisitionByProduit(produit.getUid(), lotNorm);
@@ -4005,6 +4014,9 @@ public class RecquisitionService implements RecquisitionStorage {
                 continue;
             }
             String lotNorm = lot.trim();
+            if (isStockLotDestroyed(produit.getUid(), lotNorm, region)) {
+                continue;
+            }
             LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, datedebut, datefin);
             totals.add(m.entrees(), m.sorties(), m.stockInitial(), m.expiree(), m.finalValid());
             double stockFinalValid = m.finalValid();
@@ -4076,6 +4088,9 @@ public class RecquisitionService implements RecquisitionStorage {
             return totals;
         }
         String lotNorm = lot.trim();
+        if (isStockLotDestroyed(produit.getUid(), lotNorm, region)) {
+            return totals;
+        }
         LocalDate leo = LocalDate.now();
         LotPeriodPieces m = computeLotPeriodPieces(produit.getUid(), lotNorm, region, leo, leo);
         totals.add(m.entrees(), m.sorties(), m.stockInitial(), m.expiree(), m.finalValid());
@@ -4287,6 +4302,51 @@ public class RecquisitionService implements RecquisitionStorage {
             return results.isEmpty() ? null : results.get(0);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /**
+     * Indique si un lot (produit + numéro de lot + région) a déjà été marqué
+     * comme déclassé ({@code destroyed = true}) dans stock_agregate. Une fois
+     * déclassé, le lot ne doit plus jamais être re-clôturé ni réexposé.
+     */
+    private boolean isStockLotDestroyed(String productId, String numlot, String region) {
+        if (productId == null || numlot == null) {
+            return false;
+        }
+        try {
+            StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM stock_agregate s WHERE s.product_id = ? "
+                    + "AND s.num_lot = ? AND s.destroyed = ?");
+            if (region != null && !region.isBlank()) {
+                sql.append(" AND s.region LIKE ?");
+            }
+            Long count;
+            if (ManagedSessionFactory.isEmbedded()) {
+                count = ManagedSessionFactory.executeRead(em -> {
+                    Query q = em.createNativeQuery(sql.toString())
+                            .setParameter(1, productId)
+                            .setParameter(2, numlot)
+                            .setParameter(3, Boolean.TRUE);
+                    if (region != null && !region.isBlank()) {
+                        q.setParameter(4, region);
+                    }
+                    Object rst = q.getSingleResult();
+                    return rst == null ? 0L : ((Number) rst).longValue();
+                });
+            } else {
+                Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sql.toString())
+                        .setParameter(1, productId)
+                        .setParameter(2, numlot)
+                        .setParameter(3, Boolean.TRUE);
+                if (region != null && !region.isBlank()) {
+                    q.setParameter(4, region);
+                }
+                Object rst = q.getSingleResult();
+                count = rst == null ? 0L : ((Number) rst).longValue();
+            }
+            return count != null && count > 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -5410,6 +5470,170 @@ public class RecquisitionService implements RecquisitionStorage {
     private record ExpiredItem(String uidProduit, String numlot, LocalDate dateExpire, double quantite,
             Mesure mesure, double coutAchat, String region) {
 
+    }
+
+    @Override
+    public List<Object[]> loadPosStockView(String region, String meth, boolean global) {
+        StringBuilder sb = new StringBuilder();
+        boolean fifo = !"lifo".equalsIgnoreCase(meth) && !"ppps".equalsIgnoreCase(meth);
+        String headOrder = fifo ? "sa.date ASC, sa.date_expiration ASC"
+                : ("lifo".equalsIgnoreCase(meth) ? "sa.date DESC, sa.date_expiration ASC"
+                        : "sa.date_expiration ASC, sa.date ASC");
+        String pieceRegion = global ? "" : " AND sa.region LIKE :region ";
+        String headRegion = " AND sa.region LIKE :region ";
+        sb.append("""
+                SELECT pr.uid, pr.codebar, pr.nomproduit, pr.marque, pr.modele, pr.taille,
+                       pr.categoryid_uid,
+                       COALESCE(stk.total_pieces, 0),
+                       hl.numlot, hl.date_expiration, hl.cout_achat, hl.mesure_id,
+                       hlm.quantcontenu, hlm.description,
+                       sm.uid, sm.quantcontenu
+                FROM produit pr
+                LEFT JOIN (
+                    SELECT sa.product_id, SUM(COALESCE(sa.final_quantity, 0)) AS total_pieces
+                    FROM stock_agregate sa
+                    WHERE sa.num_lot IS NOT NULL AND sa.destroyed = 0
+                      AND sa.date = (SELECT MAX(s3.date) FROM stock_agregate s3
+                                     WHERE s3.product_id = sa.product_id AND s3.region = sa.region
+                                       AND s3.num_lot = sa.num_lot AND s3.destroyed = sa.destroyed)
+                      {piece_region}
+                    GROUP BY sa.product_id
+                ) stk ON stk.product_id = pr.uid
+                LEFT JOIN (
+                    SELECT head.product_id, head.numlot, head.date_expiration, head.cout_achat, head.mesure_id FROM (
+                        SELECT sa.product_id, sa.num_lot AS numlot, sa.date_expiration, sa.cout_achat, sa.mesure_id,
+                               ROW_NUMBER() OVER (PARTITION BY sa.product_id ORDER BY {head_order}) AS rn
+                        FROM stock_agregate sa
+                        WHERE sa.num_lot IS NOT NULL AND sa.destroyed = 0
+                          AND COALESCE(sa.final_quantity, 0) > 0
+                          AND sa.date = (SELECT MAX(s3.date) FROM stock_agregate s3
+                                         WHERE s3.product_id = sa.product_id AND s3.region = sa.region
+                                           AND s3.num_lot = sa.num_lot AND s3.destroyed = sa.destroyed)
+                          {head_region}
+                    ) head WHERE head.rn = 1
+                ) hl ON hl.product_id = pr.uid
+                LEFT JOIN (
+                    SELECT m.produit_id, m.uid, m.quantcontenu, m.description,
+                           ROW_NUMBER() OVER (PARTITION BY m.produit_id ORDER BY m.quantcontenu ASC) AS rn
+                    FROM mesure m
+                ) sm ON sm.produit_id = pr.uid AND sm.rn = 1
+                LEFT JOIN mesure hlm ON hlm.uid = hl.mesure_id
+                WHERE COALESCE(stk.total_pieces, 0) > 0
+                ORDER BY pr.nomproduit ASC
+                """.replace("{piece_region}", pieceRegion).replace("{head_region}", headRegion)
+                .replace("{head_order}", headOrder));
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter("region", region == null ? "%" : region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter("region", region == null ? "%" : region);
+        return query.getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadHeaderRecqs(String region) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT r.uid, r.product_id, r.numlot, r.date, r.dateExpiry FROM recquisition r "
+                + "WHERE (:region IS NULL OR r.region = :region) ORDER BY r.date ASC");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter("region", region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter("region", region);
+        return query.getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadAllRecqs() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT r.uid, r.product_id, r.numlot, r.date, r.dateExpiry FROM recquisition r");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString()).getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadRecqLotEntrees(String region) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+                SELECT r.product_id, r.numlot, SUM(COALESCE(r.quantite, 0) * COALESCE(m.quantcontenu, 1))
+                FROM recquisition r JOIN mesure m ON m.uid = r.mesure_id
+                WHERE (:region IS NULL OR r.region = :region) AND (r.reference IS NULL OR r.reference NOT LIKE 'RTR%')
+                GROUP BY r.product_id, r.numlot
+                """);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter("region", region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter("region", region);
+        return query.getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadLigneVenteLotSorties(String region) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+                SELECT l.product_id, l.numlot, SUM(COALESCE(l.quantite, 0) * COALESCE(n.quantcontenu, 1))
+                FROM ligne_vente l JOIN mesure n ON n.uid = l.mesure_id
+                WHERE l.reference_uid IN (SELECT v.uid FROM vente v WHERE (:region IS NULL OR v.region = :region))
+                GROUP BY l.product_id, l.numlot
+                """);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter("region", region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter("region", region);
+        return query.getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadRetourDepotLotReturns(String region) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+                SELECT q.product_id, rd.numlot, SUM(COALESCE(rd.quantite, 0) * COALESCE(m.quantcontenu, 1))
+                FROM retour_depot rd
+                JOIN recquisition q ON q.uid = rd.recquisition_id
+                JOIN mesure m ON m.uid = rd.mesure_id
+                WHERE (:region IS NULL OR rd.region = :region)
+                GROUP BY q.product_id, rd.numlot
+                """);
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString());
+                query.setParameter("region", region);
+                return query.getResultList();
+            });
+        }
+        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
+        query.setParameter("region", region);
+        return query.getResultList();
+    }
+
+    @Override
+    public List<Object[]> loadPriceRows() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT pv.uid, pv.q_min, pv.prix_unitaire, pv.mesureid_uid, pv.recquisition_id FROM prix_de_vente pv");
+        if (ManagedSessionFactory.isEmbedded()) {
+            return ManagedSessionFactory.executeRead(em -> em.createNativeQuery(sb.toString()).getResultList());
+        }
+        return ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString()).getResultList();
     }
 
 }

@@ -76,6 +76,7 @@ import tools.DebtItem;
 import tools.FileUtils;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import services.utils.UserRoleRegistry;
 import services.utils.PermissionRegistry;
 import tools.Tables;
@@ -478,6 +479,7 @@ public class ReleveeController implements Initializable {
             try {
                 Desktop.getDesktop().open(report);
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ReleveeController.exportDebtSheetForClient");
                 Logger.getLogger(ReleveeController.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -581,6 +583,7 @@ public class ReleveeController implements Initializable {
             img_vu_logo.setImage(image);
             Util.centerImage(img_vu_logo);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "ReleveeController.setup");
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
 
@@ -897,6 +900,7 @@ public class ReleveeController implements Initializable {
                 try {
                     Desktop.getDesktop().open(file);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "ReleveeController.exportXlsRelevee");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -913,6 +917,7 @@ public class ReleveeController implements Initializable {
                 try {
                     Desktop.getDesktop().open(file);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "ReleveeController.exportPdfRelevee");
                     Logger.getLogger(GoodstorageController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }

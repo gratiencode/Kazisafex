@@ -8,6 +8,8 @@ import java.util.Objects;
 import data.Mesure;
 import data.Produit;
 import java.time.LocalDate;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 
 /**
  *
@@ -29,6 +31,7 @@ public class InventoryMagasin {
     private String devise;
     private double alerte;
     private LocalDate expiry;
+    private final BooleanProperty selectProperty = new SimpleBooleanProperty(false);
 
     public InventoryMagasin(Produit produit, Mesure mesure, double quantEntree, double quantSortie, double quantStock) {
         this.produit = produit;
@@ -87,6 +90,7 @@ public class InventoryMagasin {
     public int hashCode() {
         int hash = 7;
         hash = 11 * hash + Objects.hashCode(this.produit);
+        hash = 11 * hash + Objects.hashCode(this.lot);
         return hash;
     }
 
@@ -103,6 +107,9 @@ public class InventoryMagasin {
         }
         final InventoryMagasin other = (InventoryMagasin) obj;
         if (!Objects.equals(this.produit, other.produit)) {
+            return false;
+        }
+        if (!Objects.equals(this.lot, other.lot)) {
             return false;
         }
         return true;
@@ -191,6 +198,16 @@ public class InventoryMagasin {
         this.destroyed = destroyed;
     }
 
-  
+    public boolean isSelect() {
+        return selectProperty.get();
+    }
+
+    public void setSelect(boolean select) {
+        this.selectProperty.set(select);
+    }
+
+    public BooleanProperty selectProperty() {
+        return selectProperty;
+    }
 
 }

@@ -42,6 +42,7 @@ import tools.CurrencyConverter;
 import tools.DataCache;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import services.SyncOutboxService;
 import services.sync.DownsyncCatchupService;
 import tools.Constants;
@@ -214,6 +215,7 @@ public class ParametreController implements Initializable {
                 (String) "Info"
             );
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "ParametreController.configTaux");
             MainUI.notify(
                 null,
                 (String) this.bundle.getString("error"),
@@ -259,6 +261,7 @@ public class ParametreController implements Initializable {
                 (String) "info"
             );
         } catch (NumberFormatException e) {
+            SyncLogger.getInstance().log(e, "ParametreController.configTauxImpositionResultat");
             MainUI.notify(
                 null,
                 (String) this.bundle.getString("error"),
@@ -560,6 +563,7 @@ public class ParametreController implements Initializable {
                             )
                         );
                     } catch (IllegalStateException e) {
+                        SyncLogger.getInstance().log(e, "ParametreController.initialize");
                         this.tf_taux_de_change.clear();
                     }
                 }
@@ -888,6 +892,7 @@ public class ParametreController implements Initializable {
                     );
                 }
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "ParametreController.saveConfigurations");
                 Logger.getLogger(ParametreController.class.getName()).log(
                     Level.SEVERE,
                     null,
@@ -921,6 +926,7 @@ public class ParametreController implements Initializable {
         try {
             SyncEngine.getInstance().syncInBackground();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "ParametreController.reinitSync");
             Logger.getLogger(ParametreController.class.getName()).log(
                 Level.SEVERE,
                 "Echec relance du cycle de synchronisation",
@@ -955,7 +961,9 @@ public class ParametreController implements Initializable {
                                 newFile.toPath(),
                                 StandardCopyOption.REPLACE_EXISTING
                             );
-                        } catch (IOException ignored) {}
+                        } catch (IOException ignored) {
+                            SyncLogger.getInstance().log(ignored, "ParametreController.getLogPath");
+                        }
                     }
                 }
             }
@@ -985,6 +993,7 @@ public class ParametreController implements Initializable {
             try {
                 Desktop.getDesktop().open(logFile);
             } catch (IOException e) {
+                SyncLogger.getInstance().log(e, "ParametreController.openLogFile");
                 javafx.application.Platform.runLater(() ->
                     MainUI.notify(
                         null,
@@ -1046,8 +1055,11 @@ public class ParametreController implements Initializable {
                     );
                     try {
                         Desktop.getDesktop().open(dest.getParentFile());
-                    } catch (IOException ignored) {}
+                    } catch (IOException ignored) {
+                        SyncLogger.getInstance().log(ignored, "ParametreController.saveLogCopy");
+                    }
                 } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "ParametreController.saveLogCopy");
                     javafx.application.Platform.runLater(() ->
                         MainUI.notify(
                             null,
@@ -1082,6 +1094,7 @@ public class ParametreController implements Initializable {
             try {
                 Desktop.getDesktop().open(dir);
             } catch (IOException e) {
+                SyncLogger.getInstance().log(e, "ParametreController.openLogFolder");
                 javafx.application.Platform.runLater(() ->
                     MainUI.notify(
                         null,

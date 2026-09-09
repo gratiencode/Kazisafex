@@ -384,7 +384,7 @@
                                                             <Pagination fx:id="pagination2" layoutX="13.0" layoutY="92.0" maxPageIndicatorCount="3" prefHeight="420.0" prefWidth="875.0" AnchorPane.bottomAnchor="2.0" AnchorPane.leftAnchor="6.0" AnchorPane.rightAnchor="7.0" AnchorPane.topAnchor="92.0" />
                                                             <TableView fx:id="table_inv_mag" layoutX="25.0" layoutY="99.0" prefHeight="319.0" prefWidth="854.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="96.0" AnchorPane.leftAnchor="9.0" AnchorPane.rightAnchor="9.0" AnchorPane.topAnchor="99.0">
                                                               <columns>
-                                                                <TableColumn fx:id="col_codebar_tInv_mag" prefWidth="75.0" text="%xcol.code_bar" />
+                                                                <TableColumn fx:id="col_select_tInv_mag" prefWidth="40.0" resizable="false" text="" />
                                                                 <TableColumn fx:id="col_prod_tInv_mag" prefWidth="75.0" text="%xlbel.produx" />
                                                                   <TableColumn fx:id="col_stok_init_tInv_mag" prefWidth="75.0" text="%xcolumn_init_stock" />
                                                                   <TableColumn fx:id="col_entree_tInv_mag" prefWidth="75.0" text="%xqte_entree" />
@@ -444,8 +444,9 @@
                                                                   <ComboBox fx:id="cbx_filter_color_inv" prefHeight="24.0" prefWidth="218.0" promptText="Filtrer par péremption" />
                                                                   <CheckBox fx:id="chbx_filter_stock_fini" mnemonicParsing="false" prefHeight="24.0" text="Stock fini" />
                                                                   <CheckBox fx:id="chbx_filter_stock_non_fini" mnemonicParsing="false" prefHeight="24.0" text="Stock non fini" />
-                                                                  <CheckBox fx:id="chbx_filter_stock_destroyed" mnemonicParsing="false" prefHeight="24.0" text="Déclassés" />
-                                                                  <Button fx:id="btn_declasser_inv" disable="true" mnemonicParsing="false" onAction="#declasserInventaire" style="-fx-background-color: #f75d59; -fx-text-fill: white;" text="Déclasser lots expirés" />
+                                                                   <CheckBox fx:id="chbx_filter_stock_destroyed" mnemonicParsing="false" prefHeight="24.0" text="Déclassés" />
+                                                                   <CheckBox fx:id="chbx_selectall_inv" mnemonicParsing="false" prefHeight="24.0" text="%xall" />
+                                                                   <Button fx:id="btn_declasser_inv" disable="true" mnemonicParsing="false" onAction="#declasserInventaire" style="-fx-background-color: #f75d59; -fx-text-fill: white;" text="Déclasser la sélection" />
                                                                </children>
                                                             </HBox>
                                                             <ComboBox fx:id="cbx_region_maginv" layoutX="746.0" layoutY="57.0" prefHeight="24.0" prefWidth="116.0" promptText="%xregions" AnchorPane.rightAnchor="4.0" />

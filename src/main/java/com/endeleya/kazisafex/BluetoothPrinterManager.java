@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import tools.SyncLogger;
 
 public class BluetoothPrinterManager {
 
@@ -22,6 +23,7 @@ public class BluetoothPrinterManager {
                 try {
                     System.out.println("Found: " + btDevice.getFriendlyName(false));
                 } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "BluetoothPrinterManager.findPrinters");
                     System.out.println("Found device but name unknown");
                 }
             }

@@ -48,7 +48,7 @@ public class VenteEncoder implements Encoder.Text<Vente> {
                 .add("payload", ins.getPayload())
                 .add("priority", ins.getPriority())
                 .add("counter", ins.getCounter())
-                .add("dateVente", ins.getDateVente().toString())
+                .add("dateVente", tools.Constants.Datetime.utcString(ins.getDateVente()))
                 .add("deviseDette", ins.getDeviseDette());
         JsonObjectBuilder jsob = Json.createObjectBuilder();
 

@@ -29,6 +29,7 @@ public class Main {
                 return;
             }
         } catch (Throwable t) {
+            tools.SyncLogger.getInstance().log(t, "Main.main");
             System.err.println("[Kazisafex] Verification de mise a jour en attente impossible : "
                     + (t.getMessage() == null ? t.toString() : t.getMessage()));
         }
@@ -41,6 +42,7 @@ public class Main {
                 Kazisafex.main(args);
                 return;
             } catch (Throwable t) {
+                tools.SyncLogger.getInstance().log(t, "Main.main");
                 if (isPipelineFailure(t)) {
                     System.err.println(
                             "[Kazisafex] Aucun pipeline graphique matériel disponible : " + rootMessage(t));
@@ -111,6 +113,7 @@ public class Main {
             new ProcessBuilder(cmd).inheritIO().start();
             return true;
         } catch (Exception e) {
+            tools.SyncLogger.getInstance().log(e, "Main.relaunchWithSoftwareRenderer");
             System.err.println("[Kazisafex] Erreur lors de la relance : " + e.getMessage());
             return false;
         }

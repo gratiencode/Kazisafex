@@ -84,6 +84,7 @@ import tools.DataId;
 import tools.SyncRetryHandler;
 import tools.MainUI;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.ComboBoxAutoCompletion;
 import tools.Tables;
 import tools.Util;
@@ -332,6 +333,7 @@ public class DestockController implements Initializable {
                         double data = Double.parseDouble(newValue);
                         txt_equivalentCdf.setText(CurrencyConverter.equivalentLabel(data, cbx_devise_req1.getValue()));
                     } catch (NumberFormatException e) {
+                        SyncLogger.getInstance().log(e, "DestockController.initialize");
                         MainUI.notify(null, "Erreur", "Entrer les chiffres uniquement", 3, "error");
                     }
                 });
@@ -712,12 +714,14 @@ public class DestockController implements Initializable {
         try {
             qte = Double.parseDouble(tf_quantite_dstk.getText());
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "DestockController.addDestocker");
             MainUI.notify(null, bundle.getString("error"), "Quantité invalide", 3, "error");
             return;
         }
          try {
             catu = Double.parseDouble(tf_cout_unitr_cump_dstk.getText());
         } catch (NumberFormatException ex) {
+            SyncLogger.getInstance().log(ex, "DestockController.addDestocker");
             MainUI.notify(null, bundle.getString("error"), "Cout d'achat unitaire invalide", 3, "error");
             return;
         }
@@ -889,6 +893,7 @@ public class DestockController implements Initializable {
                 }
                
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "DestockController.saveAllDestockers");
                 Logger.getLogger(DestockController.class.getName()).log(Level.SEVERE,
                         "Échec de l'enregistrement des destockages", ex);
                 final int failedAfter = savedList.size();
@@ -1096,6 +1101,7 @@ public class DestockController implements Initializable {
                     throw new Exception("Destocker non enregistré");
                 }, MAX_RETRY);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "DestockController.saveDestockerWithRetry");
                 System.err.println("Erreur: " + e.getMessage());
             }
         });
@@ -1117,6 +1123,7 @@ public class DestockController implements Initializable {
         try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
             return is != null ? is.readAllBytes() : new byte[0];
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "DestockController.loadDefaultImage");
             return new byte[0];
         }
     }
@@ -1134,6 +1141,7 @@ public class DestockController implements Initializable {
             h.setMesureList(m);
             kazisafe.saveLite(h).execute();
         } catch (IOException e) {
+            SyncLogger.getInstance().log(e, "DestockController.saveProduitByHttp");
             System.err.println("Erreur: " + e.getMessage());
         }
     }

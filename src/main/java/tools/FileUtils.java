@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import tools.SyncLogger;
 
 public class FileUtils {
 
@@ -92,13 +93,16 @@ public class FileUtils {
             outStream.close();
             return targetFile;
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "FileUtils.streamTofile");
             Logger.getLogger(SyncEngine.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "FileUtils.streamTofile");
             Logger.getLogger(SyncEngine.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             try {
                 outStream.close();
             } catch (IOException ex) {
+                SyncLogger.getInstance().log(ex, "FileUtils.streamTofile.finally");
                 Logger.getLogger(SyncEngine.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -122,6 +126,7 @@ public class FileUtils {
                     = new FileOutputStream(file);
             fout.write(b);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "FileUtils.byteToFile");
             e.printStackTrace();
         }
         return file;
@@ -143,6 +148,7 @@ public class FileUtils {
                     = new FileOutputStream(file);
             fout.write(b);
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "FileUtils.byteToFile.withExt");
             e.printStackTrace();
         }
         return file;

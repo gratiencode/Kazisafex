@@ -116,6 +116,30 @@ public class SyncLogger {
         log(throwable, context, null, null);
     }
 
+    public void logMessage(String context, String message) {
+        final LocalDateTime timestamp = LocalDateTime.now();
+        logExecutor.submit(() -> {
+            synchronized (SyncLogger.class) {
+                ensureLogFileExists();
+                try (
+                    FileWriter fw = new FileWriter(LOG_FILE, true);
+                    BufferedWriter bw = new BufferedWriter(fw);
+                    PrintWriter pw = new PrintWriter(bw)
+                ) {
+                    writeHeader(pw, context, null, null, timestamp);
+                    pw.println("Message: " + message);
+                    pw.println("=== END ===");
+                    pw.println();
+                } catch (IOException e) {
+                    System.err.println(
+                        "SyncLogger: erreur d'écriture dans le fichier de log: " +
+                            e.getMessage()
+                    );
+                }
+            }
+        });
+    }
+
     public void log(
         Throwable throwable,
         String context,

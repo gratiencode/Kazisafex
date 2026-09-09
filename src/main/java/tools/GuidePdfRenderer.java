@@ -16,6 +16,7 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import tools.SyncLogger;
 
 /**
  * Rend simple Markdown vers un PDF respectant la charte graphique Kazisafe
@@ -118,6 +119,7 @@ public final class GuidePdfRenderer {
                 f.encode(String.valueOf(c));
                 return true;
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "GuidePdfRenderer.canEncode");
                 return false;
             }
         }
@@ -277,6 +279,7 @@ public final class GuidePdfRenderer {
             }
             return PDType0Font.load(doc, in, true);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "GuidePdfRenderer.loadTtf");
             return null;
         }
     }

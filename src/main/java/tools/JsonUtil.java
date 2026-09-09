@@ -68,6 +68,7 @@ import data.MatiereSku;
 import data.Presence;
 import data.Entreprise;
 import data.Employee;
+import tools.SyncLogger;
 
 /**
  *
@@ -85,6 +86,7 @@ public class JsonUtil {
                 return reader.readObject();
             }
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "JsonUtil.jsonify");
             Logger.getLogger(JsonUtil.class.getName()).log(Level.WARNING, "Erreur jsonify Jackson", e);
             return Json.createObjectBuilder().build();
         }
@@ -98,6 +100,7 @@ public class JsonUtil {
                 builder.add("uid", category.getUid() == null ? "" : category.getUid())
                         .add("descritption", category.getDescritption() == null ? "" : category.getDescritption());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Category category = (Category) obj;
                 builder.add("uid", category.getUid() == null ? "" : category.getUid())
                         .add("descritption", "");
@@ -127,6 +130,7 @@ public class JsonUtil {
                     builder.add("methodeInventaire", "FIFO");
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Produit p = (Produit) obj;
                 builder.add("uid", p.getUid() == null ? "" : p.getUid())
                         .add("nomProduit", "")
@@ -147,6 +151,7 @@ public class JsonUtil {
                         .add("produitId", Json.createObjectBuilder()
                                 .add("uid", (ins.getProduitId() == null || ins.getProduitId().getUid() == null) ? "" : ins.getProduitId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Mesure ins = (Mesure) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("description", "")
@@ -166,6 +171,7 @@ public class JsonUtil {
                     builder.add("phone", ins.getPhone());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Fournisseur ins = (Fournisseur) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("adresse", "-")
@@ -196,6 +202,7 @@ public class JsonUtil {
                     builder.add("libelle", "-");
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 // Fallback to minimal json if something goes wrong
                 Livraison ins = (Livraison) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
@@ -237,6 +244,7 @@ public class JsonUtil {
                     builder.add("dateExpir", ins.getDateExpir().toString());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Stocker ins = (Stocker) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("libelle", "")
@@ -272,6 +280,7 @@ public class JsonUtil {
                         .add("productId", Json.createObjectBuilder()
                                 .add("uid", (ins.getProductId() == null || ins.getProductId().getUid() == null) ? "" : ins.getProductId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Destocker ins = (Destocker) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("libelle", "")
@@ -306,6 +315,7 @@ public class JsonUtil {
                     builder.add("dateExpiry", ins.getDateExpiry().toString());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Recquisition ins = (Recquisition) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("reference", "")
@@ -333,6 +343,7 @@ public class JsonUtil {
                         .add("recquisitionId", Json.createObjectBuilder()
                                 .add("uid", (ins.getRecquisitionId() == null || ins.getRecquisitionId().getUid() == null) ? "" : ins.getRecquisitionId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 PrixDeVente ins = (PrixDeVente) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("qmax", 0)
@@ -359,6 +370,7 @@ public class JsonUtil {
                             .add("uid", ins.getUid() == null ? "" : ins.getUid()).build());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Client ins = (Client) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("adresse", "")
@@ -417,6 +429,7 @@ public class JsonUtil {
                     builder.add("echeance", ins.getEcheance().toString());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Vente ins = (Vente) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid().toString())
                         .add("libelle", "")
@@ -463,6 +476,7 @@ public class JsonUtil {
                     builder.add("clientId", ins.getClientId());
                 }
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 LigneVente ins = (LigneVente) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid().toString())
                         .add("numlot", "")
@@ -488,6 +502,7 @@ public class JsonUtil {
                                 .add("uid", (ins.getTresorId() == null || ins.getTresorId().getUid() == null) ? "" : ins.getTresorId().getUid()).build())
                         .add("date", ins.getDate() == null ? "" : ins.getDate().toString());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Traisorerie ins = (Traisorerie) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("libelle", "")
@@ -541,6 +556,7 @@ public class JsonUtil {
                 }
                 builder.add("caisseOpId", caisseOpBuilder.build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Operation ins = (Operation) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("libelle", "")
@@ -570,6 +586,7 @@ public class JsonUtil {
                 builder.add("idProduit", image.getIdProduit() == null ? "" : image.getIdProduit())
                         .add("imageBase64", image.getImageBase64() == null ? "" : image.getImageBase64());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 ImageProduit image = (ImageProduit) obj;
                 builder.add("idProduit", "")
                         .add("imageBase64", "");
@@ -592,6 +609,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder()
                                 .add("uid", (oper.getMesureId() == null || oper.getMesureId().getUid() == null) ? "" : oper.getMesureId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Aretirer oper = (Aretirer) obj;
                 builder.add("uid", oper.getUid() == null ? "" : oper.getUid())
                         .add("numlot", "")
@@ -616,6 +634,7 @@ public class JsonUtil {
                         .add("clientOrganisationId", Json.createObjectBuilder()
                                 .add("uid", (oper.getClientOrganisationId() == null || oper.getClientOrganisationId().getUid() == null) ? "" : oper.getClientOrganisationId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 ClientAppartenir oper = (ClientAppartenir) obj;
                 builder.add("uid", oper.getUid() == null ? "" : oper.getUid())
                         .add("region", "")
@@ -637,6 +656,7 @@ public class JsonUtil {
                         .add("rccmOrganisation", oper.getRccmOrganisation() == null ? "" : oper.getRccmOrganisation())
                         .add("websiteOrganisation", oper.getWebsiteOrganisation() == null ? "" : oper.getWebsiteOrganisation());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 ClientOrganisation oper = (ClientOrganisation) obj;
                 builder.add("uid", oper.getUid() == null ? "" : oper.getUid())
                         .add("adresse", "")
@@ -669,6 +689,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder()
                                 .add("uid", (oper.getMesureId() == null || oper.getMesureId().getUid() == null) ? "" : oper.getMesureId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 RetourDepot oper = (RetourDepot) obj;
                 builder.add("uid", oper.getUid() == null ? "" : oper.getUid())
                         .add("coutAchat", 0)
@@ -701,6 +722,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder()
                                 .add("uid", (oper.getMesureId() == null || oper.getMesureId().getUid() == null) ? "" : oper.getMesureId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 RetourMagasin oper = (RetourMagasin) obj;
                 builder.add("uid", oper.getUid() == null ? "" : oper.getUid())
                         .add("prixVente", 0)
@@ -724,6 +746,7 @@ public class JsonUtil {
                         .add("typeAbonnement", ab.getTypeAbonnement() == null ? "" : ab.getTypeAbonnement())
                         .add("dateAbonnement", ab.getDateAbonnement() == null ? "" : ab.getDateAbonnement().toString());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Abonnement ab = (Abonnement) obj;
                 builder.add("uid", ab.getUid() == null ? "" : ab.getUid())
                         .add("devise", "")
@@ -747,6 +770,7 @@ public class JsonUtil {
                         .add("startDate", bill.getStartDate() == null ? "" : bill.getStartDate().toString())
                         .add("endDate", bill.getEndDate() == null ? "" :bill.getEndDate().toString());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Facture bill = (Facture) obj;
                 builder.add("uid", bill.getUid() == null ? "" : bill.getUid())
                         .add("numero", "")
@@ -765,6 +789,7 @@ public class JsonUtil {
                         .add("nomDepense", bill.getNomDepense() == null ? "" : bill.getNomDepense())
                         .add("region", bill.getRegion() == null ? "" : bill.getRegion());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Depense bill = (Depense) obj;
                 builder.add("uid", bill.getUid() == null ? "" : bill.getUid())
                         .add("nomDepense", "")
@@ -781,6 +806,7 @@ public class JsonUtil {
                         .add("soldeMinimum", bill.getSoldeMinimum() == null ? 0 : bill.getSoldeMinimum())
                         .add("typeCompte", bill.getTypeCompte() == null ? "-" : bill.getTypeCompte());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 CompteTresor bill = (CompteTresor) obj;
                 builder.add("uid", bill.getUid() == null ? "" : bill.getUid())
                         .add("bankName", "-")
@@ -799,6 +825,7 @@ public class JsonUtil {
                         .add("perissable", ins.getPerissable() ? 1 : 0)
                         .add("region", ins.getRegion() == null ? "" : ins.getRegion());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Matiere ins = (Matiere) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("matiereName", "")
@@ -815,6 +842,7 @@ public class JsonUtil {
                         .add("typeDepot", ins.getTypeDepot() == null ? "" : ins.getTypeDepot())
                         .add("region", ins.getRegion() == null ? "" : ins.getRegion());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Depot ins = (Depot) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("nomDepot", "")
@@ -834,6 +862,7 @@ public class JsonUtil {
                         .add("dureeAmortissementMois", ins.getDureeAmortissementMois() == null ? 12 : ins.getDureeAmortissementMois())
                         .add("actif", ins.getActif() ? 1 : 0);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Immobilisation ins = (Immobilisation) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("libelle", "")
@@ -855,6 +884,7 @@ public class JsonUtil {
                         .add("valeurTotal", ins.getValeurTotal())
                         .add("valeurTotalEcart", ins.getValeurTotalEcart() == null ? 0 : ins.getValeurTotalEcart());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Inventaire ins = (Inventaire) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("etat", "")
@@ -884,6 +914,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder().add("uid", (ins.getMesureId() == null || ins.getMesureId().getUid() == null) ? "" : ins.getMesureId().getUid()).build())
                         .add("productionId", Json.createObjectBuilder().add("uid", (ins.getProductionId() == null || ins.getProductionId().getUid() == null) ? "" : ins.getProductionId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Entreposer ins = (Entreposer) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("date", "")
@@ -914,6 +945,7 @@ public class JsonUtil {
                         .add("operationId", Json.createObjectBuilder().add("uid", (ins.getOperationId() == null || ins.getOperationId().getUid() == null) ? "" : ins.getOperationId().getUid()).build())
                         .add("productionId", Json.createObjectBuilder().add("uid", (ins.getProductionId() == null || ins.getProductionId().getUid() == null) ? "" : ins.getProductionId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Imputer ins = (Imputer) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("date", "")
@@ -938,6 +970,7 @@ public class JsonUtil {
                         .add("skuId", Json.createObjectBuilder().add("uid", (ins.getSkuId() == null || ins.getSkuId().getUid() == null) ? "" : ins.getSkuId().getUid()).build())
                         .add("productionId", Json.createObjectBuilder().add("uid", (ins.getProductionId() == null || ins.getProductionId().getUid() == null) ? "" : ins.getProductionId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Repartir ins = (Repartir) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("coutAchat", 0)
@@ -963,6 +996,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder().add("uid", (ins.getMesureId() == null || ins.getMesureId().getUid() == null) ? "" : ins.getMesureId().getUid()).build())
                         .add("produitId", Json.createObjectBuilder().add("uid", (ins.getProduitId() == null || ins.getProduitId().getUid() == null) ? "" : ins.getProduitId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Production ins = (Production) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("numlot", "")
@@ -983,6 +1017,7 @@ public class JsonUtil {
                         .add("region", ins.getRegion() == null ? "" : ins.getRegion())
                         .add("matiereId", Json.createObjectBuilder().add("uid", (ins.getMatiere() == null || ins.getMatiere().getUid() == null) ? "" : ins.getMatiere().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 MatiereSku ins = (MatiereSku) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("nomSku", "")
@@ -1005,6 +1040,7 @@ public class JsonUtil {
                         .add("mesureId", Json.createObjectBuilder().add("uid", (ins.getMesureId() == null || ins.getMesureId().getUid() == null) ? "" : ins.getMesureId().getUid()).build())
                         .add("productId", Json.createObjectBuilder().add("uid", (ins.getProductId() == null || ins.getProductId().getUid() == null) ? "" : ins.getProductId().getUid()).build());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Compter ins = (Compter) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("region", "")
@@ -1031,6 +1067,7 @@ public class JsonUtil {
                         .add("region", ins.getRegion() == null ? "" : ins.getRegion())
                         .add("entreprise", ins.getEntreprise() == null ? "" : ins.getEntreprise());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Presence ins = (Presence) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("agentId", "")
@@ -1060,6 +1097,7 @@ public class JsonUtil {
                         .add("longitude", ins.getLongitude() == null ? 0 : ins.getLongitude())
                         .add("dateCreation", ins.getDateCreation() == null ? "" : ins.getDateCreation().toString());
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Entreprise ins = (Entreprise) obj;
                 builder.add("uid", ins.getUid() == null ? "" : ins.getUid())
                         .add("nomEntreprise", "")
@@ -1090,6 +1128,7 @@ public class JsonUtil {
                         .add("fingerprintHash", ins.getFingerprintHash() == null ? "" : ins.getFingerprintHash())
                         .add("revoquee", ins.isRevoquee() ? 1 : 0);
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "JsonUtil.jsonifyOld");
                 Employee ins = (Employee) obj;
                 builder.add("userId", "")
                         .add("engagementId", "")
@@ -1112,14 +1151,23 @@ public class JsonUtil {
      * propriété est absente, {@code JsonValue.NULL} ou non parsable, au lieu
      * de lever une exception (les payloads downsync peuvent contenir
      * {@code "deletedAt": null}, {@code "updatedAt": null}, etc.).
+     *
+     * <p>Le serveur garantit l'UTC sur le fil (SSE/REST) : la chaîne est
+     * donc convertie UTC → heure locale, exactement comme le fait le
+     * désérialiseur Jackson de {@link KazisafeServiceFactory#mapper()}
+     * pour le canal REST. Sans cette conversion, les valeurs reçues par SSE
+     * seraient décalées de l'offset du poste par rapport au canal REST.</p>
      */
     private static LocalDateTime safeLocalDateTime(JsonObject json, String name) {
         if (json == null || !json.containsKey(name) || json.isNull(name)) {
             return null;
         }
         try {
-            return LocalDateTime.parse(json.getString(name));
+            return KazisafeServiceFactory.fromUtc(
+                LocalDateTime.parse(json.getString(name))
+            );
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "JsonUtil.safeLocalDateTime");
             return null;
         }
     }
@@ -1135,6 +1183,7 @@ public class JsonUtil {
         try {
             return LocalDate.parse(json.getString(name));
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "JsonUtil.safeLocalDate");
             return null;
         }
     }
@@ -1196,6 +1245,7 @@ public class JsonUtil {
         try {
             return json.getJsonObject(name);
         } catch (ClassCastException e) {
+            SyncLogger.getInstance().log(e, "JsonUtil.safeObject");
             return null;
         }
     }
@@ -1236,6 +1286,7 @@ public class JsonUtil {
         try {
             return CompactMode.getAnonymousClient();
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "JsonUtil.getAnonymousClientSafely");
             return null;
         }
     }
@@ -1385,6 +1436,7 @@ public class JsonUtil {
                     }
                 }
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "JsonUtil.objectify");
                 Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
@@ -1915,6 +1967,7 @@ public class JsonUtil {
                 }
             }
         } catch (Exception ex) {
+            SyncLogger.getInstance().log(ex, "JsonUtil.toBaseModelObject");
             Logger.getLogger(JsonUtil.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;

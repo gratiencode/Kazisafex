@@ -51,7 +51,6 @@ import data.StockDepotAgregate;
 import data.Stocker;
 import data.Traisorerie;
 import data.Vente;
-import data.VenteHelper;
 import data.core.KazisafeServiceFactory;
 import data.helpers.CardHelper;
 import data.helpers.Mouvment;
@@ -105,6 +104,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import tools.CurrencyConverter;
+import tools.sync.VenteDtoSyncer;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -1452,7 +1452,7 @@ public class GratienTools {
                 PrinterOutputStream pos = new PrinterOutputStream(ps);
                 try (EscPos printer = new EscPos(pos)) {
                     // Set character code table
-                    printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP863_Canadian_French);
+                    printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP437_USA_Standard_Europe);
                     
                     // Styles (like PaymentController)
                     Style title = new Style()
@@ -4742,13 +4742,8 @@ public class GratienTools {
                 return "connexion indisponible";
             }
             Kazisafe kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
-            VenteHelper helper = new VenteHelper();
-            helper.setVente(context.sale);
-            helper.setClient(context.client);
-            helper.setTresor(context.account);
-            helper.setTransactionId(context.treasury == null ? null : context.treasury.getUid());
-            helper.setLigneVentes(context.lines);
-            Response<Vente> response = kazisafe.syncSale(helper).execute();
+            VenteDtoSyncer syncer = new VenteDtoSyncer();
+            Response<Vente> response = syncer.pushSale(kazisafe, context.sale, context.client, null, context.lines);
             return response == null ? "aucune réponse serveur" : "code " + response.code();
         } catch (Exception ex) {
             return "échec: " + ex.getMessage();
@@ -4761,11 +4756,11 @@ public class GratienTools {
                 return "connexion indisponible";
             }
             Kazisafe kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
-            Response<Traisorerie> cashResponse = kazisafe.saveCash(treasury).execute();
+            VenteDtoSyncer syncer = new VenteDtoSyncer();
+            boolean cashOk = syncer.pushTraisorerie(kazisafe, treasury);
             Response<Operation> operationResponse = kazisafe.saveOperation(operation).execute();
-            int cashCode = cashResponse == null ? 0 : cashResponse.code();
             int operationCode = operationResponse == null ? 0 : operationResponse.code();
-            return "trésorerie code " + cashCode + ", opération code " + operationCode;
+            return "trésorerie " + (cashOk ? "ok" : "échec") + ", opération code " + operationCode;
         } catch (Exception ex) {
             return "échec: " + ex.getMessage();
         }

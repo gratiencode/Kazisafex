@@ -31,13 +31,13 @@ import data.Entreprise;
 import data.LigneVente;
 import data.Mesure;
 import data.Produit;
-import data.ProduitHelper;
 import data.Recquisition;
 import data.SaleAgregate;
 import data.Traisorerie;
 import data.Vente;
-import data.VenteHelper;
 import data.core.KazisafeServiceFactory;
+import data.dto.SyncErrorResponse;
+import data.dto.UpsyncErrorParser;
 import data.helpers.Mouvment;
 import data.helpers.TypeTraisorerie;
 import data.network.Kazisafe;
@@ -71,13 +71,13 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -145,9 +145,12 @@ import tools.PriceMaker;
 import tools.SaleItemHelper;
 import tools.SubscriptionUtil;
 import tools.SyncEngine;
+import tools.SyncLogger;
 import tools.SyncRetryHandler;
 import tools.Tables;
 import tools.Util;
+import tools.sync.MissingParentHealer;
+import tools.sync.VenteDtoSyncer;
 import services.utils.UserRoleRegistry;
 import utilities.PDFUtils;
 import java.util.stream.Collectors;
@@ -268,10 +271,12 @@ public class PaymentController
     double usd = 0.0;
     double revertUsd;
     double dt;
+    private volatile boolean suppressListener = false;
     String user;
     String typecli;
     boolean print;
     Kazisafe kazisafe;
+    private final VenteDtoSyncer venteSync = new VenteDtoSyncer();
     VBox vbx;
     @FXML
     private Pane pane_invoiced;
@@ -366,11 +371,18 @@ public class PaymentController
                     System.out.println("impirmente name " + printerName);
                     return;
                 }
-                List<LigneVente> items = new ArrayList<>(itemx);
+                List<LigneVente> items = new ArrayList<>();
+                if (itemx != null) {
+                    for (LigneVente lv : itemx) {
+                        if (lv != null && lv.getDeletedAt() == null) {
+                            items.add(lv);
+                        }
+                    }
+                }
                 PrintService ps = PrinterOutputStream.getPrintServiceByName(printerName);
                 pos = new PrinterOutputStream(ps);
                 try (EscPos printer = new EscPos(pos)) {
-                    printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP863_Canadian_French);
+                    printer.setCharacterCodeTable(EscPos.CharacterCodeTable.CP437_USA_Standard_Europe);
                     Style title = new Style().setJustification(EscPosConst.Justification.Center).setFontSize(this.title_s == 1 ? Style.FontSize._1 : (this.title_s == 2 ? Style.FontSize._2 : Style.FontSize._3), this.title_s == 1 ? Style.FontSize._1 : (this.title_s == 2 ? Style.FontSize._2 : Style.FontSize._3));
                     Style identite = new Style().setJustification(EscPosConst.Justification.Center).setFontSize(this.identite_s == 1 ? Style.FontSize._1 : (this.identite_s == 2 ? Style.FontSize._2 : Style.FontSize._3), this.identite_s == 1 ? Style.FontSize._1 : (this.identite_s == 2 ? Style.FontSize._2 : Style.FontSize._3));
                     Style body = new Style().setJustification(EscPosConst.Justification.Center).setFontSize(this.body_s == 1 ? Style.FontSize._1 : (this.body_s == 2 ? Style.FontSize._2 : Style.FontSize._3), this.body_s == 1 ? Style.FontSize._1 : (this.body_s == 2 ? Style.FontSize._2 : Style.FontSize._3));
@@ -379,26 +391,37 @@ public class PaymentController
                     Style customer = new Style(printer.getStyle()).setBold(true).setUnderline(Style.Underline.OneDotThick);
                     Style right = new Style(printer.getStyle()).setJustification(EscPosConst.Justification.Right);
                     Style centerbold = new Style().setJustification(EscPosConst.Justification.Center).setBold(true);
-                    if (this.f != null) {
-                        RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
-                        imgWrapper.setJustification(EscPosConst.Justification.Center);
-                        printer.feed(1);
-                        BufferedImage bimg = ImageIO.read(this.f);
-                        BitonalThreshold bitonal = new BitonalThreshold(100);
-                        EscPosImage posimg = new EscPosImage((CoffeeImage) new CoffeeImageImpl(bimg), (Bitonal) bitonal);
+                    if (this.f != null && this.f.exists()) {
                         try {
-                            printer.write((ImageWrapperInterface) imgWrapper, posimg);
+                            BufferedImage bimg = ImageIO.read(this.f);
+                            if (bimg != null) {
+                                RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
+                                imgWrapper.setJustification(EscPosConst.Justification.Center);
+                                printer.feed(1);
+                                BitonalThreshold bitonal = new BitonalThreshold(100);
+                                EscPosImage posimg = new EscPosImage((CoffeeImage) new CoffeeImageImpl(bimg), (Bitonal) bitonal);
+                                printer.write((ImageWrapperInterface) imgWrapper, posimg);
+                            }
                         } catch (Exception e) {
+                            SyncLogger.getInstance().log(e, "PaymentController.printReceipt");
                             MainUI.notify(null, (String) "Attention", (String) "Veuillez mettre un bon logo (125X125px) au moins, pour votre facture", (long) 3L, (String) "warning");
                         }
                     }
                     printer.feed(1);
-                    printer.writeLF(title, this.entreprise.getNomEntreprise() == null ? this.entrepName : this.entreprise.getNomEntreprise());
-                    String idnat = this.entreprise.getIdNat() == null ? this.idNat : this.entreprise.getIdNat();
-                    String impot = this.entreprise.getNumeroImpot() == null ? this.nif : this.entreprise.getNumeroImpot();
-                    String phones = this.entreprise.getPhones() == null ? this.phonez : this.entreprise.getPhones();
-                    String stateId = "RCCM." + this.entreprise.getIdentification() + " " + (String) (idnat == null ? "" : "ID NAT." + idnat) + (String) (impot == null ? "" : " NIF." + impot + "\nAdresse : " + this.entreprise.getAdresse() + "\n" + (String) (phones == null || phones.equals("-") ? "" : "Tel :" + phones));
-                    printer.writeLF(centerbold, stateId);
+                    String companyName = this.entreprise.getNomEntreprise() == null || this.entreprise.getNomEntreprise().isBlank() ? this.entrepName : this.entreprise.getNomEntreprise();
+                    printer.writeLF(title, companyName);
+                    String entRccm = this.entreprise.getIdentification() == null || this.entreprise.getIdentification().isBlank() ? this.rccm : this.entreprise.getIdentification();
+                    String idnat = this.entreprise.getIdNat() == null || this.entreprise.getIdNat().isBlank() ? this.idNat : this.entreprise.getIdNat();
+                    String impot = this.entreprise.getNumeroImpot() == null || this.entreprise.getNumeroImpot().isBlank() ? this.nif : this.entreprise.getNumeroImpot();
+                    String adresse = this.entreprise.getAdresse() == null || this.entreprise.getAdresse().isBlank() ? this.adresse : this.entreprise.getAdresse();
+                    String phones = this.entreprise.getPhones() == null || this.entreprise.getPhones().isBlank() || this.entreprise.getPhones().equals("-") ? this.phonez : this.entreprise.getPhones();
+                    StringBuilder stateId = new StringBuilder();
+                    if (entRccm != null && !entRccm.isBlank()) stateId.append("RCCM.").append(entRccm);
+                    if (idnat != null && !idnat.isBlank()) stateId.append(" ID NAT.").append(idnat);
+                    if (impot != null && !impot.isBlank() && !impot.equals("Aucun")) stateId.append(" NIF.").append(impot);
+                    if (adresse != null && !adresse.isBlank() && !adresse.equals("aucune")) stateId.append("\nAdresse : ").append(adresse);
+                    if (phones != null && !phones.isBlank() && !phones.equals("-")) stateId.append("\nTel: ").append(phones);
+                    printer.writeLF(centerbold, stateId.toString());
                     if (this.entreprise.getWebsite() != null) {
                         printer.writeLF(identite, this.entreprise.getWebsite());
                     }
@@ -413,9 +436,11 @@ public class PaymentController
                     DecimalFormat moneyFormat = isUSD ? new DecimalFormat("0.00") : new DecimalFormat("#,##0.00");
                     printer.writeLF("-".repeat(this.WIDTH));
                     double grandTotal = 0.0;
+                    String mainCurrency = CurrencyConverter.normalize(currency);
                     for (LigneVente item : items) {
-                        Produit p = ProduitDelegate.findProduit((String) item.getProductId().getUid());
-                        List<String> nameLines = PaymentController.wrapText(p.getNomProduit() + " " + p.getModele() + " " + p.getTaille() + " " + p.getMarque(), this.WIDTH);
+                        Produit p = item.getProductId() != null ? ProduitDelegate.findProduit((String) item.getProductId().getUid()) : null;
+                        String productName = p != null ? (p.getNomProduit() + " " + (p.getModele() != null ? p.getModele() : "") + " " + (p.getTaille() != null ? p.getTaille() : "") + " " + (p.getMarque() != null ? p.getMarque() : "")) : "Produit inconnu";
+                        List<String> nameLines = PaymentController.wrapText(productName, this.WIDTH);
                         for (int i = 0; i < nameLines.size(); ++i) {
                             String lineName = nameLines.get(i);
                             printer.writeLF(lineName);
@@ -423,11 +448,13 @@ public class PaymentController
                             if (i != nameLines.size() - 1) {
                                 continue;
                             }
-                            double unitPrice = item.getPrixUnit();
-                            double lineTotal = item.getMontantUsd();
+                            double unitPrice = item.getPrixUnit() != null ? CurrencyConverter.priceFromStorageUsd(item.getPrixUnit()) : 0.0;
+                            double lineTotal = CurrencyConverter.convert(
+                                    CurrencyConverter.legacyUsdFromStorage(item.getMontantUsd(), item.getMontantCdf()),
+                                    CurrencyConverter.USD, mainCurrency);
                             Mesure m = item.getMesureId();
                             String priceStr = moneyFormat.format(unitPrice);
-                            String qtyStr = "x" + item.getQuantite() + " " + m.getDescription();
+                            String qtyStr = "x" + item.getQuantite() + (m != null ? " " + m.getDescription() : "");
                             String totalStr = moneyFormat.format(lineTotal);
                             int leftLen = this.WIDTH - (priceStr.length() + qtyStr.length() + totalStr.length() + 2);
                             String leftPad = " ".repeat(Math.max(0, leftLen));
@@ -435,20 +462,20 @@ public class PaymentController
                             System.out.println(line);
                             printer.writeLF(body, line);
                         }
-                        grandTotal += item.getMontantUsd();
+                        grandTotal += CurrencyConverter.convert(
+                                CurrencyConverter.legacyUsdFromStorage(item.getMontantUsd(), item.getMontantCdf()),
+                                CurrencyConverter.USD, mainCurrency);
                     }
                     double convertedTotal = grandTotal;
                     double convertedPaid = amountPaid;
                     double convertedReste = convertedTotal - convertedPaid;
                     printer.writeLF("-".repeat(this.WIDTH));
                     printer.writeLF(pied, this.printLine("TOTAL:", convertedTotal, currency, moneyFormat));
-                    if (isUSD) {
-                        printer.writeLF(pied, this.printLine("PAY\u00c9:", convertedPaid, currency, moneyFormat));
-                        if (convertedReste > 0.01) {
-                            printer.writeLF(pied, this.printLine("RESTE \u00c0 PAYER:", convertedReste, currency, moneyFormat));
-                        } else if (convertedReste < -0.01) {
-                            printer.writeLF(pied, this.printLine("TROP PAY\u00c9:", -convertedReste, currency, moneyFormat));
-                        }
+                    printer.writeLF(pied, this.printLine("PAY\u00c9:", convertedPaid, currency, moneyFormat));
+                    if (convertedReste > 0.01) {
+                        printer.writeLF(pied, this.printLine("RESTE \u00c0 PAYER:", convertedReste, currency, moneyFormat));
+                    } else if (convertedReste < -0.01) {
+                        printer.writeLF(pied, this.printLine("TROP PAY\u00c9:", -convertedReste, currency, moneyFormat));
                     }
                     printer.writeLF(pied, "Operateur: " + this.user);
                     boolean isavert = this.pref.getBoolean("averti", true);
@@ -467,7 +494,9 @@ public class PaymentController
                     printer.cut(EscPos.CutMode.FULL);
                 }
             } catch (Exception exception) {
-                // empty catch block
+                SyncLogger.getInstance().log(exception, "PaymentController.printReceipt");
+                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, "Erreur impression receipt", exception);
+                Platform.runLater(() -> MainUI.notify(null, "Erreur", "Erreur lors de l'impression : " + exception.getMessage(), 4L, "error"));
             }
         });
     }
@@ -511,8 +540,8 @@ public class PaymentController
         this.cbx_payment_mode.getSelectionModel().selectFirst();
         dpk_date_vente.setValue(LocalDate.now());
         this.maker.setTaux(this.taux2change);
-        this.captioncdf.setText(this.maker.getInverseCurrencyCode());
-        this.captionusd.setText(this.maker.getMainCurrency());
+        this.captioncdf.setText(CurrencyConverter.CDF);
+        this.captionusd.setText(CurrencyConverter.USD);
         this.refreshSerialPrinters();
     }
 
@@ -537,8 +566,18 @@ public class PaymentController
         this.cbx_comptes.setItems(this.comptes);
         this.f = FileUtils.pointFile((String) (this.entreprise.getUid() + ".png"));
         if (!this.f.exists()) {
-            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-            FileUtils.streamTofile((InputStream) is);
+            File parent = this.f.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            try (InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png")) {
+                if (is != null) {
+                    java.nio.file.Files.copy(is, this.f.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PaymentController.setEntreprise");
+                java.util.logging.Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
         Image image = null;
         try {
@@ -546,6 +585,7 @@ public class PaymentController
             this.img_vu_logo.setImage(image);
             Util.centerImage((ImageView) this.img_vu_logo);
         } catch (FileNotFoundException ex) {
+            SyncLogger.getInstance().log(ex, "PaymentController.setEntreprise");
             Logger.getLogger(ProduitsController.class.getName()).log(Level.SEVERE, null, ex);
         }
         new ComboBoxAutoCompletion(this.cbx_clients);
@@ -589,28 +629,18 @@ public class PaymentController
         if (invoiceId != null && invoiceId.getObservation().equals("Drafted")) {
             lignes = lig;
         }
-        double sommed = lignes.stream().mapToDouble(l -> l.getMontantUsd()).sum();
-        double sommef = lignes.stream().mapToDouble(l -> l.getMontantCdf()).sum();
-        final double totMain = CurrencyConverter.legacyTotalInMainCurrency(sommed, sommef);
-        // Les champs CDF et USD restent toujours visibles quelle que soit la devise principale.
-        this.cdf = CurrencyConverter.amountFromLegacyStorage(sommed, sommef, CurrencyConverter.CDF);
-        this.revertUsd = this.usd = CurrencyConverter.amountFromLegacyStorage(sommed, sommef, CurrencyConverter.USD);
+        double sommed = lignes.stream()
+                .mapToDouble(l -> CurrencyConverter.legacyUsdFromStorage(l.getMontantUsd(), l.getMontantCdf())).sum();
+        double sommef = CurrencyConverter.fromUsd(sommed, CurrencyConverter.CDF);
+        final double totMain = CurrencyConverter.fromUsd(sommed, CurrencyConverter.mainCurrency());
+        this.revertUsd = this.usd = sommed;
+        this.cdf = sommef;
         this.revertCdf = this.cdf;
-        this.txt_bill_somme_facture.setText(CurrencyConverter.CDF + " : " + Math.round(this.cdf));
-        this.txt_bill_somme_credit.setText(CurrencyConverter.CDF + " : " + Math.round(this.cdf));
         this.sumCopy = totMain;
         this.txt_eval_sum_usd.setText(String.valueOf(this.usd));
-        this.txt_eval_sum_cdf.setText(String.valueOf(Math.round(this.cdf)));
-        if (this.maker.isUsd()) {
-            this.cdf = CurrencyConverter.fromUsd(this.usd, CurrencyConverter.CDF);
-            this.revertUsd = this.usd;
-            this.revertCdf = this.cdf;
-            this.txt_bill_somme_facture.setText(CurrencyConverter.USD + " : " + totMain);
-            this.txt_bill_somme_credit.setText(CurrencyConverter.USD + " : " + totMain);
-            this.sumCopy = totMain;
-            this.txt_eval_sum_usd.setText(String.valueOf(this.usd));
-            this.txt_eval_sum_cdf.setText(String.valueOf(BigDecimal.valueOf(this.cdf).setScale(0, RoundingMode.HALF_EVEN).doubleValue()));
-        }
+        this.txt_eval_sum_cdf.setText(String.valueOf(BigDecimal.valueOf(this.cdf).setScale(0, RoundingMode.HALF_EVEN).doubleValue()));
+        this.txt_bill_somme_facture.setText(CurrencyConverter.formatCompact(totMain) + " " + CurrencyConverter.mainCurrency());
+        this.txt_bill_somme_credit.setText(CurrencyConverter.formatCompact(totMain) + " " + CurrencyConverter.mainCurrency());
         this.venteItems.clear();
         this.venteItems.addAll(lignes);
         int ref = 0;
@@ -628,10 +658,12 @@ public class PaymentController
             if (invoiceId.getPayment().toUpperCase().contains("credit partiel".toUpperCase())) {
                 this.pane_bill_cash_paid.setVisible(true);
                 this.txt_bill_cash_paid.setVisible(true);
-                this.txt_bill_somme_credit.setText(String.valueOf(invoiceId.getMontantDette()));
-                this.txt_bill_somme_facture.setText(String.valueOf(
+                String debtMain = CurrencyConverter.formatCompact(CurrencyConverter.debtInMainCurrency(invoiceId.getMontantDette(), invoiceId.getDeviseDette()));
+                this.txt_bill_somme_credit.setText(debtMain);
+                String totInMain = CurrencyConverter.formatCompact(
                         CurrencyConverter.legacyTotalInMainCurrency(
-                                invoiceId.getMontantUsd(), invoiceId.getMontantCdf())));
+                                invoiceId.getMontantUsd(), invoiceId.getMontantCdf()));
+                this.txt_bill_somme_facture.setText(totInMain);
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             } else if (invoiceId.getPayment().contains("Cash") | invoiceId.getPayment().contains(TypeTraisorerie.ELECTRONIQUE.name()) | invoiceId.getPayment().contains("Banque")) {
@@ -642,26 +674,39 @@ public class PaymentController
             } else {
                 this.pane_bill_cash_paid.setVisible(false);
                 this.txt_bill_cash_paid.setVisible(false);
-                this.txt_bill_somme_credit.setText(String.valueOf(invoiceId.getMontantDette()));
+                this.txt_bill_somme_credit.setText(CurrencyConverter.formatCompact(CurrencyConverter.debtInMainCurrency(invoiceId.getMontantDette(), invoiceId.getDeviseDette())));
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             }
             ref = invoiceId.getUid();
-            Client clt = ClientDelegate.findClient((String) invoiceId.getClientId().getUid());
-            this.txt_nom_client1.setText("Tel : " + (clt.getPhone().length() < 8 ? "..." : clt.getPhone()));
-            this.txt_nom_client.setText("Client : " + clt.getNomClient());
+            Client clt = null;
+            if (invoiceId.getClientId() != null && invoiceId.getClientId().getUid() != null) {
+                clt = ClientDelegate.findClient((String) invoiceId.getClientId().getUid());
+            }
+            if (clt == null) {
+                clt = ClientDelegate.findAnonymousClient();
+            }
+            if (clt == null) {
+                clt = new Client("inconnu", "Client inconnu");
+            }
+            String phone = clt.getPhone() == null ? "" : clt.getPhone();
+            String nomClient = clt.getNomClient() == null || clt.getNomClient().isBlank() ? "Client inconnu" : clt.getNomClient();
+            final Client resolvedClient = clt;
+            this.txt_nom_client1.setText("Tel : " + (phone.length() < 8 ? "..." : phone));
+            this.txt_nom_client.setText("Client : " + nomClient);
             // Also populate the cliname TextField and phone field so that
             // printReceipt / printBillViaBluetooth / printBillViaSerial read
             // the correct client name from the stored invoice, not stale UI state.
             Platform.runLater(() -> {
-                this.cliname.setText(clt.getNomClient());
-                this.tf_phone_client.setText(clt.getPhone());
-                this.client = clt;
+                this.cliname.setText(nomClient);
+                this.tf_phone_client.setText(phone);
+                this.client = resolvedClient;
             });
         }
         this.vente4save = new Vente(ref);
         int tbil = this.pref.getInt("tranzit_bill", -100);
         this.tf_nominal_recu_usd.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (this.suppressListener) return;
             double in_usd = Double.parseDouble(newValue.isEmpty() ? "0" : newValue);
             if (newValue.isEmpty() && this.tf_nominal_recu_cdf.getText().isEmpty()) {
                 this.dt = this.usd;
@@ -675,7 +720,7 @@ public class PaymentController
                 this.vente4save.setMontantCdf(0.0);
             } else if (!newValue.isEmpty() && this.tf_nominal_recu_cdf.getText().isEmpty()) {
                 double restUsd = new BigDecimal(this.usd - in_usd).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restCdf = this.maker.isUsd() ? this.maker.usdToCdf(restUsd) : this.maker.cdfToUsd(restUsd);
+                double d = restCdf = CurrencyConverter.fromUsd(restUsd, CurrencyConverter.CDF);
                 if (restUsd >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(restUsd));
                     this.txt_eval_sum_cdf.setText(String.valueOf(restCdf));
@@ -708,7 +753,7 @@ public class PaymentController
                 }
                 inCdf = Double.parseDouble(this.tf_nominal_recu_cdf.getText());
                 restCdf = new BigDecimal(this.cdf - inCdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restUsd = this.maker.isUsd() ? this.maker.cdfToUsd(restCdf) : this.maker.usdToCdf(restCdf);
+                double d = restUsd = CurrencyConverter.toUsd(restCdf, CurrencyConverter.CDF);
                 if (restCdf >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(restUsd));
                     this.txt_eval_sum_cdf.setText(String.valueOf(restCdf));
@@ -740,18 +785,18 @@ public class PaymentController
                     return;
                 }
                 inCdf = Double.parseDouble(this.tf_nominal_recu_cdf.getText());
-                double converted = this.maker.isUsd() ? this.maker.cdfToUsd(inCdf) : this.maker.usdToCdf(inCdf);
+                double converted = CurrencyConverter.toUsd(inCdf, CurrencyConverter.CDF);
                 double nwInUsd = in_usd + converted;
                 double restUsd = new BigDecimal(this.usd - nwInUsd).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restCdf = this.maker.isUsd() ? this.maker.usdToCdf(restUsd) : this.maker.cdfToUsd(restUsd);
+                double d = restCdf = CurrencyConverter.fromUsd(restUsd, CurrencyConverter.CDF);
                 if (restUsd >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(Math.round(restUsd)));
                     this.txt_eval_sum_cdf.setText(String.valueOf(Math.round(restCdf)));
                     this.dt = restUsd;
                     this.fd = in_usd;
                     this.ff = inCdf;
-                    this.tf_arembourser_cdf.setText("");
-                    this.tf_arembourser_usd.setText("");
+                    this.tf_arembourser_cdf.setText("0");
+                    this.tf_arembourser_usd.setText("0");
                 } else {
                     double retour = Math.abs(restUsd);
                     this.fd = nwInUsd - retour;
@@ -778,17 +823,18 @@ public class PaymentController
                     this.txt_bill_cash_paid.setVisible(false);
                 } else {
                     double sin = Double.parseDouble(this.tf_nominal_recu_usd.getText());
-                    this.txt_bill_somme_facture.setText(sin > totMain ? String.valueOf(totMain) : String.valueOf(sin));
+                    double shown = sin > totMain ? totMain : sin;
+                    this.txt_bill_somme_facture.setText(CurrencyConverter.formatCompact(shown) + " " + CurrencyConverter.mainCurrency());
                     this.pane_bill_cash_paid.setVisible(true);
                     this.txt_bill_cash_paid.setVisible(true);
                     this.cbx_payment_mode.getSelectionModel().select(4);
                 }
                 this.dpk_echeance_debt.setDisable(false);
-                this.txt_bill_somme_credit.setText(String.valueOf(debt));
+                this.txt_bill_somme_credit.setText(CurrencyConverter.formatCompact(debt) + " " + CurrencyConverter.mainCurrency());
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             } else {
-                this.txt_bill_somme_facture.setText(String.valueOf(totMain));
+                this.txt_bill_somme_facture.setText(CurrencyConverter.formatCompact(totMain) + " " + CurrencyConverter.mainCurrency());
                 this.dpk_echeance_debt.setDisable(true);
                 this.cbx_payment_mode.getSelectionModel().select(0);
                 this.pane_bill_sum_credit.setVisible(false);
@@ -796,6 +842,7 @@ public class PaymentController
             }
         });
         this.tf_nominal_recu_cdf.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (this.suppressListener) return;
             double in_cdf = Double.parseDouble(newValue.isEmpty() ? "0" : newValue);
             if (newValue.isEmpty() && this.tf_nominal_recu_usd.getText().isEmpty()) {
                 this.txt_eval_sum_cdf.setText(String.valueOf(new BigDecimal(Math.round(this.cdf)).setScale(2, RoundingMode.HALF_EVEN).doubleValue()));
@@ -810,15 +857,15 @@ public class PaymentController
             } else if (!newValue.isEmpty() && this.tf_nominal_recu_usd.getText().isEmpty()) {
                 double restUsd;
                 double restCdf = new BigDecimal(Math.round(this.cdf - in_cdf)).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restUsd = this.maker.isUsd() ? this.maker.cdfToUsd(restCdf) : this.maker.usdToCdf(restCdf);
+                double d = restUsd = CurrencyConverter.toUsd(restCdf, CurrencyConverter.CDF);
                 if (restCdf >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(restUsd));
                     this.txt_eval_sum_cdf.setText(String.valueOf(restCdf));
                     this.dt = restUsd;
                     this.fd = 0.0;
                     this.ff = in_cdf;
-                    this.tf_arembourser_cdf.setText("");
-                    this.tf_arembourser_usd.setText("");
+                    this.tf_arembourser_cdf.setText("0");
+                    this.tf_arembourser_usd.setText("0");
                 } else {
                     double retour = Math.abs(restCdf);
                     this.fd = 0.0;
@@ -827,31 +874,26 @@ public class PaymentController
                     this.txt_eval_sum_usd.setText("0.0");
                     this.txt_eval_sum_cdf.setText("0.0");
                     this.tf_arembourser_cdf.setText("" + retour);
-                    this.tf_arembourser_usd.setText("" + new BigDecimal(retour / this.taux2change).setScale(2, RoundingMode.HALF_EVEN).doubleValue());
+                    this.tf_arembourser_usd.setText("" + CurrencyConverter.round(retour / this.taux2change));
                 }
-                if (this.maker.isUsd()) {
-                    this.vente4save.setMontantCdf(this.ff);
-                    this.vente4save.setMontantUsd(0.0);
-                } else if (this.maker.isCdf()) {
-                    this.vente4save.setMontantCdf(0.0);
-                    this.vente4save.setMontantUsd(this.ff);
-                }
+                this.vente4save.setMontantCdf(this.ff);
+                this.vente4save.setMontantUsd(0.0);
             } else if (newValue.isEmpty() && !this.tf_nominal_recu_usd.getText().isEmpty()) {
                 double restCdf;
                 if (!StringUtils.isNumeric((CharSequence) this.tf_nominal_recu_usd.getText())) {
                     return;
                 }
-                double in_usd = this.maker.isCdf() ? Double.parseDouble(this.tf_nominal_recu_cdf.getText()) : Double.parseDouble(this.tf_nominal_recu_usd.getText());
+                double in_usd = Double.parseDouble(this.tf_nominal_recu_usd.getText());
                 double restUsd = new BigDecimal(this.usd - in_usd).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restCdf = this.maker.isCdf() ? restUsd : (double) Math.round(this.maker.usdToCdf(restUsd));
+                double d = restCdf = CurrencyConverter.fromUsd(restUsd, CurrencyConverter.CDF);
                 if (restUsd >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(restUsd));
                     this.txt_eval_sum_cdf.setText(String.valueOf(restCdf));
                     this.dt = restUsd;
                     this.fd = in_usd;
                     this.ff = 0.0;
-                    this.tf_arembourser_cdf.setText("");
-                    this.tf_arembourser_usd.setText("");
+                    this.tf_arembourser_cdf.setText("0");
+                    this.tf_arembourser_usd.setText("0");
                 } else {
                     double retour = Math.abs(restUsd);
                     this.fd = in_usd - retour;
@@ -860,25 +902,21 @@ public class PaymentController
                     this.txt_eval_sum_usd.setText("0.0");
                     this.txt_eval_sum_cdf.setText("0.0");
                     this.tf_arembourser_usd.setText("" + retour);
-                    this.tf_arembourser_cdf.setText("" + (this.maker.isUsd() ? this.maker.usdToCdf(retour) : this.maker.cdfToUsd(retour)));
+                    this.tf_arembourser_cdf.setText("" + CurrencyConverter.round(retour * this.taux2change));
                 }
-                if (this.maker.isUsd()) {
-                    this.vente4save.setMontantCdf(0.0);
-                    this.vente4save.setMontantUsd(this.fd);
-                } else if (this.maker.isCdf()) {
-                    this.vente4save.setMontantCdf(this.fd);
-                    this.vente4save.setMontantUsd(0.0);
-                }
+                this.vente4save.setMontantCdf(0.0);
+                this.vente4save.setMontantUsd(this.fd);
             } else {
                 double restUsd;
                 if (!StringUtils.isNumeric((CharSequence) this.tf_nominal_recu_usd.getText())) {
                     return;
                 }
                 double inUsd = Double.parseDouble(this.tf_nominal_recu_usd.getText());
-                double converted = this.maker.isUsd() ? this.maker.usdToCdf(inUsd) : this.maker.cdfToUsd(inUsd);
-                double nwInCdf = in_cdf + converted;
-                double restCdf = new BigDecimal(this.cdf - nwInCdf).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-                double d = restUsd = this.maker.isUsd() ? this.maker.cdfToUsd(restCdf) : this.maker.usdToCdf(restCdf);
+                double converted = CurrencyConverter.toUsd(in_cdf, CurrencyConverter.CDF);
+                double nwInUsd = inUsd + converted;
+                double restUsd2 = new BigDecimal(this.usd - nwInUsd).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+                double restCdf = CurrencyConverter.fromUsd(restUsd2, CurrencyConverter.CDF);
+                double d = restUsd = restUsd2;
                 if (restCdf >= 0.0) {
                     this.txt_eval_sum_usd.setText(String.valueOf(restUsd));
                     this.txt_eval_sum_cdf.setText(String.valueOf(restCdf));
@@ -891,22 +929,18 @@ public class PaymentController
                     double retour = Math.abs(restCdf);
                     this.fd = 0.0;
                     this.dt = 0.0;
-                    this.ff = nwInCdf - retour;
+                    this.ff = nwInUsd - retour;
                     this.txt_eval_sum_usd.setText("0.0");
                     this.txt_eval_sum_cdf.setText("0.0");
                     this.tf_arembourser_cdf.setText("" + retour);
-                    this.tf_arembourser_usd.setText("" + (this.maker.isUsd() ? this.maker.cdfToUsd(retour) : this.maker.usdToCdf(retour)));
+                    this.tf_arembourser_usd.setText("" + CurrencyConverter.round(retour / this.taux2change));
                 }
-                if (this.maker.isUsd()) {
-                    this.vente4save.setMontantCdf(this.ff);
-                } else if (this.maker.isCdf()) {
-                    this.vente4save.setMontantUsd(this.ff);
-                }
+                this.vente4save.setMontantUsd(this.fd);
+                this.vente4save.setMontantCdf(this.ff);
             }
-            String dev = this.pref.get("mainCur", "USD");
-            double debt = this.maker.isUsd() ? Double.parseDouble(this.txt_eval_sum_usd.getText()) : Double.parseDouble(this.txt_eval_sum_cdf.getText());
-            this.vente4save.setDeviseDette(dev);
-            this.vente4save.setMontantDette(Double.valueOf(debt));
+            double debt = Double.parseDouble(this.txt_eval_sum_usd.getText());
+            this.vente4save.setDeviseDette("USD");
+            this.vente4save.setMontantDette(Double.valueOf(this.maker.isUsd() ? debt : debt / this.taux2change));
             if (debt > 0.0) {
                 if (this.tf_nominal_recu_cdf.getText().isEmpty()) {
                     this.cbx_payment_mode.getSelectionModel().select(3);
@@ -914,18 +948,20 @@ public class PaymentController
                     this.txt_bill_cash_paid.setVisible(false);
                 } else {
                     double sin = Double.parseDouble(this.tf_nominal_recu_cdf.getText());
-                    this.txt_bill_somme_facture.setText(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue() > totMain ? String.valueOf(totMain) : String.valueOf(BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue()));
+                    double converted = BigDecimal.valueOf(sin / this.taux2change).setScale(2, 6).doubleValue();
+                    double shown = converted > totMain ? totMain : converted;
+                    this.txt_bill_somme_facture.setText(CurrencyConverter.formatCompact(shown) + " " + CurrencyConverter.mainCurrency());
                     this.cbx_payment_mode.getSelectionModel().select(4);
                     this.pane_bill_cash_paid.setVisible(true);
                     this.txt_bill_cash_paid.setVisible(true);
                 }
                 this.dpk_echeance_debt.setDisable(false);
-                this.txt_bill_somme_credit.setText(String.valueOf(debt));
+                this.txt_bill_somme_credit.setText(CurrencyConverter.formatCompact(debt) + " " + CurrencyConverter.mainCurrency());
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
             } else {
                 this.dpk_echeance_debt.setDisable(true);
-                this.txt_bill_somme_facture.setText(String.valueOf(totMain));
+                this.txt_bill_somme_facture.setText(CurrencyConverter.formatCompact(totMain) + " " + CurrencyConverter.mainCurrency());
                 this.cbx_payment_mode.getSelectionModel().select(0);
                 this.pane_bill_sum_credit.setVisible(false);
                 this.txt_lbl_credit.setVisible(false);
@@ -1261,7 +1297,7 @@ public class PaymentController
     @FXML
     public void printInvoice(Event e) {
         Vente vx = VenteDelegate.findVente((int) this.vente4save.getUid());
-        if (vx == null && this.copies == 1) {
+        if (vx == null) {
             MainUI.notify(null, (String) "Erreur", (String) "Impossible d'imprimer une vente non enregistr\u00e9e", (long) 4L, (String) "error");
             return;
         }
@@ -1320,6 +1356,7 @@ public class PaymentController
             try {
                 dialogStage = (Stage) ((Node) et.getSource()).getScene().getWindow();
             } catch (Exception ignored) {
+                SyncLogger.getInstance().log(ignored, "PaymentController.saveVente");
             }
         }
         if (!((String) this.cbx_payment_mode.getValue()).equals("CREDIT") && this.choosenComptTr == null) {
@@ -1401,6 +1438,7 @@ public class PaymentController
                         try {
                             this.saveClientByHttp(customer);
                         } catch (IOException ex) {
+                            SyncLogger.getInstance().log(ex, "PaymentController.saveVente");
                             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     });
@@ -1422,6 +1460,10 @@ public class PaymentController
                 if (this.vente4save != null) {
                     Vente vtx;
                     this.vente4save.setClientId(this.client);
+                    // Finalisation Drafted -> vente normale : hard-delete les lignes
+                    // soft-deleted (deletedAt non nul) laissees par saveCart afin de ne
+                    // garder que les lignes actives (sans deletedAt).
+                    LigneVenteDelegate.hardDeleteSoftDeletedByReference(this.vente4save.getUid());
                     Map<String, Double> lotAvailablePiecesCache = new HashMap<>();
                     if (!this.clients.contains(this.client) && this.save2favorite.isSelected()) {
                         this.clients.add(this.client);
@@ -1449,8 +1491,9 @@ public class PaymentController
                         RecquisitionDelegate.fixUndesiredRecqusitionOf(leo, leo, region);
                         RecquisitionDelegate.rectifyStock(part.getProductId(), leo, leo, region, part.getNumlot());
                     }
-                    System.out.println("Ventitem count : " + this.venteItems.size());
-                    this.vente4save.setLigneVenteList(this.venteItems);
+                    System.out.println("Ventitem count : " + this.venteItems.size()
+                            + " saleParts count : " + saleParts.size());
+                    this.vente4save.setLigneVenteList(saleParts.isEmpty() ? this.venteItems : saleParts);
                     this.pref.putInt("_bill_counter_", this.compteur);
                     this.pref.putInt("tranzit_bill", -100);
                     if (!((String) this.cbx_payment_mode.getValue()).equals("CREDIT")) {
@@ -1520,6 +1563,7 @@ public class PaymentController
                     });
                 }
             } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "PaymentController.saveVente");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, "Save error", ex);
                 Platform.runLater(() -> {
                     MainUI.notify(null, "Erreur", "Erreur lors de l'enregistrement: " + ex.getMessage(), 4L, "error");
@@ -1532,7 +1576,7 @@ public class PaymentController
                     PosController.getInstance().savedCarts.removeIf(v -> v.getUid() == this.vente4save.getUid());
                 }
                 PosController.getInstance().choosenVente = null;
-                PosController.getInstance().refreshPosUi();
+                PosController.getInstance().updateStockForSoldArticles(new ArrayList<>(this.venteItems));
                 this.venteItems.clear();
                 MainUI.notify(null, "Info", "Vente enregistree avec succes", 4L, "info");
                 close(null);
@@ -1550,7 +1594,7 @@ public class PaymentController
             try {
                 this.cdl.await();
             } catch (InterruptedException interruptedException) {
-                // empty catch block
+                SyncLogger.getInstance().log(interruptedException, "PaymentController.tryToSaveSale");
             }
 
             try {
@@ -1565,50 +1609,118 @@ public class PaymentController
                     int reponse = rep.code();
                     System.out.println("Reponse http code - de vente " + reponse);
                     switch (reponse) {
-                        case 417:
-                            System.out.println("T3 Client " + reponse + " " + client.getPhone());
-                            {
-                                List<Client> cs = ClientDelegate.findClientByPhone((String) client.getPhone());
-                                if (!cs.isEmpty()) {
-                                    System.err.println("Clients is Empty");
-                                    Client c = cs.get(0);
-                                    boolean client_saved = saveClientByHttp(c);
-                                    System.out.println("Client enregistre : " + (client_saved ? "OK" : "OOps! error"));
-                                } else {
-                                    Client sc = ClientDelegate.saveClient(client);
-                                    System.out.println("Save clt " + sc.getPhone());
-                                }
+                        case 460 -> {
+                            // Produit manquant — le serveur a renvoyé {"missingUid":"prod-xxx","missingType":"PRODUIT"}
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String note460 = err != null ? err.getMessage() : null;
+                            System.out.println("T3 Produit manquant 460 missingUid=" + (err != null ? err.getMissingUid() : null)
+                                    + " missingType=" + (err != null ? err.getMissingType() : null));
+                            if (note460 != null && !note460.isBlank()) Platform.runLater(() -> MainUI.notify(null, "Serveur 460", note460, 4L, "warning"));
+                            if (!heal(kazisafe, err)) {
+                                // produit introuvable — fallback : pousse tous les produits de la vente
+                                healProduitsOf(lignes);
                             }
-                            break;
-                        case 412:
-                            System.out.println("T3 Compte Tresor " + reponse);
-                            {
-                                List<CompteTresor> comptes = CompteTresorDelegate.findByNumeroCompte(ct.getNumeroCompte());
-                                if (!comptes.isEmpty()) {
-                                    System.err.println("After if compte tres");
-                                    CompteTresor compte = comptes.get(0);
-                                    saveCompte(compte);
-                                    Util.sync(compte, Constants.ACTION_CREATE, Tables.COMPTETRESOR);
-                                }
+                        }
+                        case 461 -> {
+                            // Mesure manquante — contient missingUid (mesure) + produitUid
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String note461 = err != null ? err.getMessage() : null;
+                            System.out.println("T3 Mesure manquante 461 missingUid=" + (err != null ? err.getMissingUid() : null)
+                                    + " produitUid=" + (err != null ? err.getProduitUid() : null));
+                            if (note461 != null && !note461.isBlank()) Platform.runLater(() -> MainUI.notify(null, "Serveur 461", note461, 4L, "warning"));
+                            if (!heal(kazisafe, err)) {
+                                // fallback : pousse tous les produits/mesures de la vente
+                                healProduitsOf(lignes);
                             }
-                            break;
-                        case 400:
-                            for (LigneVente ligne : lignes) {
-                                Produit produit = ProduitDelegate.findProduit(ligne.getProductId().getUid());
-                                List<Mesure> mesures = MesureDelegate.findMesureByProduit(produit.getUid());
-                                sendProduitIfNotExist(produit, mesures);
+                        }
+                        case 417 -> {
+                            // Client non synchronise — body contient missingUid (uid du client)
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            if (err != null && (err.getMissingUid() == null || err.getMissingUid().isBlank())
+                                    && client != null) {
+                                err.setMissingUid(client.getUid());
                             }
-                            break;
-                        case 200:
+                            String note417 = err != null ? err.getMessage() : null;
+                            System.out.println("T3 Client 417 missingUid=" + (err != null ? err.getMissingUid() : null) + " phone=" + client.getPhone());
+                            if (note417 != null && !note417.isBlank()) Platform.runLater(() -> MainUI.notify(null, "Serveur 417", note417, 4L, "warning"));
+                            boolean healed417 = heal(kazisafe, err);
+                            if (!healed417 && client != null) {
+                                healed417 = MissingParentHealer.getInstance().healClientEntity(kazisafe, client);
+                            }
+                            System.out.println("Client " + (err != null ? err.getMissingUid() : "?") + " enregistre : " + (healed417 ? "OK" : "echec"));
+                        }
+                        case 412 -> {
+                            // CompteTresor non synchronise — body contient missingUid
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            if (err != null && (err.getMissingUid() == null || err.getMissingUid().isBlank())
+                                    && ct != null) {
+                                err.setMissingUid(ct.getUid());
+                            }
+                            String note412 = err != null ? err.getMessage() : null;
+                            System.out.println("T3 Compte Tresor 412 missingUid=" + (err != null ? err.getMissingUid() : null));
+                            if (note412 != null && !note412.isBlank()) Platform.runLater(() -> MainUI.notify(null, "Serveur 412", note412, 4L, "warning"));
+                            boolean healed412 = heal(kazisafe, err);
+                            if (!healed412 && ct != null) {
+                                healed412 = MissingParentHealer.getInstance().healCompteTresorEntity(kazisafe, ct);
+                            }
+                            System.out.println("CompteTresor " + (err != null ? err.getMissingUid() : "?") + " repousse : " + (healed412 ? "OK" : "echec"));
+                        }
+                        case 400 -> {
+                            // Fallback legacy : produit non trouve sans code 460 — pousse tous les produits
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String msg400 = err != null ? err.getMessage() : null;
+                            String finalMsg400 = msg400;
+                            if (finalMsg400 != null && !finalMsg400.isBlank()) Platform.runLater(() -> MainUI.notify(null, "Serveur 400", finalMsg400, 4L, "error"));
+                            System.out.println("T3 Fallback 400 missingType=" + (err != null ? err.getMissingType() : "?") + " — pousse tous les produits");
+                            healProduitsOf(lignes);
+                        }
+                        case 422 -> {
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String msg422 = err != null ? err.getMessage() : null;
+                            if (msg422 == null) msg422 = "Liste de lignes vide — données corrompues";
+                            String finalMsg422 = msg422;
+                            Platform.runLater(() -> MainUI.notify(null, "Serveur 422", finalMsg422, 5L, "error"));
+                            System.out.println("Serveur: liste de lignes vide (422) — abandon");
+                            return;
+                        }
+                        case 403 -> {
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String msg403 = err != null ? err.getMessage() : null;
+                            if (msg403 == null || msg403.isBlank()) msg403 = "Accès refusé (403) — permission CREATE_SALE/UPDATE_SALE ou tenant manquante. Contactez l'admin.";
+                            String finalMsg403 = msg403;
+                            System.out.println("Serveur: 403 Forbidden — abandon, pas de retry");
+                            Platform.runLater(() -> MainUI.notify(null, "Serveur 403", finalMsg403, 6L, "error"));
+                            return;
+                        }
+                        case 402 -> {
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String msg402 = err != null ? err.getMessage() : null;
+                            if (msg402 == null) msg402 = "Votre abonnement est expire, veuillez le renouveler";
+                            String finalMsg402 = msg402;
+                            System.out.println("Serveur: abonnement expire (402) — abandon");
+                            Platform.runLater(() -> MainUI.notify(null, "Serveur 402", finalMsg402, 5L, "error"));
+                            return;
+                        }
+                        case 200 -> {
                             System.out.println("Vente enregistree au serveur avec succes");
                             return;
-                        default:
+                        }
+                        default -> {
+                            SyncErrorResponse err = parseErrorBody(rep);
+                            String msgDef = err != null ? err.getMessage() : null;
+                            if (msgDef == null) msgDef = "Erreur serveur code " + reponse;
+                            String finalMsgDef = msgDef;
+                            Platform.runLater(() -> MainUI.notify(null, "Serveur " + reponse, finalMsgDef, 4L, "error"));
                             System.out.println("Reponse par defaut " + reponse);
+                        }
                     }
                     throw new Exception("Vente non enregistrée, code=" + reponse);
                 }, MAX_SALE_RETRY);
             } catch (Exception e) {
-                System.out.println("Erreur vente: " + e.getMessage());
+                SyncLogger.getInstance().log(e, "PaymentController.tryToSaveSale");
+                String errMsg = rootCauseMessage(e);
+                System.out.println("Erreur vente: " + errMsg);
+                Platform.runLater(() -> MainUI.notify(null, "Synchronisation vente", errMsg, 5L, "error"));
             }
             Platform.runLater(() -> {
                 if (dialogStage != null && dialogStage.isShowing()) {
@@ -1618,9 +1730,26 @@ public class PaymentController
         });
     }
 
+    private static String rootCauseMessage(Throwable t) {
+        String msg = t == null ? null : t.getMessage();
+        Throwable c = t;
+        while (c != null && c.getCause() != null && !c.getCause().equals(c)) {
+            c = c.getCause();
+        }
+        String root = c == null ? null : c.getMessage();
+        if (root == null || root.trim().isEmpty()) {
+            root = msg;
+        }
+        if (root == null || root.trim().isEmpty()) {
+            root = "Erreur inconnue lors de la synchronisation";
+        }
+        return root.equals(msg) ? root : root + " (origine: " + msg + ")";
+    }
+
     private void createPdfBill(Entreprise entrep, Vente vt, Client ff) {
         if (ff == null) {
             MainUI.notify(null, (String) "Erreur", (String) "Tu peux aussi preciser un client si besoin", (long) 3L, (String) "error");
+            return;
         }
         try {
             PDDocument document = new PDDocument();
@@ -1671,7 +1800,7 @@ public class PaymentController
             int lpp = 26;
             String dev = this.pref.get("mainCur", "USD");
             for (LigneVente rupture : this.venteItems) {
-                if (++i > 13 && i == 14 | ++ln == lpp) {
+                if (++i > 13 && i == 14 || ++ln == lpp) {
                     contentStream.close();
                     PDPage fPage2 = new PDPage(PDRectangle.A4);
                     document.addPage(fPage2);
@@ -1687,12 +1816,17 @@ public class PaymentController
                     }
                 }
                 Produit x = rupture.getProductId();
+                String mesDesc = rupture.getMesureId() != null ? rupture.getMesureId().getDescription() : "";
+                String productName = x != null
+                    ? x.getNomProduit() + " " + (x.getMarque() == null ? "" : x.getMarque()) + " " + (x.getModele() == null ? "" : x.getModele()) + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur())
+                    : "Produit inconnu";
+                double unitPrice = rupture.getPrixUnit() != null ? rupture.getPrixUnit() : 0.0;
                 pdf.setRightAlignedColumns(new int[]{2, 3, 4});
                 pdf.addCell(i + ".", egray);
-                pdf.addCell(rupture.getQuantite() + " " + rupture.getMesureId().getDescription(), egray);
-                pdf.addCell(x.getNomProduit() + " " + x.getMarque() + " " + x.getModele() + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur()), egray);
-                pdf.addCell(rupture.getPrixUnit() * this.taux2change + " ", egray);
-                double stot = rupture.getQuantite() * rupture.getPrixUnit();
+                pdf.addCell(rupture.getQuantite() + " " + mesDesc, egray);
+                pdf.addCell(productName, egray);
+                pdf.addCell(unitPrice * this.taux2change + " ", egray);
+                double stot = rupture.getQuantite() * unitPrice;
                 somme += stot;
                 pdf.addCell(Math.round(BigDecimal.valueOf(stot).setScale(2, RoundingMode.HALF_EVEN).doubleValue() * this.taux2change) + " FC", egray);
             }
@@ -1726,10 +1860,12 @@ public class PaymentController
                 try {
                     Desktop.getDesktop().open(bcmd);
                 } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "PaymentController.createPdfBill");
                     Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }).start();
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PaymentController.createPdfBill");
             Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -1745,6 +1881,7 @@ public class PaymentController
                     st.close();
                 }
             } catch (Exception ignored) {
+                SyncLogger.getInstance().log(ignored, "PaymentController.close");
             }
         }
         if (!saleSaveSubmitted) {
@@ -1782,8 +1919,7 @@ public class PaymentController
         if (!Util.isInternetAndBaseApiReachable()) {
             return false;
         }
-        Response exec = this.kazisafe.saveByForm(clt.getUid(), clt.getNomClient(), clt.getPhone(), clt.getTypeClient(), clt.getEmail(), clt.getAdresse(), clt.getParentId().getUid()).execute();
-        return exec.code() == 200;
+        return this.venteSync.pushClient(this.kazisafe, clt);
     }
 
     private boolean saveCashByHttp(Traisorerie tr) {
@@ -1791,31 +1927,72 @@ public class PaymentController
             if (!Util.isInternetAndBaseApiReachable()) {
                 return false;
             }
-            Response excuted = this.kazisafe.saveCash(tr).execute();
-            return excuted.isSuccessful();
+            return this.venteSync.pushTraisorerie(this.kazisafe, tr);
         } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PaymentController.saveCashByHttp");
             return false;
         }
     }
 
     private Response<Vente> saveVenteByHttp(Vente vente, Client client, CompteTresor tresor, String transaction, List<LigneVente> venteItems) throws IOException {
-        try {
-            if (!Util.isInternetAndBaseApiReachable()) {
-                return null;
-            }
-            VenteHelper hlp = new VenteHelper();
-            hlp.setTransactionId(transaction);
-            hlp.setTresor(tresor);
-            hlp.setClient(client);
-            hlp.setLigneVentes(venteItems);
-            hlp.setVente(vente);
-            Response exe = this.kazisafe.syncSale(hlp).execute();
-            System.out.println("Vente response Http : " + String.valueOf(exe));
-            return exe;
-        } catch (JsonProcessingException ex) {
-            Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+        if (this.kazisafe == null || vente == null) {
             return null;
         }
+        String txid = transaction != null && !transaction.isBlank()
+                ? transaction : UUID.randomUUID().toString();
+        Vente slim = slimVente(vente, tresor);
+        slim.setClientId(client);
+        List<LigneVente> slimLignes = new ArrayList<>();
+        for (LigneVente lv : venteItems) {
+            if (lv.getProductId() == null || lv.getProductId().getUid() == null
+                    || lv.getMesureId() == null || lv.getMesureId().getUid() == null) {
+                System.out.println("Ligne ignoree (produit/mesure manquant) : " + lv.getUid());
+                continue;
+            }
+            slimLignes.add(slimLigne(lv, client));
+        }
+        return this.venteSync.pushSale(this.kazisafe, slim, txid, slimLignes);
+    }
+
+    private Vente slimVente(Vente source, CompteTresor tresor) {
+        Vente copy = new Vente(source.getUid());
+        copy.setReference(source.getReference());
+        copy.setLibelle(source.getLibelle());
+        copy.setObservation(source.getObservation());
+        copy.setDateVente(source.getDateVente());
+        copy.setMontantUsd(source.getMontantUsd());
+        copy.setMontantCdf(source.getMontantCdf());
+        copy.setMontantDette(source.getMontantDette());
+        copy.setDeviseDette(source.getDeviseDette());
+        copy.setEcheance(source.getEcheance());
+        copy.setLatitude(source.getLatitude());
+        copy.setLongitude(source.getLongitude());
+        copy.setRegion(source.getRegion());
+        if (tresor == null && !Constants.PAYEMENT_CREDIT.equals(source.getPayment())) {
+            copy.setPayment(Constants.PAYEMENT_CREDIT);
+        } else {
+            copy.setPayment(source.getPayment());
+        }
+        return copy;
+    }
+
+    private LigneVente slimLigne(LigneVente source, Client client) {
+        LigneVente copy = new LigneVente(source.getUid());
+        String cli = source.getClientId();
+        if (cli == null || cli.isBlank()) {
+            cli = client != null && client.getPhone() != null ? client.getPhone() : "-";
+        }
+        copy.setClientId(cli);
+        copy.setQuantite(source.getQuantite());
+        copy.setMontantUsd(source.getMontantUsd());
+        copy.setMontantCdf(source.getMontantCdf());
+        copy.setPrixUnit(source.getPrixUnit());
+        copy.setCoutAchat(source.getCoutAchat());
+        copy.setNumlot(source.getNumlot());
+        copy.setProductId(new Produit(source.getProductId().getUid()));
+        copy.setMesureId(new Mesure(source.getMesureId().getUid()));
+        copy.setReference(new Vente(this.vente4save.getUid()));
+        return copy;
     }
 
     private List<SaleItemHelper> toSaleItemHelper(List<LigneVente> lvs) {
@@ -1837,87 +2014,46 @@ public class PaymentController
         return result;
     }
 
-    private boolean saveCompte(CompteTresor tr) throws IOException {
-        Response exec = this.kazisafe.saveCompteTresorByForm(tr.getUid(), tr.getBankName(), tr.getIntitule(), tr.getSoldeMinimum().doubleValue(), tr.getNumeroCompte(), tr.getRegion(), tr.getTypeCompte()).execute();
-        System.err.println("Reponse exec " + exec.code());
-        return exec.code() == 200;
-    }
-
-    private void sendProduitIfNotExist(Produit produit, List<Mesure> mesures) {
-        byte[] imageBytes = produit.getImage();
-        if (imageBytes == null) {
-            imageBytes = this.loadDefaultImage();
-        }
-        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-        this.saveProduitByHttp(produit, base64Image, mesures);
-    }
-
-    private byte[] loadDefaultImage() {
-        byte[] byArray;
-        block8:
-        {
-            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-            try {
-                byArray = FileUtils.readAllBytes((InputStream) is);
-                if (is == null) {
-                    break block8;
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (is != null) {
-                        try {
-                            is.close();
-                        } catch (Throwable throwable2) {
-                            throwable.addSuppressed(throwable2);
-                        }
-                    }
-                    throw throwable;
-                } catch (IOException e) {
-                    System.err.println("Erreur lors du chargement de l'image par d\u00e9faut" + e.getMessage());
-                    return new byte[0];
-                }
-            } finally {
-                try {
-                    is.close();
-                } catch (IOException ex) {
-                    Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        }
-        return byArray;
-    }
-
-    private void saveProduitByHttp(Produit produit, String base64Image, List<Mesure> mesures) {
-        if (!Util.isInternetAndBaseApiReachable()) {
-            return;
-        }
-        ProduitHelper produitHelper = this.createProduitHelper(produit, base64Image, mesures);
+    /**
+     * Parse le body d'erreur HTTP en SyncErrorResponse structure (une seule
+     * lecture du errorBody). Renvoie null si corps illisible (retry simple).
+     */
+    private SyncErrorResponse parseErrorBody(Response<?> rep) {
         try {
-            Response response = this.kazisafe.saveLite(produitHelper).execute();
-            if (response.isSuccessful()) {
-                System.out.println("Save synchrone Produit " + response.code());
-            } else {
-                System.err.println("Echec d'enregistrement du produit code : " + response.code());
-            }
+            String body = rep.errorBody() != null ? rep.errorBody().string() : "";
+            SyncLogger.getInstance().logMessage("PaymentController.parseErrorBody",
+                    "http " + rep.code() + " body=" + body);
+            return UpsyncErrorParser.parse(body);
         } catch (IOException e) {
-            System.err.println("Erreur lors de l'enregistrement du produit" + e.getMessage());
+            SyncLogger.getInstance().log(e, "PaymentController.parseErrorBody");
+            return null;
         }
     }
 
-    private ProduitHelper createProduitHelper(Produit produit, String base64Image, List<Mesure> mesures) {
-        ProduitHelper produitHelper = new ProduitHelper();
-        produitHelper.setUid(produit.getUid());
-        produitHelper.setCategoryId(produit.getCategoryId().getUid());
-        produitHelper.setCodebar(produit.getCodebar());
-        produitHelper.setCouleur(produit.getCouleur());
-        produitHelper.setMarque(produit.getMarque());
-        produitHelper.setModele(produit.getModele());
-        produitHelper.setNomProduit(produit.getNomProduit());
-        produitHelper.setImage("data:image/jpeg;base64," + base64Image);
-        produitHelper.setTaille(produit.getTaille());
-        produitHelper.setMethodeInventaire(produit.getMethodeInventaire());
-        produitHelper.setMesureList(mesures);
-        return produitHelper;
+    private boolean heal(Kazisafe kazisafe, SyncErrorResponse err) {
+        try {
+            return err != null && MissingParentHealer.getInstance().heal(kazisafe, err);
+        } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "PaymentController.heal");
+            return false;
+        }
+    }
+
+    private void healProduitsOf(List<LigneVente> lignes) {
+        MissingParentHealer healer = MissingParentHealer.getInstance();
+        for (LigneVente ligne : lignes) {
+            if (ligne.getProductId() == null || ligne.getProductId().getUid() == null) {
+                continue;
+            }
+            SyncErrorResponse err = new SyncErrorResponse();
+            err.setMissingType("PRODUIT");
+            err.setMissingUid(ligne.getProductId().getUid());
+            try {
+                healer.heal(this.kazisafe, err);
+            } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "PaymentController.healProduitsOf");
+            }
+        }
     }
 
     @FXML
@@ -1950,6 +2086,7 @@ public class PaymentController
                             this.lbl_bt_count.setText(currentCount + " trouv\u00e9(s)");
                         });
                     } catch (IOException | InterruptedException e) {
+                        SyncLogger.getInstance().log(e, "PaymentController.onBluetoothSearch");
                         System.err.println("Error discovering device: " + e.getMessage());
                     }
                 }
@@ -1960,6 +2097,7 @@ public class PaymentController
                     this.chbx_bt_search.setSelected(false);
                 });
             } catch (Exception e) {
+                SyncLogger.getInstance().log(e, "PaymentController.onBluetoothSearch");
                 Platform.runLater(() -> {
                     this.pgi_bt_search.setVisible(false);
                     this.lbl_bt_count.setText("Erreur: " + e.getMessage());
@@ -1981,6 +2119,7 @@ public class PaymentController
             ObservableSet<Printer> osp = Printer.getAllPrinters();
             this.cbx_printers.setItems(this.setToList(osp));
         } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "PaymentController.refreshSerialPrinters");
             System.err.println("Error discovering serial ports: " + e.getMessage());
         }
     }

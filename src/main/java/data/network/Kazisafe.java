@@ -15,6 +15,20 @@ import data.helpers.Token;
 import data.helpers.TokenRefreshed;
 import data.helpers.VuStock;
 import data.helpers.VueAbonnement;
+import data.dto.CategoryUpsertDto;
+import data.dto.ClientUpsertDto;
+import data.dto.CompteTresorUpsertDto;
+import data.dto.DestockerUpsertDto;
+import data.dto.FournisseurUpsertDto;
+import data.dto.LigneVenteUpsertDto;
+import data.dto.LivraisonUpsertDto;
+import data.dto.MesureUpsertDto;
+import data.dto.PrixDeVenteUpsertDto;
+import data.dto.ProduitUpsertDto;
+import data.dto.RecquisitionUpsertDto;
+import data.dto.StockerUpsertDto;
+import data.dto.TraisorerieUpsertDto;
+import data.dto.VenteUpsertDto;
 import data.network.dto.BatchMutationDto;
 import data.network.dto.BatchResultDto;
 import data.network.dto.SyncOutboxDto;
@@ -1047,6 +1061,55 @@ public interface Kazisafe {
     @GET("ventes/{uid}/show")
     Call<Vente> showVente(@Path("uid") String var1);
 
+    // dto upsync endpoints (DTOs asymetriques, auto-healing MISSING_PARENT)
+    @POST("ventes/x-sync/dto")
+    Call<Vente> syncSaleDto(@Body VenteUpsertDto dto);
+
+    @PATCH("clients/x-sync/dto")
+    Call<Client> syncClientDto(@Body ClientUpsertDto dto);
+
+    @PATCH("produits/x-sync/dto")
+    Call<Produit> syncProduitDto(@Body ProduitUpsertDto dto);
+
+    @GET("produits/x-sync/full/{uid}")
+    Call<Produit> syncProduitFull(@Path("uid") String uid);
+
+    @PATCH("mesures/x-sync/dto")
+    Call<Mesure> syncMesureDto(@Body MesureUpsertDto dto);
+
+    @GET("mesures/x-sync/full/{uid}")
+    Call<Mesure> syncMesureFull(@Path("uid") String uid);
+
+    @PATCH("categories/x-sync/dto")
+    Call<Category> syncCategoryDto(@Body CategoryUpsertDto dto);
+
+    @PATCH("supplier/x-sync/dto")
+    Call<Fournisseur> syncFournisseurDto(@Body FournisseurUpsertDto dto);
+
+    @PATCH("tresor/x-sync/dto")
+    Call<CompteTresor> syncCompteTresorDto(@Body CompteTresorUpsertDto dto);
+
+    @PATCH("traisorerie/x-sync/dto")
+    Call<Traisorerie> syncTraisorerieDto(@Body TraisorerieUpsertDto dto);
+
+    @PATCH("livraison/x-sync/dto")
+    Call<Livraison> syncLivraisonDto(@Body LivraisonUpsertDto dto);
+
+    @PATCH("stocks/x-sync/dto")
+    Call<Stocker> syncStockerDto(@Body StockerUpsertDto dto);
+
+    @PATCH("destockage/x-sync/dto")
+    Call<Destocker> syncDestockerDto(@Body DestockerUpsertDto dto);
+
+    @PATCH("req/x-sync/dto")
+    Call<Recquisition> syncRecquisitionDto(@Body RecquisitionUpsertDto dto);
+
+    @PATCH("prices/x-sync/dto")
+    Call<PrixDeVente> syncPrixDeVenteDto(@Body PrixDeVenteUpsertDto dto);
+
+    @PATCH("lignevente/x-sync/dto")
+    Call<LigneVente> syncLigneVenteDto(@Body LigneVenteUpsertDto dto);
+
     @PATCH("taxer/sync")
     Call<String> syncTaxer(@Body List<Taxer> var1);
 
@@ -1452,5 +1515,12 @@ public interface Kazisafe {
         @Query("originalSince") String originalSince,
         @Query("lastPriority") Integer lastPriority,
         @Query("limit") Integer limit
+    );
+
+    @FormUrlEncoded
+    @PATCH("v1/req/declassify")
+    Call<ResponseBody> declassifyStock(
+        @Field("productId") String productId,
+        @Field("numlot") String numlot
     );
 }

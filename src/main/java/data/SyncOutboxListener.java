@@ -72,6 +72,14 @@ public class SyncOutboxListener {
             return;
         }
 
+        // L'abonnement n'est JAMAIS eligible au sync outbox : il voyage via les
+        // flux de souscription dedies et non via la file de mutation locale.
+        // Exclure evite de pousser un payload sparse (sans `agent`) qui fait
+        // echouer la validation serveur @NotNull chez le receveur.
+        if (entity instanceof Abonnement) {
+            return;
+        }
+
         // Validate table
         try {
             Tables.valueOf(type.toUpperCase());
@@ -184,6 +192,11 @@ public class SyncOutboxListener {
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                boolean created = false;
+                // Tous les champs (dont l'action, non-nullable) sont positionnes
+                // AVANT le persist : persister avec action null leve une
+                // PropertyValueException et l'enregistrement (et donc l'envoi de la
+                // ligne/vente) n'aboutit jamais.
                 if (outbox == null) {
                     outbox = new SyncOutbox();
                     outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
@@ -193,12 +206,15 @@ public class SyncOutboxListener {
                     outbox.setEntrepriseId(eUid);
                     outbox.setStatus("PENDING");
                     outbox.setRetryCount(0);
-                    em.persist(outbox);
+                    created = true;
                 }
+                outbox.setRegion(region);
                 outbox.setAction(action);
                 outbox.setPayload(finalPayload);
                 outbox.setUpdatedAt(updatedAt);
-                outbox.setRegion(region);
+                if (created) {
+                    em.persist(outbox);
+                }
                 return null;
             }).get(); // Block the outbox executor thread to preserve sequence
             return;
@@ -212,6 +228,9 @@ public class SyncOutboxListener {
             }
             try {
                 SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                boolean created = false;
+                // Champs configures AVANT le persist : l'action est non-nullable,
+                // persister avant de la positionner leve une PropertyValueException.
                 if (outbox == null) {
                     outbox = new SyncOutbox();
                     outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
@@ -221,12 +240,15 @@ public class SyncOutboxListener {
                     outbox.setEntrepriseId(eUid);
                     outbox.setStatus("PENDING");
                     outbox.setRetryCount(0);
-                    em.persist(outbox);
+                    created = true;
                 }
                 outbox.setAction(action);
                 outbox.setPayload(finalPayload);
                 outbox.setUpdatedAt(updatedAt);
                 outbox.setRegion(region);
+                if (created) {
+                    em.persist(outbox);
+                }
                 if (!activeTx) {
                     tx.commit();
                 }

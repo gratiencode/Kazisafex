@@ -346,6 +346,34 @@ public class RecquisitionDelegate {
         return getStorage().sumLatestLotFinalQuantityFromStockAggregate(productId, lot, region);
     }
 
+    public static List<Object[]> loadPosStockView(String region, String meth, boolean global) {
+        return getStorage().loadPosStockView(region, meth, global);
+    }
+
+    public static List<Object[]> loadHeaderRecqs(String region) {
+        return getStorage().loadHeaderRecqs(region);
+    }
+
+    public static List<Object[]> loadAllRecqs() {
+        return getStorage().loadAllRecqs();
+    }
+
+    public static List<Object[]> loadRecqLotEntrees(String region) {
+        return getStorage().loadRecqLotEntrees(region);
+    }
+
+    public static List<Object[]> loadLigneVenteLotSorties(String region) {
+        return getStorage().loadLigneVenteLotSorties(region);
+    }
+
+    public static List<Object[]> loadRetourDepotLotReturns(String region) {
+        return getStorage().loadRetourDepotLotReturns(region);
+    }
+
+    public static List<Object[]> loadPriceRows() {
+        return getStorage().loadPriceRows();
+    }
+
     public static List<Recquisition> findDistinctLotsForProduitRegion(String productId, String region) {
         return getStorage().findDistinctLotsForProduitRegion(productId, region);
     }

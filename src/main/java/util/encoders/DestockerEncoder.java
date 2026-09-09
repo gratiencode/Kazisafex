@@ -46,7 +46,7 @@ public class DestockerEncoder implements Encoder.Text<Destocker> {
                 .add("from", ins.getFrom())
                 .add("payload", ins.getPayload())
                 .add("destination", ins.getDestination())
-                .add("dateDestockage", Constants.DATE_HEURE_FORMATTER.format(ins.getDateDestockage()))
+                .add("dateDestockage", Constants.Datetime.utcString(ins.getDateDestockage()))
                 .add("mesureId", Json.createObjectBuilder()
                         .add("uid", ins.getMesureId().getUid()).build())
                 .add("productId", Json.createObjectBuilder()
