@@ -511,7 +511,7 @@ public class SyncOutboxService {
 
         for (Tables table : Tables.values()) {
             if (!phased.contains(table)) {
-                if(table.equals(Tables.PERMISSION)|table.equals(Tables.FINGERPRINTMAPPING))continue;
+                if(table.equals(Tables.PERMISSION)|table.equals(Tables.FINGERPRINTMAPPING)|table.equals(Tables.ABONNEMENT))continue;
                 backfillSingleTable(table, eUid, region);
             }
         }
