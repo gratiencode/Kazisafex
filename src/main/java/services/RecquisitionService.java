@@ -2074,7 +2074,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
+                        AND s2.num_lot = s.num_lot
                   )
                 """);
         if (region != null && !region.isBlank()) {
@@ -4885,7 +4885,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       WHERE s2.product_id = s.product_id
                         AND s2.region = s.region
                         AND s2.num_lot = s.num_lot
-                        AND s2.date BETWEEN ? AND ? AND s2.destroyed = s.destroyed
+                        AND s2.date BETWEEN ? AND ?
                   )
                 ORDER BY s.date DESC
                 """;
@@ -4923,14 +4923,14 @@ public class RecquisitionService implements RecquisitionStorage {
                 WHERE s.product_id = ?
                   AND s.region LIKE ?
                   AND s.num_lot = ?
-                  AND s.date BETWEEN ? AND ? AND s.destroyed = ?
+AND s.date BETWEEN ? AND ? AND s.destroyed = ?
                   AND s.date = (
                       SELECT MAX(s2.date)
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
-                        AND s2.region = s.region
+AND s2.region = s.region
                         AND s2.num_lot = s.num_lot
-                        AND s2.date BETWEEN ? AND ? AND s2.destroyed=s.destroyed
+                        AND s2.date BETWEEN ? AND ?
                   )
                 ORDER BY s.date DESC
                 """;
@@ -5015,7 +5015,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
+                        AND s2.num_lot = s.num_lot
                   )
                 ORDER BY s.date DESC
                 """;
@@ -5046,7 +5046,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND s2.region = s.region
-                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
+                        AND s2.num_lot = s.num_lot
                   )
                 ORDER BY s.date DESC
                 """;
@@ -5084,7 +5084,7 @@ public class RecquisitionService implements RecquisitionStorage {
                       FROM stock_agregate s2
                       WHERE s2.product_id = s.product_id
                         AND COALESCE(s2.region, '') = COALESCE(s.region, '')
-                        AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
+                        AND s2.num_lot = s.num_lot
                   )
                 ORDER BY s.date_expiration ASC, s.product_id ASC, s.num_lot ASC
                 """);
@@ -5239,7 +5239,7 @@ public class RecquisitionService implements RecquisitionStorage {
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot AND s2.destroyed=s.destroyed
+                            AND s2.num_lot = s.num_lot
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
@@ -5273,7 +5273,7 @@ public class RecquisitionService implements RecquisitionStorage {
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot AND s2.destroyed = s.destroyed
+                            AND s2.num_lot = s.num_lot
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
@@ -5311,7 +5311,7 @@ public class RecquisitionService implements RecquisitionStorage {
                           FROM stock_agregate s2
                           WHERE s2.product_id = s.product_id
                             AND s2.region = s.region
-                            AND s2.num_lot = s.num_lot AND s2.destroyed=s.destroyed
+                            AND s2.num_lot = s.num_lot
                       )
                     """;
             if (ManagedSessionFactory.isEmbedded()) {
@@ -5495,7 +5495,7 @@ public class RecquisitionService implements RecquisitionStorage {
                     WHERE sa.num_lot IS NOT NULL AND sa.destroyed = 0
                       AND sa.date = (SELECT MAX(s3.date) FROM stock_agregate s3
                                      WHERE s3.product_id = sa.product_id AND s3.region = sa.region
-                                       AND s3.num_lot = sa.num_lot AND s3.destroyed = sa.destroyed)
+                                       AND s3.num_lot = sa.num_lot)
                       {piece_region}
                     GROUP BY sa.product_id
                 ) stk ON stk.product_id = pr.uid
@@ -5508,7 +5508,7 @@ public class RecquisitionService implements RecquisitionStorage {
                           AND COALESCE(sa.final_quantity, 0) > 0
                           AND sa.date = (SELECT MAX(s3.date) FROM stock_agregate s3
                                          WHERE s3.product_id = sa.product_id AND s3.region = sa.region
-                                           AND s3.num_lot = sa.num_lot AND s3.destroyed = sa.destroyed)
+                                           AND s3.num_lot = sa.num_lot)
                           {head_region}
                     ) head WHERE head.rn = 1
                 ) hl ON hl.product_id = pr.uid
