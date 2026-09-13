@@ -181,9 +181,10 @@ public final class SaleSyncHelper {
             return source;
         }
         // Brouillon sans caisse (Drafted) : pas d'opération de trésorerie créée.
-        // Il est donc poussé comme une vente à crédit : tout le montant est porté
-        // en dette (montantUsd/Cdf restent pour l'affichage local uniquement) et
-        // le mode de paiement est forcé à crédit.
+        // Il est donc poussé comme une vente à crédit. L'entête porte le total dans
+        // UNE SEULE devise (convention legacy) : les lecteurs d'autres terminaux
+        // recombinent le total via usd + cdf/taux (ou cdf + usd*taux), renseigner les
+        // deux montants ferait donc DOUBLER le montant affiché/imprimé.
         Vente copy = new Vente(source.getUid());
         copy.setReference(source.getReference());
         copy.setLibelle(source.getLibelle());
@@ -194,8 +195,11 @@ public final class SaleSyncHelper {
         copy.setRegion(source.getRegion());
         copy.setClientId(source.getClientId());
         double totalUsd = CurrencyConverter.legacyUsdFromStorage(source.getMontantUsd(), source.getMontantCdf());
-        copy.setMontantUsd(0d);
-        copy.setMontantCdf(0d);
+        double cdf = source.getMontantCdf();
+        double usd = source.getMontantUsd();
+        boolean cdfOperative = cdf > 0 && usd <= 0;
+        copy.setMontantCdf(cdfOperative ? CurrencyConverter.round(cdf) : 0d);
+        copy.setMontantUsd(cdfOperative ? 0d : CurrencyConverter.round(totalUsd));
         copy.setMontantDette(totalUsd > 0 ? totalUsd : source.getMontantDette());
         copy.setDeviseDette(CurrencyConverter.USD);
         copy.setEcheance(source.getEcheance());
