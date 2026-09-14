@@ -5198,7 +5198,7 @@ public class Util {
         FileOutputStream fos;
         try {
             String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-inv_mag_" + LocalDateTime.now() + ".xlsx");
+            File file = new File(path + "/ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
             fos = new FileOutputStream(file);
             XSSFWorkbook workbook = new XSSFWorkbook();
             Font headerFont = workbook.createFont();
@@ -6318,7 +6318,7 @@ public class Util {
             if (!dir.exists()) {
                 dir.mkdirs();
             }
-            File file = new File(path + "/Releve_Fournisseur_" + f.getNomFourn().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+            File file = new File(path + "/Releve_Fournisseur_" + Constants.sanitizeFileName(f.getNomFourn(), "fournisseur") + "_" + System.currentTimeMillis() + ".xlsx");
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 workbook.write(fos);
             }
@@ -6415,6 +6415,190 @@ public class Util {
         }
     }
 
+    public static File exportXlsRuptureStock(List<Rupture> ruptures) {
+        try {
+            String path = MainUI.cPath("/Media/inventories");
+            File file = new File(path + "/ksf-rupture_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+                Sheet sheet = workbook.createSheet("Stock en rupture");
+                String[] titleColumns = {"CODEBAR", "PRODUIT", "MARQUE", "MODELE", "MESURE", "QUANTITE RESTANTE", "STOCK-ALERTE", "PRIX UNITAIRE", "LOCALISATION", "REGION", "DATE"};
+                XSSFCellStyle headerStyle = workbook.createCellStyle();
+                headerStyle.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 231, (byte) 76, (byte) 60}, null));
+                headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerStyle.setFont(headerFont);
+                Row header = sheet.createRow(0);
+                for (int i = 0; i < titleColumns.length; i++) {
+                    Cell cell = header.createCell(i);
+                    cell.setCellValue(titleColumns[i]);
+                    cell.setCellStyle(headerStyle);
+                }
+                int rowNum = 1;
+                for (Rupture r : ruptures) {
+                    Produit p = r.getProduit();
+                    if (p == null) {
+                        continue;
+                    }
+                    Row row = sheet.createRow(rowNum++);
+                    row.createCell(0).setCellValue(notNull(p.getCodebar()));
+                    row.createCell(1).setCellValue(notNull(p.getNomProduit()));
+                    row.createCell(2).setCellValue(notNull(p.getMarque()));
+                    row.createCell(3).setCellValue(notNull(p.getModele()));
+                    row.createCell(4).setCellValue(r.getMesure() == null ? "" : notNull(r.getMesure().getDescription()));
+                    row.createCell(5).setCellValue(r.getQuant());
+                    row.createCell(6).setCellValue(r.getAlert());
+                    row.createCell(7).setCellValue(r.getUnitprice());
+                    row.createCell(8).setCellValue(notNull(r.getLocalisation()));
+                    row.createCell(9).setCellValue(notNull(r.getRegion()));
+                    row.createCell(10).setCellValue(notNull(r.getDate()));
+                }
+                for (int i = 0; i < titleColumns.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+            }
+            return file;
+        } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsRuptureStock");
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static File exportXlsPeremptionStock(List<Peremption> items, int months) {
+        try {
+            String path = MainUI.cPath("/Media/inventories");
+            File file = new File(path + "/ksf-inv_expiree_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+                Sheet sheet = workbook.createSheet(months > 0 ? "Produits sur le point d'expirer" : "Produits expires");
+                String[] titleColumns = {"CODEBAR", "PRODUIT", "LOT", "MESURE", "QUANTITE", "COUT ACHAT", "VALEUR", "DATE EXPIRATION", "LOCALISATION", "REGION"};
+                XSSFCellStyle headerStyle = workbook.createCellStyle();
+                headerStyle.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 219, (byte) 68, (byte) 55}, null));
+                headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerStyle.setFont(headerFont);
+                Row header = sheet.createRow(0);
+                for (int i = 0; i < titleColumns.length; i++) {
+                    Cell cell = header.createCell(i);
+                    cell.setCellValue(titleColumns[i]);
+                    cell.setCellStyle(headerStyle);
+                }
+                int rowNum = 1;
+                double totalValue = 0.0;
+                for (Peremption p : items) {
+                    Row row = sheet.createRow(rowNum++);
+                    row.createCell(0).setCellValue(notNull(p.getCodebar()));
+                    row.createCell(1).setCellValue(notNull(p.getProduit()));
+                    row.createCell(2).setCellValue(notNull(p.getLot()));
+                    row.createCell(3).setCellValue(notNull(p.getMesure()));
+                    row.createCell(4).setCellValue(p.getQuantite());
+                    row.createCell(5).setCellValue(p.getCoutAchat());
+                    row.createCell(6).setCellValue(p.getValeur());
+                    row.createCell(7).setCellValue(p.getDateExpiry() == null ? "" : p.getDateExpiry().toString());
+                    row.createCell(8).setCellValue(notNull(p.getLocalisation()));
+                    row.createCell(9).setCellValue(notNull(p.getRegion()));
+                    totalValue += p.getValeur();
+                }
+                Row total = sheet.createRow(rowNum);
+                total.createCell(1).setCellValue("TOTAL VALEUR");
+                Cell totalCell = total.createCell(6);
+                totalCell.setCellValue(totalValue);
+                CellStyle totalStyle = workbook.createCellStyle();
+                totalStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+                totalStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                Font bold = workbook.createFont();
+                bold.setBold(true);
+                totalStyle.setFont(bold);
+                for (int i = 0; i < titleColumns.length; i++) {
+                    Cell c = total.getCell(i, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                    c.setCellStyle(totalStyle);
+                }
+                for (int i = 0; i < titleColumns.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+            }
+            return file;
+        } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsPeremptionStock");
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private static String notNull(String value) {
+        return value == null ? "" : value;
+    }
+
+    public static int dataCompletenessScore(Object entity) {
+        if (entity == null) {
+            return 0;
+        }
+        int score = 0;
+        for (java.lang.reflect.Method m : entity.getClass().getMethods()) {
+            if (m.getParameterCount() != 0 || m.getReturnType() == void.class) {
+                continue;
+            }
+            String name = m.getName();
+            if (!name.startsWith("get") || name.equals("getClass")) {
+                continue;
+            }
+            Class<?> ret = m.getReturnType();
+            if (ret.isPrimitive() || Collection.class.isAssignableFrom(ret) || Map.class.isAssignableFrom(ret)) {
+                continue;
+            }
+            try {
+                Object val = m.invoke(entity);
+                if (val == null) {
+                    continue;
+                }
+                if (val instanceof String) {
+                    if (!((String) val).trim().isEmpty()) {
+                        score++;
+                    }
+                } else {
+                    score++;
+                }
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "Util.dataCompletenessScore");
+            }
+        }
+        return score;
+    }
+
+    public static void copyMissingFields(Object target, Object source) {
+        if (target == null || source == null || target.getClass() != source.getClass()) {
+            return;
+        }
+        for (java.lang.reflect.Method m : target.getClass().getMethods()) {
+            if (m.getParameterCount() != 0 || !m.getName().startsWith("get") || m.getName().equals("getClass")) {
+                continue;
+            }
+            Class<?> ret = m.getReturnType();
+            if (ret.isPrimitive() || Collection.class.isAssignableFrom(ret) || Map.class.isAssignableFrom(ret)) {
+                continue;
+            }
+            try {
+                Object sourceVal = m.invoke(source);
+                if (sourceVal == null) {
+                    continue;
+                }
+                Object targetVal = m.invoke(target);
+                boolean targetEmpty = targetVal == null || (targetVal instanceof String && ((String) targetVal).trim().isEmpty());
+                if (!targetEmpty) {
+                    continue;
+                }
+                String setterName = "set" + m.getName().substring(3);
+                java.lang.reflect.Method setter = target.getClass().getMethod(setterName, ret);
+                setter.invoke(target, sourceVal);
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "Util.copyMissingFields");
+            }
+        }
+    }
+
     public static void exportXlsFinancialStates(data.finance.BilanReport bilan, data.finance.CompteResultatReport cr,
             double chargesInd, String entrepriseName) {
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -6499,7 +6683,7 @@ public class Util {
             javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
             fileChooser.setTitle("Exporter les états financiers");
             fileChooser.setInitialFileName(
-                    "etat_financier_" + entrepriseName.replace(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+                    "etat_financier_" + Constants.sanitizeFileName(entrepriseName, "entreprise") + "_" + System.currentTimeMillis() + ".xlsx");
             fileChooser.getExtensionFilters()
                     .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
             File file = fileChooser.showSaveDialog(null);
@@ -6648,7 +6832,7 @@ public class Util {
             javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
             fileChooser.setTitle("Exporter le relevé client");
             fileChooser.setInitialFileName(
-                    "Releve_" + c.getNomClient().replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".xlsx");
+                    "Releve_" + Constants.sanitizeFileName(c.getNomClient(), "client") + "_" + System.currentTimeMillis() + ".xlsx");
             fileChooser.getExtensionFilters()
                     .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
             File file = fileChooser.showSaveDialog(null);

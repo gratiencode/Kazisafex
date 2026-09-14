@@ -362,6 +362,9 @@ public class ClientService implements ClientStorage {
         }
 
         // 9. Remove duplicate client
+        tools.Util.copyMissingFields(keeperManaged, duplicateManaged);
+        em.merge(keeperManaged);
+        tools.Util.sync(keeperManaged, "update", tools.Tables.CLIENT);
         em.remove(duplicateManaged);
         tools.Util.sync(duplicateManaged, "delete", tools.Tables.CLIENT);
     }
@@ -410,23 +413,18 @@ public class ClientService implements ClientStorage {
 
     private Client selectKeeper(EntityManager em, List<Client> group) {
         Client keeper = group.get(0);
-        int maxSales = -1;
+        int maxScore = -1;
+        long maxSales = -1;
         for (Client c : group) {
+            int score = tools.Util.dataCompletenessScore(c);
             Long salesCount = em.createQuery("SELECT COUNT(v) FROM Vente v WHERE v.clientId = :c", Long.class)
                 .setParameter("c", c)
                 .getSingleResult();
-            int countVal = salesCount == null ? 0 : salesCount.intValue();
-            if (countVal > maxSales) {
+            long countVal = salesCount == null ? 0 : salesCount.longValue();
+            if (score > maxScore || (score == maxScore && countVal > maxSales)) {
+                maxScore = score;
                 maxSales = countVal;
                 keeper = c;
-            } else if (countVal == maxSales) {
-                int keeperScore = (keeper.getEmail() != null && !keeper.getEmail().trim().isEmpty() ? 1 : 0)
-                                + (keeper.getAdresse() != null && !keeper.getAdresse().trim().isEmpty() ? 1 : 0);
-                int score = (c.getEmail() != null && !c.getEmail().trim().isEmpty() ? 1 : 0)
-                          + (c.getAdresse() != null && !c.getAdresse().trim().isEmpty() ? 1 : 0);
-                if (score > keeperScore) {
-                    keeper = c;
-                }
             }
         }
         return keeper;

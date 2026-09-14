@@ -81,6 +81,21 @@ public class Constants {
         DateTimeFormatter.ofPattern("yyyy");
     public static final DateTimeFormatter TIMESTAMPED_FORMATTER =
         DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    /**
+     * Removes characters that are illegal in Windows/Linux file names
+     * (colon, slash, backslash, quote, asterisk, question mark, angle brackets,
+     * pipe) and collapses runs of dashes.  Returns {@code fallback} when the
+     * result would be empty.
+     */
+    public static String sanitizeFileName(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        String sanitized = value.replaceAll("[\\\\/:*?\"<>|]+", "-").replaceAll("-+", "-").replaceAll("^-|-$", "").trim();
+        return sanitized.isEmpty() ? fallback : sanitized;
+    }
+
     public static final Calendar Calendrier = Calendar.getInstance();
     public static final long MILLSECONDS_JOURN = 86400000;
 

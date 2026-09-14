@@ -19,11 +19,14 @@ import data.Category;
 import data.Client;
 import data.ClientAppartenir;
 import data.ClientOrganisation;
+import data.Commande;
 import data.CompteTresor;
 import data.Compter;
 import data.Depot;
 import data.Destocker;
 import data.Depense;
+import data.DepenseAgregate;
+import data.DetteFournisseurAgregate;
 import data.Entreposer;
 import data.Entreprise;
 import data.Facture;
@@ -46,6 +49,7 @@ import data.Repartir;
 import data.RetourDepot;
 import data.RetourMagasin;
 import data.SaleAgregate;
+import data.Satisfaire;
 import data.StockAgregate;
 import data.StockDepotAgregate;
 import data.Stocker;
@@ -151,6 +155,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import utilities.PDFUtils;
 import utilities.Peremption;
+import tools.InventoryMagasin;
 import tools.Rupture;
 import tools.PurchaseBySupplier;
 import tools.PurchaseByProduct;
@@ -193,6 +198,20 @@ public class GratienTools {
     private static final Map<String, PlanConfirmationRequest> PLAN_CONFIRMATION_REQUESTS = new ConcurrentHashMap<>();
     private static final Map<String, ToolExecutionResult> RECENT_TOOL_EXECUTIONS = new ConcurrentHashMap<>();
     private static final long TOOL_EXECUTION_TTL_MS = 120_000L;
+    private static final Map<String, DupEntityBatch> DUPLICATE_ENTITY_BATCHES = new ConcurrentHashMap<>();
+
+    private record DupEntityEntry(int number, int groupNumber, data.BaseModel entity) {}
+
+    private record DupEntityBatch(String batchId, java.util.List<DupEntityEntry> entries, LocalDateTime createdAt) {
+        private DupEntityEntry find(int number) {
+            for (DupEntityEntry entry : entries) {
+                if (entry.number() == number) {
+                    return entry;
+                }
+            }
+            return null;
+        }
+    }
     private static final long WORKFLOW_CANCELLATION_TTL_MS = 180_000L;
     private static final long PLAN_CONFIRMATION_TTL_MS = 300_000L;
     private static final long ACTIVE_WORKFLOW_MAX_AGE_MS = 30 * 60_000L;
@@ -206,6 +225,7 @@ public class GratienTools {
             Category cat = new Category();
             cat.setDescritption(newcategory);
             Category c = CategoryDelegate.saveCategory(cat);
+            broadcastLocalChange(c);
             return "la category vien d'etre creee avec succes avec le nom " + c.getDescritption();
         });
     }
@@ -216,6 +236,7 @@ public class GratienTools {
             List<Category> dcats=CategoryDelegate.findCategories(dcategory);
             for (Category dcat : dcats) {
                 CategoryDelegate.deleteCategory(dcat);
+                broadcastLocalChange(dcat);
             }
             return "tout category nomee " + dcategory+" vient d'etre supprimee de la base de donnee";
         });
@@ -1395,6 +1416,137 @@ public class GratienTools {
             } catch (Exception ex) {
                 return "Une erreur s'est produite lors de la fusion des clients doublons : " + safe(ex.getMessage(), ex.getClass().getSimpleName());
             }
+        });
+    }
+
+    @Tool("Détecte les clients doublons par nom et telephone, puis demande confirmation avant fusion. Le plus complet est conservé.")
+    public String detectDuplicateClientsForDeletion() {
+        return executeOnce("detectDuplicateClientsForDeletion", "all-clients", () -> {
+            List<Client> clients = ClientDelegate.findClients();
+            if (clients == null || clients.isEmpty()) return "Aucun client trouvé.";
+            java.util.function.Function<Client, String> keyFn = c -> {
+                String name = c.getNomClient();
+                String phone = c.getPhone();
+                if (name == null || phone == null) return null;
+                name = name.trim().toLowerCase();
+                phone = phone.trim().replaceAll("\\s+", "");
+                if (name.isEmpty() || phone.isEmpty()) return null;
+                if (phone.equals("09000") || phone.equals("09001") || name.equals("anonyme") || name.equals("importer")) return null;
+                return name + "|" + phone;
+            };
+            DupEntityBatch batch = buildDupEntityBatch(clients, keyFn);
+            if (batch == null) return "Aucun client doublon trouvé par nom et téléphone.";
+            return renderDupEntityBatch(batch, "Clients doublons détectés (le plus complet sera conservé).");
+        });
+    }
+
+    @Tool("Détecte les fournisseurs doublons par nom et telephone, puis demande confirmation avant fusion. Le plus complet est conservé.")
+    public String detectDuplicateSuppliersForDeletion() {
+        return executeOnce("detectDuplicateSuppliersForDeletion", "all-suppliers", () -> {
+            List<Fournisseur> suppliers = FournisseurDelegate.findFournisseurs();
+            if (suppliers == null || suppliers.isEmpty()) return "Aucun fournisseur trouvé.";
+            java.util.function.Function<Fournisseur, String> keyFn = s -> {
+                String name = s.getNomFourn();
+                String phone = s.getPhone();
+                if (name == null || phone == null) return null;
+                name = name.trim().toLowerCase();
+                phone = phone.trim().replaceAll("\\s+", "");
+                if (name.isEmpty() || phone.isEmpty()) return null;
+                return name + "|" + phone;
+            };
+            DupEntityBatch batch = buildDupEntityBatch(suppliers, keyFn);
+            if (batch == null) return "Aucun fournisseur doublon trouvé par nom et téléphone.";
+            return renderDupEntityBatch(batch, "Fournisseurs doublons détectés (le plus complet sera conservé).");
+        });
+    }
+
+    @Tool("Détecte les comptes trésor doublons par intitulé, puis demande confirmation avant fusion. Le plus complet est conservé.")
+    public String detectDuplicateCompteTresorsForDeletion() {
+        return executeOnce("detectDuplicateCompteTresorsForDeletion", "all-comptes", () -> {
+            List<CompteTresor> comptes = CompteTresorDelegate.findCompteTresors();
+            if (comptes == null || comptes.isEmpty()) return "Aucun compte trésor trouvé.";
+            java.util.function.Function<CompteTresor, String> keyFn = ct -> {
+                String intitule = ct.getIntitule();
+                if (intitule == null) return null;
+                intitule = intitule.trim().toLowerCase();
+                if (intitule.isEmpty()) return null;
+                return intitule;
+            };
+            DupEntityBatch batch = buildDupEntityBatch(comptes, keyFn);
+            if (batch == null) return "Aucun compte trésor doublon trouvé.";
+            return renderDupEntityBatch(batch, "Comptes trésor doublons détectés (le plus complet sera conservé).");
+        });
+    }
+
+    @Tool("Détecte les livraisons doublons par référence/fournisseur/date, puis demande confirmation avant fusion. Les quantités sont additionnées.")
+    public String detectDuplicateLivraisonsForDeletion() {
+        return executeOnce("detectDuplicateLivraisonsForDeletion", "all-deliveries", () -> {
+            List<Livraison> livraisons = LivraisonDelegate.findLivraisons();
+            if (livraisons == null || livraisons.isEmpty()) return "Aucune livraison trouvée.";
+            java.util.function.Function<Livraison, String> keyFn = l -> {
+                String ref = safe(l.getReference(), safe(l.getNumPiece(), ""));
+                String fUid = l.getFournId() == null ? null : l.getFournId().getUid();
+                if (ref.isEmpty() || fUid == null || l.getDateLivr() == null) return null;
+                ref = ref.trim().toLowerCase();
+                return ref + "|" + fUid + "|" + l.getDateLivr();
+            };
+            DupEntityBatch batch = buildDupEntityBatch(livraisons, keyFn);
+            if (batch == null) return "Aucune livraison doublon trouvée.";
+            return renderDupEntityBatch(batch, "Livraisons doublons détectées (les quantités des stocks seront additionnées).");
+        });
+    }
+
+    @Tool("Détecte les dépenses doublons par nom, montant, région et fréquence, puis demande confirmation avant fusion. Le plus complet est conservé.")
+    public String detectDuplicateDepensesForDeletion() {
+        return executeOnce("detectDuplicateDepensesForDeletion", "all-depenses", () -> {
+            List<Depense> depenses = DepenseDelegate.findDepenses();
+            if (depenses == null || depenses.isEmpty()) return "Aucune dépense trouvée.";
+            java.util.function.Function<Depense, String> keyFn = d -> {
+                String nom = safe(d.getNomDepense(), "").trim().toLowerCase();
+                if (nom.isEmpty() || nom.startsWith("importer")) {
+                    return null;
+                }
+                String montant = d.getMontant() == null ? "" : String.valueOf(d.getMontant());
+                String region = safe(d.getRegion(), "").trim().toLowerCase();
+                String frequence = safe(d.getFrequence(), "").trim().toLowerCase();
+                return nom + "|" + montant + "|" + region + "|" + frequence;
+            };
+            DupEntityBatch batch = buildDupEntityBatch(depenses, keyFn);
+            if (batch == null) return "Aucune dépense doublon trouvée (même nom, montant, région et fréquence).";
+            return renderDupEntityBatch(batch, "Dépenses doublons détectées (le plus complet sera conservé).");
+        });
+    }
+
+    @Tool("Fusionne les doublons confirmés depuis un des lots détectés par detectDuplicate*(...). Le plus complet est conservé et ses champs manquants sont comblés par ceux du doublon.")
+    public String deleteConfirmedDuplicateEntities(
+            @P("batchId retourné par la commande de détection") String batchId,
+            @P("Numeros des éléments à fusionner, séparés par virgule. Chaque numéro indique un doublon à supprimer ; le doublon du même groupe ayant le plus de champs remplis sera conservé.") String selectedNumbers) {
+        return executeOnce("deleteConfirmedDuplicateEntities", safe(batchId, "") + "|" + safe(selectedNumbers, ""), () -> {
+            DupEntityBatch batch = DUPLICATE_ENTITY_BATCHES.get(batchId == null ? "" : batchId.trim());
+            if (batch == null) return "Lot de doublons introuvable. Demandez d'abord à Gratien d'afficher les doublons avec l'une des commandes detectDuplicate*.";
+            List<Integer> numbers = parseSelectedNumbers(selectedNumbers);
+            if (numbers.isEmpty()) return "Aucun numéro valide reçu. Indiquez les numéros à supprimer, par exemple `2, 5, 8`.";
+            List<String> merged = new ArrayList<>();
+            List<String> failed = new ArrayList<>();
+            for (Integer number : numbers) {
+                DupEntityEntry entry = batch.find(number);
+                if (entry == null) { failed.add("Numero " + number + ": introuvable dans le lot."); continue; }
+                data.BaseModel keeper = findDupEntityKeeper(batch, entry, numbers);
+                if (keeper == null) { failed.add("Numero " + number + ": aucun autre élément disponible pour servir de gardien."); continue; }
+                data.BaseModel dup = entry.entity();
+                try {
+                    String detail = mergeDuplicateEntity(keeper, dup);
+                    merged.add(number + ". " + detail);
+                } catch (Exception ex) {
+                    failed.add("Numero " + number + ": " + safe(ex.getMessage(), ex.getClass().getSimpleName()));
+                }
+            }
+            if (!merged.isEmpty()) removeDupEntityEntries(batch, numbers);
+            StringBuilder builder = new StringBuilder();
+            builder.append("Fusion des doublons terminée.");
+            if (!merged.isEmpty()) builder.append("\n\nFusionné(s):\n").append(String.join("\n", merged));
+            if (!failed.isEmpty()) builder.append("\n\nNon traité(s):\n").append(String.join("\n", failed));
+            return builder.toString().trim();
         });
     }
 
@@ -2793,6 +2945,421 @@ public class GratienTools {
         }
     }
 
+    private <T extends data.BaseModel> DupEntityBatch buildDupEntityBatch(List<T> entities, java.util.function.Function<T, String> keyFn) {
+        Map<String, List<T>> groups = new LinkedHashMap<>();
+        for (T entity : entities) {
+            if (entity == null) {
+                continue;
+            }
+            String key = keyFn.apply(entity);
+            if (key == null || key.isEmpty()) {
+                continue;
+            }
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(entity);
+        }
+        List<DupEntityEntry> entries = new ArrayList<>();
+        int groupNumber = 1;
+        for (List<T> group : groups.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+            for (T entity : group) {
+                entries.add(new DupEntityEntry(entries.size() + 1, groupNumber, entity));
+            }
+            groupNumber++;
+        }
+        if (entries.isEmpty()) {
+            return null;
+        }
+        String batchId = "dup-entity-" + DataId.generate();
+        DupEntityBatch batch = new DupEntityBatch(batchId, entries, LocalDateTime.now());
+        DUPLICATE_ENTITY_BATCHES.put(batchId, batch);
+        return batch;
+    }
+
+    private String renderDupEntityBatch(DupEntityBatch batch, String title) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(title).append("\nLot: ").append(batch.batchId()).append("\n\n");
+        data.BaseModel first = batch.entries().get(0).entity();
+        if (first instanceof Client) {
+            builder.append("|numero|groupe|uid|nom|telephone|email|adresse|\n")
+                    .append("|---|---|---|---|---|---|---|\n");
+            for (DupEntityEntry entry : batch.entries()) {
+                Client c = (Client) entry.entity();
+                builder.append("|").append(entry.number())
+                        .append("|").append(entry.groupNumber())
+                        .append("|").append(tableCell(c.getUid()))
+                        .append("|").append(tableCell(c.getNomClient()))
+                        .append("|").append(tableCell(c.getPhone()))
+                        .append("|").append(tableCell(c.getEmail()))
+                        .append("|").append(tableCell(c.getAdresse()))
+                        .append("|\n");
+            }
+        } else if (first instanceof Fournisseur) {
+            builder.append("|numero|groupe|uid|nom|telephone|adresse|identification|\n")
+                    .append("|---|---|---|---|---|---|---|\n");
+            for (DupEntityEntry entry : batch.entries()) {
+                Fournisseur f = (Fournisseur) entry.entity();
+                builder.append("|").append(entry.number())
+                        .append("|").append(entry.groupNumber())
+                        .append("|").append(tableCell(f.getUid()))
+                        .append("|").append(tableCell(f.getNomFourn()))
+                        .append("|").append(tableCell(f.getPhone()))
+                        .append("|").append(tableCell(f.getAdresse()))
+                        .append("|").append(tableCell(f.getIdentification()))
+                        .append("|\n");
+            }
+        } else if (first instanceof CompteTresor) {
+            builder.append("|numero|groupe|uid|intitule|type|numero compte|banque|\n")
+                    .append("|---|---|---|---|---|---|---|\n");
+            for (DupEntityEntry entry : batch.entries()) {
+                CompteTresor ct = (CompteTresor) entry.entity();
+                builder.append("|").append(entry.number())
+                        .append("|").append(entry.groupNumber())
+                        .append("|").append(tableCell(ct.getUid()))
+                        .append("|").append(tableCell(ct.getIntitule()))
+                        .append("|").append(tableCell(ct.getTypeCompte()))
+                        .append("|").append(tableCell(ct.getNumeroCompte()))
+                        .append("|").append(tableCell(ct.getBankName()))
+                        .append("|\n");
+            }
+        } else if (first instanceof Livraison) {
+            builder.append("|numero|groupe|uid|reference|numero piece|date|fournisseur|\n")
+                    .append("|---|---|---|---|---|---|---|\n");
+            for (DupEntityEntry entry : batch.entries()) {
+                Livraison l = (Livraison) entry.entity();
+                builder.append("|").append(entry.number())
+                        .append("|").append(entry.groupNumber())
+                        .append("|").append(tableCell(l.getUid()))
+                        .append("|").append(tableCell(l.getReference()))
+                        .append("|").append(tableCell(l.getNumPiece()))
+                        .append("|").append(tableCell(l.getDateLivr() == null ? "-" : l.getDateLivr().toString()))
+                        .append("|").append(tableCell(l.getFournId() == null ? "-" : l.getFournId().getNomFourn()))
+                        .append("|\n");
+            }
+        } else if (first instanceof Depense) {
+            builder.append("|numero|groupe|uid|nom|montant|devise|frequence|region|\n")
+                    .append("|---|---|---|---|---|---|---|---|\n");
+            for (DupEntityEntry entry : batch.entries()) {
+                Depense d = (Depense) entry.entity();
+                builder.append("|").append(entry.number())
+                        .append("|").append(entry.groupNumber())
+                        .append("|").append(tableCell(d.getUid()))
+                        .append("|").append(tableCell(d.getNomDepense()))
+                        .append("|").append(d.getMontant() == null ? "-" : String.valueOf(d.getMontant()))
+                        .append("|").append(tableCell(d.getDevise()))
+                        .append("|").append(tableCell(d.getFrequence()))
+                        .append("|").append(tableCell(d.getRegion()))
+                        .append("|\n");
+            }
+        }
+        builder.append("\nConfirmez les doublons à fusionner avec le format: ")
+                .append("numero ou plusieurs numeros séparés par virgule, par exemple `2, 5, 8`.\n")
+                .append("Gratien utilisera le lot ").append(batch.batchId())
+                .append(" et conservera le plus complet de chaque groupe.");
+        return builder.toString();
+    }
+
+    private data.BaseModel findDupEntityKeeper(DupEntityBatch batch, DupEntityEntry removed, List<Integer> selectedNumbers) {
+        data.BaseModel keeper = null;
+        int maxScore = -1;
+        for (DupEntityEntry candidate : batch.entries()) {
+            if (candidate.groupNumber() != removed.groupNumber() || selectedNumbers.contains(candidate.number())) {
+                continue;
+            }
+            data.BaseModel fresh = reloadEntity(candidate.entity());
+            if (fresh == null) {
+                continue;
+            }
+            int score = Util.dataCompletenessScore(fresh);
+            if (score > maxScore) {
+                maxScore = score;
+                keeper = fresh;
+            }
+        }
+        return keeper;
+    }
+
+    private data.BaseModel reloadEntity(data.BaseModel entity) {
+        if (entity instanceof Client c) {
+            return ClientDelegate.findClient(c.getUid());
+        }
+        if (entity instanceof Fournisseur f) {
+            return FournisseurDelegate.findFournisseur(f.getUid());
+        }
+        if (entity instanceof CompteTresor ct) {
+            return CompteTresorDelegate.findCompteTresor(ct.getUid());
+        }
+        if (entity instanceof Livraison l) {
+            return LivraisonDelegate.findLivraison(l.getUid());
+        }
+        if (entity instanceof Depense d) {
+            return DepenseDelegate.findDepense(d.getUid());
+        }
+        return null;
+    }
+
+    private String mergeDuplicateEntity(data.BaseModel keeper, data.BaseModel duplicate) {
+        if (keeper instanceof Client) {
+            return mergeDuplicateClient((Client) keeper, (Client) duplicate);
+        }
+        if (keeper instanceof Fournisseur) {
+            return mergeDuplicateSupplier((Fournisseur) keeper, (Fournisseur) duplicate);
+        }
+        if (keeper instanceof CompteTresor) {
+            return mergeDuplicateCompteTresor((CompteTresor) keeper, (CompteTresor) duplicate);
+        }
+        if (keeper instanceof Livraison) {
+            return mergeDuplicateLivraison((Livraison) keeper, (Livraison) duplicate);
+        }
+        if (keeper instanceof Depense) {
+            return mergeDuplicateDepense((Depense) keeper, (Depense) duplicate);
+        }
+        throw new IllegalStateException("Type non pris en charge: " + keeper.getClass().getSimpleName());
+    }
+
+    private String mergeDuplicateClient(Client keeper, Client duplicate) {
+        ClientDelegate.mergeDuplicateClients(keeper, duplicate);
+        Client fresh = ClientDelegate.findClient(keeper.getUid());
+        if (fresh != null) {
+            broadcastLocalChange(fresh);
+        }
+        return "client fusionné: " + safe(duplicate.getNomClient(), duplicate.getUid())
+                + " -> " + safe(keeper.getNomClient(), keeper.getUid())
+                + " (ventes, commandes, retours et paiements réassignés, doublon supprimé)";
+    }
+
+    private String mergeDuplicateSupplier(Fournisseur keeper, Fournisseur duplicate) {
+        List<data.BaseModel> changed = new ArrayList<>();
+        ManagedSessionFactory.executeWrite(em -> {
+            Fournisseur k = em.merge(keeper);
+            Fournisseur d = em.merge(duplicate);
+            List<Livraison> livs = em.createQuery("SELECT l FROM Livraison l WHERE l.fournId = :d", Livraison.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Livraison l : livs) {
+                l.setFournId(k);
+                em.merge(l);
+                Util.sync(l, Constants.ACTION_UPDATE, Tables.LIVRAISON);
+                changed.add(l);
+            }
+            List<Commande> cmds = em.createQuery("SELECT c FROM Commande c WHERE c.fournisseurId = :d", Commande.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Commande c : cmds) {
+                c.setFournisseurId(k);
+                em.merge(c);
+            }
+            List<DetteFournisseurAgregate> dettes = em.createQuery("SELECT df FROM DetteFournisseurAgregate df WHERE df.fournisseurId = :d", DetteFournisseurAgregate.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (DetteFournisseurAgregate df : dettes) {
+                df.setFournisseurId(k);
+                em.merge(df);
+            }
+            Util.copyMissingFields(k, d);
+            em.merge(k);
+            Util.sync(k, Constants.ACTION_UPDATE, Tables.FOURNISSEUR);
+            changed.add(k);
+            em.remove(d);
+            Util.sync(d, Constants.ACTION_DELETE, Tables.FOURNISSEUR);
+            return null;
+        });
+        broadcastLocalChanges(changed);
+        return "fournisseur fusionné: " + safe(duplicate.getNomFourn(), duplicate.getUid())
+                + " -> " + safe(keeper.getNomFourn(), keeper.getUid())
+                + " (livraisons, commandes et dettes réassignées, doublon supprimé)";
+    }
+
+    private String mergeDuplicateCompteTresor(CompteTresor keeper, CompteTresor duplicate) {
+        List<data.BaseModel> changed = new ArrayList<>();
+        ManagedSessionFactory.executeWrite(em -> {
+            CompteTresor k = em.merge(keeper);
+            CompteTresor d = em.merge(duplicate);
+            List<Traisorerie> trs = em.createQuery("SELECT t FROM Traisorerie t WHERE t.tresorId = :d", Traisorerie.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Traisorerie t : trs) {
+                t.setTresorId(k);
+                em.merge(t);
+                Util.sync(t, Constants.ACTION_UPDATE, Tables.TRAISORERIE);
+                changed.add(t);
+            }
+            List<Operation> ops = em.createQuery("SELECT o FROM Operation o WHERE o.tresorId = :d", Operation.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Operation o : ops) {
+                o.setTresorId(k);
+                em.merge(o);
+                Util.sync(o, Constants.ACTION_UPDATE, Tables.OPERATION);
+                changed.add(o);
+            }
+            Util.copyMissingFields(k, d);
+            em.merge(k);
+            Util.sync(k, Constants.ACTION_UPDATE, Tables.COMPTETRESOR);
+            changed.add(k);
+            em.remove(d);
+            Util.sync(d, Constants.ACTION_DELETE, Tables.COMPTETRESOR);
+            return null;
+        });
+        broadcastLocalChanges(changed);
+        return "compte trésor fusionné: " + safe(duplicate.getIntitule(), duplicate.getUid())
+                + " -> " + safe(keeper.getIntitule(), keeper.getUid())
+                + " (mouvements trésorerie et opérations réassignés, doublon supprimé)";
+    }
+
+    private String mergeDuplicateLivraison(Livraison keeper, Livraison duplicate) {
+        List<data.BaseModel> changed = new ArrayList<>();
+        ManagedSessionFactory.executeWrite(em -> {
+            Livraison k = em.merge(keeper);
+            Livraison d = em.merge(duplicate);
+            List<Stocker> dupStockers = em.createQuery("SELECT s FROM Stocker s WHERE s.livraisId = :d", Stocker.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Stocker s : dupStockers) {
+                Stocker keeperStocker = findStockerMatch(em, k, s);
+                if (keeperStocker != null) {
+                    Mesure targetMeasure = smallestMeasure(keeperStocker.getMesureId(), s.getMesureId());
+                    keeperStocker.setQuantite(sumInMeasure(keeperStocker.getQuantite(), keeperStocker.getMesureId(), s.getQuantite(), s.getMesureId(), targetMeasure));
+                    keeperStocker.setPrixAchatTotal(keeperStocker.getPrixAchatTotal() + s.getPrixAchatTotal());
+                    em.merge(keeperStocker);
+                    Util.sync(keeperStocker, Constants.ACTION_UPDATE, Tables.STOCKER);
+                    changed.add(keeperStocker);
+                    em.remove(s);
+                    Util.sync(s, Constants.ACTION_DELETE, Tables.STOCKER);
+                } else {
+                    s.setLivraisId(k);
+                    em.merge(s);
+                    Util.sync(s, Constants.ACTION_UPDATE, Tables.STOCKER);
+                    changed.add(s);
+                }
+            }
+            List<Entreposer> dupEntreposers = em.createQuery("SELECT e FROM Entreposer e WHERE e.livraisonId = :d", Entreposer.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Entreposer e : dupEntreposers) {
+                Entreposer keeperEntreposer = findEntreposerMatch(em, k, e);
+                if (keeperEntreposer != null) {
+                    Mesure targetMeasure = smallestMeasure(keeperEntreposer.getMesureId(), e.getMesureId());
+                    keeperEntreposer.setQuantite(sumInMeasure(keeperEntreposer.getQuantite(), keeperEntreposer.getMesureId(), e.getQuantite(), e.getMesureId(), targetMeasure));
+                    em.merge(keeperEntreposer);
+                    Util.sync(keeperEntreposer, Constants.ACTION_UPDATE, Tables.ENTREPOSER);
+                    changed.add(keeperEntreposer);
+                    em.remove(e);
+                    Util.sync(e, Constants.ACTION_DELETE, Tables.ENTREPOSER);
+                } else {
+                    e.setLivraisonId(k);
+                    em.merge(e);
+                    Util.sync(e, Constants.ACTION_UPDATE, Tables.ENTREPOSER);
+                    changed.add(e);
+                }
+            }
+            List<Satisfaire> satisfs = em.createQuery("SELECT sf FROM Satisfaire sf WHERE sf.livraisonId = :d", Satisfaire.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Satisfaire sf : satisfs) {
+                sf.setLivraisonId(k);
+                em.merge(sf);
+            }
+            Util.copyMissingFields(k, d);
+            em.merge(k);
+            Util.sync(k, Constants.ACTION_UPDATE, Tables.LIVRAISON);
+            changed.add(k);
+            em.remove(d);
+            Util.sync(d, Constants.ACTION_DELETE, Tables.LIVRAISON);
+            return null;
+        });
+        broadcastLocalChanges(changed);
+        return "livraison fusionnée: " + safe(duplicate.getReference(), duplicate.getUid())
+                + " -> " + safe(keeper.getReference(), keeper.getUid())
+                + " (stocks et entrepôts fusionnés ou réaffectés, doublon supprimé)";
+    }
+
+    private String mergeDuplicateDepense(Depense keeper, Depense duplicate) {
+        List<data.BaseModel> changed = new ArrayList<>();
+        ManagedSessionFactory.executeWrite(em -> {
+            Depense k = em.merge(keeper);
+            Depense d = em.merge(duplicate);
+            List<Operation> ops = em.createQuery("SELECT o FROM Operation o WHERE o.depenseId = :d", Operation.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (Operation o : ops) {
+                o.setDepenseId(k);
+                em.merge(o);
+                Util.sync(o, Constants.ACTION_UPDATE, Tables.OPERATION);
+                changed.add(o);
+            }
+            List<DepenseAgregate> aggs = em.createQuery("SELECT da FROM DepenseAgregate da WHERE da.depenseId = :d", DepenseAgregate.class)
+                    .setParameter("d", d)
+                    .getResultList();
+            for (DepenseAgregate da : aggs) {
+                da.setDepenseId(k);
+                em.merge(da);
+            }
+            Util.copyMissingFields(k, d);
+            em.merge(k);
+            Util.sync(k, Constants.ACTION_UPDATE, Tables.DEPENSE);
+            changed.add(k);
+            em.remove(d);
+            Util.sync(d, Constants.ACTION_DELETE, Tables.DEPENSE);
+            return null;
+        });
+        broadcastLocalChanges(changed);
+        return "dépense fusionnée: " + safe(duplicate.getNomDepense(), duplicate.getUid())
+                + " -> " + safe(keeper.getNomDepense(), keeper.getUid())
+                + " (opérations et agrégats réassignés, doublon supprimé)";
+    }
+
+    private Stocker findStockerMatch(EntityManager em, Livraison keeper, Stocker s) {
+        if (s.getProductId() == null) {
+            return null;
+        }
+        String numlot = safe(s.getNumlot(), "");
+        List<Stocker> candidates = em.createQuery("SELECT sk FROM Stocker sk WHERE sk.livraisId = :k AND sk.productId = :p", Stocker.class)
+                .setParameter("k", keeper)
+                .setParameter("p", s.getProductId())
+                .getResultList();
+        for (Stocker candidate : candidates) {
+            if (Objects.equals(safe(candidate.getNumlot(), ""), numlot)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private Entreposer findEntreposerMatch(EntityManager em, Livraison keeper, Entreposer e) {
+        String key = entreposerKey(e);
+        if (key == null) {
+            return null;
+        }
+        List<Entreposer> candidates = em.createQuery("SELECT ep FROM Entreposer ep WHERE ep.livraisonId = :k", Entreposer.class)
+                .setParameter("k", keeper)
+                .getResultList();
+        for (Entreposer candidate : candidates) {
+            if (Objects.equals(entreposerKey(candidate), key)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private String entreposerKey(Entreposer e) {
+        String sku = e.getSkuId() == null ? "" : e.getSkuId().getUid();
+        String matiere = e.getMatiereId() == null ? "" : e.getMatiereId().getUid();
+        if (sku.isEmpty() && matiere.isEmpty()) {
+            return null;
+        }
+        String depot = e.getDepotId() == null ? "" : e.getDepotId().getUid();
+        return sku + "|" + matiere + "|" + safe(e.getNumlot(), "") + "|" + depot;
+    }
+
+    private void removeDupEntityEntries(DupEntityBatch batch, List<Integer> numbers) {
+        batch.entries().removeIf(entry -> numbers.contains(entry.number()));
+        if (batch.entries().isEmpty()) {
+            DUPLICATE_ENTITY_BATCHES.remove(batch.batchId());
+        }
+    }
+
     private Livraison createGenericTransferDelivery() {
         Entreprise entreprise = currentEntreprise();
         Fournisseur supplier = FournisseurDelegate.findOrCreate(entreprise);
@@ -3642,7 +4209,8 @@ public class GratienTools {
                     .append(" | ").append(safe(r.getLocalisation(), "-"))
                     .append(" |\n");
         }
-        sb.append("\nPour générer un fichier PDF, utilisez la commande `exportLowStockProductsPdf()`.");
+        sb.append("\nPour générer un fichier PDF, utilisez la commande `exportLowStockProductsPdf()`.")
+                .append("\nPour générer un fichier Excel, utilisez la commande `exportLowStockProductsExcel()`.");
         return sb.toString();
     }
 
@@ -3708,6 +4276,8 @@ public class GratienTools {
                 return "Aucun produit avec stock > 0 trouvé dans cette période.";
             }
             sb.append("\nPour générer un fichier PDF, utilisez la commande `exportExpiringProductsPdf(")
+                    .append(months).append(")`.")
+                    .append("\nPour générer un fichier Excel, utilisez la commande `exportExpiringProductsExcel(")
                     .append(months).append(")`.");
             return sb.toString();
         } catch (NumberFormatException e) {
@@ -3745,6 +4315,119 @@ public class GratienTools {
         } catch (Exception ex) {
             return "Échec génération PDF: " + ex.getMessage();
         }
+    }
+
+    @Tool("Génère un fichier Excel des produits en rupture de stock et l'ouvre")
+    public String exportLowStockProductsExcel() {
+        try {
+            String region = resolveFinancialRegion(null);
+            List<Rupture> ruptures = RecquisitionDelegate.findStockEnRupture(region);
+            if (ruptures == null || ruptures.isEmpty()) {
+                return "Aucun produit en rupture de stock à exporter.";
+            }
+            File file = Util.exportXlsRuptureStock(ruptures);
+            if (file == null) {
+                return "Échec génération Excel de la rupture de stock.";
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+            return "Fichier Excel de la rupture de stock généré avec succès: " + file.getAbsolutePath();
+        } catch (Exception ex) {
+            return "Échec génération Excel de la rupture de stock: " + ex.getMessage();
+        }
+    }
+
+    @Tool("Génère un fichier Excel des produits déjà expirés ou sur le point d'expirer selon le délai spécifié et l'ouvre")
+    public String exportExpiringProductsExcel(
+            @P("Nombre de mois pour l'échéance (ex: 4). 0 ou vide pour les produits déjà expirés.") String monthsStr) {
+        try {
+            int months = 0;
+            if (monthsStr != null && !monthsStr.isBlank()) {
+                months = Integer.parseInt(monthsStr.trim());
+                if (months < 0) months = 0;
+            }
+            LocalDate today = LocalDate.now();
+            LocalDate endDate = months > 0 ? today.plusMonths(months) : today;
+            String region = resolveFinancialRegion(null);
+            List<Peremption> expired = RecquisitionDelegate.showExpiredAtInterval(
+                    months > 0 ? today : LocalDate.of(1900, 1, 1), endDate, region);
+            if (expired == null || expired.isEmpty()) {
+                return "Aucun produit à exporter.";
+            }
+            File file = Util.exportXlsPeremptionStock(expired, months);
+            if (file == null) {
+                return "Échec génération Excel des produits expirés.";
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+            String label = months > 0 ? "expirant dans les " + months + " prochains mois" : "expirés";
+            return "Fichier Excel des produits " + label + " généré avec succès: " + file.getAbsolutePath();
+        } catch (NumberFormatException e) {
+            return "Nombre de mois invalide.";
+        } catch (Exception ex) {
+            return "Échec génération Excel: " + ex.getMessage();
+        }
+    }
+
+    @Tool("Génère un fichier Excel de l'inventaire théorique du stock (stock initial + entrées - sorties) et l'ouvre")
+    public String exportTheoreticalInventoryExcel() {
+        try {
+            String region = resolveFinancialRegion(null);
+            List<InventoryMagasin> items = buildTheoreticalInventory(region, LocalDate.now());
+            if (items == null || items.isEmpty()) {
+                return "Aucune donnée d'inventaire théorique trouvée.";
+            }
+            Entreprise entreprise = currentEntreprise();
+            HashMap<String, String> bundle = new HashMap<>();
+            bundle.put("entrep", pref.get("ent_name", safe(entreprise.getNomEntreprise(), "Entreprise")));
+            bundle.put("rccm", pref.get("ent_ID", safe(entreprise.getIdentification(), "")));
+            bundle.put("eUid", pref.get("eUid", safe(entreprise.getUid(), "")));
+            bundle.put("region", region);
+            bundle.put("debut", "Depuis l'origine");
+            bundle.put("fin", "Aujourd'hui");
+            bundle.put("operateur", pref.get("operator", "Assistant"));
+            File file = Util.exportXlsInventoryMagasin(bundle, items, pref.get("mainCur", "USD"));
+            if (file == null) {
+                return "Échec génération Excel de l'inventaire théorique.";
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+            return "Fichier Excel de l'inventaire théorique généré avec succès (" + items.size() + " ligne(s) de stock): " + file.getAbsolutePath();
+        } catch (Exception ex) {
+            return "Échec génération Excel de l'inventaire théorique: " + ex.getMessage();
+        }
+    }
+
+    private List<InventoryMagasin> buildTheoreticalInventory(String region, LocalDate atDate) {
+        List<StockAgregate> aggregates = RepportDelegate.findLatestStockAgregates(region, atDate);
+        List<InventoryMagasin> result = new ArrayList<>();
+        if (aggregates == null) {
+            return result;
+        }
+        for (StockAgregate sa : aggregates) {
+            if (sa.getProductId() == null) {
+                continue;
+            }
+            InventoryMagasin im = new InventoryMagasin();
+            im.setProduit(sa.getProductId());
+            im.setMesure(sa.getMesureId());
+            im.setStockInitial(sa.getInitialQuantity() != null ? sa.getInitialQuantity() : 0);
+            im.setQuantEntree(sa.getEntrees() != null ? sa.getEntrees() : 0);
+            im.setQuantSortie(sa.getSorties() != null ? sa.getSorties() : 0);
+            im.setQuantStock(sa.getFinalQuantity() != null ? sa.getFinalQuantity() : 0);
+            im.setCoutAchat(sa.getCoutAchat() != null ? sa.getCoutAchat() : 0);
+            im.setLot(sa.getNumlot());
+            im.setExpiry(sa.getDateExpiration());
+            im.setAlerte(0);
+            im.setDestroyed(sa.isDestroyed());
+            im.setValeurStock(im.getQuantStock() * im.getCoutAchat());
+            im.setLocalisation(region);
+            result.add(im);
+        }
+        return result;
     }
 
     @Tool("Verifie la derniere version de Kazisafe disponible et retourne les infos de mise a jour")
@@ -7118,6 +7801,7 @@ public class GratienTools {
         } catch (Exception ex) {
             System.err.println("Gratien sync HTTP échouée pour " + table + ": " + ex.getMessage());
         }
+        broadcastLocalChange(model);
     }
 
     private void syncUpdate(data.BaseModel model, Tables table) {
@@ -7126,6 +7810,7 @@ public class GratienTools {
         } catch (Exception ex) {
             System.err.println("Gratien sync HTTP update échouée pour " + table + ": " + ex.getMessage());
         }
+        broadcastLocalChange(model);
     }
 
     private void syncDelete(data.BaseModel model, Tables table) {
@@ -7133,6 +7818,33 @@ public class GratienTools {
             Util.sync(model, Constants.ACTION_DELETE, table);
         } catch (Exception ex) {
             System.err.println("Gratien sync HTTP delete échouée pour " + table + ": " + ex.getMessage());
+        }
+        broadcastLocalChange(model);
+    }
+
+    /**
+     * Pousse la mutation locale vers les écrans ouverts (Produits, POS,
+     * Stockage, Clients, Fournisseurs, Trésorerie...) via les listeners
+     * OnDataSyncListener déjà enregistrés. Sans risque depuis n'importe quel
+     * thread : NotificationHandler bascule sur le thread JavaFX.
+     */
+    private void broadcastLocalChange(data.BaseModel model) {
+        if (model == null) {
+            return;
+        }
+        try {
+            tools.NotificationHandler.broadcastDataSynced(model);
+        } catch (Throwable ignored) {
+            // La couche UI peut être indisponible pendant le bootstrap / les tests headless.
+        }
+    }
+
+    private void broadcastLocalChanges(List<data.BaseModel> models) {
+        if (models == null) {
+            return;
+        }
+        for (data.BaseModel model : models) {
+            broadcastLocalChange(model);
         }
     }
 
@@ -7624,6 +8336,9 @@ public class GratienTools {
                 case "Facture": FactureDelegate.updateFacture((data.Facture) entity); break;
                 default: break;
             }
+            if (entity instanceof data.BaseModel bm) {
+                broadcastLocalChange(bm);
+            }
         } catch (Exception e) {
             // ignore
         }
@@ -7757,6 +8472,9 @@ public class GratienTools {
                                 case "Presence": PresenceDelegate.updatePresence((data.Presence) entity); break;
                                 case "Facture": FactureDelegate.updateFacture((data.Facture) entity); break;
                                 default: break;
+                            }
+                            if (entity instanceof data.BaseModel bm) {
+                                broadcastLocalChange(bm);
                             }
                         }
                     }
