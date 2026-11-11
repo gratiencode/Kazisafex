@@ -399,16 +399,18 @@ public class ManagedSessionFactory {
             EntityManager em = getEntityManager();
             EntityTransaction tx = em.getTransaction();
             boolean started = !tx.isActive();
-            if (started) {
-                tx.begin();
-            }
             try {
+                // begin() dans le try : si le pool refuse la transaction,
+                // l'EntityManager doit quand meme etre ferme dans finally.
+                if (started) {
+                    tx.begin();
+                }
                 T result = withCurrentEntityManager(em, () -> action.apply(em));
                 if (started && tx.isActive()) {
                     tx.commit();
                 }
                 return result;
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
                 if (started && tx.isActive()) {
                     tx.rollback();
                 }

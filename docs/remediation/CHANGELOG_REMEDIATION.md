@@ -447,3 +447,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Si `EntityManagerFactory.createEntityManager()` échoue, le `CompletableFuture`
   est désormais complété exceptionnellement ; plus de blocage sur `join()`.
 - Test ajouté ; suite complète 212/212.
+
+## Campagne 7 duodecies — Nettoyage transaction MySQL (2026-11-11)
+
+- `executeWrite` MySQL ouvre la transaction dans le `try` : un échec de
+  `begin()` ferme désormais l'EntityManager.
+- Rollback élargi aux `Error`, pas seulement aux `RuntimeException`.
+- Suite complète 212/212.
