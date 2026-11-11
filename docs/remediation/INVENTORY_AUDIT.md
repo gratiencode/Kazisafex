@@ -63,9 +63,8 @@ pouvait donc synchroniser ou relire un inventaire non encore commité.
 
 **Correction appliquée** : `.join()` avant retour, comme `CompterService`. Le commit local
 est terminé quand la méthode rend la main.  
-**Limite** : aucun test automatisé fiable n'a pu être conservé sans mock statique
-inter-thread ; la correction est vérifiée par compilation et revue de code. Un test
-d'intégration SQLite réel est à ajouter (voir §6).
+**Test** : `InventaireServiceTest.createWaitsForLocalFuture` vérifie explicitement
+l'appel à `join()` via un `CompletableFuture` espionné.
 
 ### B2 — Pas de photographie du stock théorique à l'ouverture
 
