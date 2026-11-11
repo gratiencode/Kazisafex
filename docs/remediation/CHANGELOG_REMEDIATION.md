@@ -86,6 +86,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `ManagedSessionFactory` et `JpaUtil` délèguent à la politique commune.
 - Tests : `MySqlTlsTest` (5 cas). Suite complète après campagne : **183/183**.
 - Baseline actualisée : 177 tests au démarrage, 98 entrées locales préservées.
+- **H5 (atténuation)** : `DatabaseFileSecurity` applique 0700 au répertoire et
+  0600 à la base SQLite/WAL/SHM. Le chiffrement SQLCipher reste manuel.
 
 ## Campagne 3 — Synchronisation (audit + première correction, 2026-11-11)
 

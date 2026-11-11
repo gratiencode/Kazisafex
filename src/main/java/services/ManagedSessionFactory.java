@@ -219,6 +219,10 @@ public class ManagedSessionFactory {
                 properties
             );
             SchemaAutoUpdater.ensureCoreSchema(true, dbUrl, null, null);
+            // SQLCipher n'est pas encore actif : au minimum, la base locale et
+            // ses fichiers WAL/SHM ne doivent pas être lisibles par les autres
+            // comptes du poste.
+            services.utils.DatabaseFileSecurity.harden(dbPath + ".db");
             writeQueue = new WriteQueueManager(emf);
             AggregateTriggerService.getInstance().rebuildAtStartup();
             threadLocal = null; // inutile pour sqlite
