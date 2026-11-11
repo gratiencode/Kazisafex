@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.util.concurrent.locks.ReentrantLock;
 
 import data.Inventaire;
+import data.Produit;
+import data.StockAgregate;
 import org.junit.jupiter.api.Test;
 
 class CompterServiceInventoryGuardTest {
@@ -42,6 +44,31 @@ class CompterServiceInventoryGuardTest {
         assertEquals(opening, CompterService.inventoryReferenceDate(inventory));
         assertEquals(LocalDate.now(), CompterService.inventoryReferenceDate(new Inventaire()));
         assertEquals(LocalDate.now(), CompterService.inventoryReferenceDate(null));
+    }
+
+    @Test
+    void openingTheoreticalStockUsesInventoryOpeningDate() {
+        LocalDate opening = LocalDate.of(2026, 11, 1);
+        Inventaire inventory = new Inventaire();
+        inventory.setUid("inv-opening");
+        inventory.setDateDebut(opening);
+        Produit product = new Produit("prod-open");
+
+        final LocalDate[] seenDate = new LocalDate[1];
+        CompterService service = new CompterService() {
+            @Override
+            public StockAgregate findLotStock(String pId, String lot, LocalDate date, String region) {
+                seenDate[0] = date;
+                StockAgregate aggregate = new StockAgregate("stock-open");
+                aggregate.setFinalQuantity(42d);
+                return aggregate;
+            }
+        };
+
+        double quantity = service.theoreticalStockAtOpening(product, "lot-1", inventory, "Lubumbashi");
+
+        assertEquals(42d, quantity);
+        assertEquals(opening, seenDate[0]);
     }
 
     @Test

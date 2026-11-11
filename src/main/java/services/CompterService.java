@@ -481,7 +481,7 @@ public class CompterService implements CompterStorage {
      * retombe explicitement sur le stock courant pour ne pas produire un faux
      * ecart de zero.
      */
-    private double theoreticalStockAtOpening(Produit prod, String lot, Inventaire inv, String region) {
+    double theoreticalStockAtOpening(Produit prod, String lot, Inventaire inv, String region) {
         if (prod == null) {
             return 0d;
         }

@@ -77,6 +77,8 @@ stratégie explicite pour les mouvements postérieurs.
 
 **Limites** : pas de snapshot immuable dédié ; dépend de la présence d'un agrégat à la date d'ouverture ; les anciens inventaires sans date gardent le comportement courant.
 
+**Test** : `openingTheoreticalStockUsesInventoryOpeningDate` vérifie que la date transmise est bien `dateDebut` et que la quantité d'ouverture est utilisée.
+
 **Statut** : **partiellement corrigé**.
 
 ### B3 — Clôture non atomique
