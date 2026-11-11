@@ -133,3 +133,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test ajouté : `KazisafeServiceFactoryHttpPolicyTest` (vérifie la politique
   OkHttp et les timeouts).
 - `HTTP_ARCHITECTURE.md` mis à jour.
+
+## Campagne 6 — Architecture (cadrage, 2026-11-11)
+
+- Audit des God Classes et plan d'extraction progressive :
+  `ARCHITECTURE_REMEDIATION.md`.
+- Aucun déplacement massif effectué : les extractions démarreront après la
+  stabilisation inventaire/synchronisation, avec tests de caractérisation.
