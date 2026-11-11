@@ -29,7 +29,7 @@ public final class DatabaseBackup {
 
     private static final Logger LOGGER = Logger.getLogger(DatabaseBackup.class.getName());
     private static final DateTimeFormatter STAMP =
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     private DatabaseBackup() {
     }

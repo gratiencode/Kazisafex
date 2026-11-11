@@ -530,3 +530,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - La sauvegarde `inventory-close` est prise à l'intérieur du verrou
   d'inventaire, après sérialisation des clôtures concurrentes.
 - Suite complète 213/213.
+
+## Campagne 7 quaterdecies — Horodatage des sauvegardes (2026-11-11)
+
+- Les noms de sauvegarde incluent les millisecondes : deux copies dans la même
+  seconde ne s'écrasent plus.
+- Suite complète 213/213.
