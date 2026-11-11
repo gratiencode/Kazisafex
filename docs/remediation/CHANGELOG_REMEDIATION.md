@@ -368,3 +368,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `CompterService.createCompter/updateCompter` rejettent une quantité
   négative, NaN/infinie, ou un inventaire/produit absent avant toute écriture.
 - Test ajouté ; suite complète 206/206.
+
+## Campagne 3 ter — Coalescence des doublons d'outbox (2026-11-11)
+
+- `BackgroundSyncService` ne transmet plus qu'une mutation pour des enregistrements
+  strictement identiques (table/entité/action/payload/région) ; les copies
+  exactes sont acquittées après succès.
+- Les mises à jour différentes de la même entité restent envoyées séparément.
+- Test ajouté ; suite complète 207/207.

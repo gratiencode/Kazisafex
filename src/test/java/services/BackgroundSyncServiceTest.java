@@ -1,9 +1,12 @@
 package services;
 
+import data.SyncOutbox;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -56,6 +59,32 @@ class BackgroundSyncServiceTest {
         assertEquals(0, p("PRESENCE"));
         assertEquals(5, p("FACTURE"));
         assertEquals(99, p("UNKNOWN_TABLE"));
+    }
+
+    @Test
+    @DisplayName("Les mutations strictement identiques sont coalescées avant envoi")
+    void testCoalesceExactDuplicates() {
+        SyncOutbox first = record("uid-1", "same-payload");
+        SyncOutbox duplicate = record("uid-2", "same-payload");
+        SyncOutbox different = record("uid-3", "other-payload");
+
+        List<SyncOutbox> unique = BackgroundSyncService.coalesceExactDuplicates(
+                List.of(first, duplicate, different));
+
+        assertEquals(2, unique.size());
+        assertSame(first, unique.get(0));
+        assertSame(different, unique.get(1));
+    }
+
+    private static SyncOutbox record(String uid, String payload) {
+        SyncOutbox r = new SyncOutbox();
+        r.setUid(uid);
+        r.setTableName("PRODUIT");
+        r.setEntityId("prod-1");
+        r.setAction("UPDATE");
+        r.setPayload(payload);
+        r.setRegion("Goma");
+        return r;
     }
 
     private static void assertLess(int a, int b) {

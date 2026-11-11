@@ -409,6 +409,27 @@ public class BackgroundSyncService extends Service<Void> {
         };
     }
 
+    /**
+     * Conserve une seule mutation par clé métier strictement identique. Des
+     * mises à jour différentes de la même entité restent envoyées séparément.
+     */
+    static List<SyncOutbox> coalesceExactDuplicates(List<SyncOutbox> input) {
+        if (input == null || input.isEmpty()) {
+            return List.of();
+        }
+        java.util.Map<String, SyncOutbox> unique = new java.util.LinkedHashMap<>();
+        for (SyncOutbox record : input) {
+            String key = String.join("|",
+                    String.valueOf(record.getTableName()),
+                    String.valueOf(record.getEntityId()),
+                    String.valueOf(record.getAction()),
+                    String.valueOf(record.getPayload()),
+                    String.valueOf(record.getRegion()));
+            unique.putIfAbsent(key, record);
+        }
+        return new java.util.ArrayList<>(unique.values());
+    }
+
     private SyncOutcome processUpsyncChunk(List<SyncOutbox> chunk) {
         // 1. Hierarchical Sort (Dependency Level, then Timestamp)
         chunk.sort((r1, r2) -> {
@@ -422,8 +443,18 @@ public class BackgroundSyncService extends Service<Void> {
                     : r2.getUpdatedAt() != null? -1: 0;
         });
 
+        // 1b. Les mutations strictement identiques (même table, entité,
+        // action, payload, région) ne doivent pas être envoyées plusieurs fois :
+        // le serveur les acquitterait toutes alors qu'une seule a été appliquée.
+        List<SyncOutbox> originalChunk = List.copyOf(chunk);
+        final List<SyncOutbox> effectiveChunk = coalesceExactDuplicates(chunk);
+        List<String> duplicateUids = originalChunk.stream()
+                .filter(r -> effectiveChunk.stream().noneMatch(k -> k.getUid().equals(r.getUid())))
+                .map(SyncOutbox::getUid)
+                .collect(Collectors.toList());
+
         // 2. Convert to BatchMutationDto
-        List<BatchMutationDto> mutations = chunk
+        List<BatchMutationDto> mutations = effectiveChunk
                 .stream()
                 .map(r -> {
                     BatchMutationDto dto = new BatchMutationDto();
@@ -456,7 +487,7 @@ public class BackgroundSyncService extends Service<Void> {
 
                 // Handle Successes
                 if (result.successes != null) {
-                    List<String> successUids = chunk
+                    List<String> successUids = effectiveChunk
                             .stream()
                             .filter(r-> result.successes.stream().anyMatch(s-> s.entityId != null && s.entityId.equals(r.getEntityId())
                                             && s.entityType != null && s.entityType.equalsIgnoreCase(r.getTableName())))
@@ -471,9 +502,15 @@ public class BackgroundSyncService extends Service<Void> {
                     }
                 }
 
+                if (!duplicateUids.isEmpty()) {
+                    SyncOutboxService.markAsApplied(duplicateUids);
+                    acknowledgedUids.addAll(duplicateUids);
+                    appliedCount += duplicateUids.size();
+                }
+
                 // Handle Failures: mark as UNSYNCED (will be retried, up to 5 times)
                 if (result.failures != null) {
-                    List<String> failedUids = chunk
+                    List<String> failedUids = effectiveChunk
                             .stream()
                             .filter(r-> result.failures.stream().anyMatch(s-> s.entityId != null && s.entityId.equals(r.getEntityId())
                                             && s.entityType != null && s.entityType.equalsIgnoreCase(r.getTableName())))
@@ -512,7 +549,7 @@ public class BackgroundSyncService extends Service<Void> {
             } else {
                 System.err.println("[SYNC-UPSYNC] Server error: " + response.code());
                 // Mark entire chunk as UNSYNCED for retry
-                List<String> allUids = chunk.stream().map(SyncOutbox::getUid).collect(Collectors.toList());
+                List<String> allUids = effectiveChunk.stream().map(SyncOutbox::getUid).collect(Collectors.toList());
                 SyncOutboxService.markAsUnsynced(allUids);
                 return SyncOutcome.failed();
             }
@@ -539,7 +576,7 @@ public class BackgroundSyncService extends Service<Void> {
             );
             // Marquer le lot comme UNSYNCED (retryCount++) pour que le retry
             // reste actif même si le timestamp de fin de synchro avance.
-            List<String> allUids = chunk.stream()
+            List<String> allUids = effectiveChunk.stream()
                     .map(SyncOutbox::getUid)
                     .collect(Collectors.toList());
             try {
