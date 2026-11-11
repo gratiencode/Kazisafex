@@ -122,11 +122,18 @@ zéro, malgré le message « les non comptés seront mis à ZERO ».
 ### B5 — Comptages concurrents non protégés
 
 Aucune contrainte d'unicité sur `(inventaire_id, product_id, numlot, region)` et aucun
-verrou/`@Version`. Deux utilisateurs peuvent créer ou modifier le même comptage ; les
+`@Version`. Deux utilisateurs peuvent créer ou modifier le même comptage ; les
 purges et recalculs `#INV` peuvent se chevaucher.
 
-**Risque** : doubles ajustements, écarts incohérents.  
-**Statut** : **ouvert**.
+**Correction partielle** : `CompterService` sérialise désormais tous les
+ajustements/clôtures d'un même inventaire via un verrou réentrant par
+`inventaire.uid`. Les autres inventaires restent parallèles.
+
+**Limite** : ce verrou est local au processus. Deux instances de
+l'application sur la même base, ou deux nœuds, ne sont pas protégés ; une
+contrainte d'unicité et/ou `@Version` reste nécessaire.
+
+**Statut** : **partiellement corrigé** (mono-processus).
 
 ### B6 — Absence de validateur et de trace de validation
 

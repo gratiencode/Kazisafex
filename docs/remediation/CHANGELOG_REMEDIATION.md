@@ -113,6 +113,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - **Corrigé B3 (partiel)** : la clôture crée d'abord les comptages zéro, puis
   marque l'inventaire `Terminé`. Une interruption laisse l'inventaire ouvert
   et la clôture reste rejouable ; la transaction unique reste à faire.
+- **Corrigé B5 (partiel)** : verrou réentrant par inventaire dans
+  `CompterService` (création/mise à jour/suppression/clôture sérialisées dans
+  le processus) ; test de verrouillage ajouté. La protection multi-instances
+  reste à faire.
 - Audit complet : `INVENTORY_AUDIT.md`.
 - Constats ouverts : pas de photographie figée du théorique, clôture non
   atomique, comptages concurrents non protégés, validateur absent, lots

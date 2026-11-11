@@ -30,6 +30,9 @@ import jakarta.persistence.EntityNotFoundException;
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 import tools.Agregator;
 import tools.ComptageItem;
@@ -44,9 +47,42 @@ import tools.SyncLogger;
  */
 public class CompterService implements CompterStorage {
 
+    /**
+     * Sérialise les ajustements d'un même inventaire dans ce processus. Le
+     * verrou est réentrant : la clôture peut créer des comptages zéro via
+     * createCompter sans se bloquer elle-même. Les autres inventaires restent
+     * indépendants.
+     */
+    private static final ConcurrentHashMap<String, ReentrantLock> INVENTORY_LOCKS =
+            new ConcurrentHashMap<>();
+
     Preferences pref;
     String devise;
     double taux;
+
+    static ReentrantLock inventoryLock(Inventaire inv) {
+        String key = inv == null || inv.getUid() == null || inv.getUid().isBlank()
+                ? "__no_inventory__"
+                : inv.getUid();
+        return INVENTORY_LOCKS.computeIfAbsent(key, ignored -> new ReentrantLock());
+    }
+
+    private <T> T withInventoryLock(Inventaire inv, Supplier<T> action) {
+        ReentrantLock lock = inventoryLock(inv);
+        lock.lock();
+        try {
+            return action.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void withInventoryLock(Inventaire inv, Runnable action) {
+        withInventoryLock(inv, () -> {
+            action.run();
+            return null;
+        });
+    }
 
     @Override
     public boolean isExists(String uid) {
@@ -71,6 +107,10 @@ public class CompterService implements CompterStorage {
 
     @Override
     public Compter createCompter(Compter cat) {
+        return withInventoryLock(cat.getInventaireId(), () -> createCompterLocked(cat));
+    }
+
+    private Compter createCompterLocked(Compter cat) {
         boolean isDeleted = cat.getDeletedAt() != null;
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
@@ -93,6 +133,10 @@ public class CompterService implements CompterStorage {
 
     @Override
     public Compter updateCompter(Compter cat) {
+        return withInventoryLock(cat.getInventaireId(), () -> updateCompterLocked(cat));
+    }
+
+    private Compter updateCompterLocked(Compter cat) {
         boolean isDeleted = cat.getDeletedAt() != null;
         String uid = cat.getUid();
         if (cat.getInventaireId() == null) {
@@ -148,6 +192,10 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void deleteCompter(Compter obj) {
+        withInventoryLock(obj.getInventaireId(), () -> deleteCompterLocked(obj));
+    }
+
+    private void deleteCompterLocked(Compter obj) {
         // Sauvegarder les champs necessaires avant suppression
         Produit prod = obj.getProductId();
         String region = obj.getRegion();
@@ -806,6 +854,10 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
+        withInventoryLock(inv, () -> removeNoCountedProductsLocked(inv, onCreated));
+    }
+
+    private void removeNoCountedProductsLocked(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
         if (inv == null || inv.getUid() == null || inv.getRegion() == null || inv.getCodeInventaire() == null) {
             return;
         }
