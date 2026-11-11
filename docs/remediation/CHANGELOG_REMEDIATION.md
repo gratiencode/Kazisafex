@@ -434,3 +434,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - `INVENTORY_AUDIT.md` distingue la clôture atténuée par sauvegarde de la
   transaction unique encore absente, et documente B4 (lots nuls) comme ouvert.
+
+## Campagne 3 septies — Échec de recherche outbox non masqué (2026-11-11)
+
+- `findPendingOutbox` ne transforme plus une erreur SQL en « aucun
+  enregistrement » : l'exception remonte, la transaction métier est annulée
+  et aucun doublon n'est créé.
+- Test ajouté (échec de requête) ; suite complète 211/211.

@@ -325,28 +325,20 @@ public class SyncOutboxListener {
         String tableName,
         String entityId
     ) {
-        try {
-            List<SyncOutbox> results = em
-                .createQuery(
-                    "SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.entityId = :entityId AND s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt DESC",
-                    SyncOutbox.class
-                )
-                .setParameter("tableName", tableName)
-                .setParameter("entityId", entityId)
-                .setMaxResults(1)
-                .getResultList();
-            return results.isEmpty() ? null : results.get(0);
-        } catch (Exception e) {
-            SyncLogger
-                .getInstance()
-                .log(
-                    e,
-                    "SyncOutboxListener: failed to find pending outbox record",
-                    tableName,
-                    entityId
-                );
-            return null;
-        }
+        // Ne jamais transformer une erreur de requete en "aucun enregistrement" :
+        // cela creerait un doublon d'outbox et masquerait une panne de stockage.
+        // L'exception remonte et fait annuler la transaction metier ; le chemin
+        // asynchrone de repli reessaiera.
+        List<SyncOutbox> results = em
+            .createQuery(
+                "SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.entityId = :entityId AND s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt DESC",
+                SyncOutbox.class
+            )
+            .setParameter("tableName", tableName)
+            .setParameter("entityId", entityId)
+            .setMaxResults(1)
+            .getResultList();
+        return results.isEmpty() ? null : results.get(0);
     }
 
     private LocalDateTime getUpdatedAt(Object entity) {
