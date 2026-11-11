@@ -418,3 +418,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - La CI publie `target/surefire-reports/` en artefact, en plus du rapport
   SpotBugs déjà archivé.
+
+## Campagne 9 — État sécurité consolidé (2026-11-11)
+
+- `SECURITY_REMEDIATION.md` documente l'atomicité outbox, les sauvegardes,
+  le garde-fou désérialisation et le tri des findings SpotBugs restants.

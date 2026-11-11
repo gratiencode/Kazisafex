@@ -137,3 +137,33 @@ Les outils de réplication MySQL de `GratienTools` n'utilisent plus `root` par d
 ### Désérialisation Java WebSocket (2026-11-11)
 
 `ImageProductDecoder` (`ObjectInputStream.readObject`) supprimé ; il n'était utilisé que par le `SyncEndpoint` legacy. Aucun flux réseau ne doit désérialiser du Java arbitraire.
+
+---
+
+## État consolidé — 11 novembre 2026
+
+### Corrections structurelles
+
+- Outbox écrite dans la transaction métier (plus de perte entre commit et
+  synchronisation).
+- Sauvegardes SQLite avant migration et avant clôture d'inventaire.
+- Désérialisation Java non sûre interdite par le garde-fou CI.
+- Secrets applicatifs hors du code courant (SecretStore/TokenStore).
+- TLS MySQL `REQUIRED` par défaut, plus de `root` implicite.
+- Téléchargements de mise à jour bornés par timeouts.
+
+### Findings SpotBugs examinés
+
+- `COMMAND_INJECTION` (`Main`) : faux positif — `ProcessBuilder` reçoit une
+  liste d'arguments, sans shell ni concaténation de commande.
+- `STCAL_*` : faux positifs — les champs de `Constants` sont des
+  `ThreadSafeSimpleDateFormat` synchronisés.
+- Les bugs de correction réels (NPE, comparaisons Integer/String, listes
+  nulles, fermeture imprimante) ont été corrigés.
+
+### Actions externes non automatisables
+
+1. Révocation de la clé Ollama historique.
+2. Rotation du mot de passe MySQL et création d'un compte applicatif.
+3. Publication du manifeste signé et de la clé publique Ed25519.
+4. Migration SQLCipher ou chiffrement disque OS.
