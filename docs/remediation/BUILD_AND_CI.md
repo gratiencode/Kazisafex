@@ -68,6 +68,10 @@ findings. Le rapport est publié et devra devenir bloquant après la campagne 6.
 - Pas de base MySQL de test en CI.
 - Pas de test d'interface JavaFX (TestFX absent).
 - Pas de seuil de couverture.
+- **SpotBugs 4.8.6 / FindSecBugs 1.13.0 ne sait pas analyser les classes Java 25**
+  (`NoClassesFoundToAnalyzeException`) : le job statique reste volontairement
+  non bloquant et devra être réoutillé (version compatible Java 25 ou analyse
+  Bytecode séparée) avant de devenir un gate.
 - Gitleaks peut signaler les secrets historiques déjà connus (clé Ollama
   compromise) : leur présence dans l'historique est documentée dans
   `MANUAL_ACTIONS.md`, elle ne doit pas être « corrigée » en réécrivant
