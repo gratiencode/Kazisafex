@@ -216,3 +216,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   est obligatoire.
 - Le mot de passe reste fourni par l'utilisateur ; aucune valeur embarquée.
 - Erreur explicite si le compte admin n'est pas configuré.
+
+## Rapport d'étape (2026-11-11)
+
+- Création de `FINAL_REPORT.md` : état vérifié, corrections livrées, points
+  partiels/non corrigés, actions manuelles et évolutions API serveur.
+- Aucune conclusion prématurée : la mission reste active.
