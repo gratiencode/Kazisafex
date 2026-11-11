@@ -177,3 +177,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
   file d'écriture SQLite.
 - Aucun hook n'est enregistré avant l'initialisation de la base, pour éviter
   toute création tardive de base pendant un arrêt.
+
+## Campagne 1 ter — Garde-fou secrets/TLS (2026-11-11)
+
+- Ajout de `scripts/security-regression.sh` : échoue si la clé Ollama
+  historique, `Admin*21`, `useSSL=false` ou un contournement TrustAll /
+  HostnameVerifier réapparaît dans `src/main/java`.
+- Intégré comme première étape de la CI (`build-and-test`).
+- Vérifié localement : aucune occurrence interdite.

@@ -44,6 +44,7 @@ Jobs :
 
 1. **build-and-test** (bloquant) :
    - checkout ;
+   - garde-fou secrets/TLS (`scripts/security-regression.sh`) ;
    - Temurin 25 + cache Maven ;
    - `mvn -Dtests.skip=false test` ;
    - `mvn -DskipTests package` ;

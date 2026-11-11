@@ -25,6 +25,9 @@ jobs:
           java-version: "25"
           cache: maven
 
+      - name: Security regression guard
+        run: ./scripts/security-regression.sh
+
       - name: Compile and run the full test suite
         # tests.skip=true is the local default; CI must always force the suite.
         run: mvn -B -ntp -Dtests.skip=false test
