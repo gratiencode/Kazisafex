@@ -26,7 +26,7 @@ mvn -B -ntp -Dtests.skip=false test
 
 | Élément | Valeur |
 |---|---|
-| Tests exécutés | **195** |
+| Tests exécutés | **198** |
 | Échecs | 0 |
 | Erreurs | 0 |
 | Ignorés | 0 |
@@ -34,7 +34,7 @@ mvn -B -ntp -Dtests.skip=false test
 | Commande | `mvn -q clean test -Dtests.skip=false` |
 
 Après ajout des tests TLS, `REMOVE`, dead-letter, politique HTTP, garde
-d'inventaire, permissions SQLite et verrouillage, le total est de **195** (validation par `mvn clean test`, qui
+d'inventaire, permissions SQLite et verrouillage, le total est de **198** (validation par `mvn clean test`, qui
 élimine les rapports Surefire périmés).
 
 ## 3. CI GitHub Actions
@@ -70,10 +70,11 @@ findings. Le rapport est publié et devra devenir bloquant après la campagne 6.
 - Pas de base MySQL de test en CI.
 - Pas de test d'interface JavaFX (TestFX absent).
 - Pas de seuil de couverture.
-- **SpotBugs 4.8.6 / FindSecBugs 1.13.0 ne sait pas analyser les classes Java 25**
-  (`NoClassesFoundToAnalyzeException`) : le job statique reste volontairement
-  non bloquant et devra être réoutillé (version compatible Java 25 ou analyse
-  Bytecode séparée) avant de devenir un gate.
+- SpotBugs 4.10.5 analyse Java 25 mais épuise le tas sur ce projet (`OutOfMemoryError`)
+  avec la configuration actuelle ; le job reste non bloquant. Un réglage mémoire
+  dédié ou une analyse par module est nécessaire avant d’en faire un gate.
+  L’analyse a néanmoins déjà révélé des bugs de correction réels, dont trois
+  corrigés dans `Util`.
 - Gitleaks peut signaler les secrets historiques déjà connus (clé Ollama
   compromise) : leur présence dans l'historique est documentée dans
   `MANUAL_ACTIONS.md`, elle ne doit pas être « corrigée » en réécrivant

@@ -1045,7 +1045,8 @@ public class Util {
     public static List<LigneVente> findSaleItemsFor(List<LigneVente> items, Integer vent) {
         List<LigneVente> result = new ArrayList<>();
         for (LigneVente l : items) {
-            if (l.getReference().getUid() == vent) {
+            if (l.getReference() != null
+                    && java.util.Objects.equals(l.getReference().getUid(), vent)) {
                 if (!result.contains(l)) {
                     result.add(l);
                 }
@@ -1241,7 +1242,9 @@ public class Util {
     public static List<PrixDeVente> findPricesForReq(List<PrixDeVente> pvs, String reqUid) {
         List<PrixDeVente> rst = new ArrayList<>();
         for (PrixDeVente pv : pvs) {
-            if (pv.getRecquisitionId().equals(reqUid)) {
+            if (pv.getRecquisitionId() != null
+                    && reqUid != null
+                    && reqUid.equals(pv.getRecquisitionId().getUid())) {
                 rst.add(pv);
             }
         }
@@ -3343,7 +3346,7 @@ public class Util {
 
     public static Vente getVente(List<Vente> lv, Integer ref) {
         for (Vente v : lv) {
-            if (v.getUid() == ref) {
+            if (java.util.Objects.equals(v.getUid(), ref)) {
                 return v;
             }
         }
@@ -4599,6 +4602,88 @@ public class Util {
         return null;
     }
 
+    /**
+     * Detail des depenses realisees au format Excel (xlsx), une ligne par
+     * date/imputation/depense avec cumul des montants USD et CDF et une ligne de
+     * totaux. Meme presentation que l'onglet "gestion de depenses" de la
+     * tresorerie.
+     */
+    public static File exportXlsExpenseDetails(List<data.DepenseAgregate> items, String title) {
+        FileOutputStream fos = null;
+        try {
+            String path = MainUI.cPath("/Media/autres");
+            File file = new File(
+                    path + "/ksf-Rapport_depenses_detail_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+            fos = new FileOutputStream(file);
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            Font headerFont = workbook.createFont();
+            headerFont.setColor(IndexedColors.DARK_BLUE.index);
+            headerFont.setBold(true);
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            headerCellStyle.setFillForegroundColor(IndexedColors.SKY_BLUE.index);
+            headerCellStyle.setFillPattern(FillPatternType.DIAMONDS);
+            headerCellStyle.setFont(headerFont);
+
+            XSSFSheet feuil = workbook.createSheet("Depenses detaillees");
+            feuil.setColumnWidth(2, 30 * 300);
+
+            int rowid = 0;
+            if (title != null && !title.isBlank()) {
+                XSSFRow titleRow = feuil.createRow(rowid++);
+                XSSFCell titleCell = titleRow.createCell(0);
+                titleCell.setCellStyle(headerCellStyle);
+                titleCell.setCellValue(title);
+                rowid++;
+            }
+
+            XSSFRow row0 = feuil.createRow(rowid++);
+            String[] headers = {"DATE", "IMPUTATION", "NOM DE LA DEPENSE", "MONTANT USD", "MONTANT CDF"};
+            for (int i = 0; i < headers.length; i++) {
+                XSSFCell cell = row0.createCell(i);
+                cell.setCellStyle(headerCellStyle);
+                cell.setCellValue(headers[i]);
+            }
+
+            double sumUsd = 0;
+            double sumCdf = 0;
+            for (data.DepenseAgregate item : items) {
+                row0 = feuil.createRow(rowid++);
+                row0.createCell(0).setCellValue(item.getDate() != null
+                        ? item.getDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        : "-");
+                row0.createCell(1).setCellValue(item.getImputation() == null ? "-" : item.getImputation());
+                row0.createCell(2).setCellValue(item.getDepenseId() != null ? item.getDepenseId().getNomDepense() : "");
+                double usd = item.getMontantUsd() == null ? 0 : item.getMontantUsd();
+                double cdf = item.getMontantCdf() == null ? 0 : item.getMontantCdf();
+                row0.createCell(3).setCellValue(usd);
+                row0.createCell(4).setCellValue(cdf);
+                sumUsd += usd;
+                sumCdf += cdf;
+            }
+
+            row0 = feuil.createRow(rowid++);
+            row0.createCell(2).setCellValue("TOTAUX");
+            row0.createCell(3).setCellValue(sumUsd);
+            row0.createCell(4).setCellValue(sumCdf);
+
+            workbook.write(fos);
+            return file;
+        } catch (Exception e) {
+            SyncLogger.getInstance().log(e, "Util.exportXlsExpenseDetails");
+            e.printStackTrace();
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "Util.exportXlsExpenseDetails");
+                    ex.printStackTrace();
+                }
+            }
+        }
+        return null;
+    }
+
     public static <T> double sumUp(List<T> data, boolean forSaleCredit, double taux) {
         double result = 0;
         for (T t : data) {
@@ -4979,12 +5064,9 @@ public class Util {
 
     public static File exportXlsInventoryMagasin(HashMap<String, String> bundleData, List<InventoryMagasin> lisinvent,
             String dev) {
-        FileOutputStream fos;
-        try {
-            String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
-            fos = new FileOutputStream(file);
-            XSSFWorkbook workbook = new XSSFWorkbook();
+        String path = MainUI.cPath("Media" + File.separator + "inventories");
+        File file = new File(path + File.separator + "ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Font headerFont = workbook.createFont();
             headerFont.setColor(IndexedColors.DARK_BLUE.index);
             headerFont.setBold(true);
@@ -5102,49 +5184,42 @@ public class Util {
             XSSFCell stock_th = row0.createCell(10);
             stock_th.setCellStyle(headerCellStyle);
             stock_th.setCellValue("STOCK THEORIQUE");
-            XSSFCell stock_ph = row0.createCell(11);
-            stock_ph.setCellStyle(headerCellStyle);
-            stock_ph.setCellValue("STOCK PHYSIQUE");
-            XSSFCell alerte = row0.createCell(12);
+            XSSFCell alerte = row0.createCell(11);
             alerte.setCellStyle(headerCellStyle);
             alerte.setCellValue("ALERTE");
-            XSSFCell pau_usd = row0.createCell(13);
+            XSSFCell pau_usd = row0.createCell(12);
             pau_usd.setCellStyle(headerCellStyle);
             pau_usd.setCellValue("P.A. UNIT");
-            XSSFCell valeur_total = row0.createCell(14);
+            XSSFCell valeur_total = row0.createCell(13);
             valeur_total.setCellStyle(headerCellStyle);
             valeur_total.setCellValue("VALEUR STOCK");
-            XSSFCell local = row0.createCell(15);
+            XSSFCell local = row0.createCell(14);
             local.setCellStyle(headerCellStyle);
             local.setCellValue("LOCALISATION");
-            XSSFCell date_expir = row0.createCell(16);
+            XSSFCell date_expir = row0.createCell(15);
             date_expir.setCellStyle(headerCellStyle);
             date_expir.setCellValue("DATE EXP.");
-            XSSFCell prixdevente = row0.createCell(17);
-            prixdevente.setCellStyle(headerCellStyle);
-            prixdevente.setCellValue("PRIX-VENTE");
-            XSSFCell devise = row0.createCell(18);
-            devise.setCellStyle(headerCellStyle);
-            devise.setCellValue("DEVISE");
-            XSSFCell multibatch = row0.createCell(19);
-            multibatch.setCellStyle(headerCellStyle);
-            multibatch.setCellValue("MULTI-LOT");
+            XSSFCell etat = row0.createCell(16);
+            etat.setCellStyle(headerCellStyle);
+            etat.setCellValue("ETAT");
             for (InventoryMagasin ii : lisinvent) {
                 row0 = feuil.createRow(++rowid);
+                Produit p = ii.getProduit();
                 XSSFCell codebar1 = row0.createCell(0);
-                codebar1.setCellValue(ii.getProduit().getCodebar());
+                codebar1.setCellValue(p == null || p.getCodebar() == null ? "" : p.getCodebar());
                 XSSFCell nom_prod = row0.createCell(1);
-                nom_prod.setCellValue(ii.getProduit().getNomProduit());
+                nom_prod.setCellValue(p == null || p.getNomProduit() == null ? "" : p.getNomProduit());
                 XSSFCell pmarque = row0.createCell(2);
-                pmarque.setCellValue(ii.getProduit().getMarque());
+                pmarque.setCellValue(p == null || p.getMarque() == null ? "" : p.getMarque());
                 XSSFCell pmodele = row0.createCell(3);
-                pmodele.setCellValue(ii.getProduit().getModele());
+                pmodele.setCellValue(p == null || p.getModele() == null ? "" : p.getModele());
                 XSSFCell ptaille = row0.createCell(4);
-                ptaille.setCellValue((ii.getProduit().getTaille() == null ? "" : ii.getProduit().getTaille()));
+                ptaille.setCellValue(p == null || p.getTaille() == null ? "" : p.getTaille());
                 XSSFCell dlot = row0.createCell(5);
-                dlot.setCellValue(ii.getLot());
+                dlot.setCellValue(ii.getLot() == null ? "" : ii.getLot());
                 XSSFCell dmesure = row0.createCell(6);
-                dmesure.setCellValue(ii.getMesure().getDescription() + ":" + ii.getMesure().getQuantContenu());
+                Mesure m = ii.getMesure();
+                dmesure.setCellValue(m == null ? "" : m.getDescription() + ":" + m.getQuantContenu());
                 XSSFCell dstock_init = row0.createCell(7);
                 dstock_init.setCellValue(ii.getStockInitial());
                 XSSFCell entrees = row0.createCell(8);
@@ -5153,34 +5228,42 @@ public class Util {
                 quant_out.setCellValue(ii.getQuantSortie());
                 XSSFCell quant_remain = row0.createCell(10);
                 quant_remain.setCellValue(ii.getQuantStock());
-                XSSFCell stock_phys = row0.createCell(11);
-                stock_phys.setCellValue(0);
-                XSSFCell stock_alerte = row0.createCell(12);
+                XSSFCell stock_alerte = row0.createCell(11);
                 stock_alerte.setCellValue(ii.getAlerte());
-                XSSFCell dpau = row0.createCell(13);
+                XSSFCell dpau = row0.createCell(12);
                 dpau.setCellValue(ii.getCoutAchat());
-                XSSFCell dvaleur = row0.createCell(14);
+                XSSFCell dvaleur = row0.createCell(13);
                 somme += ii.getValeurStock();
                 dvaleur.setCellValue(ii.getValeurStock());
-                XSSFCell loc = row0.createCell(15);
+                XSSFCell loc = row0.createCell(14);
                 loc.setCellValue(ii.getLocalisation());
-                XSSFCell dexpir = row0.createCell(16);
+                XSSFCell dexpir = row0.createCell(15);
                 LocalDate dexp = ii.getExpiry();
                 dexpir.setCellValue(dexp == null ? "" : dexp.toString());
-                XSSFCell vprice = row0.createCell(17);
-                vprice.setCellValue(ii.getPrixDeVente());
-                XSSFCell devisevalue = row0.createCell(18);
-                devisevalue.setCellValue(ii.getDevise());
-                XSSFCell vmultibatch = row0.createCell(19);
-                vmultibatch.setCellValue("NON");
+                XSSFCell etatCell = row0.createCell(16);
+                boolean expired = dexp != null && !dexp.isAfter(LocalDate.now());
+                boolean destroyed = ii.isDestroyed();
+                if (expired && destroyed) {
+                    etatCell.setCellValue("expirée déclassée");
+                } else if (expired) {
+                    etatCell.setCellValue("expirée non déclassée");
+                } else if (destroyed) {
+                    etatCell.setCellValue("non expirée déclassée");
+                } else {
+                    etatCell.setCellValue("non expirée");
+                }
             }
             enttvaluen.setCellValue(somme);
-            workbook.write(fos);
-            fos.close();
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
+            }
             return file;
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "Util.exportXlsInventoryMagasin");
             e.printStackTrace();
+            if (file.exists()) {
+                file.delete();
+            }
         }
         return null;
     }
@@ -5195,12 +5278,12 @@ public class Util {
 
     public static File exportXlsPhysicalInventory(HashMap<String, String> bundleData, List<ComptageItem> lisinvent,
             String dev) {
-        FileOutputStream fos;
-        try {
-            String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
-            fos = new FileOutputStream(file);
-            XSSFWorkbook workbook = new XSSFWorkbook();
+        if (lisinvent == null || lisinvent.isEmpty()) {
+            return null;
+        }
+        String path = MainUI.cPath("Media" + File.separator + "inventories");
+        File file = new File(path + File.separator + "ksf-inv_mag_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Font headerFont = workbook.createFont();
             headerFont.setColor(IndexedColors.DARK_BLUE.index);
             headerFont.setBold(true);
@@ -5328,16 +5411,18 @@ public class Util {
 
             for (ComptageItem ii : lisinvent) {
                 row0 = feuil.createRow(++rowid);
-                String localisation = getLocation(ii.getProduit().getUid());
-                row0.createCell(0).setCellValue(ii.getProduit().getCodebar());
-                row0.createCell(1).setCellValue(ii.getProduit().getNomProduit());
-                row0.createCell(2).setCellValue(ii.getProduit().getMarque());
-                row0.createCell(3).setCellValue(ii.getProduit().getModele());
+                Produit p = ii.getProduit();
+                String localisation = p == null ? "" : getLocation(p.getUid());
+                row0.createCell(0).setCellValue(p == null || p.getCodebar() == null ? "" : p.getCodebar());
+                row0.createCell(1).setCellValue(p == null || p.getNomProduit() == null ? "" : p.getNomProduit());
+                row0.createCell(2).setCellValue(p == null || p.getMarque() == null ? "" : p.getMarque());
+                row0.createCell(3).setCellValue(p == null || p.getModele() == null ? "" : p.getModele());
                 row0.createCell(4)
-                        .setCellValue((ii.getProduit().getTaille() == null ? "" : ii.getProduit().getTaille()));
+                        .setCellValue(p == null || p.getTaille() == null ? "" : p.getTaille());
                 row0.createCell(5).setCellValue(ii.getNumlot());
                 row0.createCell(6).setCellValue(ii.getQuantite());
-                row0.createCell(7).setCellValue(ii.getMesure().getDescription());
+                Mesure m = ii.getMesure();
+                row0.createCell(7).setCellValue(m == null ? "" : m.getDescription());
                 row0.createCell(8).setCellValue(ii.getCoutAchat());
                 row0.createCell(9).setCellValue(ii.getCoutTotal());
                 row0.createCell(10).setCellValue(dev);
@@ -5345,12 +5430,16 @@ public class Util {
                 row0.createCell(12).setCellValue(ii.getDateExpiration());
             }
             enttvaluen.setCellValue(lisinvent.stream().mapToDouble(c -> c.getCoutTotal()).sum());
-            workbook.write(fos);
-            fos.close();
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
+            }
             return file;
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "Util.exportXlsPhysicalInventory");
             e.printStackTrace();
+            if (file.exists()) {
+                file.delete();
+            }
         }
         return null;
     }
@@ -5838,7 +5927,7 @@ public class Util {
             if (v == null) {
                 continue;
             }
-            if (v.getUid() == uid) {
+            if (java.util.Objects.equals(v.getUid(), uid)) {
                 rst.add(l);
             }
         }
@@ -6330,8 +6419,8 @@ public class Util {
     }
 
     public static void exportXlsExpiredStock(List<utilities.Peremption> list) {
-        try {
-            XSSFWorkbook workbook = new XSSFWorkbook();
+        File file = null;
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Produits Expirés");
             String[] columns = {"Codebar", "Produit", "Lot", "Localisation", "Région", "Mesure", "Quantité",
                 "Cout Achat", "Valeur Total", "Date Expiration"};
@@ -6393,34 +6482,36 @@ public class Util {
             fileChooser.setInitialFileName("Produits_Expirés_" + System.currentTimeMillis() + ".xlsx");
             fileChooser.getExtensionFilters()
                     .add(new javafx.stage.FileChooser.ExtensionFilter("Fichier Excel", "*.xlsx"));
-            File file = fileChooser.showSaveDialog(null);
+            file = fileChooser.showSaveDialog(null);
             if (file != null) {
+                final File savedFile = file;
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     workbook.write(fos);
                 }
                 // Ouverture asynchrone
                 new Thread(() -> {
                     try {
-                        Desktop.getDesktop().open(file);
+                        Desktop.getDesktop().open(savedFile);
                     } catch (IOException ex) {
                         SyncLogger.getInstance().log(ex, "Util.exportXlsExpiredStock");
                         Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }).start();
             }
-            workbook.close();
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "Util.exportXlsExpiredStock");
             e.printStackTrace();
+            if (file != null && file.exists()) {
+                file.delete();
+            }
         }
     }
 
     public static File exportXlsRuptureStock(List<Rupture> ruptures) {
-        try {
-            String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-rupture_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
-            try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
-                Sheet sheet = workbook.createSheet("Stock en rupture");
+        String path = MainUI.cPath("Media" + File.separator + "inventories");
+        File file = new File(path + File.separator + "ksf-rupture_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Stock en rupture");
                 String[] titleColumns = {"CODEBAR", "PRODUIT", "MARQUE", "MODELE", "MESURE", "QUANTITE RESTANTE", "STOCK-ALERTE", "PRIX UNITAIRE", "LOCALISATION", "REGION", "DATE"};
                 XSSFCellStyle headerStyle = workbook.createCellStyle();
                 headerStyle.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 231, (byte) 76, (byte) 60}, null));
@@ -6457,21 +6548,25 @@ public class Util {
                 for (int i = 0; i < titleColumns.length; i++) {
                     sheet.autoSizeColumn(i);
                 }
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
             }
             return file;
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "Util.exportXlsRuptureStock");
             e.printStackTrace();
+            if (file.exists()) {
+                file.delete();
+            }
         }
         return null;
     }
 
     public static File exportXlsPeremptionStock(List<Peremption> items, int months) {
-        try {
-            String path = MainUI.cPath("/Media/inventories");
-            File file = new File(path + "/ksf-inv_expiree_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
-            try (XSSFWorkbook workbook = new XSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
-                Sheet sheet = workbook.createSheet(months > 0 ? "Produits sur le point d'expirer" : "Produits expires");
+        String path = MainUI.cPath("Media" + File.separator + "inventories");
+        File file = new File(path + File.separator + "ksf-inv_expiree_" + Constants.TIMESTAMPED_FORMAT.format(new Date()) + ".xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet(months > 0 ? "Produits sur le point d'expirer" : "Produits expires");
                 String[] titleColumns = {"CODEBAR", "PRODUIT", "LOT", "MESURE", "QUANTITE", "COUT ACHAT", "VALEUR", "DATE EXPIRATION", "LOCALISATION", "REGION"};
                 XSSFCellStyle headerStyle = workbook.createCellStyle();
                 headerStyle.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 219, (byte) 68, (byte) 55}, null));
@@ -6519,11 +6614,16 @@ public class Util {
                 for (int i = 0; i < titleColumns.length; i++) {
                     sheet.autoSizeColumn(i);
                 }
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
             }
             return file;
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "Util.exportXlsPeremptionStock");
             e.printStackTrace();
+            if (file.exists()) {
+                file.delete();
+            }
         }
         return null;
     }
@@ -7324,6 +7424,27 @@ public class Util {
             }
         }
         return false;
+    }
+
+    /**
+     * Détecte une intention d'élimination/fusion de doublons (français, accents
+     * ignorés). Les workflows spécialisés (vente, dépense) doivent NE PAS intercepter
+     * ces demandes: elles doivent atteindre le chat générique de Gratien et son plan
+     * en étapes (planExecution).
+     */
+    public static boolean isDedupEliminationIntent(String question) {
+        if (question == null) {
+            return false;
+        }
+        String v = java.text.Normalizer.normalize(question, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(java.util.Locale.ROOT);
+        return v.contains("doublon")
+                || v.contains("dupli")
+                || v.contains("dedup")
+                || v.contains("fusionne")
+                || v.contains("fusioner")
+                || v.contains("fusion des");
     }
 
 }

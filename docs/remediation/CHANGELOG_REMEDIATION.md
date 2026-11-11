@@ -237,3 +237,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   repli sur le stock courant si aucun agrégat à cette date.
 - La clôture des non-comptés utilise la même référence.
 - Test de sélection de date ajouté ; suite complète 195/195.
+
+## Campagne 6 bis — Bugs de correction SpotBugs (2026-11-11)
+
+- `Util.findPricesForReq` comparait un `Recquisition` à une `String`
+  (filtre toujours vide) ; compare désormais le `uid`.
+- Comparaisons d'`Integer` par `==` corrigées en `Objects.equals` dans
+  `Util.findLigneVenteForVente`, `Util.findSaleItemsFor` et `Util.getVente`.
+- `findSaleItemsFor` protège aussi une référence de vente nulle.
+- Tests `UtilTest` ajoutés ; suite complète 198/198.
