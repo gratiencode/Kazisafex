@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -50,6 +51,11 @@ public final class DatabaseBackup {
             return null;
         }
         String base = database.getFileName().toString();
+        String today = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
+        Path existingToday = findTodayBackup(directory, base, today);
+        if (existingToday != null) {
+            return existingToday;
+        }
         Path target = directory.resolve(base + ".bak-" + LocalDateTime.now().format(STAMP));
         try {
             copyIfExists(database, target);
@@ -65,6 +71,22 @@ public final class DatabaseBackup {
         }
     }
 
+    private static Path findTodayBackup(Path directory, String base, String today) {
+        try (var stream = Files.list(directory)) {
+            return stream
+                    .filter(p -> {
+                        String name = p.getFileName().toString();
+                        return name.startsWith(base + ".bak-" + today)
+                                && !name.endsWith("-wal")
+                                && !name.endsWith("-shm");
+                    })
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
     private static void copyIfExists(Path source, Path target) throws IOException {
         if (Files.isRegularFile(source)) {
             Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING,
@@ -75,7 +97,12 @@ public final class DatabaseBackup {
     private static void prune(Path directory, String base, int keep) {
         try (var stream = Files.list(directory)) {
             List<Path> backups = stream
-                    .filter(p -> p.getFileName().toString().startsWith(base + ".bak-"))
+                    .filter(p -> {
+                        String name = p.getFileName().toString();
+                        return name.startsWith(base + ".bak-")
+                                && !name.endsWith("-wal")
+                                && !name.endsWith("-shm");
+                    })
                     .sorted(Comparator.comparingLong(DatabaseBackup::lastModified).reversed())
                     .toList();
             for (int i = keep; i < backups.size(); i++) {

@@ -2,6 +2,7 @@ package services.utils;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -25,6 +26,8 @@ class DatabaseBackupTest {
         assertNotNull(backup);
         assertTrue(Files.isRegularFile(backup));
         assertTrue(Files.readString(backup).contains("sqlite-content"));
+        Path second = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
+        assertEquals(backup, second, "une seule sauvegarde par jour");
     }
 
     @Test

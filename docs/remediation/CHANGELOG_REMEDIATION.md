@@ -349,3 +349,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Le chemin `Drafted` ne remplace plus `lignes` par une liste nulle ; le
   null-check tardif devenu redondant est supprimé.
 - Suite complète 205/205.
+
+## Campagne 7 nonies — Sauvegarde SQLite une fois par jour (2026-11-11)
+
+- `DatabaseBackup` réutilise la sauvegarde déjà créée le jour courant ; évite
+  une copie de plusieurs dizaines de Mo à chaque démarrage.
+- Le nettoyage de rétention ignore les fichiers WAL/SHM.
+- Test mis à jour ; suite complète 205/205.
