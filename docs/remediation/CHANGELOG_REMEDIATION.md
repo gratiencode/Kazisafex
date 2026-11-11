@@ -611,3 +611,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   tolérance de 1e-9 ; évite un format `1.0` au lieu de `1` selon la
   représentation binaire.
 - Suite complète 219/219.
+
+## Campagne 6 terdecies — Formatage monétaire BigDecimal (2026-11-11)
+
+- `GratienTools.purchaseAmount` arrondit désormais en BigDecimal HALF_UP à
+  2 décimales ; `1.005` devient `1.01` (Math.round binaire donnait `1`).
+- Test ajouté (entier, centimes, décimal) ; suite complète 220/220.

@@ -8431,10 +8431,16 @@ public class GratienTools {
     }
 
     private String purchaseAmount(double value) {
-        double v = Math.round(value * 100d) / 100d;
-        return Math.abs(v - Math.rint(v)) < 1e-9
-                ? String.valueOf((long) Math.rint(v))
-                : String.valueOf(v);
+        if (!Double.isFinite(value)) {
+            return String.valueOf(value);
+        }
+        java.math.BigDecimal amount = java.math.BigDecimal.valueOf(value)
+                .setScale(2, java.math.RoundingMode.HALF_UP)
+                .stripTrailingZeros();
+        if (amount.scale() < 0) {
+            amount = amount.setScale(0);
+        }
+        return amount.toPlainString();
     }
 
     private File companyLogoFile() {
