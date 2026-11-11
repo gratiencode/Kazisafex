@@ -407,3 +407,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `DatabaseBackup.backupNow` contourne le throttle quotidien pour les
   opérations risquées.
 - Test ajouté ; suite complète 209/209.
+
+## Campagne 8 — Rapport final actualisé (2026-11-11)
+
+- `FINAL_REPORT.md` remis à jour : 209 tests, outbox atomique, sauvegardes,
+  WebSocket supprimé, SpotBugs opérationnel, tests UI réels et risques
+  résiduels exacts.
