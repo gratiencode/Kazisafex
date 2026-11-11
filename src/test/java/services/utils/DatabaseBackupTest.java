@@ -43,6 +43,25 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void retentionKeepsOnlyRequestedNumberOfBackups() throws Exception {
+        Path database = dir.resolve("kazi-retention.db");
+        Files.writeString(database, "sqlite-content");
+
+        DatabaseBackup.backupNow(database.toString(), "inventory-close-a", 2);
+        DatabaseBackup.backupNow(database.toString(), "inventory-close-b", 2);
+        DatabaseBackup.backupNow(database.toString(), "inventory-close-c", 2);
+
+        try (var stream = Files.list(dir)) {
+            long count = stream
+                    .filter(p -> p.getFileName().toString().startsWith("kazi-retention.db.bak-"))
+                    .filter(p -> !p.getFileName().toString().endsWith("-wal"))
+                    .filter(p -> !p.getFileName().toString().endsWith("-shm"))
+                    .count();
+            assertEquals(2, count);
+        }
+    }
+
+    @Test
     void missingDatabaseHasNoBackup() {
         assertNull(DatabaseBackup.backupBeforeMigration(dir.resolve("absent.db").toString(), 5));
     }

@@ -423,3 +423,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - `SECURITY_REMEDIATION.md` documente l'atomicité outbox, les sauvegardes,
   le garde-fou désérialisation et le tri des findings SpotBugs restants.
+
+## Campagne 7 decies — Test de rétention des sauvegardes (2026-11-11)
+
+- Test ajouté : `backupNow(..., keep=2)` ne conserve que les deux sauvegardes
+  principales, WAL/SHM exclus du décompte.
+- Suite complète 210/210.
