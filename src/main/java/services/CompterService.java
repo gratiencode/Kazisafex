@@ -544,18 +544,12 @@ public class CompterService implements CompterStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ?  ORDER BY p.updated_at ASC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, puid);
-                    query.setParameter(2, inventaireId);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, puid);
-            query.setParameter(2, inventaireId);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, puid);
+                query.setParameter(2, inventaireId);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -566,20 +560,13 @@ public class CompterService implements CompterStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND p.numlot = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, puid);
-                    query.setParameter(2, inventaireId);
-                    query.setParameter(3, lot);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, puid);
-            query.setParameter(2, inventaireId);
-            query.setParameter(3, lot);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, puid);
+                query.setParameter(2, inventaireId);
+                query.setParameter(3, lot);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }

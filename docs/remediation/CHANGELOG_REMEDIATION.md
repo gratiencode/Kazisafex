@@ -499,3 +499,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `executeRead` : utilisé uniquement pour un test de présence à la clôture,
   aucun besoin d'entité managée.
 - Suite complète 213/213.
+
+## Campagne 4 decies — Fermeture des surcharges de comptage (2026-11-11)
+
+- Les surcharges `findComptageForProduit(puid, inventaireId)` et
+  `(..., lot)` passent par `executeRead` : plus de session MySQL laissée
+  ouverte sur ces lectures.
+- Suite complète 213/213.
