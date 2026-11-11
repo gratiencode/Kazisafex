@@ -555,3 +555,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `DatabaseBackup.verify` compare la copie à son `.sha256` et détecte une
   altération avant restauration.
 - Test ajouté (intègre puis corrompu) ; suite complète 215/215.
+
+## Campagne 7 novodecies — Restauration manuelle vérifiée (2026-11-11)
+
+- `scripts/restore-sqlite-backup.sh` : confirmation explicite, contrôle
+  SHA-256, remplacement de la base et suppression des WAL/SHM obsolètes.
+- Procédure documentée dans `BACKUP_RESTORE.md`.
+- Test manuel sur fichiers temporaires : OK.
