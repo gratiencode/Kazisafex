@@ -441,3 +441,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   enregistrement » : l'exception remonte, la transaction métier est annulée
   et aucun doublon n'est créé.
 - Test ajouté (échec de requête) ; suite complète 211/211.
+
+## Campagne 7 undecies — File d'écriture fail-safe (2026-11-11)
+
+- Si `EntityManagerFactory.createEntityManager()` échoue, le `CompletableFuture`
+  est désormais complété exceptionnellement ; plus de blocage sur `join()`.
+- Test ajouté ; suite complète 212/212.

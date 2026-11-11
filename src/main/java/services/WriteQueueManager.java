@@ -65,20 +65,26 @@ public class WriteQueueManager {
         boolean previous = data.SyncOutboxListener.isSuppressed();
         try {
             data.SyncOutboxListener.setSuppressed(task.isSuppressed());
-            EntityManager em = emf.createEntityManager();
+            EntityManager em = null;
             try {
-                em.getTransaction().begin();
+                em = emf.createEntityManager();
+                final EntityManager taskEm = em;
+                taskEm.getTransaction().begin();
                 T result = ManagedSessionFactory.withCurrentEntityManager(
-                        em, () -> task.getAction().apply(em));
-                em.getTransaction().commit();
+                        taskEm, () -> task.getAction().apply(taskEm));
+                taskEm.getTransaction().commit();
                 task.getFuture().complete(result);
             } catch (Exception ex) {
-                if (em.getTransaction().isActive()) {
+                if (em != null && em.getTransaction().isActive()) {
                     em.getTransaction().rollback();
                 }
+                // Toujours completer le future, y compris si createEntityManager
+                // a echoue : sinon l'appelant reste bloque sur join().
                 task.getFuture().completeExceptionally(ex);
             } finally {
-                em.close();
+                if (em != null) {
+                    em.close();
+                }
             }
         } finally {
             data.SyncOutboxListener.setSuppressed(previous);
