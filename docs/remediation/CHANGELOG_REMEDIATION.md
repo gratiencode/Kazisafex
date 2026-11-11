@@ -362,3 +362,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `security-regression.sh` échoue désormais si `new ObjectInputStream` ou
   `XMLDecoder` réapparaît dans le code de production.
 - Vérification locale : OK.
+
+## Campagne 4 ter — Validation des quantités d'inventaire (2026-11-11)
+
+- `CompterService.createCompter/updateCompter` rejettent une quantité
+  négative, NaN/infinie, ou un inventaire/produit absent avant toute écriture.
+- Test ajouté ; suite complète 206/206.

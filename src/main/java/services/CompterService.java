@@ -107,7 +107,31 @@ public class CompterService implements CompterStorage {
 
     @Override
     public Compter createCompter(Compter cat) {
+        validateCompter(cat);
         return withInventoryLock(cat.getInventaireId(), () -> createCompterLocked(cat));
+    }
+
+    /**
+     * Un comptage physique ne peut pas porter une quantite negative, NaN ou
+     * infinie, ni etre rattache a un inventaire/produit absent : ces valeurs
+     * produiraient des ajustements de stock incoherents.
+     */
+    static void validateCompter(Compter cat) {
+        if (cat == null) {
+            throw new IllegalArgumentException("Comptage d'inventaire requis");
+        }
+        if (cat.getInventaireId() == null) {
+            throw new IllegalArgumentException("Inventaire requis pour un comptage");
+        }
+        if (cat.getProductId() == null) {
+            throw new IllegalArgumentException("Produit requis pour un comptage");
+        }
+        double quantite = cat.getQuantite();
+        if (!Double.isFinite(quantite) || quantite < 0) {
+            throw new IllegalArgumentException(
+                    "Quantité physique invalide : " + quantite
+                            + " (une quantité négative ou non finie est interdite)");
+        }
     }
 
     private Compter createCompterLocked(Compter cat) {
@@ -131,6 +155,7 @@ public class CompterService implements CompterStorage {
 
     @Override
     public Compter updateCompter(Compter cat) {
+        validateCompter(cat);
         return withInventoryLock(cat.getInventaireId(), () -> updateCompterLocked(cat));
     }
 
