@@ -143,8 +143,7 @@ public class Util {
     }
 
     public static void sendText(String text) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
-        // endp.sendMessage(text);
+        // Historique : envoi WebSocket supprimé. Le canal applicatif est SSE/outbox.
     }
 
     public static String toPlain(double number) {
@@ -152,7 +151,6 @@ public class Util {
     }
 
     public static void syncModel(final BaseModel bm, final String action) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
         bm.setAction(action);
         bm.setType(bm.getType());
         bm.setPriority(0);
@@ -160,49 +158,31 @@ public class Util {
         String user = pref.get("userid", "na");
         bm.setFrom(user);
         bm.setCounter(1);
-        if (endp != null) {
-            endp.sendObject(bm);
-        }
     }
 
     public static void syncImage(ImageProduit img) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
-        if (endp != null) {
-            endp.sendObject(img);
-        }
+        // Historique : envoi WebSocket supprimé.
     }
 
     public static void syncList(List objs) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
-        if (endp != null) {
-            // endp.sendListObject(objs);
-        }
+        // Historique : envoi WebSocket supprimé.
     }
 
     public static void async(BaseModel bm, String action, Tables t) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
         bm.setAction(action);
         bm.setType(t.name());
         String user = pref.get("userid", "na");
         bm.setFrom(user);
         bm.setCount(1);
         bm.setCounter(1);
-        if (endp != null) {
-            // endp.async(bm);
-        }
     }
 
     public static void syncModel(final BaseModel bm, final String action, final long counter, final long count) {
-        SyncEndpoint endp = SyncEndpoint.getInstance();
         bm.setAction(action);
         bm.setCount(count);
         String user = pref.get("userid", "na");
         bm.setFrom(user);
         bm.setCounter(counter);
-        if (endp != null) {
-            endp.sendObject(bm);
-        }
-
     }
 
     public static Produit findProduit(Collection<Produit> lismez, String uid) {

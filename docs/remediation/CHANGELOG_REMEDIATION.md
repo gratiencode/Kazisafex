@@ -287,3 +287,15 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `prepareAllProductCodesForThermalPrint` vérifie `product == null` avant
   `matchesPrintTarget`/`getNomProduit` ; un produit nul est ignoré proprement.
 - Suite complète 202/202.
+
+## Campagne 7 septies — Suppression du canal WebSocket mort (2026-11-11)
+
+- `SyncEndpoint`/`WsClientEndpoint` supprimés : `getInstance()` n'était jamais
+  initialisé (constructeur commenté), donc `Util.sync*` n'envoyait rien.
+- `BaseModelDecoder` et les 25 encodeurs `util/encoders` supprimés : aucun
+  autre consommateur.
+- Dépendances `jakarta.websocket-client-api` / `jakarta.websocket-api` et
+  `requires jakarta.websocket.client` retirées.
+- `Util.sync*` conservés comme API sans envoi réseau ; le canal actif reste
+  SSE + outbox Retrofit.
+- Suite complète 202/202.

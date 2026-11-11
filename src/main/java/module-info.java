@@ -17,7 +17,6 @@ module com.endeleya.kazisafex {
     requires jakarta.persistence;
     requires jakarta.validation;
     requires jakarta.ws.rs;
-    requires jakarta.websocket.client;
     requires jakarta.xml.bind;
 
     requires org.apache.poi.ooxml;
