@@ -613,16 +613,11 @@ public class CompterService implements CompterStorage {
             Timestamp offline = new Timestamp(disconnected_at);
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM compter p WHERE p.updated_at >= ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, offline);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, offline);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, offline);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }

@@ -512,3 +512,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `findComptages(inventaireId, region)` passe par `executeRead` ; lecture
   seule utilisée pour l'ajustement après inventaire et l'UI.
 - Suite complète 213/213.
+
+## Campagne 4 duodecies — Fermeture session comptages non synchronisés (2026-11-11)
+
+- `findUnSyncedCompter` passe par `executeRead` ; plus de session MySQL
+  laissée ouverte sur cette lecture.
+- Suite complète 213/213.
