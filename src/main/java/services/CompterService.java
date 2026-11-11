@@ -860,11 +860,15 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
-        // La clôture n'est pas encore une transaction unique : une sauvegarde
-        // immédiate limite l'impact d'une interruption au milieu des ajustements.
-        services.utils.DatabaseBackup.backupNow(
-                ManagedSessionFactory.localDatabasePath(), "inventory-close", 10);
-        withInventoryLock(inv, () -> removeNoCountedProductsLocked(inv, onCreated));
+        withInventoryLock(inv, () -> {
+            // La clôture n'est pas encore une transaction unique : une sauvegarde
+            // immédiate limite l'impact d'une interruption au milieu des
+            // ajustements. Elle est prise sous le verrou pour ne pas copier deux
+            // fois la base lors de clôtures concurrentes.
+            services.utils.DatabaseBackup.backupNow(
+                    ManagedSessionFactory.localDatabasePath(), "inventory-close", 10);
+            removeNoCountedProductsLocked(inv, onCreated);
+        });
     }
 
     private void removeNoCountedProductsLocked(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {

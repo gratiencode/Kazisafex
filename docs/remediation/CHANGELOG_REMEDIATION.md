@@ -524,3 +524,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `BUILD_AND_CI.md` : 213 tests.
 - `TEST_STRATEGY.md` : inventaire, outbox atomique, sauvegardes et
   validation des quantités documentés.
+
+## Campagne 4 terdecies — Sauvegarde de clôture sous verrou (2026-11-11)
+
+- La sauvegarde `inventory-close` est prise à l'intérieur du verrou
+  d'inventaire, après sérialisation des clôtures concurrentes.
+- Suite complète 213/213.
