@@ -454,3 +454,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `begin()` ferme désormais l'EntityManager.
 - Rollback élargi aux `Error`, pas seulement aux `RuntimeException`.
 - Suite complète 212/212.
+
+## Campagne 7 terdecies — Test échec begin (2026-11-11)
+
+- Test ajouté : si `tx.begin()` échoue, l'EntityManager est fermé et
+  l'exception remonte.
+- Suite complète 213/213.

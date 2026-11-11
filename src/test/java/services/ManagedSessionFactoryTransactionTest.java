@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -137,6 +138,21 @@ class ManagedSessionFactoryTransactionTest {
             verify(tx, never()).commit();
             verify(tx, never()).rollback();
             msf.verify(() -> ManagedSessionFactory.closeEntityManager(), never());
+        } finally {
+            tearDown();
+        }
+    }
+
+    @Test
+    @DisplayName("Un échec de begin ferme quand même l'EntityManager")
+    void beginFailureClosesEntityManager() {
+        setUp(false);
+        try {
+            doThrow(new IllegalStateException("begin refused")).when(tx).begin();
+            assertThrows(IllegalStateException.class,
+                    () -> ManagedSessionFactory.executeWrite(e -> e));
+            verify(tx, never()).commit();
+            msf.verify(() -> ManagedSessionFactory.closeEntityManager(), times(1));
         } finally {
             tearDown();
         }
