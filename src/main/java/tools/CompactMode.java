@@ -439,7 +439,7 @@ public class CompactMode {
             }
         });
         cbx_product.setItems(produits);
-        ComboBoxAutoCompletion<Produit> comx = new ComboBoxAutoCompletion<>(cbx_product);
+        new ComboBoxAutoCompletion<>(cbx_product);
     }
 
     public void initMesureList(ComboBox<Mesure> cbx_mesure) {
@@ -480,7 +480,7 @@ public class CompactMode {
                         .findFirst().orElse(null);
             }
         });
-        ComboBoxAutoCompletion<Client> comboBoxAutoCompletion = new ComboBoxAutoCompletion<>(cbx_clients);
+        new ComboBoxAutoCompletion<>(cbx_clients);
         cbx_clients.setItems(clients);
 
     }
@@ -504,7 +504,7 @@ public class CompactMode {
             }
         });
         cbx_comptes.setItems(compteTresors);
-        ComboBoxAutoCompletion<CompteTresor> comx = new ComboBoxAutoCompletion<>(cbx_comptes);
+        new ComboBoxAutoCompletion<>(cbx_comptes);
         cbx_comptes.getSelectionModel().selectFirst();
     }
 

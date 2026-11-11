@@ -715,10 +715,36 @@ public class MainUI {
             Scene scene = new Scene(load, w, h);
             Kazisafex.applyTheme(scene);
             Stage stage = new Stage();
+            // Rattacher le dialogue a la fenetre principale est indispensable :
+            // sans owner, une Stage APPLICATION_MODAL sans parent n'est pas
+            // garantie au-dessus de la fenetre principale par le gestionnaire de
+            // fenetres. Elle s'ouvrait derriere, tout en bloquant les saisies de
+            // la fenetre principale (APPLICATION_MODAL) : l'ecran paraissait
+            // "fige" alors que seule la fenetre de derriere etait inerte, et le
+            // dialogue restait invisible. initOwner() garantit l'empilement et le
+            // centrage au-dessus du parent.
+            Stage parentStage = Kazisafex.stagex;
+            if (parentStage != null && parentStage.isShowing() && parentStage != stage) {
+                stage.initOwner(parentStage);
+            }
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.initStyle(StageStyle.UNDECORATED);
             stage.setScene(scene);
             stage.setAlwaysOnTop(false);
+            if (parentStage != null && parentStage.isShowing()) {
+                // Centre sur la fenetre mere ; w/h sont les dimensions demandees
+                // du dialogue. Si la mere n'a pas encore de taille exploitable,
+                // on retombe sur son coin superieur gauche plutot que NaN.
+                double ow = parentStage.getWidth();
+                double oh = parentStage.getHeight();
+                if (ow > w && oh > h) {
+                    stage.setX(parentStage.getX() + (ow - w) / 2.0);
+                    stage.setY(parentStage.getY() + (oh - h) / 2.0);
+                } else {
+                    stage.setX(parentStage.getX());
+                    stage.setY(parentStage.getY());
+                }
+            }
             load.setOnMousePressed((javafx.scene.input.MouseEvent event) -> {
                 xOffset = event.getSceneX();
                 yOffset = event.getSceneY();
@@ -773,6 +799,25 @@ public class MainUI {
                 Level.SEVERE,
                 null,
                 ex
+            );
+            notify(null, res, "Impossible d'ouvrir la fenetre", 6, "error");
+        } catch (RuntimeException ex) {
+            // Les controleurs de dialogue sont initialises entre load() et
+            // showAndWait(). Toute NPE / ClassCastException / erreur de delegate
+            // y interrompait l'affichage sans le moindre retour visible : le
+            // dialogue ne s'ouvrait simplement pas. On journalise et on previent.
+            SyncLogger.getInstance().log(ex, "MainUI.floatDialog/" + res);
+            Logger.getLogger(MainUI.class.getName()).log(
+                Level.SEVERE,
+                "Echec d'ouverture du dialogue " + res,
+                ex
+            );
+            notify(
+                null,
+                res,
+                "Erreur interne a l'ouverture de la fenetre (voir le log)",
+                6,
+                "error"
             );
         }
     }
@@ -911,8 +956,18 @@ public class MainUI {
             SyncLogger.getInstance().log(ex, "MainUI.getPage");
             Logger.getLogger(MainUI.class.getName()).log(
                 Level.SEVERE,
-                null,
+                "Echec de chargement de la vue " + ress,
                 ex
+            );
+            // Sans ce retour, l'appelant (switchSimpleScreens) faisait un
+            // "return" muet sur le null : le clic sur l'entree de menu
+            // paraissait sans effet et rien n'indiquait la cause.
+            notify(
+                null,
+                ress,
+                "Impossible de charger cette page (voir le log)",
+                6,
+                "error"
             );
         }
         return null;
@@ -1238,7 +1293,7 @@ public class MainUI {
             }
         );
         elements.setItems(instances);
-        ComboBoxAutoCompletion<T> comx = new ComboBoxAutoCompletion<>(elements);
+        new ComboBoxAutoCompletion<>(elements);
     }
 
     public static <T> void initChooser(

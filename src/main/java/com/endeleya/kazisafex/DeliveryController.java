@@ -108,7 +108,7 @@ public class DeliveryController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         region = pref.get("region", "...");
         role = UserRoleRegistry.getRole(pref);
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         entr = pref.get("eUid", "");
         bntsave.setText(RB.getString("xbtn.save") + " >>");
         MainUI.setPattern(dpk_dateLivr);
@@ -156,7 +156,7 @@ public class DeliveryController implements Initializable {
         list_fourn.addAll(fss);
         cbx_choose_fourniss_lic.setItems(list_fourn);
         cbx_choose_fourniss_lic.getSelectionModel().selectFirst();
-        ComboBoxAutoCompletion<Fournisseur> com = new ComboBoxAutoCompletion<>(cbx_choose_fourniss_lic);
+        new ComboBoxAutoCompletion<>(cbx_choose_fourniss_lic);
 
     }
 

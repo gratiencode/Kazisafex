@@ -466,3 +466,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `scripts/package-app-image.sh` construit une image autonome avec jpackage.
 - Image Linux testée avec préférences isolées : écran de connexion OK.
 - `PACKAGING.md` documente Linux/Windows et les limites.
+
+## Campagne 6 undecies — Dead stores ComboBoxAutoCompletion (2026-11-11)
+
+- Variables inutilisées supprimées dans `CompactMode`, `MainUI`,
+  `DeliveryController` et `TresorerieController` ; la construction (qui
+  enregistre les listeners d'autocomplétion) est conservée.
+- Suite complète 213/213.

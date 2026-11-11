@@ -714,12 +714,12 @@ public class TresorerieController implements Initializable {
 
     @FXML
     private void goToClient(Event e) {
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         MainUI.floatDialog(tools.Constants.CLIENT_DLG, 521, 635, token, kazisafe, entreprise, region);
     }
 
     public void setUp(Entreprise eze, Vente v, Facture f) {
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         kazisafe = KazisafeServiceFactory.createService(token);
         this.entreprise = eze;
         regions = FXCollections.observableArrayList();
@@ -1173,7 +1173,7 @@ public class TresorerieController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         refreshCurrencyContext();
         bundle = rb;
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");
         entr = pref.get("eUid", "unknown");
@@ -1193,9 +1193,9 @@ public class TresorerieController implements Initializable {
         dpk_date_recov.setValue(LocalDate.now());
         dpk_date_ech_recov.setDisable(true);
 
-        ComboBoxAutoCompletion<CompteTresor> comboBoxAutoCompletion = new ComboBoxAutoCompletion<>(cbx_compte_dep);
-        ComboBoxAutoCompletion<CompteTresor> comboBoxAutoCompletion1 = new ComboBoxAutoCompletion<>(cbx_compte_recov);
-        ComboBoxAutoCompletion<Depense> comboBoxAutoCompletion2 = new ComboBoxAutoCompletion<>(cbx_depenses);
+        new ComboBoxAutoCompletion<>(cbx_compte_dep);
+        new ComboBoxAutoCompletion<>(cbx_compte_recov);
+        new ComboBoxAutoCompletion<>(cbx_depenses);
         Util.installTooltip(imgbtn_clean, "Supprimer toute les notifications");
         Tooltip.install(pane_delete, new Tooltip("Supprimer l'une de mes transactions"));
         NotificationHandler.setOnDataSyncListener(this::handleSyncFromServer);
@@ -1207,31 +1207,85 @@ public class TresorerieController implements Initializable {
         deleteCpt.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
-                if (choosenComptetr != null) {
-                    Alert alert = new Alert(Alert.AlertType.WARNING,
-                            "Voulez vous supprimer le compte ?, les transactions de ce compte risque d'etre perdue",
-                            ButtonType.YES, ButtonType.CANCEL);
-                    alert.setTitle("Attention");
-                    alert.setHeaderText(null);
-                    Optional<ButtonType> clkbtn = alert.showAndWait();
-                    if (clkbtn.get() == ButtonType.YES) {
-                        if (PermissionRegistry.hasGlobalAccess()) {
-                            List<Traisorerie> transx = TraisorerieDelegate
-                                    .findTraisorByCompteTresor(choosenComptetr.getUid());
-                            if (transx == null ? true : transx.isEmpty()) {
-                                CompteTresorDelegate.deleteCompteTresor(choosenComptetr);// database.delete(choosenComptetr);
-                                MainUI.notify(null, "Succes", "Compte supprime avec succes", 3, "info");
-                                comptes.remove(choosenComptetr);
-                            }
-                        } else {
-                            MainUI.notify(null, "Erreur",
-                                    "Vous n'avez pas des privileges necessaire pour supprimer les elements", 3,
-                                    "error");
-                        }
-                    }
+                final CompteTresor target = tresors.getSelectionModel().getSelectedItem() == null
+                        ? choosenComptetr
+                        : tresors.getSelectionModel().getSelectedItem();
+                if (target == null) {
+                    return;
                 }
+                Alert alert = new Alert(Alert.AlertType.WARNING,
+                        "Voulez vous supprimer le compte ?, les transactions de ce compte risque d'etre perdue",
+                        ButtonType.YES, ButtonType.CANCEL);
+                alert.setTitle("Attention");
+                alert.setHeaderText(null);
+                Optional<ButtonType> clkbtn = alert.showAndWait();
+                if (!clkbtn.isPresent() || clkbtn.get() != ButtonType.YES) {
+                    return;
+                }
+                // Trader, Manager et ALL_ACCESS ont le droit de supprimer un compte.
+                if (!canDeleteTreasuryRow()) {
+                    MainUI.notify(null, "Erreur",
+                            "Vous n'avez pas des privileges necessaire pour supprimer les elements", 3,
+                            "error");
+                    return;
+                }
+                Executors.newSingleThreadExecutor().submit(() -> {
+                    try {
+                        // Supprimer d'abord les transactions du compte (en vrai),
+                        // pour eviter un echec de cle etrangere sur tresor_id.
+                        List<Traisorerie> transx = TraisorerieDelegate
+                                .findTraisorByCompteTresor(target.getUid());
+                        if (transx != null) {
+                            for (Traisorerie tr : transx) {
+                                TraisorerieDelegate.deleteTraisorerie(tr);
+                                Util.sync(tr, Constants.ACTION_DELETE, Tables.TRAISORERIE);
+                            }
+                        }
+                        // Supprimer le compte, en vrai, dans la base locale.
+                        CompteTresor toDelete = CompteTresorDelegate.findCompteTresor(target.getUid());
+                        if (toDelete != null) {
+                            CompteTresorDelegate.deleteCompteTresor(toDelete);
+                        }
+                        Util.sync(target, Constants.ACTION_DELETE, Tables.COMPTETRESOR);
+                        javafx.application.Platform.runLater(() -> {
+                            // Retirer la ligne de la liste et de la cache pour
+                            // qu'elle ne reapparaisse pas dans les combobox.
+                            tresors.getItems().remove(target);
+                            if (comptes != null) {
+                                comptes.removeIf(c -> c.getUid().equals(target.getUid()));
+                            }
+                            if (search_compte.getText() == null || search_compte.getText().isEmpty()) {
+                                tresors.setItems(comptes);
+                            }
+                            choosenComptetr = null;
+                            bankname.clear();
+                            intitule_copmpte.clear();
+                            numero_compte.clear();
+                            soldeMin.clear();
+                            count_compte.setText(String.format(bundle.getString("xitems"), tresors.getItems().size()));
+                            DataCache.invalidateAll();
+                            MainUI.notify(null, "Succes", "Compte supprime avec succes", 3, "info");
+                        });
+                    } catch (Exception ex) {
+                        SyncLogger.getInstance().log(ex, "TresorerieController.deleteCompte");
+                        javafx.application.Platform.runLater(() -> MainUI.notify(null, "Erreur",
+                                "Echec de la suppression du compte: " + ex.getMessage(), 3, "error"));
+                    }
+                });
             }
         });
+    }
+
+    /**
+     * Trader (role "Trader"), tout role contenant "Manager" (ex: Manager_ALL_ACCESS)
+     * et ALL_ACCESS peuvent supprimer les lignes comptes/transactions de tresorerie.
+     */
+    private boolean canDeleteTreasuryRow() {
+        if (PermissionRegistry.hasGlobalAccess()) {
+            return true;
+        }
+        String role = UserRoleRegistry.getRole(pref);
+        return role != null && (role.contains("Trader") || role.contains("Manager"));
     }
 
     private void handleSyncFromServer(BaseModel baseModel) {
@@ -1653,18 +1707,41 @@ public class TresorerieController implements Initializable {
         alert.setTitle("Attention");
         alert.setHeaderText(null);
         Optional<ButtonType> clkbtn = alert.showAndWait();
-        if (clkbtn.get() == ButtonType.YES) {
-            if (trx != null) {
-                if (PermissionRegistry.hasGlobalAccess()) {
-                    TraisorerieDelegate.deleteTraisorerie(trx);
-                    // database.delete(trx);
-                    MainUI.notify(null, "Succes", "Transaction supprimee avec succes", 3, "info");
-                } else {
-                    MainUI.notify(null, "Erreur",
-                            "Vous n'avez pas les privileges necessaire pour effectuer une supression", 3, "error");
-                }
-            }
+        if (!clkbtn.isPresent() || clkbtn.get() != ButtonType.YES) {
+            return;
         }
+        final Traisorerie target = trx;
+        if (target == null) {
+            MainUI.notify(null, "Erreur", "Selectionner una transaction, puis supprimer", 3, "error");
+            return;
+        }
+        if (!canDeleteTreasuryRow()) {
+            MainUI.notify(null, "Erreur",
+                    "Vous n'avez pas les privileges necessaire pour effectuer une supression", 3, "error");
+            return;
+        }
+        Executors.newSingleThreadExecutor().submit(() -> {
+            try {
+                Traisorerie existing = TraisorerieDelegate.findTraisorerie(target.getUid());
+                if (existing != null) {
+                    TraisorerieDelegate.deleteTraisorerie(existing);
+                }
+                Util.sync(target, Constants.ACTION_DELETE, Tables.TRAISORERIE);
+                javafx.application.Platform.runLater(() -> {
+                    lstrz.removeIf(t -> t.getUid().equals(target.getUid()));
+                    lstransaction.removeIf(t -> t.getUid().equals(target.getUid()));
+                    tbl_transaction.setItems(lstransaction);
+                    fillTransactions(lstrz);
+                    trx = null;
+                    DataCache.invalidateAll();
+                    MainUI.notify(null, "Succes", "Transaction supprimee avec succes", 3, "info");
+                });
+            } catch (Exception ex) {
+                SyncLogger.getInstance().log(ex, "TresorerieController.deleteTransaction");
+                javafx.application.Platform.runLater(() -> MainUI.notify(null, "Erreur",
+                        "Echec de la suppression de la transaction: " + ex.getMessage(), 3, "error"));
+            }
+        });
     }
 
     @FXML
