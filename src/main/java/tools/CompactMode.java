@@ -6,6 +6,7 @@ package tools;
 
 import com.endeleya.kazisafex.MainuiController;
 import com.endeleya.kazisafex.PaymentController;
+import com.endeleya.kazisafex.tools.EscPosPrintSupport;
 
 import com.fazecast.jSerialComm.SerialPort;
 import com.github.anastaciocintra.escpos.EscPos;
@@ -72,7 +73,7 @@ import javafx.util.converter.NumberStringConverter;
 import javax.imageio.ImageIO;
 import javax.print.PrintService;
 import org.apache.commons.lang3.time.DateUtils;
-import org.controlsfx.tools.Platform;
+import services.PlatformUtil;
 import retrofit2.Response;
 import tools.SyncLogger;
 import tools.sync.CallFactory;
@@ -177,7 +178,7 @@ public class CompactMode {
     public void initialiseDesplayPort() {
         SerialPort[] ps = SerialPort.getCommPorts();
         if (ps.length > 0) {
-            if (Platform.getCurrent().equals(Platform.WINDOWS)) {
+            if (PlatformUtil.isWindows()) {
                 String port = pref.get("display_port", "COM2");
                 chport = SerialPort.getCommPort(port);
                 chport.setComPortParameters(9600, 8, 1, 0);
@@ -749,10 +750,16 @@ public class CompactMode {
                 try {
                     BufferedImage bimg = ImageIO.read(f);
                     if (bimg != null) {
+                        // Le logo brut produit un raster de 32 Ko pour une image
+                        // 512x512 : le tampon d'une imprimante thermique d'entree
+                        // de gamme deborde, elle se desynchronise et le ticket sort
+                        // vide. On le reduit a la largeur imprimable avant envoi.
+                        BufferedImage scaled = EscPosPrintSupport.scaleLogoToPaper(
+                                bimg, EscPosPrintSupport.printableDotsOf(48));
                         RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
                         imgWrapper.setJustification(EscPosConst.Justification.Center);
                         Bitonal bitonal = new BitonalThreshold(100);
-                        EscPosImage posimg = new EscPosImage(new CoffeeImageImpl(bimg), bitonal);
+                        EscPosImage posimg = new EscPosImage(new CoffeeImageImpl(scaled), bitonal);
                         printer.write(imgWrapper, posimg);
                     }
                 } catch (Exception e) {

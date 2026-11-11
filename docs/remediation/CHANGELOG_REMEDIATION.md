@@ -157,3 +157,14 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Vérification préalable : aucune référence Maven/source à ces chemins ; le
   build et les tests ne les utilisent pas.
 - `.gitignore` complété pour éviter leur réintroduction.
+
+## Campagne 5 bis — Dépendances Maven (2026-11-11)
+
+- Suppression de `controlsfx:8.40.11` (obsolète JavaFX 8) : seul usage
+  `Platform.WINDOWS` remplacé par `PlatformUtil.isWindows()`.
+- Suppression de `jersey-media-jaxb:4.0.0-M1` et `javax.ws.rs-api:2.0`
+  inutilisés ; ajout explicite de `jakarta.ws.rs-api:3.1.0`, réellement requis
+  par `module-info.java`.
+- `maven-dependency-plugin` passé de 3.5.0 à 3.8.1 ; l'analyse de dépendances
+  reste bloquée par le bytecode Java 25 (`Unsupported class file major version 69`).
+- Build et suite complète vérifiés après nettoyage.

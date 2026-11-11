@@ -36,6 +36,10 @@ module com.endeleya.kazisafex {
     requires langchain4j.ollama;
     requires langgraph4j.core;
 
+    requires io.github.resilience4j.circuitbreaker;
+    requires io.github.resilience4j.retry;
+    requires io.github.resilience4j.core;
+
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.datatype.jsr310;
 
@@ -47,7 +51,6 @@ module com.endeleya.kazisafex {
     requires escpos.coffee;
     requires com.google.zxing;
     requires com.google.zxing.javase;
-    requires controlsfx;
 
     requires swing.toast.notifications;
 
