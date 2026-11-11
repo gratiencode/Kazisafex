@@ -56,6 +56,16 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void verifyRejectsMissingChecksum() throws Exception {
+        Path database = dir.resolve("kazi-nochecksum.db");
+        Files.writeString(database, "sqlite-content");
+        Path backup = DatabaseBackup.backupNow(database.toString(), "nochecksum", 5);
+        Files.deleteIfExists(Path.of(backup.toString() + ".sha256"));
+
+        assertFalse(DatabaseBackup.verify(backup));
+    }
+
+    @Test
     void immediateBackupCarriesOperationLabel() throws Exception {
         Path database = dir.resolve("kazi-test.db");
         Files.writeString(database, "sqlite-content");

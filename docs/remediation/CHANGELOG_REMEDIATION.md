@@ -580,3 +580,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `scripts/test-restore-backup.sh` vérifie restauration valide et refus d'une
   empreinte invalide avec cible intacte.
 - Exécuté en CI après le garde-fou sécurité.
+
+## Campagne 7 vigesies quater — Sauvegarde sans empreinte refusée (2026-11-11)
+
+- Test ajouté : `verify` retourne false si le fichier `.sha256` est absent.
+- Suite complète 217/217.
