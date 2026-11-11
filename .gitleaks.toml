@@ -1,0 +1,12 @@
+# Baseline Gitleaks pour Kazisafex.
+#
+# La clé Ollama historique a été compromise et reste dans l'historique Git.
+# Sa révocation/rotation est suivie dans docs/remediation/MANUAL_ACTIONS.md.
+# Ce allowlist ne couvre QUE cette empreinte connue et le script de garde qui
+# contient son préfixe : toute nouvelle clé reste détectée.
+title = "Kazisafex secret-scan baseline"
+
+[allowlist]
+description = "Known compromised historical Ollama key and the security guard prefix"
+paths = ['''scripts/security-regression.sh''']
+regexes = ['''a6514fe5[0-9a-f]{24}''']

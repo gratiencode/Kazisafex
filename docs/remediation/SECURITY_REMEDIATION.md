@@ -161,6 +161,13 @@ Les outils de réplication MySQL de `GratienTools` n'utilisent plus `root` par d
 - Les bugs de correction réels (NPE, comparaisons Integer/String, listes
   nulles, fermeture imprimante) ont été corrigés.
 
+### Détection de secrets en CI
+
+`.gitleaks.toml` limite l'allowlist à l'empreinte de la clé Ollama historique
+(déjà compromise, rotation externe) et au script de garde qui contient son
+préfixe. Les nouvelles clés restent détectées et le job Gitleaks peut être
+bloquant sans être structurellement rouge.
+
 ### Actions externes non automatisables
 
 1. Révocation de la clé Ollama historique.
