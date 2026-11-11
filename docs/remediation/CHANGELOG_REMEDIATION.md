@@ -188,3 +188,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   HostnameVerifier réapparaît dans `src/main/java`.
 - Intégré comme première étape de la CI (`build-and-test`).
 - Vérifié localement : aucune occurrence interdite.
+
+## Campagne 7 ter — Code mort réseau (2026-11-11)
+
+- `tools/HttpSyncHandler.java` supprimé : 1 576 lignes jamais instanciées,
+  uniquement citées dans des commentaires de `SyncEngine`.
+- Le chemin réel `SyncEndpoint` / `BackgroundSyncService` n'est pas modifié.
+- Build et suite complète vérifiés après suppression.
