@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.prefs.Preferences;
 import retrofit2.Response;
@@ -21,6 +22,7 @@ public class UpdateManager {
     private static final String PREF_VERSION = "ksf_version";
     private static final String PREF_PENDING_UPDATE = "ksf_pending_update";
     private static final String PREF_PENDING_VERSION = "ksf_pending_version";
+    private static final String PREF_PENDING_VERIFIED = "ksf_pending_update_verified";
 
     private final Kazisafe kazisafe;
     private final Preferences prefs;
@@ -62,9 +64,15 @@ public class UpdateManager {
     /**
      * Conserve la mise a jour telechargee pour l'application au prochain
      * demarrage de l'application.
+     *
+     * @param verified vrai uniquement si le fichier a ete authentifie via le
+     *                 manifeste signe (UpdateVerifier). Seules les mises a
+     *                 jour verifiees sont appliquees automatiquement au
+     *                 demarrage.
      */
-    public void storePendingUpdate(String downloadedFilePath, String newVersion) {
+    public void storePendingUpdate(String downloadedFilePath, String newVersion, boolean verified) {
         prefs.put(PREF_PENDING_UPDATE, downloadedFilePath);
+        prefs.putBoolean(PREF_PENDING_VERIFIED, verified);
         if (newVersion != null && !newVersion.isBlank()) {
             prefs.put(PREF_PENDING_VERSION, newVersion);
         }
@@ -80,12 +88,18 @@ public class UpdateManager {
     }
 
     /**
-     * Si une mise a jour a ete telechargee au demarrage precedent, la remplace
-     * dans le dossier d'installation et relance l'application. A appeler au tout
-     * debut du processus (avant l'initialisation de l'UI).
+     * Si une mise a jour verifiee a ete telechargee au demarrage precedent,
+     * la remplace dans le dossier d'installation et relance l'application.
+     * A appeler au tout debut du processus (avant l'initialisation de
+     * l'UI).
      *
-     * @return true si une mise a jour a ete appliquee (le processus doit se terminer
-     * pour laisser le script de relance prendre le relais)
+     * <p>Securite : une mise a jour non verifiee (absence de manifeste signe
+     * cote serveur, ou empreinte invalide) n'est JAMAIS appliquee
+     * automatiquement. Le fichier reste disponible pour une installation
+     * manuelle par l'utilisateur.</p>
+     *
+     * @return true si une mise a jour verifiee a ete appliquee (le processus
+     * doit se terminer pour laisser le script de relance prendre le relais)
      */
     public boolean applyPendingUpdateAtStartup() {
         String path = prefs.get(PREF_PENDING_UPDATE, "");
@@ -96,6 +110,24 @@ public class UpdateManager {
         if (!pending.exists() || !pending.isFile()) {
             prefs.remove(PREF_PENDING_UPDATE);
             prefs.remove(PREF_PENDING_VERSION);
+            prefs.remove(PREF_PENDING_VERIFIED);
+            return false;
+        }
+        // Ne jamais faire confiance au drapeau persiste : un fichier peut avoir
+        // ete remplace apres le telechargement, et les Preferences sont
+        // modifiables par l'utilisateur. La verification signature + SHA-256
+        // est refaite au moment exact de l'application.
+        boolean verified = UpdateVerifier.loadVerifiedManifestEntry(
+                UPDATE_URL, pending.getName())
+                .map(entry -> UpdateVerifier.verifyDownloadedFile(pending.toPath(), entry))
+                .orElse(false);
+        if (!verified) {
+            SyncLogger.getInstance().log(
+                new SecurityException("Mise a jour en attente non verifiee, installation automatique refusee : " + path),
+                "UpdateManager.applyPendingUpdateAtStartup");
+            prefs.remove(PREF_PENDING_UPDATE);
+            prefs.remove(PREF_PENDING_VERSION);
+            prefs.remove(PREF_PENDING_VERIFIED);
             return false;
         }
         String newVersion = prefs.get(PREF_PENDING_VERSION, "");
@@ -105,6 +137,7 @@ public class UpdateManager {
         scheduleRestart(pending.getAbsolutePath());
         prefs.remove(PREF_PENDING_UPDATE);
         prefs.remove(PREF_PENDING_VERSION);
+        prefs.remove(PREF_PENDING_VERIFIED);
         return true;
     }
 
@@ -112,17 +145,19 @@ public class UpdateManager {
         new Thread(() -> {
             try {
                 String filename = module.getNomModule();
-                if (filename == null || filename.isEmpty()) {
-                    filename = JAR_NAME;
+                String validated = UpdateVerifier.validateFilename(filename);
+                if (validated == null) {
+                    validated = JAR_NAME;
                 }
                 String localPath = MainUI.cPath("/Media/Update");
-                String filePath = localPath + File.separator + filename;
+                Path finalPath = Paths.get(localPath, validated);
+                Path partPath = Paths.get(localPath, validated + ".part");
 
-                URLConnection connexion = new URL(UPDATE_URL + "/" + filename).openConnection();
+                URLConnection connexion = new URL(UPDATE_URL + "/" + validated).openConnection();
                 long totalSize = connexion.getContentLengthLong();
 
                 try (InputStream is = connexion.getInputStream();
-                     OutputStream os = Files.newOutputStream(Paths.get(filePath))) {
+                     OutputStream os = Files.newOutputStream(partPath)) {
                     long nread = 0L;
                     byte[] buffer = new byte[8192];
                     int n;
@@ -134,8 +169,24 @@ public class UpdateManager {
                         }
                     }
                 }
+                var manifestEntry = UpdateVerifier.loadVerifiedManifestEntry(
+                        UPDATE_URL, validated);
+                boolean verified = manifestEntry
+                        .map(entry -> UpdateVerifier.verifyDownloadedFile(partPath, entry))
+                        .orElse(false);
+                if (!verified) {
+                    Files.deleteIfExists(partPath);
+                    if (listener != null) {
+                        listener.onError(
+                            "Mise a jour refusee : fichier non verifiable "
+                            + "(manifeste signe absent ou empreinte invalide).");
+                    }
+                    return;
+                }
+                Files.move(partPath, finalPath,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 if (listener != null) {
-                    listener.onComplete(filePath);
+                    listener.onComplete(finalPath.toString());
                 }
             } catch (Exception e) {
                 SyncLogger.getInstance().log(e, "UpdateManager.downloadJar");

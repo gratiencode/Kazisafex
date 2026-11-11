@@ -222,3 +222,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Création de `FINAL_REPORT.md` : état vérifié, corrections livrées, points
   partiels/non corrigés, actions manuelles et évolutions API serveur.
 - Aucune conclusion prématurée : la mission reste active.
+
+
+## Campagne 1 quinquies — Revalidation des mises à jour (2026-11-11)
+
+- `applyPendingUpdateAtStartup` revalide systématiquement signature + SHA-256 ;
+  un drapeau `verified` persisté ne suffit plus.
+- Test de non-régression ajouté.

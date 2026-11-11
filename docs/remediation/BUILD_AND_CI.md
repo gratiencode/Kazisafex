@@ -26,7 +26,7 @@ mvn -B -ntp -Dtests.skip=false test
 
 | Élément | Valeur |
 |---|---|
-| Tests exécutés | **192** |
+| Tests exécutés | **193** |
 | Échecs | 0 |
 | Erreurs | 0 |
 | Ignorés | 0 |
@@ -34,7 +34,7 @@ mvn -B -ntp -Dtests.skip=false test
 | Commande | `mvn -q clean test -Dtests.skip=false` |
 
 Après ajout des tests TLS, `REMOVE`, dead-letter, politique HTTP, garde
-d'inventaire, permissions SQLite et verrouillage, le total est de **192** (validation par `mvn clean test`, qui
+d'inventaire, permissions SQLite et verrouillage, le total est de **193** (validation par `mvn clean test`, qui
 élimine les rapports Surefire périmés).
 
 ## 3. CI GitHub Actions
