@@ -391,3 +391,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test dédié : avec un EntityManager courant, le listener persiste l'outbox
   directement, sans passer par l'exécuteur asynchrone.
 - Suite complète 208/208.
+
+## Campagne 3 sexies — Acquittement conditionnel des doublons (2026-11-11)
+
+- Les copies exactes ne sont plus acquittées globalement après une réponse HTTP
+  réussie : elles ne le sont que si la mutation conservée figure réellement
+  dans `successes`. Une mutation conservée rejetée laisse ses copies en file.
+- Suite complète 208/208.

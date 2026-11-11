@@ -7,6 +7,7 @@ import data.network.dto.BatchResultDto;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -419,15 +420,18 @@ public class BackgroundSyncService extends Service<Void> {
         }
         java.util.Map<String, SyncOutbox> unique = new java.util.LinkedHashMap<>();
         for (SyncOutbox record : input) {
-            String key = String.join("|",
-                    String.valueOf(record.getTableName()),
-                    String.valueOf(record.getEntityId()),
-                    String.valueOf(record.getAction()),
-                    String.valueOf(record.getPayload()),
-                    String.valueOf(record.getRegion()));
-            unique.putIfAbsent(key, record);
+            unique.putIfAbsent(outboxKey(record), record);
         }
         return new java.util.ArrayList<>(unique.values());
+    }
+
+    static String outboxKey(SyncOutbox record) {
+        return String.join("|",
+                String.valueOf(record.getTableName()),
+                String.valueOf(record.getEntityId()),
+                String.valueOf(record.getAction()),
+                String.valueOf(record.getPayload()),
+                String.valueOf(record.getRegion()));
     }
 
     private SyncOutcome processUpsyncChunk(List<SyncOutbox> chunk) {
@@ -448,10 +452,13 @@ public class BackgroundSyncService extends Service<Void> {
         // le serveur les acquitterait toutes alors qu'une seule a été appliquée.
         List<SyncOutbox> originalChunk = List.copyOf(chunk);
         final List<SyncOutbox> effectiveChunk = coalesceExactDuplicates(chunk);
-        List<String> duplicateUids = originalChunk.stream()
+        Map<String, String> keeperByKey = effectiveChunk.stream()
+                .collect(Collectors.toMap(BackgroundSyncService::outboxKey,
+                        SyncOutbox::getUid, (a, b) -> a));
+        Map<String, String> duplicateToKeeper = originalChunk.stream()
                 .filter(r -> effectiveChunk.stream().noneMatch(k -> k.getUid().equals(r.getUid())))
-                .map(SyncOutbox::getUid)
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(SyncOutbox::getUid,
+                        r -> keeperByKey.get(outboxKey(r)), (a, b) -> a));
 
         // 2. Convert to BatchMutationDto
         List<BatchMutationDto> mutations = effectiveChunk
@@ -499,13 +506,19 @@ public class BackgroundSyncService extends Service<Void> {
                         SyncOutboxService.markAsApplied(successUids);
                         acknowledgedUids.addAll(successUids);
                         appliedCount = successUids.size();
-                    }
-                }
 
-                if (!duplicateUids.isEmpty()) {
-                    SyncOutboxService.markAsApplied(duplicateUids);
-                    acknowledgedUids.addAll(duplicateUids);
-                    appliedCount += duplicateUids.size();
+                        // Les copies exactes ne sont acquittees que si la mutation
+                        // conservee a bien ete acceptee par le serveur.
+                        List<String> duplicateAck = duplicateToKeeper.entrySet().stream()
+                                .filter(e -> successUids.contains(e.getValue()))
+                                .map(Map.Entry::getKey)
+                                .collect(Collectors.toList());
+                        if (!duplicateAck.isEmpty()) {
+                            SyncOutboxService.markAsApplied(duplicateAck);
+                            acknowledgedUids.addAll(duplicateAck);
+                            appliedCount += duplicateAck.size();
+                        }
+                    }
                 }
 
                 // Handle Failures: mark as UNSYNCED (will be retried, up to 5 times)
