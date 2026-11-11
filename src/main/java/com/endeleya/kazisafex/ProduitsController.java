@@ -119,10 +119,9 @@ import services.utils.RegionRegistry;
 import services.utils.UserRoleRegistry;
 import tools.Constants;
 import tools.DataCache;
-import tools.DataId;
-import tools.DataImporter;
-import tools.DownloadTask;
-import tools.FileUtils;
+ import tools.DataId;
+ import tools.DataImporter;
+ import tools.FileUtils;
 import services.RepportService;
 import tools.LigneImport;
 import tools.MainUI;
@@ -550,11 +549,13 @@ public class ProduitsController implements Initializable {
             SyncLogger.getInstance().log(ex, "ProduitsController.printBCWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
-            try {
-                pos.close();
-            } catch (IOException ex) {
-                SyncLogger.getInstance().log(ex, "ProduitsController.printBCWithThermal");
-                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+            if (pos != null) {
+                try {
+                    pos.close();
+                } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "ProduitsController.printBCWithThermal");
+                    Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 

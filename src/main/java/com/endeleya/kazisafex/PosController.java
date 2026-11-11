@@ -3381,17 +3381,20 @@ public class PosController implements Initializable {
             Mesure mz = r.getMesureId();
             if (mz == null) {
                 Produit p = r.getProductId();
-                mz = MesureDelegate.findByProduitAndQuant(p.getUid(), 1d);
+                if (p != null) {
+                    mz = MesureDelegate.findByProduitAndQuant(p.getUid(), 1d);
+                }
             }
             double sa = r.getStockAlert() == null ? 0 : r.getStockAlert();
-            Double qc = mz == null ? mz.getQuantContenu() : mz.getQuantContenu();
-            Mesure mm;
-            if (qc == null) {
-                mm = MesureDelegate.findMesure(mz.getUid());
-                qc = mm.getQuantContenu();
+            double qc = 1d;
+            String unite = "";
+            if (mz != null) {
+                if (mz.getQuantContenu() != null && mz.getQuantContenu() > 0) {
+                    qc = mz.getQuantContenu();
+                }
+                unite = mz.getDescription() == null ? "" : mz.getDescription();
             }
-            SimpleStringProperty ex = getValues(
-                    (sa / qc) + " " + (mz == null ? mz.getDescription() : mz.getDescription()));
+            SimpleStringProperty ex = getValues((sa / qc) + " " + unite);
             return ex;
 
         });
@@ -4990,7 +4993,7 @@ public class PosController implements Initializable {
             for (Node node1 : elt) {
                 if (node1 instanceof ImageView) {
                     ImageView imagev = (ImageView) node1;
-                    if (imagev.getId().equals(node1)) {
+                    if (id != null && id.equals(imagev.getId())) {
                         Util.installPicture(imagev, id + ".jpeg");
                     }
                 }

@@ -6,6 +6,7 @@ import com.endeleya.kazisafex.PosController;
 import com.endeleya.kazisafex.ProduitsController;
 import com.endeleya.kazisafex.SerialPrinterManager;
 import com.endeleya.kazisafex.tools.BluetoothPrintService;
+import com.endeleya.kazisafex.tools.EscPosPrintSupport;
 import com.endeleya.kazisafex.tools.SerialPrintService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fazecast.jSerialComm.SerialPort;
@@ -27,6 +28,7 @@ import data.BaseModel;
 import data.Category;
 import data.Client;
 import data.CompteTresor;
+import data.core.TokenStore;
 import data.Entreprise;
 import data.LigneVente;
 import data.Mesure;
@@ -74,8 +76,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.ResourceBundle;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -366,9 +372,11 @@ public class PaymentController
             String customerPhone, String currency, double rate) {
         Executors.newSingleThreadExecutor().submit(() -> {
             PrinterOutputStream pos = null;
+            StringBuilder journal = new StringBuilder();
             try {
                 if (printerName == null) {
-                    System.out.println("impirmente name " + printerName);
+                    SyncLogger.getInstance().logMessage("PaymentController.printReceipt",
+                            "Aucune imprimante selectionnee, impression annulee.");
                     return;
                 }
                 List<LigneVente> items = new ArrayList<>();
@@ -379,6 +387,17 @@ public class PaymentController
                         }
                     }
                 }
+                int printableDots = EscPosPrintSupport.printableDotsOf(this.WIDTH);
+                journal.append("===== Debut impression ticket =====\n");
+                journal.append("Imprimante    : ").append(printerName).append('\n');
+                journal.append("Facture       : ").append(invoiceNumber).append('\n');
+                journal.append("Client        : ").append(customerName == null ? "" : customerName)
+                        .append(" / ").append(customerPhone == null ? "" : customerPhone).append('\n');
+                journal.append("Devise        : ").append(currency).append('\n');
+                journal.append("Lignes        : ").append(items.size()).append('\n');
+                journal.append("Largeur       : ").append(this.WIDTH).append(" car., ")
+                        .append(printableDots).append(" points\n");
+                SyncLogger.getInstance().logMessage("PaymentController.printReceipt (entete)", journal.toString());
                 PrintService ps = PrinterOutputStream.getPrintServiceByName(printerName);
                 pos = new PrinterOutputStream(ps);
                 try (EscPos printer = new EscPos(pos)) {
@@ -395,21 +414,36 @@ public class PaymentController
                         try {
                             BufferedImage bimg = ImageIO.read(this.f);
                             if (bimg != null) {
+                                // Le logo doit tenir dans la largeur imprimable. Sans cette
+                                // reduction, le logo de remplacement 512x512 genere un raster
+                                // de 32 Ko (64 octets par ligne x 512 lignes) alors qu'une
+                                // imprimante 58mm ne fait que 384 points de large : son tampon
+                                // deborde, elle jette des octets, se desynchronise du flux
+                                // ESC/POS et le papier sort vide.
+                                int originalWidth = bimg.getWidth();
+                                int originalHeight = bimg.getHeight();
+                                BufferedImage scaled = EscPosPrintSupport.scaleLogoToPaper(bimg, printableDots);
                                 RasterBitImageWrapper imgWrapper = new RasterBitImageWrapper();
                                 imgWrapper.setJustification(EscPosConst.Justification.Center);
                                 printer.feed(1);
                                 BitonalThreshold bitonal = new BitonalThreshold(100);
-                                EscPosImage posimg = new EscPosImage((CoffeeImage) new CoffeeImageImpl(bimg), (Bitonal) bitonal);
+                                EscPosImage posimg = new EscPosImage((CoffeeImage) new CoffeeImageImpl(scaled), (Bitonal) bitonal);
+                                int logoBytes = imgWrapper.getBytes(posimg).length;
+                                journal.append("Logo          : ").append(originalWidth).append('x').append(originalHeight)
+                                        .append(" px -> ").append(scaled.getWidth()).append('x').append(scaled.getHeight())
+                                        .append(" px, ").append(logoBytes).append(" octets ESC/POS\n");
                                 printer.write((ImageWrapperInterface) imgWrapper, posimg);
                             }
                         } catch (Exception e) {
                             SyncLogger.getInstance().log(e, "PaymentController.printReceipt");
+                            journal.append("Logo          : ERREUR ").append(e).append('\n');
                             MainUI.notify(null, (String) "Attention", (String) "Veuillez mettre un bon logo (125X125px) au moins, pour votre facture", (long) 3L, (String) "warning");
                         }
                     }
                     printer.feed(1);
                     String companyName = this.entreprise.getNomEntreprise() == null || this.entreprise.getNomEntreprise().isBlank() ? this.entrepName : this.entreprise.getNomEntreprise();
                     printer.writeLF(title, companyName);
+                    journal.append(companyName).append('\n');
                     String entRccm = this.entreprise.getIdentification() == null || this.entreprise.getIdentification().isBlank() ? this.rccm : this.entreprise.getIdentification();
                     String idnat = this.entreprise.getIdNat() == null || this.entreprise.getIdNat().isBlank() ? this.idNat : this.entreprise.getIdNat();
                     String impot = this.entreprise.getNumeroImpot() == null || this.entreprise.getNumeroImpot().isBlank() ? this.nif : this.entreprise.getNumeroImpot();
@@ -422,84 +456,126 @@ public class PaymentController
                     if (adresse != null && !adresse.isBlank() && !adresse.equals("aucune")) stateId.append("\nAdresse : ").append(adresse);
                     if (phones != null && !phones.isBlank() && !phones.equals("-")) stateId.append("\nTel: ").append(phones);
                     printer.writeLF(centerbold, stateId.toString());
+                    journal.append(stateId).append('\n');
                     if (this.entreprise.getWebsite() != null) {
                         printer.writeLF(identite, this.entreprise.getWebsite());
+                        journal.append(this.entreprise.getWebsite()).append('\n');
                     }
                     printer.writeLF(right, " Facture N.: " + this.vente4save.getReference());
+                    journal.append(" Facture N.: ").append(this.vente4save.getReference()).append('\n');
                     LocalDateTime dv = this.vente4save.getDateVente();
                     DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-                    printer.writeLF(right, dv == null ? dtf.format(LocalDateTime.now()) : dtf.format(dv));
+                    String dateStr = dv == null ? dtf.format(LocalDateTime.now()) : dtf.format(dv);
+                    printer.writeLF(right, dateStr);
+                    journal.append(dateStr).append('\n');
                     printer.write("Client : ");
-                    printer.writeLF(customer, this.cliname.getText().isBlank() ? "Anonyme" : this.cliname.getText());
-                    System.out.println("-".repeat(this.WIDTH));
+                    String cliText = this.cliname.getText().isBlank() ? "Anonyme" : this.cliname.getText();
+                    printer.writeLF(customer, cliText);
+                    journal.append("Client : ").append(cliText).append('\n');
                     boolean isUSD = "USD".equalsIgnoreCase(currency);
                     DecimalFormat moneyFormat = isUSD ? new DecimalFormat("0.00") : new DecimalFormat("#,##0.00");
                     printer.writeLF("-".repeat(this.WIDTH));
+                    journal.append("-".repeat(this.WIDTH)).append('\n');
                     double grandTotal = 0.0;
                     String mainCurrency = CurrencyConverter.normalize(currency);
-                    for (LigneVente item : items) {
-                        Produit p = item.getProductId() != null ? ProduitDelegate.findProduit((String) item.getProductId().getUid()) : null;
+                    // Une ligne par produit, meme si le stock a ete preleve sur
+                    // plusieurs lots : les sous-lignes de decoupe sont regroupees
+                    // en UNE seule ligne representative.
+                    List<ReceiptLine> receiptLines = mergeReceiptLines(items);
+                    journal.append("Lignes de vente: ").append(items == null ? 0 : items.size())
+                            .append(" sous-ligne(s) -> ").append(receiptLines.size())
+                            .append(" ligne(s) sur le ticket\n");
+                    for (ReceiptLine item : receiptLines) {
+                        Produit p = item.productId != null ? ProduitDelegate.findProduit((String) item.productId.getUid()) : null;
                         String productName = p != null ? (p.getNomProduit() + " " + (p.getModele() != null ? p.getModele() : "") + " " + (p.getTaille() != null ? p.getTaille() : "") + " " + (p.getMarque() != null ? p.getMarque() : "")) : "Produit inconnu";
                         List<String> nameLines = PaymentController.wrapText(productName, this.WIDTH);
                         for (int i = 0; i < nameLines.size(); ++i) {
                             String lineName = nameLines.get(i);
                             printer.writeLF(lineName);
-                            System.out.println(lineName);
+                            journal.append(lineName).append('\n');
                             if (i != nameLines.size() - 1) {
                                 continue;
                             }
-                            double unitPrice = item.getPrixUnit() != null ? CurrencyConverter.priceFromStorageUsd(item.getPrixUnit()) : 0.0;
+                            double unitPrice = item.prixUnit != null ? CurrencyConverter.priceFromStorageUsd(item.prixUnit) : 0.0;
                             double lineTotal = CurrencyConverter.convert(
-                                    CurrencyConverter.legacyUsdFromStorage(item.getMontantUsd(), item.getMontantCdf()),
+                                    CurrencyConverter.legacyUsdFromStorage(item.montantUsd, item.montantCdf),
                                     CurrencyConverter.USD, mainCurrency);
-                            Mesure m = item.getMesureId();
+                            Mesure m = item.mesureId;
                             String priceStr = moneyFormat.format(unitPrice);
-                            String qtyStr = "x" + item.getQuantite() + (m != null ? " " + m.getDescription() : "");
+                            String qtyStr = "x" + item.quantite + (m != null ? " " + m.getDescription() : "");
                             String totalStr = moneyFormat.format(lineTotal);
                             int leftLen = this.WIDTH - (priceStr.length() + qtyStr.length() + totalStr.length() + 2);
                             String leftPad = " ".repeat(Math.max(0, leftLen));
                             String line = leftPad + priceStr + " " + qtyStr + " " + totalStr;
-                            System.out.println(line);
                             printer.writeLF(body, line);
+                            journal.append(line);
+                            if (item.parts() > 1) {
+                                journal.append("   [regroupe ").append(item.parts()).append(" lots : ")
+                                        .append(String.join(", ", item.lots)).append(']');
+                            }
+                            journal.append('\n');
                         }
                         grandTotal += CurrencyConverter.convert(
-                                CurrencyConverter.legacyUsdFromStorage(item.getMontantUsd(), item.getMontantCdf()),
+                                CurrencyConverter.legacyUsdFromStorage(item.montantUsd, item.montantCdf),
                                 CurrencyConverter.USD, mainCurrency);
                     }
                     double convertedTotal = grandTotal;
                     double convertedPaid = amountPaid;
                     double convertedReste = convertedTotal - convertedPaid;
-                    printer.writeLF("-".repeat(this.WIDTH));
-                    printer.writeLF(pied, this.printLine("TOTAL:", convertedTotal, currency, moneyFormat));
-                    printer.writeLF(pied, this.printLine("PAY\u00c9:", convertedPaid, currency, moneyFormat));
+                    String separator = "-".repeat(this.WIDTH);
+                    printer.writeLF(separator);
+                    journal.append(separator).append('\n');
+                    String totalLine = this.printLine("TOTAL:", convertedTotal, currency, moneyFormat);
+                    printer.writeLF(pied, totalLine);
+                    journal.append(totalLine).append('\n');
+                    String paidLine = this.printLine("PAYÉ:", convertedPaid, currency, moneyFormat);
+                    printer.writeLF(pied, paidLine);
+                    journal.append(paidLine).append('\n');
                     if (convertedReste > 0.01) {
-                        printer.writeLF(pied, this.printLine("RESTE \u00c0 PAYER:", convertedReste, currency, moneyFormat));
+                        String resteLine = this.printLine("RESTE À PAYER:", convertedReste, currency, moneyFormat);
+                        printer.writeLF(pied, resteLine);
+                        journal.append(resteLine).append('\n');
                     } else if (convertedReste < -0.01) {
-                        printer.writeLF(pied, this.printLine("TROP PAY\u00c9:", -convertedReste, currency, moneyFormat));
+                        String tropLine = this.printLine("TROP PAYÉ:", -convertedReste, currency, moneyFormat);
+                        printer.writeLF(pied, tropLine);
+                        journal.append(tropLine).append('\n');
                     }
-                    printer.writeLF(pied, "Operateur: " + this.user);
+                    String operLine = "Operateur: " + this.user;
+                    printer.writeLF(pied, operLine);
+                    journal.append(operLine).append('\n');
                     boolean isavert = this.pref.getBoolean("averti", true);
                     if (isavert) {
                         printer.feed(1);
                         String text = "CHER CLIENT S.V.P,VEUILLEZ VERIFIER VOS PRODUITS A LA RECEPTION PAS DES RECLAMATIONS APRES";
-                        printer.writeLF(centerbold, this.pref.get("ads_mesg", text));
+                        String adsText = this.pref.get("ads_mesg", text);
+                        printer.writeLF(centerbold, adsText);
+                        journal.append(adsText).append('\n');
                     }
                     printer.writeLF(ephone, this.messageForCustomer);
+                    journal.append(this.messageForCustomer).append('\n');
                     QRCode qrcode = new QRCode();
                     printer.feed(1);
                     qrcode.setSize(2);
                     qrcode.setJustification(EscPosConst.Justification.Center);
+                    int qrBytes = qrcode.getBytes("https://www.endeleya.com").length;
+                    journal.append("[QR code ").append(qrBytes).append(" octets]\n");
                     printer.write((BarCodeWrapperInterface) qrcode, "https://www.endeleya.com");
                     printer.feed(2);
                     printer.cut(EscPos.CutMode.FULL);
                 }
+                journal.append("===== Fin impression ticket =====");
+                SyncLogger.getInstance().logMessage("PaymentController.printReceipt (contenu)", journal.toString());
             } catch (Exception exception) {
+                journal.append("ERREUR : ").append(exception).append('\n');
+                journal.append("===== Fin impression ticket (ECHEC) =====");
+                SyncLogger.getInstance().logMessage("PaymentController.printReceipt (contenu)", journal.toString());
                 SyncLogger.getInstance().log(exception, "PaymentController.printReceipt");
                 Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, "Erreur impression receipt", exception);
                 Platform.runLater(() -> MainUI.notify(null, "Erreur", "Erreur lors de l'impression : " + exception.getMessage(), 4L, "error"));
             }
         });
     }
+
 
     public static List<String> wrapText(String text, int width) {
         ArrayList<String> lines = new ArrayList<String>();
@@ -523,9 +599,7 @@ public class PaymentController
     public String printLine(String label, double amount, String currency, DecimalFormat formatter) {
         String amountStr = formatter.format(currency.equals("USD") ? amount : (double) Math.round(amount)) + " " + currency;
         int spaces = this.WIDTH - label.length() - amountStr.length();
-        String line = label + " ".repeat(Math.max(0, spaces)) + amountStr;
-        System.out.println(line);
-        return line;
+        return label + " ".repeat(Math.max(0, spaces)) + amountStr;
     }
 
     public void printQrCodeAscii(String data) {
@@ -534,18 +608,26 @@ public class PaymentController
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        SyncLogger.getInstance().log(new Exception( "Initialization... " ),
+                "PaymentController.initialize");
         this.initPref();
         MainUI.setPattern(dpk_date_vente);
-        this.cbx_payment_mode.setItems(FXCollections.observableArrayList(new String[]{TypeTraisorerie.CAISSE.name(), TypeTraisorerie.BANQUE.name(), "MOBILE MONEY", Mouvment.CREDIT.name(), Mouvment.CREDIT.name() + "+" + Mouvment.CASH.name()}));
+        this.cbx_payment_mode.setItems(FXCollections.observableArrayList(new String[]{TypeTraisorerie.CAISSE.name(),
+            TypeTraisorerie.BANQUE.name(), "MOBILE MONEY", Mouvment.CREDIT.name(), Mouvment.CREDIT.name() + "+" 
+                    + Mouvment.CASH.name()}));
         this.cbx_payment_mode.getSelectionModel().selectFirst();
         dpk_date_vente.setValue(LocalDate.now());
         this.maker.setTaux(this.taux2change);
         this.captioncdf.setText(CurrencyConverter.CDF);
         this.captionusd.setText(CurrencyConverter.USD);
         this.refreshSerialPrinters();
+        SyncLogger.getInstance().log(new Exception( "Initialized" ),
+                "PaymentController.initialize");
     }
 
     public void setEntreprise(Entreprise e) {
+        SyncLogger.getInstance().log(new Exception( " - entrep " + e),
+                "PaymentController.setEntreprise");
         String idnat;
         this.entreprise = e;
         if (this.entreprise == null) {
@@ -560,7 +642,8 @@ public class PaymentController
         String string = idnat = this.entreprise.getIdNat() == null ? "Aucun" : this.entreprise.getIdNat();
         this.txt_bill_comp_idnat.setText((String) (!imp.equals("Aucun") && !idnat.equals("Aucun") ? "Imp\u00f4t:" + imp + " , IdNat:" + idnat : (!imp.equals("Aucun") && idnat.equals("Aucun") ? "Imp\u00f4t:" + imp : (imp.equals("Aucun") && !idnat.equals("Aucun") ? "IdNat:" + idnat : " "))));
         this.txt_comp_adresse_tel.setText("Tel:" + this.entreprise.getPhones());
-        this.clients = FXCollections.observableArrayList((Collection) ClientDelegate.findClients());
+        this.clients = dedupeClientsByName(
+                (Collection) ClientDelegate.findClients());
         this.comptes = FXCollections.observableArrayList((Collection) CompteTresorDelegate.findCompteTresors((String) this.region));
         this.cbx_clients.setItems(this.clients);
         this.cbx_comptes.setItems(this.comptes);
@@ -600,22 +683,90 @@ public class PaymentController
         return rst;
     }
 
+    /**
+     * Unifie les clients affiches en double dans la combobox de selection: le
+     * client est identifie par son nom, les donnees du premier client (ou du
+     * plus complet a egalite) sont conservees pour le nom donne.
+     */
+    private static ObservableList<Client> dedupeClientsByName(Collection<Client> all) {
+        ObservableList<Client> result = FXCollections.observableArrayList();
+        if (all == null) {
+            return result;
+        }
+        java.util.Map<String, Client> byName = new java.util.LinkedHashMap<>();
+        for (Client c : all) {
+            if (c == null) {
+                continue;
+            }
+            String name = c.getNomClient() == null ? "" : c.getNomClient().trim().toLowerCase(Locale.ROOT);
+            if (name.isEmpty()) {
+                continue;
+            }
+            Client existing = byName.get(name);
+            if (existing == null) {
+                byName.put(name, c);
+            } else {
+                // Fusion basique : completer les donnees manquantes du garde avec le doublon.
+                if (existing.getPhone() == null || existing.getPhone().isBlank()) {
+                    existing.setPhone(c.getPhone());
+                }
+                if (existing.getAdresse() == null || existing.getAdresse().isBlank()) {
+                    existing.setAdresse(c.getAdresse());
+                }
+                if (existing.getEmail() == null || existing.getEmail().isBlank()) {
+                    existing.setEmail(c.getEmail());
+                }
+            }
+        }
+        result.addAll(byName.values());
+        return result;
+    }
+
     public void setClient(Client c) {
+        // findAnonymousClient() renvoie null tant que la ligne "client anonyme"
+        // n'existe pas en base (base neuve, jeu de donnees non initialise).
+        // Dereferencer ici interrompait floatDialog() avant stage.showAndWait(),
+        // donc l'ecran de paiement ne s'affichait jamais.
+        SyncLogger.getInstance().log(new Exception( " - Obtained client " + c),
+                "PaymentController.setClient");
         this.client = c == null ? ClientDelegate.findAnonymousClient() : c;
-        this.tf_phone_client.setText(this.client.getPhone());
-        this.txt_client_selected_pay.setText(this.client.getNomClient());
-        this.cbx_clients.setValue(this.client);
+        if (this.client == null) {
+            this.client = new Client("inconnu", "Client inconnu");
+        }
+        this.tf_phone_client.setText(
+            this.client.getPhone() == null ? "" : this.client.getPhone());
+        this.txt_client_selected_pay.setText(
+            this.client.getNomClient() == null ? "Client inconnu" : this.client.getNomClient());
+        // En cas de doublons unifies par nom, selectionner l'entree de la liste
+        // qui porte le meme nom que le client choisi.
+        Client listed = this.client;
+        if (this.cbx_clients != null && this.cbx_clients.getItems() != null) {
+            String selName = this.client.getNomClient() == null ? null
+                    : this.client.getNomClient().trim().toLowerCase(Locale.ROOT);
+            if (selName != null && !selName.isEmpty()) {
+                for (Client c2 : this.cbx_clients.getItems()) {
+                    if (c2.getNomClient() != null
+                            && c2.getNomClient().trim().toLowerCase(Locale.ROOT).equals(selName)) {
+                        listed = c2;
+                        break;
+                    }
+                }
+            }
+        }
+        this.cbx_clients.setValue(listed);
     }
 
     @FXML
     private void pickClient(Event evt) {
-        String token = this.pref.get("token", null);
+        String token = TokenStore.get();
         MainUI.floatDialog((String) "client.fxml", (int) 1090, (int) 537, (String) token, (Kazisafe) this.kazisafe, (Object[]) new Object[]{this.entreprise, this.region});
     }
 
     public void setLines(List<LigneVente> lig, Vente invoice) {
+        SyncLogger.getInstance().log(new Exception( " - Ligneventes " + lig+" Vente = "+invoice),
+                "PaymentController.setLines");
         Vente invoices;
-        String token = this.pref.get("token", null);
+        String token = TokenStore.get();
         this.messageForCustomer = this.pref.get("mesc", "Les marchandises vendues ne sont ni reprises ni echangees");
         this.kazisafe = KazisafeServiceFactory.createService((String) token);
         this.venteItems = new ArrayList<LigneVente>();
@@ -626,7 +777,10 @@ public class PaymentController
         }
         List<LigneVente> lgvt = invoiceId == null ? lig : LigneVenteDelegate.findByReference(invoiceId.getUid());
         List<LigneVente> lignes = this.sortByPriceLength(lgvt);
-        if (invoiceId != null && invoiceId.getObservation().equals("Drafted")) {
+        if (lignes == null) {
+            lignes = new ArrayList<>();
+        }
+        if (invoiceId != null && "Drafted".equals(invoiceId.getObservation())) {
             lignes = lig;
         }
         double sommed = lignes.stream()
@@ -651,11 +805,12 @@ public class PaymentController
             this.pane_bill_cash_paid.setVisible(false);
             this.txt_bill_cash_paid.setVisible(false);
         } else {
-            if (!invoiceId.getObservation().equals("Drafted")) {
+            if (!"Drafted".equals(invoiceId.getObservation())) {
                 this.tf_nominal_recu_usd.setText(String.valueOf(invoiceId.getMontantUsd()));
                 this.tf_nominal_recu_cdf.setText(String.valueOf(Math.round(invoiceId.getMontantCdf())));
             }
-            if (invoiceId.getPayment().toUpperCase().contains("credit partiel".toUpperCase())) {
+            String payMode = invoiceId.getPayment() == null ? "" : invoiceId.getPayment();
+            if (payMode.toUpperCase().contains("credit partiel".toUpperCase())) {
                 this.pane_bill_cash_paid.setVisible(true);
                 this.txt_bill_cash_paid.setVisible(true);
                 String debtMain = CurrencyConverter.formatCompact(CurrencyConverter.debtInMainCurrency(invoiceId.getMontantDette(), invoiceId.getDeviseDette()));
@@ -666,7 +821,7 @@ public class PaymentController
                 this.txt_bill_somme_facture.setText(totInMain);
                 this.pane_bill_sum_credit.setVisible(true);
                 this.txt_lbl_credit.setVisible(true);
-            } else if (invoiceId.getPayment().contains("Cash") | invoiceId.getPayment().contains(TypeTraisorerie.ELECTRONIQUE.name()) | invoiceId.getPayment().contains("Banque")) {
+            } else if (payMode.contains("Cash") || payMode.contains(TypeTraisorerie.ELECTRONIQUE.name()) || payMode.contains("Banque")) {
                 this.pane_bill_cash_paid.setVisible(true);
                 this.txt_bill_cash_paid.setVisible(true);
                 this.pane_bill_sum_credit.setVisible(false);
@@ -1320,6 +1475,87 @@ public class PaymentController
         }
     }
 
+    /**
+     * Ligne de facture agregee : represente UNE seule ligne du ticket, quel que
+     * soit le nombre de lots depuis lesquels le stock a ete preleve.
+     */
+    private static final class ReceiptLine {
+        final Produit productId;
+        final Mesure mesureId;
+        final Double prixUnit;
+        double quantite;
+        double montantUsd;
+        double montantCdf;
+        final Set<String> lots = new LinkedHashSet<>();
+
+        ReceiptLine(LigneVente src) {
+            this.productId = src.getProductId();
+            this.mesureId = src.getMesureId();
+            this.prixUnit = src.getPrixUnit();
+            this.quantite = src.getQuantite();
+            this.montantUsd = src.getMontantUsd();
+            this.montantCdf = src.getMontantCdf();
+            addLot(src);
+        }
+
+        void add(LigneVente src) {
+            this.quantite += src.getQuantite();
+            this.montantUsd += src.getMontantUsd();
+            this.montantCdf += src.getMontantCdf();
+            addLot(src);
+        }
+
+        private void addLot(LigneVente src) {
+            String lot = src.getNumlot();
+            if (lot != null && !lot.isBlank()) {
+                this.lots.add(lot);
+            }
+        }
+
+        /** Nombre de sous-lignes de decoupe regroupees dans cette ligne. */
+        int parts() {
+            return this.lots.isEmpty() ? 1 : this.lots.size();
+        }
+    }
+
+    /**
+     * Regroupe les sous-lignes de vente decoupees par lot en une seule ligne
+     * representative par produit.
+     *
+     * <p>Quand le stock d'un produit est eparpille sur plusieurs lots,
+     * {@link #buildSaleParts} persiste une ligne {@link LigneVente} par lot.
+     * Sans regroupement, un article achete en 5 unites puis consomme sur 3 lots
+     * apparaitrait 3 fois sur le ticket, sur le PDF et dans le journal, pour une
+     * meme ligne de vente. La cle de regroupement est
+     * (produit, unite, prix unitaire) : deux lignes au meme produit mais a des
+     * prix differents restent deux lignes distinctes, ce qui reste coherent.
+     * L'ordre d'apparition du panier est preserve.
+     */
+    private static List<ReceiptLine> mergeReceiptLines(List<LigneVente> lines) {
+        List<ReceiptLine> merged = new ArrayList<>();
+        if (lines == null || lines.isEmpty()) {
+            return merged;
+        }
+        Map<String, ReceiptLine> byKey = new LinkedHashMap<>();
+        for (LigneVente line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String key = (line.getProductId() != null ? line.getProductId().getUid() : "?")
+                    + "|" + (line.getMesureId() != null ? line.getMesureId().getUid() : "?")
+                    + "|" + line.getPrixUnit();
+            ReceiptLine existing = byKey.get(key);
+            if (existing == null) {
+                ReceiptLine created = new ReceiptLine(line);
+                byKey.put(key, created);
+                merged.add(created);
+            } else {
+                existing.add(line);
+            }
+        }
+        return merged;
+    }
+
     private double toUsd() {
         double paidus = 0.0;
         double paidcd = 0.0;
@@ -1571,9 +1807,9 @@ public class PaymentController
                 return;
             }
             Platform.runLater(() -> {
-                PosController.getInstance().clearCart();
+                PosController.getInstance().clearCart(null);
                 if (PosController.getInstance().savedCarts != null) {
-                    PosController.getInstance().savedCarts.removeIf(v -> v.getUid() == this.vente4save.getUid());
+                    PosController.getInstance().savedCarts.removeIf(v -> java.util.Objects.equals(v.getUid(), this.vente4save.getUid()));
                 }
                 PosController.getInstance().choosenVente = null;
                 PosController.getInstance().updateStockForSoldArticles(new ArrayList<>(this.venteItems));
@@ -1794,65 +2030,118 @@ public class PaymentController
             pdf.addCell("P. total", endeleya);
             pdf.setFont((PDFont) hnormal, 10.0f, Color.BLACK);
             contentStream.setFont((PDFont) hnormal, 10.0f);
-            int i = 0;
-            double somme = 0.0;
-            int ln = 0;
-            int lpp = 26;
-            String dev = this.pref.get("mainCur", "USD");
-            for (LigneVente rupture : this.venteItems) {
-                if (++i > 13 && i == 14 || ++ln == lpp) {
-                    contentStream.close();
-                    PDPage fPage2 = new PDPage(PDRectangle.A4);
-                    document.addPage(fPage2);
-                    contentStream = new PDPageContentStream(document, fPage2);
-                    pdf = new PDFUtils(document, contentStream);
-                    int[] tablex = new int[]{55, 230, 100, 65, 90};
-                    pdf.addTable(tablex, 30, 25, pageH - 68);
-                    pdf.setFont((PDFont) hnormal, 10.0f, Color.BLACK);
-                    pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-                    contentStream.setFont((PDFont) hnormal, 10.0f);
-                    if (ln == lpp || i == 14) {
-                        ln = 0;
-                    }
+            // Meme source de donnees que le ticket thermique : la base contient
+            // les sous-lignes de decoupe par lot que buildSaleParts() a ajoutees
+            // et qui ne sont jamais revenues dans this.venteItems. Sans cette
+            // relecture, le PDF manquait des lignes et son total ne correspondait
+            // pas a celui du ticket.
+            List<LigneVente> pdfItems = LigneVenteDelegate.findByReference(vt.getUid());
+            if (pdfItems == null || pdfItems.isEmpty()) {
+                pdfItems = this.venteItems;
+            }
+            // Regroupement identique au ticket thermique : une seule ligne par
+            // produit, les lots interpelles restent traces dans le journal.
+            final List<ReceiptLine> lignes = mergeReceiptLines(pdfItems);
+            String currency = CurrencyConverter.normalize(this.maker != null
+                    ? this.maker.getMainCurrency() : this.pref.get("mainCur", "USD"));
+            boolean isUSD = CurrencyConverter.USD.equals(currency);
+            DecimalFormat moneyFormat = isUSD ? new DecimalFormat("0.00") : new DecimalFormat("#,##0.00");
+            StringBuilder pdfJournal = new StringBuilder();
+            pdfJournal.append("===== Debut impression facture PDF =====\n");
+            pdfJournal.append("Facture       : ").append(vt.getReference()).append('\n');
+            pdfJournal.append("Client        : ").append(ff.getNomClient()).append('\n');
+            pdfJournal.append("Devise        : ").append(currency).append('\n');
+            pdfJournal.append("Lignes        : ").append(pdfItems == null ? 0 : pdfItems.size())
+                    .append(" sous-ligne(s) -> ").append(lignes.size()).append(" ligne(s) sur le PDF\n");
+
+            final PDFUtils[] pdfRef = {pdf};
+            final PDPageContentStream[] csRef = {contentStream};
+            Runnable openTotalsPage = () -> {
+                try {
+                    csRef[0].close();
+                } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "PaymentController.createPdfBill");
                 }
-                Produit x = rupture.getProductId();
-                String mesDesc = rupture.getMesureId() != null ? rupture.getMesureId().getDescription() : "";
+                PDPage page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+                try {
+                    csRef[0] = new PDPageContentStream(document, page);
+                } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "PaymentController.createPdfBill");
+                    return;
+                }
+                pdfRef[0] = new PDFUtils(document, csRef[0]);
+                int[] tablex = new int[]{55, 230, 100, 65, 90};
+                pdfRef[0].addTable(tablex, 30, 25, pageH - 68);
+                pdfRef[0].setFont((PDFont) hnormal, 10.0f, Color.BLACK);
+                pdfRef[0].setRightAlignedColumns(new int[]{2, 3, 4});
+                try {
+                    csRef[0].setFont((PDFont) hnormal, 10.0f);
+                } catch (IOException e) {
+                    SyncLogger.getInstance().log(e, "PaymentController.createPdfBill");
+                }
+            };
+
+            int i = 0;
+            int rowsOnPage = 0;
+            final int rowsPerPage = 26;
+            final int rowsOnFirstPage = 14;
+            double somme = 0.0;
+            for (ReceiptLine rupture : lignes) {
+                // Saut de page : la premiere page est plus courte car elle
+                // partage l'espace avec l'en-tete. Aucune ligne n'est sautee.
+                if (rowsOnPage >= (i == 0 ? rowsOnFirstPage : rowsPerPage - 1)) {
+                    openTotalsPage.run();
+                    rowsOnPage = 0;
+                }
+                rowsOnPage++;
+                i++;
+                Produit x = rupture.productId;
+                String mesDesc = rupture.mesureId != null ? rupture.mesureId.getDescription() : "";
                 String productName = x != null
                     ? x.getNomProduit() + " " + (x.getMarque() == null ? "" : x.getMarque()) + " " + (x.getModele() == null ? "" : x.getModele()) + " " + (x.getTaille() == null ? "" : x.getTaille()) + " " + (x.getCouleur() == null ? "" : x.getCouleur())
                     : "Produit inconnu";
-                double unitPrice = rupture.getPrixUnit() != null ? rupture.getPrixUnit() : 0.0;
-                pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-                pdf.addCell(i + ".", egray);
-                pdf.addCell(rupture.getQuantite() + " " + mesDesc, egray);
-                pdf.addCell(productName, egray);
-                pdf.addCell(unitPrice * this.taux2change + " ", egray);
-                double stot = rupture.getQuantite() * unitPrice;
+                double unitPrice = rupture.prixUnit != null
+                        ? CurrencyConverter.priceFromStorageUsd(rupture.prixUnit) : 0.0;
+                double stot = CurrencyConverter.convert(
+                        CurrencyConverter.legacyUsdFromStorage(rupture.montantUsd, rupture.montantCdf),
+                        CurrencyConverter.USD, currency);
                 somme += stot;
-                pdf.addCell(Math.round(BigDecimal.valueOf(stot).setScale(2, RoundingMode.HALF_EVEN).doubleValue() * this.taux2change) + " FC", egray);
+                String qtyCell = rupture.quantite + " " + mesDesc;
+                String puCell = moneyFormat.format(unitPrice);
+                String totalCell = moneyFormat.format(stot);
+                pdfRef[0].setRightAlignedColumns(new int[]{2, 3, 4});
+                pdfRef[0].addCell(i + ".", egray);
+                pdfRef[0].addCell(qtyCell, egray);
+                pdfRef[0].addCell(productName, egray);
+                pdfRef[0].addCell(puCell, egray);
+                pdfRef[0].addCell(totalCell + " " + currency, egray);
+                pdfJournal.append(i).append(". ").append(qtyCell).append(" | ").append(productName)
+                        .append(" | PU ").append(puCell).append(" | PT ").append(totalCell)
+                        .append(' ').append(currency);
+                if (rupture.parts() > 1) {
+                    pdfJournal.append("   [regroupe ").append(rupture.parts()).append(" lots : ")
+                            .append(String.join(", ", rupture.lots)).append(']');
+                }
+                pdfJournal.append('\n');
             }
-            if (ln == lpp - 1 || ln == 0) {
-                contentStream.close();
-                PDPage fPage2 = new PDPage(PDRectangle.A4);
-                document.addPage(fPage2);
-                contentStream = new PDPageContentStream(document, fPage2);
-                pdf = new PDFUtils(document, contentStream);
-                int[] tablex = new int[]{55, 230, 100, 65, 90};
-                pdf.addTable(tablex, 30, 25, pageH - 68);
-                pdf.setFont((PDFont) hnormal, 10.0f, Color.BLACK);
-                pdf.setRightAlignedColumns(new int[]{2, 3, 4});
-                contentStream.setFont((PDFont) hnormal, 10.0f);
+            if (i == 0 || rowsOnPage >= rowsPerPage - 1) {
+                openTotalsPage.run();
             }
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("", null);
-            pdf.addCell("Total", egray);
-            pdf.addCell("", egray);
-            pdf.addCell(BigDecimal.valueOf(somme).setScale(2, RoundingMode.HALF_EVEN).doubleValue() + " ", egray);
-            contentStream.close();
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("", null);
+            pdfRef[0].addCell("Total", egray);
+            pdfRef[0].addCell("", egray);
+            pdfRef[0].addCell(moneyFormat.format(somme) + " " + currency, egray);
+            pdfJournal.append("TOTAL : ").append(moneyFormat.format(somme)).append(' ').append(currency).append('\n');
+            pdfJournal.append("===== Fin impression facture PDF =====");
+            SyncLogger.getInstance().logMessage("PaymentController.createPdfBill", pdfJournal.toString());
+            csRef[0].close();
             File bcmd = FileUtils.pointFile((String) (System.currentTimeMillis() + ".pdf"));
             document.save(bcmd);
             document.close();
@@ -2063,6 +2352,16 @@ public class PaymentController
             this.lbl_bt_count.setVisible(false);
             return;
         }
+        // Sur un poste sans adaptateur ou sans pile JSR-82 on ne lance rien :
+        // la recherche Bluetooth doit rester inoperante sur ces machines et ne
+        // jamais bloquer l'interface.
+        if (!BluetoothPrinterManager.isSupported()) {
+            this.pgi_bt_search.setVisible(false);
+            this.lbl_bt_count.setVisible(true);
+            this.lbl_bt_count.setText("Bluetooth non disponible");
+            this.chbx_bt_search.setSelected(false);
+            return;
+        }
         this.pgi_bt_search.setVisible(true);
         this.lbl_bt_count.setVisible(true);
         this.lbl_bt_count.setText("Recherche...");
@@ -2083,7 +2382,7 @@ public class PaymentController
                         Platform.runLater(() -> {
                             ObservableSet osp = Printer.getAllPrinters();
                             this.cbx_printers.setItems(this.setToList((ObservableSet<Printer>) osp));
-                            this.lbl_bt_count.setText(currentCount + " trouv\u00e9(s)");
+                            this.lbl_bt_count.setText(currentCount + " trouvé(s)");
                         });
                     } catch (IOException | InterruptedException e) {
                         SyncLogger.getInstance().log(e, "PaymentController.onBluetoothSearch");
@@ -2093,7 +2392,7 @@ public class PaymentController
                 int finalCount = count;
                 Platform.runLater(() -> {
                     this.pgi_bt_search.setVisible(false);
-                    this.lbl_bt_count.setText(finalCount + " trouv\u00e9(s)");
+                    this.lbl_bt_count.setText(finalCount + " trouvé(s)");
                     this.chbx_bt_search.setSelected(false);
                 });
             } catch (Exception e) {
@@ -2107,17 +2406,20 @@ public class PaymentController
         });
     }
 
+    /**
+     * Alimente la liste des imprimantes proposees dans l'ecran de paiement.
+     *
+     * <p>La detection des ports serie (SerialPrinterManager / jSerialComm) est
+     * volontairement inactive : sur Windows 10 elle bloquait l'ouverture de
+     * l'ecran de paiement pendant l'initialisation. Seule la liste JavaFX des
+     * imprimantes, qui fonctionne sur toutes les machines, est alimentee.
+     * Pour la reactiver plus tard, isoler findSerialPrinters() dans un Executor
+     * hors du thread JavaFX avec un delai maximum, jamais dans ce methode.
+     */
     public void refreshSerialPrinters() {
         try {
-            List<SerialPort> ports = SerialPrinterManager.findSerialPrinters();
-            for (SerialPort port : ports) {
-                String name = port.getDescriptivePortName();
-                String systemName = port.getSystemPortName();
-                SerialPrintService sps = new SerialPrintService(name, systemName);
-                PrintServiceLookup.registerService((PrintService) sps);
-            }
             ObservableSet<Printer> osp = Printer.getAllPrinters();
-            this.cbx_printers.setItems(this.setToList(osp));
+            this.cbx_printers.setItems(this.setToList((ObservableSet<Printer>) osp));
         } catch (Exception e) {
             SyncLogger.getInstance().log(e, "PaymentController.refreshSerialPrinters");
             System.err.println("Error discovering serial ports: " + e.getMessage());

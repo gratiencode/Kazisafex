@@ -319,3 +319,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   limitent désormais la connexion à 15 s et la lecture à 60 s ; un serveur
   injoignable ne bloque plus le démarrage/la mise à jour indéfiniment.
 - Suite complète 205/205.
+
+## Campagne 6 septies — NPE et logique POS/paiement (2026-11-11)
+
+- `PosController` : plus de déréférencement de `mz` nul et comparaison
+  `String.equals(Node)` corrigée (`id.equals(imagev.getId())`).
+- `PaymentController` : `lignes` nul protégé, comparaison d'Integer par
+  `Objects.equals`, `|` remplacé par `||`.
+- `ProduitsController`/`ProduitItemController` : `pos.close()` protégé.
+- Suite complète 205/205.

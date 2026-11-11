@@ -211,7 +211,7 @@ public class ProduitItemController implements Initializable {
         tile_pn_mesures.setHgap(10);
         tile_pn_mesures.setOrientation(Orientation.VERTICAL);
         tile_pn_mesures.setAlignment(Pos.CENTER);
-        kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
+        kazisafe = KazisafeServiceFactory.createService(data.core.TokenStore.get());
         Tooltip.install(img_btn_search_img_google, new Tooltip("Rechercher l'image sur Google"));
         Tooltip.install(img_btn_ordimage, new Tooltip("Rechercher l'image dans mon ordinateur"));
         Tooltip.install(tf_quant_mzr, new Tooltip("Entrer le nombre de pièce contenant dans la mesure sélectionée"));
@@ -382,11 +382,13 @@ public class ProduitItemController implements Initializable {
             SyncLogger.getInstance().log(ex, "ProduitItemController.printBCWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
-            try {
-                pos.close();
-            } catch (IOException ex) {
-                SyncLogger.getInstance().log(ex, "ProduitItemController.printBCWithThermal");
-                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+            if (pos != null) {
+                try {
+                    pos.close();
+                } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "ProduitItemController.printBCWithThermal");
+                    Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 
