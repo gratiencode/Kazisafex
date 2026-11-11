@@ -591,22 +591,14 @@ public class CompterService implements CompterStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND p.numlot = ? AND p.region = ? ");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, puid);
-                    query.setParameter(2, inventaireId);
-                    query.setParameter(3, lot);
-                    query.setParameter(4, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, puid);
-            query.setParameter(2, inventaireId);
-            query.setParameter(3, lot);
-            query.setParameter(4, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, puid);
+                query.setParameter(2, inventaireId);
+                query.setParameter(3, lot);
+                query.setParameter(4, region);
+                return query.getResultList();
+            });
         } catch (NoResultException e) {
             return null;
         }

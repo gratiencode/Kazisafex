@@ -492,3 +492,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `findAllDistinctLots` passe par `executeRead` en MySQL ; la session est
   fermée après la lecture des chaînes de lots.
 - Suite complète 213/213.
+
+## Campagne 4 nonies — Fermeture session recherche comptage (2026-11-11)
+
+- `findComptageForProduit(puid, inventaireId, lot, region)` passe par
+  `executeRead` : utilisé uniquement pour un test de présence à la clôture,
+  aucun besoin d'entité managée.
+- Suite complète 213/213.
