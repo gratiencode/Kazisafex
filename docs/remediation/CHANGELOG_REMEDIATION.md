@@ -574,3 +574,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test manuel : une copie dont le SHA-256 ne correspond pas est refusée
   (exit 1) et la cible reste intacte.
 - Procédure documentée dans `BACKUP_RESTORE.md`.
+
+## Campagne 7 vigesies ter — Test automatisé de restauration (2026-11-11)
+
+- `scripts/test-restore-backup.sh` vérifie restauration valide et refus d'une
+  empreinte invalide avec cible intacte.
+- Exécuté en CI après le garde-fou sécurité.

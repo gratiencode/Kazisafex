@@ -28,6 +28,9 @@ jobs:
       - name: Security regression guard
         run: ./scripts/security-regression.sh
 
+      - name: Backup restore guard test
+        run: ./scripts/test-restore-backup.sh
+
       - name: Compile and run the full test suite
         # tests.skip=true is the local default; CI must always force the suite.
         run: mvn -B -ntp -Dtests.skip=false test
