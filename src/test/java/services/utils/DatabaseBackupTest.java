@@ -41,6 +41,9 @@ class DatabaseBackupTest {
         assertNotNull(backup);
         assertTrue(backup.getFileName().toString().contains("inventory-close"));
         assertTrue(Files.readString(backup).contains("sqlite-content"));
+        Path checksum = Path.of(backup.toString() + ".sha256");
+        assertTrue(Files.isRegularFile(checksum));
+        assertEquals(64, Files.readString(checksum).trim().split("  ")[0].length());
     }
 
     @Test
@@ -71,6 +74,7 @@ class DatabaseBackupTest {
                     .filter(p -> p.getFileName().toString().startsWith("kazi-retention.db.bak-"))
                     .filter(p -> !p.getFileName().toString().endsWith("-wal"))
                     .filter(p -> !p.getFileName().toString().endsWith("-shm"))
+                    .filter(p -> !p.getFileName().toString().endsWith(".sha256"))
                     .count();
             assertEquals(2, count);
         }

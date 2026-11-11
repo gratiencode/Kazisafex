@@ -2,6 +2,7 @@ package services.utils;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
@@ -62,6 +63,7 @@ public final class DatabaseBackup {
             copyIfExists(Path.of(databasePath + "-wal"), Path.of(target + "-wal"));
             copyIfExists(Path.of(databasePath + "-shm"), Path.of(target + "-shm"));
             DatabaseFileSecurity.harden(target.toString());
+            writeChecksum(target);
             prune(directory, base, Math.max(1, keep));
             return target;
         } catch (IOException | RuntimeException ex) {
@@ -98,12 +100,32 @@ public final class DatabaseBackup {
             copyIfExists(Path.of(databasePath + "-wal"), Path.of(target + "-wal"));
             copyIfExists(Path.of(databasePath + "-shm"), Path.of(target + "-shm"));
             DatabaseFileSecurity.harden(target.toString());
+            writeChecksum(target);
             prune(directory, base, Math.max(1, keep));
             return target;
         } catch (IOException | RuntimeException ex) {
             LOGGER.log(Level.WARNING,
                     "Sauvegarde SQLite immédiate impossible : " + ex.getMessage());
             return null;
+        }
+    }
+
+    private static void writeChecksum(Path target) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var in = Files.newInputStream(target)) {
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) > 0) {
+                    digest.update(buffer, 0, n);
+                }
+            }
+            String hex = java.util.HexFormat.of().formatHex(digest.digest());
+            Path checksum = Path.of(target.toString() + ".sha256");
+            Files.writeString(checksum, hex + "  " + target.getFileName() + System.lineSeparator());
+            DatabaseFileSecurity.harden(checksum.toString());
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IOException("SHA-256 indisponible", ex);
         }
     }
 
@@ -114,7 +136,8 @@ public final class DatabaseBackup {
                         String name = p.getFileName().toString();
                         return name.startsWith(base + ".bak-" + today)
                                 && !name.endsWith("-wal")
-                                && !name.endsWith("-shm");
+                                && !name.endsWith("-shm")
+                                && !name.endsWith(".sha256");
                     })
                     .findFirst()
                     .orElse(null);
@@ -137,12 +160,15 @@ public final class DatabaseBackup {
                         String name = p.getFileName().toString();
                         return name.startsWith(base + ".bak-")
                                 && !name.endsWith("-wal")
-                                && !name.endsWith("-shm");
+                                && !name.endsWith("-shm")
+                                && !name.endsWith(".sha256");
                     })
                     .sorted(Comparator.comparingLong(DatabaseBackup::lastModified).reversed())
                     .toList();
             for (int i = keep; i < backups.size(); i++) {
-                Files.deleteIfExists(backups.get(i));
+                Path old = backups.get(i);
+                Files.deleteIfExists(old);
+                Files.deleteIfExists(Path.of(old.toString() + ".sha256"));
             }
         } catch (IOException ex) {
             LOGGER.log(Level.FINE, "Nettoyage des sauvegardes SQLite ignoré : " + ex.getMessage());

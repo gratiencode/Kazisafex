@@ -542,3 +542,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test ajouté : deux sauvegardes du même label à quelques millisecondes
   d'intervalle produisent deux fichiers distincts.
 - Suite complète 214/214.
+
+## Campagne 7 sedecies — Empreinte SHA-256 des sauvegardes (2026-11-11)
+
+- Chaque sauvegarde SQLite produit un fichier `.sha256` (format sha256sum).
+- Les empreintes sont exclues de la détection de sauvegarde du jour et de la
+  rétention ; elles sont supprimées avec leur sauvegarde.
+- Test ajouté ; suite complète 214/214.
