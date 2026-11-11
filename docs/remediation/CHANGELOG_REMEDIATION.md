@@ -281,3 +281,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `YEAR_AND_MONTH_FORMAT`, `YEAR_ONLY_FORMAT`, `TIMESTAMPED_FORMAT` et
   `dateFormater` utilisent cette implémentation.
 - Test concurrent ajouté ; suite complète 202/202.
+
+## Campagne 6 sexies — Null-check GratienTools (2026-11-11)
+
+- `prepareAllProductCodesForThermalPrint` vérifie `product == null` avant
+  `matchesPrintTarget`/`getNomProduit` ; un produit nul est ignoré proprement.
+- Suite complète 202/202.

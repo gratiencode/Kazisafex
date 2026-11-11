@@ -2323,12 +2323,16 @@ public class GratienTools {
             List<String> matchedProductNames = new ArrayList<>();
             String requestedFormat = normalizeCodeFormat(format);
             for (Produit product : products) {
+                if (product == null) {
+                    skipped.add("Produit inconnu");
+                    continue;
+                }
                 if (!targets.isEmpty() && !matchesPrintTarget(product, targets)) {
                     continue;
                 }
                 matchedProductNames.add(safe(product.getNomProduit(), product.getUid()));
-                if (product == null || product.getCodebar() == null || product.getCodebar().isBlank()) {
-                    skipped.add(product == null ? "Produit inconnu" : safe(product.getNomProduit(), product.getUid()));
+                if (product.getCodebar() == null || product.getCodebar().isBlank()) {
+                    skipped.add(safe(product.getNomProduit(), product.getUid()));
                     continue;
                 }
                 String code = product.getCodebar().trim();
