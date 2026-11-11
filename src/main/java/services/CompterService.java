@@ -339,7 +339,7 @@ public class CompterService implements CompterStorage {
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Compter.findAll");
+                    Query query = em.createNamedQuery("Compter.findAll");
                     return query.getResultList();
                 });
             }
@@ -354,7 +354,7 @@ public class CompterService implements CompterStorage {
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    Query query = ManagedSessionFactory.getEntityManager().createNamedQuery("Produit.findAll");
+                    Query query = em.createNamedQuery("Produit.findAll");
                     return query.getResultList();
                 });
             }

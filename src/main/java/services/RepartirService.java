@@ -82,7 +82,7 @@ public class RepartirService implements RepartirStorage {
     public Repartir findRepartir(String d) {
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
-                return ManagedSessionFactory.getEntityManager().find(Repartir.class, d);
+                return em.find(Repartir.class, d);
             });
         }
         return ManagedSessionFactory.getEntityManager().find(Repartir.class, d);

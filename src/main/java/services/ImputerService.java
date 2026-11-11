@@ -82,7 +82,7 @@ public class ImputerService implements ImputerStorage {
     public Imputer findImputer(String d) {
         if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                   return ManagedSessionFactory.getEntityManager().find(Imputer.class, d);
+                   return em.find(Imputer.class, d);
                 });
             }
         return ManagedSessionFactory.getEntityManager().find(Imputer.class, d);

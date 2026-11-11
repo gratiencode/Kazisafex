@@ -83,7 +83,7 @@ public class MatiereSkuService implements MatiereSkuStorage {
     public MatiereSku findMatiereSku(String d) {
         if (ManagedSessionFactory.isEmbedded()) {
                 return ManagedSessionFactory.executeRead(em -> {
-                    return ManagedSessionFactory.getEntityManager().find(MatiereSku.class, d);
+                    return em.find(MatiereSku.class, d);
                 });
             }
         return ManagedSessionFactory.getEntityManager().find(MatiereSku.class, d);

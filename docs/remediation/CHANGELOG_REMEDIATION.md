@@ -596,3 +596,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - `FINAL_REPORT.md` et `BACKUP_RESTORE.md` mentionnent SHA-256, vérification
   et test CI de restauration.
+
+## Campagne 11 — Correction executeRead en mode SQLite (2026-11-11)
+
+- Cinq méthodes utilisaient `ManagedSessionFactory.getEntityManager()` **dans**
+  le lambda `executeRead`, au lieu du `em` fourni : `findCompters`,
+  `findProducts`, `findRepartir`, `findMatiereSku`, `findImputer`.
+- En SQLite, ce chemin pouvait reproduire un EntityManager global nul.
+- Test d'architecture ajouté pour interdire ce motif ; suite 219/219.
