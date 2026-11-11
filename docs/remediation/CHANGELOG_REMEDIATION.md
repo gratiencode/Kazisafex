@@ -272,3 +272,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `PVUnit` implémente `Serializable` : le champ `Input.pvus` n'est plus un
   champ non sérialisable signalé par SpotBugs.
 - Suite complète 201/201.
+
+## Campagne 6 quinquies — Formats de date thread-safe (2026-11-11)
+
+- `ThreadSafeSimpleDateFormat` synchronise `format`/`parse` tout en conservant
+  le type et l'API des champs `Constants`.
+- Les champs statiques `DATE_HEURE_FORMAT`, `DATE_ONLY_FORMAT`,
+  `YEAR_AND_MONTH_FORMAT`, `YEAR_ONLY_FORMAT`, `TIMESTAMPED_FORMAT` et
+  `dateFormater` utilisent cette implémentation.
+- Test concurrent ajouté ; suite complète 202/202.

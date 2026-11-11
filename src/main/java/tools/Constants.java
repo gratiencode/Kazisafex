@@ -54,15 +54,15 @@ public class Constants {
     public static final String REPPORTS = "repport-ui";
 
     public static final SimpleDateFormat DATE_HEURE_FORMAT =
-        new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        new ThreadSafeSimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
     public static final SimpleDateFormat DATE_ONLY_FORMAT =
-        new SimpleDateFormat("yyyy-MM-dd");
+        new ThreadSafeSimpleDateFormat("yyyy-MM-dd");
     public static final SimpleDateFormat YEAR_AND_MONTH_FORMAT =
-        new SimpleDateFormat("yyyy-MM");
+        new ThreadSafeSimpleDateFormat("yyyy-MM");
     public static final SimpleDateFormat YEAR_ONLY_FORMAT =
-        new SimpleDateFormat("yyyy");
+        new ThreadSafeSimpleDateFormat("yyyy");
     public static final SimpleDateFormat TIMESTAMPED_FORMAT =
-        new SimpleDateFormat("yyyyMMddHHmmss");
+        new ThreadSafeSimpleDateFormat("yyyyMMddHHmmss");
 
     /**
      * Formateurs pour les types java.time (LocalDateTime/LocalDate). Les
@@ -241,7 +241,7 @@ public class Constants {
     public static final long ARSENIC = SILVER * 2;
     public static final String DATE = "today";
     public static final String ACTION_READ = "read";
-    public static SimpleDateFormat dateFormater = new SimpleDateFormat(
+    public static SimpleDateFormat dateFormater = new ThreadSafeSimpleDateFormat(
         "yyyy-MM-dd"
     );
     public static String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";
@@ -263,7 +263,7 @@ public class Constants {
         }
 
         public static String format(Date d) {
-            SimpleDateFormat dateF = new SimpleDateFormat(
+            SimpleDateFormat dateF = new ThreadSafeSimpleDateFormat(
                 "yyyy-MM-dd HH:mm:ss"
             );
             return dateF.format(d);
@@ -295,7 +295,7 @@ public class Constants {
         }
 
         public static Date toSimpleDate(Date date) {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            SimpleDateFormat sdf = new ThreadSafeSimpleDateFormat("yyyy-MM-dd");
             String fd = sdf.format(date);
             int y = Integer.parseInt(fd.split("-")[0]);
             int m = Integer.parseInt(fd.split("-")[1]);
