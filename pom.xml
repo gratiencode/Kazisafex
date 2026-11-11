@@ -622,8 +622,9 @@
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>4.10.5.0</version>
                 <configuration>
-                    <effort>Max</effort>
+                    <effort>Default</effort>
                     <threshold>Low</threshold>
+                    <maxHeap>2048</maxHeap>
                     <!-- Rapport non bloquant tant que la dette historique n'est
                     pas triée ; la CI publie l'artefact. -->
                     <failOnError>false</failOnError>

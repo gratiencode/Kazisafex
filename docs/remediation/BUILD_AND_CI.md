@@ -70,11 +70,9 @@ findings. Le rapport est publié et devra devenir bloquant après la campagne 6.
 - Pas de base MySQL de test en CI.
 - Pas de test d'interface JavaFX (TestFX absent).
 - Pas de seuil de couverture.
-- SpotBugs 4.10.5 analyse Java 25 mais épuise le tas sur ce projet (`OutOfMemoryError`)
-  avec la configuration actuelle ; le job reste non bloquant. Un réglage mémoire
-  dédié ou une analyse par module est nécessaire avant d’en faire un gate.
-  L’analyse a néanmoins déjà révélé des bugs de correction réels, dont trois
-  corrigés dans `Util`.
+- SpotBugs 4.10.5 analyse Java 25 avec `effort=Default` et `maxHeap=2048` ; le
+  rapport est produit (≈2 790 findings, dont des bugs réels). Le job reste non
+  bloquant tant que les findings historiques ne sont pas triés.
 - Gitleaks peut signaler les secrets historiques déjà connus (clé Ollama
   compromise) : leur présence dans l'historique est documentée dans
   `MANUAL_ACTIONS.md`, elle ne doit pas être « corrigée » en réécrivant
