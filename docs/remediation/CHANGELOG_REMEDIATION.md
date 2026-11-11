@@ -604,3 +604,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `findProducts`, `findRepartir`, `findMatiereSku`, `findImputer`.
 - En SQLite, ce chemin pouvait reproduire un EntityManager global nul.
 - Test d'architecture ajouté pour interdire ce motif ; suite 219/219.
+
+## Campagne 6 duodecies — Comparaison de montants (2026-11-11)
+
+- `GratienTools.purchaseAmount` remplace `v == Math.rint(v)` par une
+  tolérance de 1e-9 ; évite un format `1.0` au lieu de `1` selon la
+  représentation binaire.
+- Suite complète 219/219.

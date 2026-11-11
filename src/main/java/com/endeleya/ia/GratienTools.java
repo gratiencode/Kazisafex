@@ -8432,7 +8432,9 @@ public class GratienTools {
 
     private String purchaseAmount(double value) {
         double v = Math.round(value * 100d) / 100d;
-        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+        return Math.abs(v - Math.rint(v)) < 1e-9
+                ? String.valueOf((long) Math.rint(v))
+                : String.valueOf(v);
     }
 
     private File companyLogoFile() {
