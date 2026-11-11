@@ -202,5 +202,7 @@ niveau sécurité/fiabilité demandée en 2026-11.
   utilisent `ManagedSessionFactory.executeWrite` au lieu de manipuler
   directement l'`EntityManager` thread-local : la session est fermée après
   commit/rollback.
-- Les lectures et les écritures auxiliaires (`createRecquisition`,
-  `createLigneVente`, etc.) restent à migrer progressivement.
+- Les écritures auxiliaires `createPrixDeVente`, `createRecquisition`,
+  `createLigneVente`, `createVente` et la purge `purgeAjustementLigneVente`
+  passent également par `executeWrite`.
+- Les lectures restent sur `getEntityManager` ; audit à poursuivre.

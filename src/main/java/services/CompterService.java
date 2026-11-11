@@ -1187,12 +1187,10 @@ public class CompterService implements CompterStorage {
             System.out.println("Element prix " + cat.getPrixUnitaire() + " enregistree");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
+            return null;
+        });
         return cat;
     }
 
@@ -1225,12 +1223,10 @@ public class CompterService implements CompterStorage {
             System.out.println("Element Recq inv " + cat.getReference() + " enregistree");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
+            return null;
+        });
         return cat;
     }
 
@@ -1253,17 +1249,15 @@ public class CompterService implements CompterStorage {
                     return null;
                 }).join();
             } else {
-                EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!tx.isActive()) {
-                    tx.begin();
-                }
-                ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
-                        .setParameter(1, prodId)
-                        .setParameter(2, numlot)
-                        .setParameter(3, venteRef)
-                        .setParameter(4, region)
-                        .executeUpdate();
-                tx.commit();
+                ManagedSessionFactory.executeWrite(em -> {
+                    em.createNativeQuery(sql)
+                            .setParameter(1, prodId)
+                            .setParameter(2, numlot)
+                            .setParameter(3, venteRef)
+                            .setParameter(4, region)
+                            .executeUpdate();
+                    return null;
+                });
             }
             // Update stock aggregate to maintain coherence after deletion
             Produit p = findProduitById(prodId);
@@ -1367,20 +1361,15 @@ public class CompterService implements CompterStorage {
             System.out.println("Element lv invent" + cat.getProductId().getNomProduit() + " vendu");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         try {
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().persist(cat);
-            tx.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.persist(cat);
+                return null;
+            });
             return cat;
-        } catch (Exception e) {
-            if (tx != null) {
-                tx.rollback();
-            }
+        } catch (RuntimeException e) {
+            return null;
         }
-        return null;
     }
 
     private Vente createVente(Vente cat) {
@@ -1392,20 +1381,15 @@ public class CompterService implements CompterStorage {
             System.out.println("Element vente inv" + cat.getReference() + " enregistree");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
         try {
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().persist(cat);
-            tx.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.persist(cat);
+                return null;
+            });
             return cat;
-        } catch (Exception e) {
-            if (tx != null) {
-                tx.rollback();
-            }
+        } catch (RuntimeException e) {
+            return null;
         }
-        return null;
     }
 
     public Client getAnonymousClient() {
