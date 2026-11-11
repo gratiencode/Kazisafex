@@ -122,3 +122,8 @@
    clé publique n'est pas intégrée et que le serveur ne publie pas
    `manifest.json` + `.sig`.
 
+
+
+### Compte admin MySQL direct (outils IA)
+
+Les outils de réplication MySQL de `GratienTools` n'utilisent plus `root` par défaut : `KAZISAFE_MYSQL_ADMIN_USER` ou `default_mysql_admin_user` est requis, avec mot de passe fourni par l'utilisateur. Voir MANUAL_ACTIONS.md §8.

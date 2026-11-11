@@ -208,3 +208,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `InventaireService.create/update/deleteInventaire` (branche MySQL) passent
   aussi par `executeWrite` : session fermée après commit/rollback.
 - Les lectures restent sur `getEntityManager` ; audit à poursuivre.
+
+## Campagne 1 quater — Admin MySQL explicite (2026-11-11)
+
+- Les outils IA de réplication MySQL n'utilisent plus `"root"` par défaut :
+  `KAZISAFE_MYSQL_ADMIN_USER` ou la préférence `default_mysql_admin_user`
+  est obligatoire.
+- Le mot de passe reste fourni par l'utilisateur ; aucune valeur embarquée.
+- Erreur explicite si le compte admin n'est pas configuré.

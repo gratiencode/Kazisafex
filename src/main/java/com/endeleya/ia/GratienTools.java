@@ -392,8 +392,12 @@ public class GratienTools {
             if (rootPassword == null || rootPassword.isBlank()) {
                 return secureMysqlPasswordRequest("execute", safe(planId, ""), host, replicaPort <= 0 ? 3306 : replicaPort);
             }
+            String adminUser = resolveMysqlAdminUser();
+            if (adminUser == null) {
+                return "Configuration refusée: configurez KAZISAFE_MYSQL_ADMIN_USER (ou la préférence default_mysql_admin_user) avec un compte administrateur dédié.";
+            }
             int port = replicaPort <= 0 ? 3306 : replicaPort;
-            try (Connection connection = DriverManager.getConnection(mysqlJdbcUrl(host, port, null), "root", rootPassword)) {
+            try (Connection connection = DriverManager.getConnection(mysqlJdbcUrl(host, port, null), adminUser, rootPassword)) {
                 validateMysqlRoot(connection);
                 applyMysqlReplicaConfiguration(connection, plan);
             } catch (SQLException ex) {
@@ -421,8 +425,12 @@ public class GratienTools {
             if (rootPassword == null || rootPassword.isBlank()) {
                 return secureMysqlPasswordRequest("test", "", host, replicaPort <= 0 ? 3306 : replicaPort);
             }
+            String adminUser = resolveMysqlAdminUser();
+            if (adminUser == null) {
+                return "Test refusé: configurez KAZISAFE_MYSQL_ADMIN_USER (ou la préférence default_mysql_admin_user) avec un compte administrateur dédié.";
+            }
             int port = replicaPort <= 0 ? 3306 : replicaPort;
-            try (Connection connection = DriverManager.getConnection(mysqlJdbcUrl(host, port, null), "root", rootPassword)) {
+            try (Connection connection = DriverManager.getConnection(mysqlJdbcUrl(host, port, null), adminUser, rootPassword)) {
                 validateMysqlRoot(connection);
                 return mysqlReplicaStatusMarkdown(connection, host, port);
             } catch (SQLException ex) {
@@ -2577,6 +2585,20 @@ public class GratienTools {
         return "jdbc:mysql://" + host + ":" + port + db
                 + "?sslMode=" + services.utils.MySqlTls.resolve(pref)
                 + "&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+    }
+
+    /**
+     * Compte administrateur des outils de réplication MySQL. Aucun compte
+     * implicite (notamment root) : la valeur doit être fournie explicitement
+     * par l'environnement ou les préférences.
+     */
+    private String resolveMysqlAdminUser() {
+        String fromEnv = System.getenv("KAZISAFE_MYSQL_ADMIN_USER");
+        if (fromEnv != null && !fromEnv.isBlank()) {
+            return fromEnv.trim();
+        }
+        String stored = pref.get("default_mysql_admin_user", null);
+        return stored == null || stored.isBlank() ? null : stored.trim();
     }
 
     private void validateMysqlRoot(Connection connection) throws SQLException {
