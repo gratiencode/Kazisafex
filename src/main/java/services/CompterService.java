@@ -234,9 +234,9 @@ public class CompterService implements CompterStorage {
         double remainingReel = sommeComptage(prod, lot, inv);
 
         if (remainingReel > 0) {
-            // 3. Recalculer les ajustements avec les lignes restantes
-            double stockTheorik = delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
-                    prod.getUid(), lot, region);
+            // 3. Recalculer les ajustements avec les lignes restantes, sur la
+            // reference temporelle de l'inventaire (ouverture), pas le stock courant.
+            double stockTheorik = theoreticalStockAtOpening(prod, lot, inv, region);
             double difference = remainingReel - stockTheorik;
 
             // Mettre a jour les metadonnees des comptages restants
@@ -462,6 +462,36 @@ public class CompterService implements CompterStorage {
         } catch (NoResultException e) {
             return null;
         }
+    }
+
+    /**
+     * Date de reference de l'inventaire. Une date d'ouverture explicite fige
+     * la quantite theorique ; les anciens inventaires sans date conservent le
+     * comportement historique (stock courant).
+     */
+    static LocalDate inventoryReferenceDate(Inventaire inv) {
+        return inv != null && inv.getDateDebut() != null
+                ? inv.getDateDebut()
+                : LocalDate.now();
+    }
+
+    /**
+     * Quantite theorique a la date d'ouverture. Si aucun agregat n'existe pour
+     * cette date (ancienne base, date anterieure au premier mouvement), on
+     * retombe explicitement sur le stock courant pour ne pas produire un faux
+     * ecart de zero.
+     */
+    private double theoreticalStockAtOpening(Produit prod, String lot, Inventaire inv, String region) {
+        if (prod == null) {
+            return 0d;
+        }
+        StockAgregate opening = findLotStock(prod.getUid(), lot,
+                inventoryReferenceDate(inv), region);
+        if (opening != null && opening.getFinalQuantity() != null) {
+            return opening.getFinalQuantity();
+        }
+        return delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
+                prod.getUid(), lot, region);
     }
 
     public StockAgregate findLotStock(String pId, String lot, LocalDate now, String region) {
@@ -745,10 +775,9 @@ public class CompterService implements CompterStorage {
         // 1. Somme physique cumulée pour ce lot (tous les comptages de cet inventaire)
         double stockReel = sommeComptage(prod, compter.getNumlot(), inv);
         System.out.println("Stock reel = pc " + stockReel);
-        // 2. Calcul théorique spécifique au lot avant cet ajustement (stock actuel dans le système)
-        double stockTheorik = delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
-                prod.getUid(), compter.getNumlot(), region);
-        System.out.println("Stock theorik = pc " + stockTheorik);
+        // 2. Reference theorique : quantite a la date d'ouverture de l'inventaire.
+        double stockTheorik = theoreticalStockAtOpening(prod, compter.getNumlot(), inv, region);
+        System.out.println("Stock theorik (ouverture) = pc " + stockTheorik);
         // 3. Différence à ajuster en pièces (Stock Physique Souhaité - Stock Actuel)
         double difference = stockReel - stockTheorik;
         System.out.println("diff = pc " + difference);
@@ -875,8 +904,12 @@ public class CompterService implements CompterStorage {
                 if (lot == null || lot.isBlank()) continue;
                 List<Compter> existing = findComptageForProduit(produit.getUid(), inv.getUid(), lot, inv.getRegion());
                 if (existing != null && !existing.isEmpty()) continue;
-                StockAgregate stock = findLotStock(produit.getUid(), lot, LocalDate.now(), inv.getRegion());
-                double stockTheorik = (stock != null && stock.getFinalQuantity() != null) ? stock.getFinalQuantity() : 0d;
+                StockAgregate stock = findLotStock(produit.getUid(), lot,
+                        inventoryReferenceDate(inv), inv.getRegion());
+                double stockTheorik = (stock != null && stock.getFinalQuantity() != null)
+                        ? stock.getFinalQuantity()
+                        : delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
+                                produit.getUid(), lot, inv.getRegion());
                 Compter co = new Compter();
                 co.setCoutAchat(stock != null && stock.getCoutAchat() != null ? stock.getCoutAchat() : 0d);
                 co.setDateCount(LocalDateTime.now());

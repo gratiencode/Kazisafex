@@ -73,8 +73,11 @@ ajustements. Les ventes/achats/retours effectués pendant le comptage modifient 
 référence. Le cahier des charges exige une photographie figée à l'ouverture et une
 stratégie explicite pour les mouvements postérieurs.
 
-**Risque métier** : écart faux, régularisation en double ou en sens inverse.  
-**Statut** : **ouvert**, correction structurelle nécessaire.
+**Correction partielle** : `editStock` et `removeNoCountedProducts` utilisent désormais la date d'ouverture (`dateDebut`) pour interroger le stock théorique, avec repli explicite sur le stock courant si aucun agrégat n'existe. Les mouvements postérieurs à l'ouverture ne modifient plus la référence.
+
+**Limites** : pas de snapshot immuable dédié ; dépend de la présence d'un agrégat à la date d'ouverture ; les anciens inventaires sans date gardent le comportement courant.
+
+**Statut** : **partiellement corrigé**.
 
 ### B3 — Clôture non atomique
 

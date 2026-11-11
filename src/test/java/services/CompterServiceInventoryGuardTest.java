@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.LocalDate;
 import java.util.concurrent.locks.ReentrantLock;
 
 import data.Inventaire;
@@ -31,6 +32,16 @@ class CompterServiceInventoryGuardTest {
 
         assertDoesNotThrow(() -> CompterService.requireInventoryOpen(open));
         assertDoesNotThrow(() -> CompterService.requireInventoryOpen(null));
+    }
+
+    @Test
+    void inventoryReferenceDateUsesOpeningDateWithLegacyFallback() {
+        Inventaire inventory = new Inventaire();
+        LocalDate opening = LocalDate.of(2026, 11, 1);
+        inventory.setDateDebut(opening);
+        assertEquals(opening, CompterService.inventoryReferenceDate(inventory));
+        assertEquals(LocalDate.now(), CompterService.inventoryReferenceDate(new Inventaire()));
+        assertEquals(LocalDate.now(), CompterService.inventoryReferenceDate(null));
     }
 
     @Test

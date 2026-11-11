@@ -229,3 +229,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `applyPendingUpdateAtStartup` revalide systématiquement signature + SHA-256 ;
   un drapeau `verified` persisté ne suffit plus.
 - Test de non-régression ajouté.
+
+
+## Campagne 4 bis — Référence d'ouverture de l'inventaire (2026-11-11)
+
+- `CompterService` calcule le théorique à `Inventaire.dateDebut` via `findLotStock` ;
+  repli sur le stock courant si aucun agrégat à cette date.
+- La clôture des non-comptés utilise la même référence.
+- Test de sélection de date ajouté ; suite complète 193/193.
