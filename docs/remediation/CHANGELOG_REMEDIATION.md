@@ -376,3 +376,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   exactes sont acquittées après succès.
 - Les mises à jour différentes de la même entité restent envoyées séparément.
 - Test ajouté ; suite complète 207/207.
+
+## Campagne 3 quater — Outbox atomique avec le métier (2026-11-11)
+
+- `ManagedSessionFactory` expose l'EntityManager de la transaction d'écriture
+  courante ; `WriteQueueManager`/`executeWrite` l'installent autour de l'action.
+- `SyncOutboxListener` écrit l'outbox **synchroniquement dans cette même
+  transaction** ; plus de perte entre commit métier et écriture outbox.
+- Repli asynchrone conservé uniquement hors transaction managée.
+- Tests de transaction adaptés ; suite complète 207/207.

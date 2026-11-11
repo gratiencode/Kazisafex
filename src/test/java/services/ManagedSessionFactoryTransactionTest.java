@@ -54,6 +54,9 @@ class ManagedSessionFactoryTransactionTest {
         msf.when(ManagedSessionFactory::isEmbedded).thenReturn(false);
         msf.when(ManagedSessionFactory::getEntityManager).thenReturn(em);
         msf.when(() -> ManagedSessionFactory.executeWrite(any())).thenCallRealMethod();
+        msf.when(() -> ManagedSessionFactory.withCurrentEntityManager(
+                any(EntityManager.class), any(java.util.function.Supplier.class)))
+                .thenCallRealMethod();
     }
 
     private void tearDown() {

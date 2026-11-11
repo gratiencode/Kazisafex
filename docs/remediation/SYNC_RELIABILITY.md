@@ -77,7 +77,10 @@ dead-letters » ; l'API de service existe et devra être branchée en campagne 6
 
 Le listener JPA doit écrire l'outbox dans la même transaction que l'entité. Ce point doit être vérifié sur chaque type d'écriture (surtout SQLite `WriteQueueManager` et MySQL `submitWrite`).
 
-**Statut** : **à confirmer par test d'intégration** ; pas de test de coupure entre l'écriture métier et l'écriture outbox.
+**Correction appliquée** : `ManagedSessionFactory` expose l'EntityManager de
+la transaction courante et `SyncOutboxListener` y écrit l'outbox de façon
+synchrone. Le commit métier et l'outbox sont donc atomiques. Repli asynchrone
+conservé hors transaction managée.
 
 ### S5 — Reprise après interruption non testée de bout en bout
 

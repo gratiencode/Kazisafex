@@ -114,6 +114,23 @@ public class SyncOutboxListener {
         final String finalType = type.toUpperCase();
         final String finalEntityId = entityId;
         final String finalPayload = payload;
+
+        // Si un EntityManager de transaction est expose par la couche de
+        // persistance, l'outbox doit etre ecrit dans CETTE transaction. Le
+        // listener ne doit jamais deleguer a un autre thread dans ce cas :
+        // une panne entre le commit metier et l'outbox perdrait la mutation.
+        EntityManager current = ManagedSessionFactory.currentTransactionEntityManager();
+        if (current != null) {
+            persistOutboxRecordInCurrentTransaction(current, action, finalType,
+                    finalEntityId, finalPayload, entity);
+            try {
+                tools.NotificationHandler.broadcastDataSynced(baseModel);
+            } catch (Throwable ignored) {
+                // UI absente au bootstrap
+            }
+            return;
+        }
+
         System.out.println("========================= L'etat de final payload "+finalPayload+"===============================");
         outboxExecutor.submit(() -> {
             int attempt = 0;
@@ -161,6 +178,48 @@ public class SyncOutboxListener {
             tools.NotificationHandler.broadcastDataSynced(baseModel);
         } catch (Throwable ignored) {
             // UI layer may be unavailable during early bootstrap / headless tests
+        }
+    }
+
+    /**
+     * Ecrit l'outbox dans l'EntityManager/transaction courant, sans commit ni
+     * nouveau thread. Toute exception remonte et fait annuler la transaction
+     * metier : une entite ne doit jamais etre committee sans sa mutation.
+     */
+    private void persistOutboxRecordInCurrentTransaction(
+            EntityManager em, String action, String finalType,
+            String finalEntityId, String finalPayload, Object entity) {
+        String eUid = java.util.prefs.Preferences.userNodeForPackage(
+                tools.SyncEngine.class).get("eUid", null);
+        String region = java.util.prefs.Preferences.userNodeForPackage(
+                tools.SyncEngine.class).get("region", "Goma");
+        upsertOutbox(em, action, finalType, finalEntityId, finalPayload,
+                entity, eUid, region);
+    }
+
+    private void upsertOutbox(EntityManager em, String action, String finalType,
+            String finalEntityId, String finalPayload, Object entity,
+            String eUid, String region) {
+        LocalDateTime updatedAt = getUpdatedAt(entity);
+        SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+        boolean created = false;
+        if (outbox == null) {
+            outbox = new SyncOutbox();
+            outbox.setUid(UUID.randomUUID().toString().replaceAll("-", ""));
+            outbox.setTableName(finalType);
+            outbox.setEntityId(finalEntityId);
+            outbox.setCreatedAt(LocalDateTime.now());
+            outbox.setEntrepriseId(eUid);
+            outbox.setStatus("PENDING");
+            outbox.setRetryCount(0);
+            created = true;
+        }
+        outbox.setRegion(region);
+        outbox.setAction(action);
+        outbox.setPayload(finalPayload);
+        outbox.setUpdatedAt(updatedAt);
+        if (created) {
+            em.persist(outbox);
         }
     }
 

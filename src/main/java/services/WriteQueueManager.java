@@ -65,22 +65,20 @@ public class WriteQueueManager {
         boolean previous = data.SyncOutboxListener.isSuppressed();
         try {
             data.SyncOutboxListener.setSuppressed(task.isSuppressed());
-            EntityManager em = null;
+            EntityManager em = emf.createEntityManager();
             try {
-                em = emf.createEntityManager();
                 em.getTransaction().begin();
-                T result = task.getAction().apply(em);
+                T result = ManagedSessionFactory.withCurrentEntityManager(
+                        em, () -> task.getAction().apply(em));
                 em.getTransaction().commit();
                 task.getFuture().complete(result);
             } catch (Exception ex) {
-                if (em != null && em.getTransaction().isActive()) {
+                if (em.getTransaction().isActive()) {
                     em.getTransaction().rollback();
                 }
                 task.getFuture().completeExceptionally(ex);
             } finally {
-                if (em != null) {
-                    em.close();
-                }
+                em.close();
             }
         } finally {
             data.SyncOutboxListener.setSuppressed(previous);

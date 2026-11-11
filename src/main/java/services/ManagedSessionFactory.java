@@ -40,6 +40,8 @@ public class ManagedSessionFactory {
     private static final EntityManagerFactory emf;
     private static final ThreadLocal<EntityManager> threadLocal;
     private static final Map<Thread, EntityManager> trackedEMs = new ConcurrentHashMap<>();
+    /** EntityManager de la transaction d'écriture courante, pour les listeners JPA. */
+    private static final ThreadLocal<EntityManager> currentTransactionEm = new ThreadLocal<>();
     private static final boolean embedded;
     private static WriteQueueManager writeQueue;
     private static volatile ExecutorService mysqlWriteExecutor;
@@ -303,6 +305,30 @@ public class ManagedSessionFactory {
         }
     }
 
+    /** EntityManager de la transaction d'écriture courante, ou null. */
+    public static EntityManager currentTransactionEntityManager() {
+        return currentTransactionEm.get();
+    }
+
+    /**
+     * Expose l'EntityManager courant aux listeners JPA afin qu'ils écrivent
+     * l'outbox dans la MÊME transaction que l'entité métier.
+     */
+    public static <T> T withCurrentEntityManager(EntityManager em,
+                                                 java.util.function.Supplier<T> action) {
+        EntityManager previous = currentTransactionEm.get();
+        currentTransactionEm.set(em);
+        try {
+            return action.get();
+        } finally {
+            if (previous == null) {
+                currentTransactionEm.remove();
+            } else {
+                currentTransactionEm.set(previous);
+            }
+        }
+    }
+
     public static <T> CompletableFuture<T> submitWrite(
         Function<EntityManager, T> action
     ) {
@@ -374,7 +400,7 @@ public class ManagedSessionFactory {
                 tx.begin();
             }
             try {
-                T result = action.apply(em);
+                T result = withCurrentEntityManager(em, () -> action.apply(em));
                 if (started && tx.isActive()) {
                     tx.commit();
                 }
