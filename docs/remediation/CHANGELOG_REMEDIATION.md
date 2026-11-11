@@ -429,3 +429,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test ajouté : `backupNow(..., keep=2)` ne conserve que les deux sauvegardes
   principales, WAL/SHM exclus du décompte.
 - Suite complète 210/210.
+
+## Campagne 4 quinquies — Statuts d'audit inventaire (2026-11-11)
+
+- `INVENTORY_AUDIT.md` distingue la clôture atténuée par sauvegarde de la
+  transaction unique encore absente, et documente B4 (lots nuls) comme ouvert.

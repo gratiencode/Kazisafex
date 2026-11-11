@@ -121,7 +121,8 @@ Un produit sans lot (ou dont le stock est porté par un lot vide) n'est donc pas
 zéro, malgré le message « les non comptés seront mis à ZERO ».
 
 **Risque** : stock résiduel non inventorié.  
-**Statut** : **ouvert**, correction à faire avec tests sur base réelle.
+**Statut** : **ouvert** — les lots `NULL`/vides restent ignorés ; une
+normalisation des requêtes de stock et un test sur base réelle sont requis.
 
 ### B5 — Comptages concurrents non protégés
 
