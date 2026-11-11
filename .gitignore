@@ -18,3 +18,11 @@ deps.txt
 lib/*.jar
 img-test.png
 .vscode/
+# Artefacts générés / documentation tierce (campagne 7)
+.codex
+compile_output.txt
+dependency-reduced-pom.xml
+javac.*.args
+jshell.history
+org/
+src/main/java/WEB-INF/glassfish-web.xml

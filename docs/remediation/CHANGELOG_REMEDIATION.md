@@ -148,3 +148,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `ARCHITECTURE_REMEDIATION.md`.
 - Aucun déplacement massif effectué : les extractions démarreront après la
   stabilisation inventaire/synchronisation, avec tests de caractérisation.
+
+## Campagne 7 — Nettoyage du dépôt (2026-11-11)
+
+- Suppression des artefacts générés suivis par Git : `.codex`,
+  `compile_output.txt`, `dependency-reduced-pom.xml`, `javac.*.args`,
+  `jshell.history`, Javadocs tierces `org/`, `src/main/java/WEB-INF/glassfish-web.xml`.
+- Vérification préalable : aucune référence Maven/source à ces chemins ; le
+  build et les tests ne les utilisent pas.
+- `.gitignore` complété pour éviter leur réintroduction.
