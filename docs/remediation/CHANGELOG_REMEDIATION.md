@@ -486,3 +486,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `findLotStock` et `hasStockWithoutLot` passent par `executeRead` : l'EntityManager
   MySQL est toujours fermé, y compris en cas de `NoResultException`.
 - Suite complète 213/213.
+
+## Campagne 4 octies — Fermeture session liste des lots (2026-11-11)
+
+- `findAllDistinctLots` passe par `executeRead` en MySQL ; la session est
+  fermée après la lecture des chaînes de lots.
+- Suite complète 213/213.

@@ -976,26 +976,16 @@ public class CompterService implements CompterStorage {
                 + "UNION "
                 + "SELECT DISTINCT num_lot FROM stock_agregate WHERE product_id = ? AND region = ? "
                 + "AND num_lot IS NOT NULL AND num_lot != ''";
-        if (ManagedSessionFactory.isEmbedded()) {
-            return ManagedSessionFactory.executeRead(em -> {
-                Query q = em.createNativeQuery(sql);
-                q.setParameter(1, productId);
-                q.setParameter(2, region);
-                q.setParameter(3, productId);
-                q.setParameter(4, region);
-                @SuppressWarnings("unchecked")
-                List<String> rows = q.getResultList();
-                return rows;
-            });
-        }
-        Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sql);
-        q.setParameter(1, productId);
-        q.setParameter(2, region);
-        q.setParameter(3, productId);
-        q.setParameter(4, region);
-        @SuppressWarnings("unchecked")
-        List<String> rows = q.getResultList();
-        return rows;
+        return ManagedSessionFactory.executeRead(em -> {
+            Query q = em.createNativeQuery(sql);
+            q.setParameter(1, productId);
+            q.setParameter(2, region);
+            q.setParameter(3, productId);
+            q.setParameter(4, region);
+            @SuppressWarnings("unchecked")
+            List<String> rows = q.getResultList();
+            return rows;
+        });
     }
 
     StockAgregate stock;
