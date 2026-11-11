@@ -591,3 +591,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - La recherche de sauvegarde du jour ignore les copies corrompues et
   privilégie une copie dont le SHA-256 est valide.
 - Test ajouté (une copie corrompue + une valide) ; suite complète 218/218.
+
+## Campagne 8 quater — Documentation sauvegarde consolidée (2026-11-11)
+
+- `FINAL_REPORT.md` et `BACKUP_RESTORE.md` mentionnent SHA-256, vérification
+  et test CI de restauration.

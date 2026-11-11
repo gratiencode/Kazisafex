@@ -6,6 +6,7 @@
 - avant clôture d'inventaire : immédiate, sous le verrou d'inventaire ;
 - fichiers : `kazi_<uid>.db.bak-<label>-<timestamp>` ;
 - empreinte : fichier `.sha256` compagnon (format `sha256sum`) ;
+- test CI : `scripts/test-restore-backup.sh` ;
 - rétention : 5 sauvegardes de migration / 10 sauvegardes de clôture.
 
 ## Vérification

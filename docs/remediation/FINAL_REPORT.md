@@ -72,7 +72,8 @@ Références : `BASELINE.md`, `BUILD_AND_CI.md`, `TEST_STRATEGY.md`.
 - Coalescence des mutations **strictement identiques** avant envoi ;
   acquittement des copies uniquement si la mutation conservée a réussi.
 - Sauvegarde SQLite avant migration Hibernate (une par jour) et avant
-  clôture d'inventaire.
+  clôture d'inventaire, avec empreinte SHA-256, vérification d'intégrité et
+  script de restauration manuel protégé par confirmation.
 - Tests : atomicité outbox, coalescence, dead-letter, REMOVE, transaction.
 
 Restent ouverts : acquittement par mutation (API serveur), `mutationId`,
