@@ -205,4 +205,6 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Les écritures auxiliaires `createPrixDeVente`, `createRecquisition`,
   `createLigneVente`, `createVente` et la purge `purgeAjustementLigneVente`
   passent également par `executeWrite`.
+- `InventaireService.create/update/deleteInventaire` (branche MySQL) passent
+  aussi par `executeWrite` : session fermée après commit/rollback.
 - Les lectures restent sur `getEntityManager` ; audit à poursuivre.

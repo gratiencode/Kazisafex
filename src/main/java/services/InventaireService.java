@@ -7,7 +7,6 @@ package services;
 import IServices.InventaireStorage;
 import data.Inventaire;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import java.sql.Timestamp;
@@ -52,12 +51,10 @@ public class InventaireService implements InventaireStorage {
             System.out.println("Element INV " + cat.getCodeInventaire() + " enregistree");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
+            return null;
+        });
         return cat;
     }
 
@@ -72,12 +69,10 @@ public class InventaireService implements InventaireStorage {
                 System.out.println("Element INv " + cat.getCodeInventaire() + " enregistree");
                 return cat;
             }
-            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().merge(cat);
-            tx.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.merge(cat);
+                return null;
+            });
         } catch (jakarta.persistence.EntityNotFoundException e) {
             System.err.println("Erreur Message : " + e.getMessage());
         }
@@ -94,12 +89,10 @@ public class InventaireService implements InventaireStorage {
             System.out.println("Element " + obj.getCodeInventaire() + " supprimee");
             return;
         }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(obj));
-        etr.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.remove(em.merge(obj));
+            return null;
+        });
     }
 
     @Override
