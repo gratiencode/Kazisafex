@@ -780,7 +780,7 @@ public class PaymentController
         if (lignes == null) {
             lignes = new ArrayList<>();
         }
-        if (invoiceId != null && "Drafted".equals(invoiceId.getObservation())) {
+        if (invoiceId != null && "Drafted".equals(invoiceId.getObservation()) && lig != null) {
             lignes = lig;
         }
         double sommed = lignes.stream()
@@ -1275,9 +1275,6 @@ public class PaymentController
                 }
             }
         });
-        if (lignes == null) {
-            return;
-        }
         this.venteItems.clear();
         this.venteItems.addAll(lignes);
         this.tbl_bill_products.setItems(FXCollections.observableArrayList((Collection) lignes));

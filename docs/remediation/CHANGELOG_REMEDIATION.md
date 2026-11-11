@@ -343,3 +343,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `ThreadSafeSimpleDateFormat` (sous-type compatible) : les faux positifs
   SpotBugs `STCAL` sont évités sans changer les 94 appelants.
 - Suite complète 205/205.
+
+## Campagne 6 decies — Null-check PaymentController (2026-11-11)
+
+- Le chemin `Drafted` ne remplace plus `lignes` par une liste nulle ; le
+  null-check tardif devenu redondant est supprimé.
+- Suite complète 205/205.
