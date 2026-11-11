@@ -385,3 +385,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   transaction** ; plus de perte entre commit métier et écriture outbox.
 - Repli asynchrone conservé uniquement hors transaction managée.
 - Tests de transaction adaptés ; suite complète 207/207.
+
+## Campagne 3 quinquies — Test d'atomicité outbox (2026-11-11)
+
+- Test dédié : avec un EntityManager courant, le listener persiste l'outbox
+  directement, sans passer par l'exécuteur asynchrone.
+- Suite complète 208/208.
