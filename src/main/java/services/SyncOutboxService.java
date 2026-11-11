@@ -35,15 +35,21 @@ public class SyncOutboxService {
     public static final int APPLIED_RETENTION_DAYS = 10;
 
     /**
-     * Récupère toutes les outbox PENDING/UNSYNCED à remonter (synchronisation
-     * complète et cycle de fond). Aucun filtre d'ancienneté ni de plafond de
-     * retries : un enregistrement rejeté par le serveur n'est jamais abandonné
-     * définitivement — il repasse {@code UNSYNCED} (compteur incrémenté) et reste
-     * éligible aux cycles suivants. Les {@code FAILED} résiduels (ancien
-     * plafond) sont re-inclus pour être retentés une dernière fois. La
-     * terminaison de chaque cycle est garantie par la déduplication des UID déjà
-     * tentés dans {@code BackgroundSyncService} et par le recul (backoff) quand
-     * aucun enregistrement ne progresse.
+     * Nombre maximal de tentatives automatiques d'une mutation. Au-dela, la
+     * mutation passe en {@code DEAD_LETTER} : elle est conservee (aucune perte
+     * de donnee) mais n'est plus renvoyee automatiquement. Une remise en file
+     * explicite ({@link #retryDeadLetters()}) est necessaire.
+     */
+    public static final int MAX_RETRY_ATTEMPTS = 10;
+
+    /**
+     * Récupère les outbox PENDING/UNSYNCED/FAILED à remonter (synchronisation
+     * complète et cycle de fond). Les retries sont bornés par
+     * {@link #MAX_RETRY_ATTEMPTS} : au-dela, la mutation passe en
+     * {@code DEAD_LETTER} et n'est plus renvoyée automatiquement, mais elle
+     * reste en base (aucune perte) jusqu'à {@link #retryDeadLetters()}. Les
+     * {@code FAILED} résiduels (ancien état) sont re-inclus pour une dernière
+     * tentative.
      */
     public static List<SyncOutbox> fetchAllPendingOutbox() {
         String jpql = "SELECT s FROM SyncOutbox s WHERE s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt ASC";
@@ -105,10 +111,10 @@ public class SyncOutboxService {
 
     /**
      * Marque un enregistrement comme {@code UNSYNCED} pour nouvel essai. Le
-     * compteur {@code retryCount} est incrémenté à titre informatif (utile au
-     * diagnostic) mais n'entraîne <strong>jamais</strong> de passage en
-     * {@code FAILED} : une mutation rejetée par le serveur reste éligible aux
-     * cycles suivants jusqu'à être acceptée.
+     * compteur {@code retryCount} est incremente ; apres
+     * {@link #MAX_RETRY_ATTEMPTS}, la mutation passe en {@code DEAD_LETTER}
+     * (conservee, plus de retry automatique) pour eviter un poison pill
+     * infini. {@link #retryDeadLetters()} permet de la remettre en file.
      */
     public static void markAsUnsynced(List<String> uids) {
         if (uids == null || uids.isEmpty()) return;
@@ -116,9 +122,30 @@ public class SyncOutboxService {
             for (String uid : uids) {
                 SyncOutbox record = em.find(SyncOutbox.class, uid);
                 if (record != null) {
-                    record.setRetryCount(record.getRetryCount() + 1);
-                    record.setStatus("UNSYNCED");
+                    int attempts = record.getRetryCount() + 1;
+                    record.setRetryCount(attempts);
+                    record.setStatus(attempts >= MAX_RETRY_ATTEMPTS
+                            ? "DEAD_LETTER"
+                            : "UNSYNCED");
                 }
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Remet en file les mutations {@code DEAD_LETTER} apres correction de la
+     * cause (ou action support). Aucun enregistrement n'est supprime.
+     */
+    public static void retryDeadLetters() {
+        submitSyncWrite(em -> {
+            int updated = em.createQuery(
+                    "UPDATE SyncOutbox s SET s.status = 'UNSYNCED', s.retryCount = 0 "
+                            + "WHERE s.status = 'DEAD_LETTER'")
+                    .executeUpdate();
+            if (updated > 0) {
+                System.out.println("[SYNC-OUTBOX] " + updated
+                        + " mutation(s) DEAD_LETTER remise(s) en file.");
             }
             return null;
         });
@@ -136,7 +163,7 @@ public class SyncOutboxService {
         submitSyncWrite(em -> {
             int updated = em.createQuery(
                     "UPDATE SyncOutbox s SET s.status = 'UNSYNCED', s.retryCount = 0 "
-                            + "WHERE s.status IN ('APPLIED','FAILED')")
+                            + "WHERE s.status IN ('APPLIED','FAILED','DEAD_LETTER')")
                     .executeUpdate();
             System.out.println("[SYNC-OUTBOX] Reinitialisation pour full resync : " + updated + " enregistrement(s) a re-televerser.");
             return null;

@@ -162,6 +162,33 @@ class SyncOutboxServiceTest {
     }
 
     @Test
+    @DisplayName("markAsUnsynced: cap de retry puis DEAD_LETTER sans perte de la mutation")
+    void testDeadLetterAfterMaxRetries() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            SyncOutbox row = new SyncOutbox();
+            row.setUid("outbox-dead-1");
+            row.setTableName("PRODUIT");
+            row.setEntityId("prod-1");
+            row.setAction("UPDATE");
+            row.setStatus("PENDING");
+            row.setRetryCount(0);
+            row.setCreatedAt(LocalDateTime.now());
+            db.records.put(row.getUid(), row);
+
+            for (int i = 0; i < SyncOutboxService.MAX_RETRY_ATTEMPTS; i++) {
+                SyncOutboxService.markAsUnsynced(List.of(row.getUid()));
+            }
+
+            assertEquals("DEAD_LETTER", row.getStatus());
+            assertEquals(SyncOutboxService.MAX_RETRY_ATTEMPTS, row.getRetryCount());
+            assertTrue(db.records.containsKey(row.getUid()),
+                    "La mutation doit rester en base pour une remise en file manuelle");
+            assertTrue(SyncOutboxService.fetchAllPendingOutbox().isEmpty(),
+                    "Une mutation DEAD_LETTER ne doit plus etre renvoyee automatiquement");
+        }
+    }
+
+    @Test
     @DisplayName("materializeDownsyncRecords: un payload sans uid est ignoré (anti-doublon)")
     void testNullUidPayloadSkipped() throws Exception {
         try (SyncTestDb db = new SyncTestDb()) {

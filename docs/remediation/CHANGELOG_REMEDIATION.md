@@ -92,10 +92,13 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - **Corrigé S1** : `SyncOutboxService.deleteNullPayloadRecords` ne supprime
   plus les `REMOVE`/`DELETE` sans payload ; leur payload null est légitime et
   la matérialisation les traite par identifiant.
-- Test de non-régression ajouté dans `SyncOutboxServiceTest`.
+- **Corrigé S3** : plafond `MAX_RETRY_ATTEMPTS = 10` puis état
+  `DEAD_LETTER` ; la mutation est conservée, n'est plus renvoyée
+  automatiquement, et `retryDeadLetters()` permet la remise en file.
+- Tests de non-régression ajoutés dans `SyncOutboxServiceTest`.
 - Audit complet : `SYNC_RELIABILITY.md`.
 - Restent ouverts : acquittement par entité au lieu de mutation, absence de
-  dead-letter, absence de tests de reprise réels.
+  tests de reprise réels.
 
 ## Campagne 4 — Inventaire physique (audit + première correction, 2026-11-11)
 

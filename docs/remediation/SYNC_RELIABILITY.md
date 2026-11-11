@@ -55,12 +55,23 @@ Divergence ──> StateValidationService / FullResyncService
 **Cause** : le DTO `BatchMutationDto` ne transporte pas l'UID d'outbox.  
 **Statut** : **ouvert** — évolution API serveur nécessaire (identifiant de mutation).
 
-### S3 — `FAILED` sans plafond ni dead-letter
+### S3 — Poison pills sans dead-letter (corrigé côté client)
 
-`fetchAllPendingOutbox` inclut `PENDING`, `UNSYNCED` et `FAILED` sans limite d'âge ou de tentatives. Une mutation définitivement invalide (poison pill) reste éligible indéfiniment ; le backoff évite la boucle serrée mais pas l'envoi perpétuel.
+`fetchAllPendingOutbox` incluait `PENDING`, `UNSYNCED` et `FAILED` sans limite
+de tentatives. Une mutation définitivement invalide restait donc éligible
+indéfiniment.
 
-**Risque** : bruit réseau, impossibilité de distinguer un rejet définitif d'une panne temporaire.  
-**Statut** : **ouvert** — prévoir un état `DEAD_LETTER` avec action manuelle de rejeu, sans supprimer la donnée.
+**Correction appliquée** :
+
+- au-delà de `MAX_RETRY_ATTEMPTS = 10`, la mutation passe en `DEAD_LETTER` ;
+- elle reste en base (aucune perte), mais n'est plus renvoyée automatiquement ;
+- `retryDeadLetters()` permet une remise en file explicite ;
+- `resetForFullResync` réarme aussi les `DEAD_LETTER`.
+
+**Test ajouté** : `SyncOutboxServiceTest.testDeadLetterAfterMaxRetries`.
+
+**Limite restante** : aucune action UI dédiée n'expose encore « rejouer les
+dead-letters » ; l'API de service existe et devra être branchée en campagne 6.
 
 ### S4 — Atomicité écriture métier / outbox
 
@@ -147,4 +158,4 @@ Résultat : **succès**. Le test de préservation des `REMOVE` est vert.
 
 ## 7. Conclusion
 
-La synchronisation possède une base solide (outbox, phases, UPSERT, tests). La correction S1 supprime une perte réelle de suppression distante. Les risques majeurs restants sont l'acquittement par entité (S2), l'absence de dead-letter (S3) et l'absence de tests de reprise réels (S5) ; ils nécessitent des évolutions serveur ou des tests d'intégration supplémentaires et ne doivent pas être corrigés par une suppression de données.
+La synchronisation possède une base solide (outbox, phases, UPSERT, tests). Les corrections S1 et S3 suppriment respectivement une perte de suppression distante et les poison pills infinis, sans supprimer de données. Les risques majeurs restants sont l'acquittement par entité (S2) et l'absence de tests de reprise réels (S5) ; ils nécessitent des évolutions serveur ou des tests d'intégration supplémentaires.
