@@ -189,6 +189,16 @@ class SyncOutboxServiceTest {
     }
 
     @Test
+    @DisplayName("resetForFullResync: les DEAD_LETTER sont remis en file")
+    void testResetRequeuesDeadLetters() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            SyncOutboxService.resetForFullResync();
+            assertTrue(db.executedUpdates.stream().anyMatch(q -> q.contains("'DEAD_LETTER'")),
+                    "La réinitialisation doit inclure les dead-letters, sinon ils restent bloqués");
+        }
+    }
+
+    @Test
     @DisplayName("materializeDownsyncRecords: un payload sans uid est ignoré (anti-doublon)")
     void testNullUidPayloadSkipped() throws Exception {
         try (SyncTestDb db = new SyncTestDb()) {

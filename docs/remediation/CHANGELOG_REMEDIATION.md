@@ -299,3 +299,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `Util.sync*` conservés comme API sans envoi réseau ; le canal actif reste
   SSE + outbox Retrofit.
 - Suite complète 202/202.
+
+## Campagne 3 bis — Remise en file des dead-letters (2026-11-11)
+
+- Test ajouté vérifiant que `resetForFullResync` inclut bien les mutations
+  `DEAD_LETTER`, sinon elles resteraient bloquées après correction.
+- Suite complète 203/203.
