@@ -305,3 +305,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test ajouté vérifiant que `resetForFullResync` inclut bien les mutations
   `DEAD_LETTER`, sinon elles resteraient bloquées après correction.
 - Suite complète 203/203.
+
+## Campagne 7 octies — Sauvegarde SQLite avant migration (2026-11-11)
+
+- `DatabaseBackup` copie la base SQLite (+ WAL/SHM) avant l'ouverture Hibernate
+  et `hbm2ddl.auto=update`, avec rétention des 5 dernières sauvegardes.
+- Protection best-effort : un échec est journalisé sans bloquer le démarrage.
+- Tests ajoutés ; suite complète 205/205.

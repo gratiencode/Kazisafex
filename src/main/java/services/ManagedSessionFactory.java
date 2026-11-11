@@ -214,6 +214,11 @@ public class ManagedSessionFactory {
                     );
                 }
             }
+            if (!testMode) {
+                // Sauvegarde avant hbm2ddl.auto=update : les migrations Hibernate
+                // ne doivent jamais être irréversibles sans copie préalable.
+                services.utils.DatabaseBackup.backupBeforeMigration(dbPath + ".db", 5);
+            }
             emf = Persistence.createEntityManagerFactory(
                 "SQlitePU",
                 properties
