@@ -16,6 +16,10 @@ import com.endeleya.ia.ChatHtmlTemplate;
 import com.endeleya.ia.GratienAssistantClient;
 import com.endeleya.ia.GratienTools;
 import com.endeleya.ia.IaResponseHandler;
+import com.endeleya.kazisafex.agent.OrchestrationChatAdapter;
+import com.endeleya.kazisafex.agent.OrchestrationRuntime;
+import com.endeleya.kazisafex.agent.TokenBudget;
+import com.endeleya.kazisafex.agent.graph.AgentResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,6 +85,7 @@ import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -92,6 +97,8 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
@@ -108,6 +115,7 @@ import javafx.scene.chart.PieChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
@@ -219,6 +227,7 @@ public class MainuiController implements Initializable {
         new LinkedBlockingQueue<>();
     // Vrai si Gratien est en cours de raisonnement ou de génération de réponse.
     private final AtomicBoolean gratienIsProcessing = new AtomicBoolean(false);
+    private final AtomicBoolean planApprovalDialogShown = new AtomicBoolean(false);
 
     public static MainuiController getInstance() {
         if (instance == null) {
@@ -418,7 +427,12 @@ public class MainuiController implements Initializable {
     @FXML
     private Label txt_selected_attachment;
 
+    @FXML
+    private Label lbl_token_restant;
+
     private ChatBridge chatBridge;
+
+    private boolean tokenExhaustionNotified;
 
     public Label getSync_txt_message() {
         return sync_txt_message;
@@ -507,6 +521,7 @@ public class MainuiController implements Initializable {
         maker = new PriceMaker();
         maker.refreshFromPreferences();
         initGratienAgent();
+        initTokenBudgetIndicator();
         Platform.runLater(this::checkForUpdates);
         txt_states_features.setVisible(true);
         txt_states_features.setText("...");
@@ -1620,33 +1635,58 @@ public class MainuiController implements Initializable {
 
     public void sseSync() {
         if (go()) {
-            Thread sseThread = new Thread(() -> {
-                EventHandler evh = new tools.NotificationHandler();
-                String url =
-                    KazisafeServiceFactory.BASE_URL + "notification/events";
-                Headers headers = new Headers.Builder()
-                    .add("Authorization", "Bearer " + token)
-                    .build();
-                // readTimeout DOIT être supérieur à l'intervalle heartbeat du serveur (15s)
-                // mais assez court pour détecter les connexions mortes rapidement.
-                // 3 minutes = 12 heartbeats manqués → connexion considérée morte → reconnexion.
-                // Cela évite les "sinks fantômes" qui s'accumulent côté Quarkus (SseRegistry).
-                EventSource.Builder evb = new EventSource.Builder(
-                    evh,
-                    URI.create(url)
-                )
-                    .headers(headers)
-                    .reconnectTime(30, TimeUnit.SECONDS)
-                    .readTimeout(3, TimeUnit.MINUTES);
-                EventSource evs = evb.build();
-                if (evh instanceof tools.NotificationHandler) {
-                    ((tools.NotificationHandler) evh).setEventSource(evs);
-                }
-                evs.start();
-            }, "kazisafe-sse-listener");
-            sseThread.setDaemon(true);
-            sseThread.start();
+            connectSse();
         }
+    }
+
+    /**
+     * (Re)connecte le flux SSE avec le jeton courant (TokenStore d'abord, champ
+     * de login en repli). Ferme l'EventSource precedent. Sans le portail go()
+     * : les reconnexions ne doivent pas reafficher les popups d'abonnement.
+     */
+    private void connectSse() {
+        String currentToken = data.core.TokenStore.get();
+        if (currentToken == null || currentToken.isBlank()) {
+            currentToken = token;
+        }
+        if (currentToken == null || currentToken.isBlank()) {
+            return;
+        }
+        final String sseToken = currentToken;
+        tools.NotificationHandler.setSseReconnectHook(this::connectSse);
+        Thread sseThread = new Thread(() -> {
+            EventHandler evh = new tools.NotificationHandler();
+            String url =
+                KazisafeServiceFactory.BASE_URL + "notification/events";
+            Headers headers = new Headers.Builder()
+                .add("Authorization", "Bearer " + sseToken)
+                .build();
+            // readTimeout DOIT être supérieur à l'intervalle heartbeat du serveur (15s)
+            // mais assez court pour détecter les connexions mortes rapidement.
+            // 3 minutes = 12 heartbeats manqués → connexion considérée morte → reconnexion.
+            // Cela évite les "sinks fantômes" qui s'accumulent côté Quarkus (SseRegistry).
+            EventSource.Builder evb = new EventSource.Builder(
+                evh,
+                URI.create(url)
+            )
+                .headers(headers)
+                .reconnectTime(30, TimeUnit.SECONDS)
+                .readTimeout(3, TimeUnit.MINUTES);
+            if (evs != null) {
+                try {
+                    evs.close();
+                } catch (Exception ex) {
+                    // flux deja ferme
+                }
+            }
+            evs = evb.build();
+            if (evh instanceof tools.NotificationHandler) {
+                ((tools.NotificationHandler) evh).setEventSource(evs);
+            }
+            evs.start();
+        }, "kazisafe-sse-listener");
+        sseThread.setDaemon(true);
+        sseThread.start();
     }
 
     @FXML
@@ -1798,7 +1838,7 @@ public class MainuiController implements Initializable {
             String idnat = pref.get("ent_idnat", null);
             String impot = pref.get("ent_impot", null);
             String phonez = pref.get("ent_phones", null);
-            token = pref.get("token", null);
+            token = data.core.TokenStore.get();
             region = pref.get("region", "...");
             txt_region.setText(region);
             String user = pref.get("operator", "Chargement...");
@@ -1934,6 +1974,15 @@ public class MainuiController implements Initializable {
         entreprisex.setIdentification(logr.getRccm());
         entreprisex.setNumeroImpot(logr.getNumeroImpot());
         entreprisex.setPhones(logr.getPhoneEntrerprise());
+        // Persister l'identité connectée dès le login : startForCurrentSession() relit
+        // ces prefs à chaque message du chat (AiAgents) — sans elles, le sessionId
+        // dériverait vers "<eUid>:unknown-user" et perdrait l'utilisateur connu.
+        if (logr.getUserId() != null && !logr.getUserId().isBlank()) {
+            pref.put("userid", logr.getUserId());
+        }
+        if (logr.getEntrepriseId() != null && !logr.getEntrepriseId().isBlank()) {
+            pref.put("eUid", logr.getEntrepriseId());
+        }
         AiAgents.getInstance().startForUser(
             logr.getUserId(),
             logr.getEntrepriseId()
@@ -2157,7 +2206,11 @@ public class MainuiController implements Initializable {
         kazisafe = KazisafeServiceFactory.createService(loginResult.getToken());
         KazisafeServiceFactory.setOnTokenRefreshCallback((Token var1) -> {
             MainuiController.this.token = var1.getToken();
-            pref.put("token", var1.getToken());
+            data.core.TokenStore.saveFromLogin(var1.getToken());
+            // Le jeton a change : le flux SSE doit utiliser le nouveau jeton
+            // (une expiration ayant provoque un 401 HTTP l'a probablement
+            // egalement coupe cote serveur).
+            connectSse();
         });
         // URL = KazisafeServiceFactory.WEBSOCKET + "/wssync/ez/" +
         // loginResult.getEntrepriseId() ;
@@ -2429,26 +2482,17 @@ public class MainuiController implements Initializable {
                 return;
             }
 
-            if (PlatformUtil.isWindows()) {
-                new ProcessBuilder(downloaded.getAbsolutePath()).start();
-                if (newModule != null && newModule.getVersion() != null) {
-                    pref.put("ksf_version", newModule.getVersion());
-                }
-                exit(e);
-            } else {
-                try {
-                    Desktop.getDesktop().open(downloaded.getParentFile());
-                } catch (IOException ignored) {
-                    SyncLogger.getInstance().log(ignored, "MainuiController.installUpdate");
-                }
-                MainUI.notify(
-                    null,
-                    "Info",
-                    "Mise a jour telechargee. Ouvrez le fichier pour finaliser l'installation.",
-                    6,
-                    "info"
-                );
-            }
+            // Securite (C3) : plus d'execution automatique du binaire
+            // telecharge, sur aucune plateforme. L'utilisateur lance
+            // l'installateur lui-meme depuis le dossier ouvert.
+            Desktop.getDesktop().open(downloaded.getParentFile());
+            MainUI.notify(
+                null,
+                "Info",
+                "Mise a jour telechargee. Lancez l'installateur depuis le dossier ouvert pour finaliser l'installation.",
+                8,
+                "info"
+            );
         } catch (IOException ex) {
             SyncLogger.getInstance().log(ex, "MainuiController.installUpdate");
             Logger.getLogger(MainuiController.class.getName()).log(
@@ -2502,14 +2546,18 @@ public class MainuiController implements Initializable {
                     updateDownloadInProgress.set(false);
                     downloadedUpdateFilePath =
                         localPath + File.separator + filename;
+                    boolean verified = ((DownloadTask) downTask).isVerified();
                     install_update_link.setVisible(true);
-                    // La mise a jour sera appliquee automatiquement au prochain
-                    // demarrage de l'application (voir Main.applyPendingUpdateAtStartup).
+                    // La mise a jour verifiee sera appliquee automatiquement au
+                    // prochain demarrage (voir Main.applyPendingUpdateAtStartup).
+                    // Non verifiee : le fichier reste disponible mais n'est
+                    // jamais applique automatiquement.
                     try {
                         tools.UpdateManager um = new tools.UpdateManager(kazisafe);
                         um.storePendingUpdate(
                             downloadedUpdateFilePath,
-                            newModule == null ? null : newModule.getVersion()
+                            newModule == null ? null : newModule.getVersion(),
+                            verified
                         );
                     } catch (Exception ex) {
                         SyncLogger.getInstance().log(ex, "MainuiController.downloadUpdate");
@@ -2522,8 +2570,10 @@ public class MainuiController implements Initializable {
                     MainUI.notify(
                         null,
                         "Succes",
-                        "Mise a jour telechargee. Elle sera installee au prochain redemarrage de Kazisafe.",
-                        6,
+                        verified
+                            ? "Mise a jour telechargee et verifiee. Elle sera installee au prochain redemarrage de Kazisafe."
+                            : "Mise a jour telechargee. Installation automatique desactivee (fichier non verifiable) : lancez l'installateur manuellement.",
+                        8,
                         "info"
                     );
                 } else if (newValue == Worker.State.FAILED) {
@@ -2554,15 +2604,23 @@ public class MainuiController implements Initializable {
     }
 
     private String resolveUpdateFilename() {
-        if (PlatformUtil.isWindows()) {
-            if (
-                newModule == null ||
-                newModule.getNomModule() == null ||
-                newModule.getNomModule().isBlank()
-            ) {
-                return "Kazisafex.exe";
+        // Securite (M6) : le nom provient du serveur (Module.nomModule) et
+        // etait utilise tel quel. Validation stricte : alphanumeriques,
+        // longueur bornee, pas de separateur de chemin, extensions
+        // autorisees uniquement. Repli sur le nom par defaut de la plateforme.
+        if (newModule != null && newModule.getNomModule() != null) {
+            String validated = tools.UpdateVerifier.validateFilename(
+                    newModule.getNomModule());
+            if (validated != null) {
+                return validated;
             }
-            return newModule.getNomModule();
+            SyncLogger.getInstance().log(
+                new SecurityException("Nom de fichier de mise a jour rejete : "
+                    + newModule.getNomModule()),
+                "MainuiController.resolveUpdateFilename");
+        }
+        if (PlatformUtil.isWindows()) {
+            return "Kazisafex.exe";
         }
         if (PlatformUtil.isMac()) {
             return "Kazisafe-MacOS.zip";
@@ -2594,6 +2652,42 @@ public class MainuiController implements Initializable {
                 "error"
             );
         }
+    }
+
+    /**
+     * Indicateur temps réel du budget de tokens, sous le champ de chat : « Token
+     * restant : (X%) ». Le pourcentage est rafraîchi chaque seconde depuis le budget
+     * partagé du chef d'orchestration ; un survol révèle le restant en format compact
+     * (90M / 87.5K...). Vire à l'orange sous 10 %, au rouge dès 0 %.
+     */
+    private void initTokenBudgetIndicator() {
+        if (lbl_token_restant == null) {
+            return;
+        }
+        Tooltip tip = new Tooltip("Token restant : —");
+        tip.setShowDelay(javafx.util.Duration.millis(120));
+        Tooltip.install(lbl_token_restant, tip);
+        refreshTokenLabel(tip);
+        Timeline clock = new Timeline(
+            new KeyFrame(javafx.util.Duration.seconds(1), e -> refreshTokenLabel(tip))
+        );
+        clock.setCycleCount(Timeline.INDEFINITE);
+        clock.play();
+    }
+
+    private void refreshTokenLabel(Tooltip tip) {
+        TokenBudget budget = OrchestrationRuntime.budget();
+        long cap = budget.cap();
+        long remaining = Math.max(0, budget.remaining());
+        int pct = (int) Math.round(cap <= 0 ? 0 : (remaining * 100.0 / cap));
+        lbl_token_restant.setText("Token restant : (" + pct + "%)");
+        tip.setText("Token restant : " + TokenBudget.formatCompact(remaining)
+            + " / " + TokenBudget.formatCompact(cap));
+        String color = pct <= 0
+            ? "#e53935"
+            : (pct < 10 ? "#ef6c00" : "#72819c");
+        lbl_token_restant.setStyle(
+            "-fx-text-fill: " + color + "; -fx-font-size: 11px;");
     }
 
     private void installTooltips() {
@@ -2978,36 +3072,53 @@ public class MainuiController implements Initializable {
 
         String url;
         String localPath;
+        /** Vrai si le fichier telecharge a ete authentifie (manifeste signe). */
+        private volatile boolean verified;
 
         public DownloadTask(String url, String localPath) {
             this.url = url;
             this.localPath = localPath;
         }
 
+        public boolean isVerified() {
+            return verified;
+        }
+
         @Override
         protected Void call() throws Exception {
+            // Securite (M6) : validation stricte du nom de fichier avant
+            // toute utilisation (reseau + ecriture disque).
             if (url == null || url.isBlank()) {
                 throw new IllegalStateException(
                     "Nom de fichier de mise a jour invalide"
                 );
             }
+            String filename = tools.UpdateVerifier.validateFilename(url);
+            if (filename == null) {
+                throw new IllegalStateException(
+                    "Nom de fichier de mise a jour invalide : " + url
+                );
+            }
 
             Files.createDirectories(Paths.get(localPath));
 
+            Path finalPath = Paths.get(localPath, filename);
+            Path partPath = Paths.get(localPath, filename + ".part");
+
             String encodedName = URLEncoder.encode(
-                this.url,
+                filename,
                 StandardCharsets.UTF_8
             ).replace("+", "%20");
             URLConnection connexion = new URL(
                 "https://cloud.kazisafe.com/download/" + encodedName
             ).openConnection();
+            connexion.setConnectTimeout(15_000);
+            connexion.setReadTimeout(60_000);
             long taille = connexion.getContentLengthLong();
 
             try (
                 InputStream is = connexion.getInputStream();
-                OutputStream os = Files.newOutputStream(
-                    Paths.get(localPath, url)
-                )
+                OutputStream os = Files.newOutputStream(partPath)
             ) {
                 long nread = 0L;
                 byte[] buffer = new byte[8192];
@@ -3024,6 +3135,30 @@ public class MainuiController implements Initializable {
             if (taille <= 0) {
                 updateProgress(1, 1);
             }
+
+            // Securite (C4) : verification d'integrite/authenticite via le
+            // manifeste signe quand il est disponible. En cas d'echec
+            // (empreinte invalide), le fichier partiel est detruit et le
+            // telechargement est marque en echec.
+            var manifestEntry = tools.UpdateVerifier.loadVerifiedManifestEntry(
+                    "https://cloud.kazisafe.com/download", filename);
+            if (tools.UpdateVerifier.isManifestSigningConfigured()) {
+                if (manifestEntry.isEmpty()) {
+                    Files.deleteIfExists(partPath);
+                    throw new IllegalStateException(
+                        "Manifeste de mise a jour indisponible ou non signe"
+                    );
+                }
+                if (!tools.UpdateVerifier.verifyDownloadedFile(partPath, manifestEntry.get())) {
+                    Files.deleteIfExists(partPath);
+                    throw new IllegalStateException(
+                        "Integrite du fichier de mise a jour invalide"
+                    );
+                }
+                verified = true;
+            }
+            Files.move(partPath, finalPath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             return null;
         }
 
@@ -3130,7 +3265,7 @@ public class MainuiController implements Initializable {
 
     @FXML
     private void sendMessage(Event event) {
-        this.token = pref.get("token", null);
+        this.token = data.core.TokenStore.get();
         sendText();
     }
 
@@ -3196,6 +3331,60 @@ public class MainuiController implements Initializable {
             });
             return;
         }
+        // Approbation des plans d'exécution uniquement via la boîte de dialogue : un
+        // texte libre saisi dans le chat (qui peut contenir n'importe quoi) ne doit
+        // jamais être interprété comme une confirmation oui/non.
+        GratienTools gratienTools = AiAgents.getInstance().getGratienTools();
+        if (gratienTools != null && gratienTools.pendingPlanForUi() != null) {
+            Platform.runLater(() -> {
+                if (webE != null) {
+                    webE.executeScript(
+                        "showBotProcess(" +
+                            escapeForJS(
+                                "Un plan d'exécution est en attente de votre approbation. "
+                                    + "Veuillez approuver ou annuler dans la boîte de dialogue."
+                            ) +
+                            ")"
+                    );
+                }
+            });
+            return;
+        }
+        // Consigne de fusion après présentation des lots : exécutée de façon
+        // déterministe (fusionnez tout, numéros pairs/impairs, garder/supprimer,
+        // lot précis) — sans repasser par la planification ni l'approbation.
+        if (gratienTools != null && gratienTools.isDedupMergeReply(question)) {
+            gratienIsProcessing.set(true);
+            Platform.runLater(() -> {
+                if (webE != null) {
+                    webE.executeScript(
+                        "showBotProcess(" +
+                            escapeForJS("Fusion des doublons en cours selon votre consigne…") +
+                            ")"
+                    );
+                }
+            });
+            new Thread(() -> {
+                try {
+                    String result = gratienTools.processDedupMergeReply(question);
+                    Platform.runLater(() -> {
+                        if (webE != null) {
+                            webE.executeScript("appendBotAnswer(" + escapeForJS(result == null ? "" : result) + ")");
+                        }
+                        afterGratienFinished();
+                    });
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    Platform.runLater(() -> {
+                        if (webE != null) {
+                            webE.executeScript("appendBotAnswer(" + escapeForJS("Erreur lors de la fusion : " + ex.getMessage()) + ")");
+                        }
+                        afterGratienFinished();
+                    });
+                }
+            }, "Gratien-merge-executor").start();
+            return;
+        }
         dispatchToGratien(question, attachments);
     }
 
@@ -3205,6 +3394,33 @@ public class MainuiController implements Initializable {
      */
     private void dispatchToGratien(String question, List<File> attachments) {
         gratienIsProcessing.set(true);
+        // Détection lexicale gratuite sur le thread FX (aucun coût réseau ni moteur).
+        if (OrchestrationChatAdapter.wantsApprovalFlow(question)) {
+            orchestrate(question);
+            return;
+        }
+        // L'adaptateur + le moteur sont construits hors du thread JavaFX (compile des
+        // graphes, scan reflexif du runtime legacy) ; le test sémantique (multi-langues)
+        // repose sur le LLM et doit lui aussi s'exécuter hors FX. La décision finale
+        // (orchestré vs classique) est rendue sur le thread de traitement.
+        new Thread(() -> {
+            OrchestrationChatAdapter adapter = OrchestrationRuntime.adapter();
+            try {
+                if (adapter.wantsPlanning(question)) {
+                    orchestrateInLine(adapter, question);
+                    return;
+                }
+            } catch (Exception ex) {
+                // Détection sémantique indisponible -> chemin Gratien classique.
+            }
+            classicStream(question, attachments);
+        }, "Gratien-routing-thread").start();
+    }
+
+    /**
+     * Chemin Gratien classique : streaming Ollama, inchangé.
+     */
+    private void classicStream(String question, List<File> attachments) {
         new Thread(() -> {
             gratienAssistantClient.stream(
                 question,
@@ -3243,6 +3459,7 @@ public class MainuiController implements Initializable {
                             if (webE != null) webE.executeScript("endBotMessage()");
                         });
                         afterGratienFinished();
+                        promptPlanApprovalIfPending();
                     }
 
                     @Override
@@ -3265,6 +3482,249 @@ public class MainuiController implements Initializable {
                 }
             );
         }, "Gratien-stream-thread").start();
+    }
+
+    /**
+     * Approbation d'un plan de Gratien classique via la boîte de dialogue : le texte
+     * tapé dans le chat n'est jamais interprété comme une confirmation (l'utilisateur
+     * pourrait y saisir n'importe quoi). Le choix de la boîte est traduit en
+     * « oui »/« non » validé et réinjecté dans le pipeline normal du chat.
+     */
+    private void promptPlanApprovalIfPending() {
+        if (!planApprovalDialogShown.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            GratienTools gratienTools = AiAgents.getInstance().getGratienTools();
+            if (gratienTools == null) {
+                return;
+            }
+            String planText = gratienTools.pendingPlanForUi();
+            if (planText == null) {
+                return;
+            }
+            boolean approved = askApprovalDialog(planText);
+            injectPlanAnswer(approved ? "oui" : "non", approved);
+        } finally {
+            planApprovalDialogShown.set(false);
+        }
+    }
+
+    /**
+     * Réinjecte la réponse validée (« oui »/« non ») dans le pipeline du chat sans
+     * passer par la saisie libre, et affiche un récapitulatif de l'action.
+     */
+    private void injectPlanAnswer(String answer, boolean approved) {
+        String reaction = approved
+                ? "✅ J'approuve ce plan."
+                : "❌ J'annule ce plan.";
+        Platform.runLater(() -> {
+            if (webE != null) {
+                webE.executeScript("appendUser(" + escapeForJS(reaction) + ")");
+            }
+        });
+        GratienTools gratienTools = AiAgents.getInstance().getGratienTools();
+        if (gratienTools != null) {
+            gratienTools.decidePlan(approved ? "oui" : "non");
+        }
+        if (approved && gratienTools != null && gratienTools.hasApprovedDedupPlan()) {
+            showBotProcess("Exécution du plan de dédoublonnage en cours…");
+            new Thread(() -> {
+                String report = null;
+                try {
+                    report = gratienTools.launchApprovedPlan();
+                } catch (Throwable ignored) {
+                }
+                final String result = report == null
+                        ? "Le plan de dédoublonnage n'a pas pu être lancé automatiquement. "
+                        + "Tapez « oui » pour le relancer."
+                        : report;
+                Platform.runLater(() -> {
+                    if (webE != null) {
+                        webE.executeScript("appendBotAnswer(" + escapeForJS(result) + ")");
+                    }
+                });
+            }, "Gratien-plan-executor").start();
+            return;
+        }
+        if (gratienIsProcessing.get()) {
+            gratienMessageQueue.offer(new PendingUserMessage(answer, new ArrayList<>()));
+            return;
+        }
+        dispatchToGratien(answer, new ArrayList<>());
+    }
+
+    /**
+     * Démarre l'orchestration sur un thread dédié (entrée lexicale, appelée depuis FX).
+     */
+    private void orchestrate(String question) {
+        new Thread(() -> orchestrateInLine(OrchestrationRuntime.adapter(), question),
+                "Gratien-orchestrated-thread").start();
+    }
+
+    /**
+     * Boucle d'orchestration réelle (plan -> approbation -> exécution). S'exécute sur un
+     * thread de fond : la boîte de dialogue d'approbation requiert le thread JavaFX,
+     * jamais ce thread-ci.
+     */
+    private void orchestrateInLine(OrchestrationChatAdapter adapter, String question) {
+        try {
+            showBotProcess("Planification en cours...");
+            AgentResponse proposal = adapter.plan(question);
+            if (proposal.status() != AgentResponse.Status.PROPOSAL) {
+                renderOrchestrated(
+                    adapter.render(proposal) + "\n\n" + processNotice(proposal)
+                );
+                return;
+            }
+            renderOrchestrated(
+                adapter.render(proposal) +
+                    "\n\n⏸ En attente de votre approbation avant toute exécution. Veuillez confirmer dans la boîte de dialogue."
+            );
+boolean approved = askApprovalDialog(adapter.render(proposal));
+            AgentResponse result;
+            if (!approved) {
+                result = AgentResponse.failed(
+                        "Exécution annulée: le plan n'a pas été approuvé.",
+                        java.util.Map.of(), 0,
+                        proposal.enterpriseUid(), proposal.engagementId(), java.util.Map.of());
+            } else {
+                showBotProcess("Plan approuvé: exécution des étapes en cours...");
+                // La reflexion/evolution etape par etape de l'executeur legacy est
+                // affichee en temps reel dans la ligne de progression du chat.
+                adapter.setStepStatusListener((step, status) -> showBotProcess(orchestratedStepNotice(step, status)));
+                try {
+                    result = adapter.execute(proposal.proposalToken());
+                } finally {
+                    adapter.setStepStatusListener(null);
+                }
+            }
+            renderOrchestrated(adapter.render(result));
+        } catch (Exception ex) {
+            renderOrchestrated(
+                "❌ Erreur d'orchestration: " + throwableMessage(ex)
+            );
+        } finally {
+            notifyTokenExhausted();
+            afterGratienFinished();
+        }
+    }
+
+    /**
+     * Notification unique par session quand le budget de tokens (« tsub ») est épuisé :
+     * la différence (plafond - somme entrée+sortie) est {@code <= 0}.
+     */
+    private void notifyTokenExhausted() {
+        if (tokenExhaustionNotified) {
+            return;
+        }
+        try {
+            TokenBudget budget = OrchestrationRuntime.budget();
+            if (!budget.exhausted()) {
+                return;
+            }
+            tokenExhaustionNotified = true;
+            Platform.runLater(() -> tools.MainUI.notify(
+                null,
+                "Gratien",
+                "Budget de tokens epuise : " + TokenBudget.formatCompact(budget.consumed())
+                    + " consommes sur " + TokenBudget.formatCompact(budget.cap())
+                    + ". Relevez le plafond « tsub » pour continuer.",
+                8,
+                "error"
+            ));
+        } catch (Exception ignored) {
+            // L'indicateur de tokens ne doit jamais casser l'orchestration.
+        }
+    }
+
+    private String processNotice(AgentResponse response) {
+        switch (response.status()) {
+            case BLOCKED:
+                return "*Requête bloquée par le garde-fou d'orchestration.*";
+            case FAILED:
+                return "*Planification impossible.*";
+            default:
+                return "";
+        }
+    }
+
+    private void renderOrchestrated(String message) {
+        Platform.runLater(() -> {
+            runChatScript("appendBotAnswer(" + escapeForJS(message) + ")");
+            runChatScript("endBotMessage()");
+        });
+    }
+
+    /**
+     * Libelle de progression d'une etape du plan orchestre pour la ligne
+     * ephémère du chat (jamais de nom technique d'outil).
+     */
+    private String orchestratedStepNotice(String step, String status) {
+        String label = step == null || step.isBlank() ? "étape du plan" : step;
+        return switch (status == null ? "" : status) {
+            case "done" -> "✅ Étape terminée : " + label;
+            case "error" -> "❌ Étape en échec : " + label;
+            default -> "⚙️ Étape en cours : " + label;
+        };
+    }
+
+    /** Affiche une note de progression éphémère dans le chat (spinner Gratien). */
+    private void showBotProcess(String message) {        Platform.runLater(() -> {
+            if (webE != null) {
+                webE.executeScript("showBotProcess(" + escapeForJS(message) + ")");
+            }
+        });
+    }
+
+    /**
+     * Demande l'approbation de l'utilisateur sur le thread JavaFX.
+     *
+     * @return {@code true} si le plan est approuvé, {@code false} sinon
+     */
+    /**
+     * Boîte de dialogue d'approbation : le plan est affiché dans une zone de texte
+     * repliée (retour à la ligne) et bornée en largeur, afin que le dialogue ne
+     * s'élargisse pas avec le texte. Le plan complet est déjà présenté dans le chat.
+     */
+    private boolean askApprovalDialog(String planText) {
+        boolean[] approved = {false};
+        CountDownLatch latch = new CountDownLatch(1);
+        Platform.runLater(() -> {
+            Dialog<Boolean> dialog = new Dialog<>();
+            dialog.setTitle("Approbation du plan d'exécution");
+            dialog.setHeaderText("Voulez-vous lancer l'exécution de ce plan ?");
+            WebView planView = new WebView();
+            planView.getEngine().loadContent(ChatHtmlTemplate.planApprovalHtml(planText));
+            planView.setPrefSize(620, 340);
+            planView.setMinWidth(580);
+            planView.setMaxWidth(700);
+            Label content = new Label(
+                "Le plan ci-dessus sera exécuté sous l'identité entreprise "
+                    + "sélectionnée. Aucune action ne sera lancée sans votre accord."
+            );
+            content.setWrapText(true);
+            content.setMaxWidth(600);
+            VBox box = new VBox(10, planView, content);
+            box.setMaxWidth(620);
+            dialog.getDialogPane().setContent(box);
+            dialog.getDialogPane().setPrefWidth(640);
+            dialog.getDialogPane().setMaxWidth(700);
+            dialog.getDialogPane().getButtonTypes()
+                .addAll(new ButtonType("Approuver", ButtonBar.ButtonData.OK_DONE),
+                        new ButtonType("Annuler", ButtonBar.ButtonData.CANCEL_CLOSE));
+            dialog.setResultConverter(button ->
+                ButtonBar.ButtonData.OK_DONE.equals(button.getButtonData()));
+            dialog.showAndWait().ifPresent(result -> approved[0] = result);
+            latch.countDown();
+        });
+        try {
+            latch.await();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return approved[0];
     }
 
     /**

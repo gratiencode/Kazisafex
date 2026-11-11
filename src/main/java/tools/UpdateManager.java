@@ -154,6 +154,8 @@ public class UpdateManager {
                 Path partPath = Paths.get(localPath, validated + ".part");
 
                 URLConnection connexion = new URL(UPDATE_URL + "/" + validated).openConnection();
+                connexion.setConnectTimeout(15_000);
+                connexion.setReadTimeout(60_000);
                 long totalSize = connexion.getContentLengthLong();
 
                 try (InputStream is = connexion.getInputStream();

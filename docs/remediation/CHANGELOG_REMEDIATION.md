@@ -312,3 +312,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   et `hbm2ddl.auto=update`, avec rétention des 5 dernières sauvegardes.
 - Protection best-effort : un échec est journalisé sans bloquer le démarrage.
 - Tests ajoutés ; suite complète 205/205.
+
+## Campagne 2 ter — Timeouts de téléchargement des mises à jour (2026-11-11)
+
+- `UpdateManager.downloadJar` et le `DownloadTask` de `MainuiController`
+  limitent désormais la connexion à 15 s et la lecture à 60 s ; un serveur
+  injoignable ne bloque plus le démarrage/la mise à jour indéfiniment.
+- Suite complète 205/205.
