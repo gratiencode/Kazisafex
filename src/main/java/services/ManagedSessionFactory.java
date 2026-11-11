@@ -231,6 +231,24 @@ public class ManagedSessionFactory {
         if (!embedded && !testMode) {
             startLeakCleaner();
         }
+        if (!testMode) {
+            registerShutdownCleanup();
+        }
+    }
+
+    /**
+     * Ferme le pool et la file d'ecriture a l'arret du processus. Le hook est
+     * enregistre apres l'initialisation reelle : il ne declenche donc jamais
+     * la creation d'une base pendant un arret.
+     */
+    private static void registerShutdownCleanup() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                closeEntityManagerFactory();
+            } catch (Throwable t) {
+                SyncLogger.getInstance().log(t, "ManagedSessionFactory.shutdown");
+            }
+        }, "kazisafe-db-shutdown"));
     }
 
     public static boolean isBdCreated() {

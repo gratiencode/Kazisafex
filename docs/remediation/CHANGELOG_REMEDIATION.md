@@ -169,3 +169,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
   reste bloquée par le bytecode Java 25 (`Unsupported class file major version 69`).
 - Build et suite complète vérifiés après nettoyage.
 - HikariCP aligné sur la propriété `${hikaricp.version}` (5.1.0) au lieu du 5.0.1 figé.
+
+## Campagne 7 bis — Ressources au shutdown (2026-11-11)
+
+- `ManagedSessionFactory` enregistre un hook d'arrêt après initialisation
+  réelle (jamais en mode test) : ferme l'`EntityManagerFactory`, le pool et la
+  file d'écriture SQLite.
+- Aucun hook n'est enregistré avant l'initialisation de la base, pour éviter
+  toute création tardive de base pendant un arrêt.
