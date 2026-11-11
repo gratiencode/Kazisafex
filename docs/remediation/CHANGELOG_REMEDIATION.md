@@ -518,3 +518,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `findUnSyncedCompter` passe par `executeRead` ; plus de session MySQL
   laissée ouverte sur cette lecture.
 - Suite complète 213/213.
+
+## Campagne 8 ter — Synthèse tests/build actualisée (2026-11-11)
+
+- `BUILD_AND_CI.md` : 213 tests.
+- `TEST_STRATEGY.md` : inventaire, outbox atomique, sauvegardes et
+  validation des quantités documentés.
