@@ -42,6 +42,8 @@ public class ManagedSessionFactory {
     private static final Map<Thread, EntityManager> trackedEMs = new ConcurrentHashMap<>();
     /** EntityManager de la transaction d'écriture courante, pour les listeners JPA. */
     private static final ThreadLocal<EntityManager> currentTransactionEm = new ThreadLocal<>();
+    /** Fichier SQLite local actif, null en mode MySQL/test. */
+    private static volatile String localDatabaseFile;
     private static final boolean embedded;
     private static WriteQueueManager writeQueue;
     private static volatile ExecutorService mysqlWriteExecutor;
@@ -173,6 +175,7 @@ public class ManagedSessionFactory {
         } else {
             // ---SQLite---
             String dbPath = dbPath("kazi_" + databaseName);
+            localDatabaseFile = testMode ? null : dbPath + ".db";
             String dbUrl =
                 "jdbc:sqlite:" +
                 dbPath +
@@ -447,6 +450,11 @@ public class ManagedSessionFactory {
             fpath = path + File.separator + dbname;
         }
         return fpath;
+    }
+
+    /** Chemin de la base SQLite locale, ou null en MySQL/mode test. */
+    public static String localDatabasePath() {
+        return localDatabaseFile;
     }
 
     public static boolean isEmbedded() {

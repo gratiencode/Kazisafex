@@ -398,3 +398,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   réussie : elles ne le sont que si la mutation conservée figure réellement
   dans `successes`. Une mutation conservée rejetée laisse ses copies en file.
 - Suite complète 208/208.
+
+## Campagne 4 quater — Sauvegarde avant clôture d'inventaire (2026-11-11)
+
+- `CompterService.removeNoCountedProducts` crée une sauvegarde SQLite
+  immédiate (`inventory-close`, rétention 10) avant les ajustements.
+- `ManagedSessionFactory.localDatabasePath()` expose le fichier local.
+- `DatabaseBackup.backupNow` contourne le throttle quotidien pour les
+  opérations risquées.
+- Test ajouté ; suite complète 209/209.

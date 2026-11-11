@@ -71,6 +71,42 @@ public final class DatabaseBackup {
         }
     }
 
+    /**
+     * Sauvegarde immédiate, sans throttle quotidien, pour une opération
+     * risquée (ex. clôture d'inventaire). Retourne null si la base n'existe pas.
+     */
+    public static Path backupNow(String databasePath, String label, int keep) {
+        if (databasePath == null || databasePath.isBlank()) {
+            return null;
+        }
+        Path database = Path.of(databasePath);
+        if (!Files.isRegularFile(database)) {
+            return null;
+        }
+        Path directory = database.getParent();
+        if (directory == null) {
+            return null;
+        }
+        String safeLabel = label == null || label.isBlank()
+                ? "manual"
+                : label.replaceAll("[^A-Za-z0-9._-]", "_");
+        String base = database.getFileName().toString();
+        Path target = directory.resolve(base + ".bak-" + safeLabel + "-"
+                + LocalDateTime.now().format(STAMP));
+        try {
+            copyIfExists(database, target);
+            copyIfExists(Path.of(databasePath + "-wal"), Path.of(target + "-wal"));
+            copyIfExists(Path.of(databasePath + "-shm"), Path.of(target + "-shm"));
+            DatabaseFileSecurity.harden(target.toString());
+            prune(directory, base, Math.max(1, keep));
+            return target;
+        } catch (IOException | RuntimeException ex) {
+            LOGGER.log(Level.WARNING,
+                    "Sauvegarde SQLite immédiate impossible : " + ex.getMessage());
+            return null;
+        }
+    }
+
     private static Path findTodayBackup(Path directory, String base, String today) {
         try (var stream = Files.list(directory)) {
             return stream

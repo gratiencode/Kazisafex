@@ -902,6 +902,10 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
+        // La clôture n'est pas encore une transaction unique : une sauvegarde
+        // immédiate limite l'impact d'une interruption au milieu des ajustements.
+        services.utils.DatabaseBackup.backupNow(
+                ManagedSessionFactory.localDatabasePath(), "inventory-close", 10);
         withInventoryLock(inv, () -> removeNoCountedProductsLocked(inv, onCreated));
     }
 

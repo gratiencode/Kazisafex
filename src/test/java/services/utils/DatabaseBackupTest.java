@@ -31,6 +31,18 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void immediateBackupCarriesOperationLabel() throws Exception {
+        Path database = dir.resolve("kazi-test.db");
+        Files.writeString(database, "sqlite-content");
+
+        Path backup = DatabaseBackup.backupNow(database.toString(), "inventory-close", 5);
+
+        assertNotNull(backup);
+        assertTrue(backup.getFileName().toString().contains("inventory-close"));
+        assertTrue(Files.readString(backup).contains("sqlite-content"));
+    }
+
+    @Test
     void missingDatabaseHasNoBackup() {
         assertNull(DatabaseBackup.backupBeforeMigration(dir.resolve("absent.db").toString(), 5));
     }
