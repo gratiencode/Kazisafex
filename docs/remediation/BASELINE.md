@@ -128,7 +128,7 @@ Le mécanisme historique « SQLCipher » est **inopérant** :
 ### 5.3 MySQL direct (mode `embedded_db=false`)
 
 - PU `kazisafe-jmx`, MySQL Connector/J 8.4, HikariCP.
-- `ManagedSessionFactory` et `JpaUtil` ne contiennent plus de compte `root` ni de mot de passe `Admin*21` par défaut.
+- `ManagedSessionFactory` ne contient plus de compte `root` ni de mot de passe `Admin*21` par défaut ; `JpaUtil` a été supprimé comme code mort en campagne 7.
 - L'utilisateur vient de `KAZISAFE_DB_USER` ou d'une préférence ; le mot de passe vient de `KAZISAFE_DB_PASSWORD` ou de `SecretStore` (migration de l'ancien stockage en clair incluse).
 - Absence de configuration : **fail-soft** au démarrage, puis erreur explicite à la connexion (pas de fallback silencieux).
 - TLS : `sslMode` par défaut `REQUIRED` ; `VERIFY_CA`/`VERIFY_IDENTITY` configurables.

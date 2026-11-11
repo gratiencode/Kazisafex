@@ -157,6 +157,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Vérification préalable : aucune référence Maven/source à ces chemins ; le
   build et les tests ne les utilisent pas.
 - `.gitignore` complété pour éviter leur réintroduction.
+- `services/JpaUtil.java` supprimé : ancien chemin MySQL dupliqué, uniquement importé
+  (jamais appelé) ; imports retirés de `CommandeService`/`CommandeListService`.
 
 ## Campagne 5 bis — Dépendances Maven (2026-11-11)
 

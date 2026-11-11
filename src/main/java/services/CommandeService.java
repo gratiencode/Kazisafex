@@ -12,7 +12,6 @@ import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.Query;
 import java.time.LocalDateTime;
 import java.util.List;
-import services.JpaUtil;
 
 /**
  *
