@@ -14,6 +14,7 @@ mvn -B -ntp -Dtests.skip=false test
 
 - JDK cible : **Temurin 25** (LTS).
 - `pom.xml` : `source/target/release = 25`, `--enable-preview`.
+- Enforcer Maven : Java `[25,26)`, Maven `[3.9,)` ; un build hors de ces versions échoue explicitement.
 - `tests.skip=true` est le défaut du POM (tests dépendants d'Ollama/DB locales) ;
   **la CI force toujours `-Dtests.skip=false`**.
 - Le packaging produit :
