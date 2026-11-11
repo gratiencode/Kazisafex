@@ -54,7 +54,7 @@ public final class DatabaseBackup {
         String base = database.getFileName().toString();
         String today = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         Path existingToday = findTodayBackup(directory, base, today);
-        if (existingToday != null) {
+        if (existingToday != null && verify(existingToday)) {
             return existingToday;
         }
         Path target = directory.resolve(base + ".bak-" + LocalDateTime.now().format(STAMP));

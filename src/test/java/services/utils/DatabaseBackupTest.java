@@ -33,6 +33,18 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void corruptedSameDayBackupIsReplaced() throws Exception {
+        Path database = dir.resolve("kazi-corrupt-daily.db");
+        Files.writeString(database, "sqlite-content");
+        Path first = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
+        Files.writeString(first, "corrupted");
+        Path second = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
+
+        assertNotEquals(first, second);
+        assertTrue(DatabaseBackup.verify(second));
+    }
+
+    @Test
     void verifyDetectsIntactAndCorruptedBackups() throws Exception {
         Path database = dir.resolve("kazi-verify.db");
         Files.writeString(database, "sqlite-content");

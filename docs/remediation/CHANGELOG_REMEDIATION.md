@@ -562,3 +562,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   SHA-256, remplacement de la base et suppression des WAL/SHM obsolètes.
 - Procédure documentée dans `BACKUP_RESTORE.md`.
 - Test manuel sur fichiers temporaires : OK.
+
+## Campagne 7 vigesies — Sauvegarde quotidienne corrompue remplacée (2026-11-11)
+
+- Une sauvegarde du jour n'est réutilisée que si son SHA-256 est valide ;
+  sinon une nouvelle copie est créée.
+- Test ajouté ; suite complète 216/216.
