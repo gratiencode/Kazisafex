@@ -195,3 +195,12 @@ niveau sécurité/fiabilité demandée en 2026-11.
   uniquement citées dans des commentaires de `SyncEngine`.
 - Le chemin réel `SyncEndpoint` / `BackgroundSyncService` n'est pas modifié.
 - Build et suite complète vérifiés après suppression.
+
+## Campagne 7 quater — Écritures MySQL d'inventaire (2026-11-11)
+
+- `CompterService.createCompter/updateCompter/deleteCompter` (branche MySQL)
+  utilisent `ManagedSessionFactory.executeWrite` au lieu de manipuler
+  directement l'`EntityManager` thread-local : la session est fermée après
+  commit/rollback.
+- Les lectures et les écritures auxiliaires (`createRecquisition`,
+  `createLigneVente`, etc.) restent à migrer progressivement.

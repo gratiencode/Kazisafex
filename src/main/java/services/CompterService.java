@@ -121,12 +121,10 @@ public class CompterService implements CompterStorage {
             System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " comptee");
             return cat;
         }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        ManagedSessionFactory.getEntityManager().persist(cat);
-        tx.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.persist(cat);
+            return null;
+        });
         if (!isDeleted) editStock(cat, true);
         return cat;
     }
@@ -164,12 +162,10 @@ public class CompterService implements CompterStorage {
                 System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " recomptee");
                 return cat;
             }
-            EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!tx.isActive()) {
-                tx.begin();
-            }
-            ManagedSessionFactory.getEntityManager().merge(cat);
-            tx.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.merge(cat);
+                return null;
+            });
             if (!isDeleted) editStock(cat, false);
         } catch (jakarta.persistence.EntityNotFoundException e) {
             System.err.println("Erreur Message : " + e.getMessage());
@@ -214,12 +210,10 @@ public class CompterService implements CompterStorage {
                 return obj;
             }).join();
         } else {
-            EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-            if (!etr.isActive()) {
-                etr.begin();
-            }
-            ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(obj));
-            etr.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.remove(em.merge(obj));
+                return null;
+            });
         }
         System.out.println("Element " + (prod != null ? prod.getNomProduit() : "?") + " comptee supprimee");
 
