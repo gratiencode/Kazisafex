@@ -132,3 +132,8 @@ Les outils de réplication MySQL de `GratienTools` n'utilisent plus `root` par d
 ### Mise à jour — revalidation au démarrage (2026-11-11)
 
 `UpdateManager.applyPendingUpdateAtStartup` ne fait plus confiance au drapeau `ksf_pending_update_verified` : le manifeste signé, la taille et le SHA-256 sont revalidés juste avant l'application. Test : `UpdateManagerPendingUpdateTest`.
+
+
+### Désérialisation Java WebSocket (2026-11-11)
+
+`ImageProductDecoder` (`ObjectInputStream.readObject`) supprimé ; il n'était utilisé que par le `SyncEndpoint` legacy. Aucun flux réseau ne doit désérialiser du Java arbitraire.

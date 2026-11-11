@@ -250,3 +250,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - PlanStep : identifiant stable sans `Math.abs(Integer.MIN_VALUE)`.
 - SecretStore : `writeDeviceKeyFile` accepte un chemin relatif sans parent.
 - Tests PlanStep/SecretStore ; suite complète 200/200.
+
+## Campagne 1 sexies — Désérialisation Java non sûre (2026-11-11)
+
+- `util/decoders/ImageProductDecoder` supprimé : `ObjectInputStream.readObject()`
+  sur un flux WebSocket, signalé `OBJECT_DESERIALIZATION` par FindSecBugs.
+- Il n'était référencé que par le `SyncEndpoint` legacy jamais instancié.
+- Aucun autre décodeur n'utilise la désérialisation Java.

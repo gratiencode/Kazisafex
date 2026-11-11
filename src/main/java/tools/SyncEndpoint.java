@@ -30,7 +30,6 @@ import delegates.RetourMagasinDelegate;
 import delegates.StockerDelegate;
 import delegates.TraisorerieDelegate;
 import delegates.VenteDelegate;
-import util.decoders.ImageProductDecoder;
 import java.io.IOException;
 import java.net.URI;
 import java.util.LinkedHashMap;
@@ -172,7 +171,7 @@ public class SyncEndpoint {
         try {
             ClientEndpointConfig config = ClientEndpointConfig.Builder.create()
                     .configurator(configurator)
-                    .decoders(List.of(BaseModelDecoder.class, ImageProductDecoder.class))
+                    .decoders(List.of(BaseModelDecoder.class))
                     .encoders(List.of(AbonnementEncoder.class, AretirerEncoder.class, CategoryEncoder.class, ProduitEncoder.class, MesureEncoder.class, FournisseurEncoder.class, ListEncoder.class, RefresherEncoder.class,
                             LivraisonEncoder.class, StockerEncoder.class, DestockerEncoder.class, RecquisitionEncoder.class, PrixDeVenteEncoder.class,
                             ClientEncoder.class, ClientAppartenirEncoder.class, ClientOrganisationEncoder.class, VenteEncoder.class, LigneVenteEncoder.class, ImageProductEncoder.class,
