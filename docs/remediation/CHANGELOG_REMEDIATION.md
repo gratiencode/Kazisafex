@@ -236,4 +236,4 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `CompterService` calcule le théorique à `Inventaire.dateDebut` via `findLotStock` ;
   repli sur le stock courant si aucun agrégat à cette date.
 - La clôture des non-comptés utilise la même référence.
-- Test de sélection de date ajouté ; suite complète 193/193.
+- Test de sélection de date ajouté ; suite complète 194/194.

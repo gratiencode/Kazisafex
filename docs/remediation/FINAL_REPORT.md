@@ -15,7 +15,7 @@
 | JDK | Temurin 25.0.4 |
 | Maven | 3.9.11, versions imposées par Enforcer |
 | Tests initiaux | 177/177 |
-| Tests actuels | **193/193** |
+| Tests actuels | **194/194** |
 | Build package | **SUCCÈS** |
 | Entrées locales préexistantes | 98, préservées ; aucun reset/stash pop |
 
@@ -80,7 +80,7 @@ Références : `BASELINE.md`, `BUILD_AND_CI.md`, `TEST_STRATEGY.md`.
 mvn -q clean test -Dtests.skip=false
 ```
 
-- 193 tests, 0 échec, 0 erreur, 22 suites.
+- 194 tests, 0 échec, 0 erreur, 22 suites.
 - Tests ajoutés : MySQL TLS, politique HTTP, REMOVE outbox, dead-letter, inventaire (attente locale, garde clôture, verrou), permissions SQLite.
 
 Angles morts : inventaire réel SQLite/MySQL, reprise sync après coupure, mise à jour signée de bout en bout, packaging Windows/Linux, couverture JavaFX.
