@@ -133,12 +133,20 @@ purges et recalculs `#INV` peuvent se chevaucher.
 `Inventaire` ne contient ni `validated_by`, ni `validated_at`, ni version. L'audit ne peut
 pas prouver qui a clôturé ni empêcher une modification silencieuse après clôture.
 
-**Correction partielle** : `CompterService.updateCompter` refuse désormais toute
-modification si l'inventaire est `Terminé` (`requireInventoryOpen`), même si
-l'appel ne passe pas par l'UI. Les champs de traçabilité du validateur restent
-absents.
+**Corrections appliquées** :
 
-**Statut** : **partiellement corrigé**.
+- `CompterService.updateCompter` refuse toute modification si l'inventaire est
+  `Terminé` (`requireInventoryOpen`), même si l'appel ne passe pas par l'UI ;
+- `Inventaire` porte désormais `valide_par` et `valide_le`, renseignés à la
+  clôture depuis l'opérateur connecté ;
+- ces champs sont **exclus du payload Retrofit** (`@JsonIgnore`) tant que l'API
+  serveur ne les accepte pas : le contrat distant est préservé.
+
+**Limite** : le validateur n'est pas encore synchronisé côté serveur ; une
+évolution API est nécessaire. La version d'inventaire (`@Version`) reste
+absente.
+
+**Statut** : **partiellement corrigé** (traçabilité locale).
 
 ### B7 — Calcul de l'écart dépendant du stock courant
 

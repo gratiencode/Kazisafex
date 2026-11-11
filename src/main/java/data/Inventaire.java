@@ -6,6 +6,7 @@ package data;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -69,6 +70,19 @@ public class Inventaire extends BaseModel implements Serializable {
     private double valeurTotal = 0;
     @Column(name = "valeur_total_ecart")
     private Double valeurTotalEcart = 0d;
+
+    /**
+     * Trace locale du validateur. Ces champs ne sont pas encore acceptes par
+     * l'API serveur : ils restent hors du payload Retrofit pour preserver le
+     * contrat existant, et seront synchronises apres evolution API.
+     */
+    @JsonIgnore
+    @Column(name = "valide_par")
+    private String validePar;
+
+    @JsonIgnore
+    @Column(name = "valide_le", columnDefinition = "DATETIME")
+    private LocalDateTime valideLe;
 
     public Inventaire() {
     }
@@ -218,9 +232,24 @@ public class Inventaire extends BaseModel implements Serializable {
     public Double getValeurTotalEcart() {
         return valeurTotalEcart;
     }
-
     public void setValeurTotalEcart(Double valeurTotalEcart) {
         this.valeurTotalEcart = valeurTotalEcart;
+    }
+
+    public String getValidePar() {
+        return validePar;
+    }
+
+    public void setValidePar(String validePar) {
+        this.validePar = validePar;
+    }
+
+    public LocalDateTime getValideLe() {
+        return valideLe;
+    }
+
+    public void setValideLe(LocalDateTime valideLe) {
+        this.valideLe = valideLe;
     }
 
 }

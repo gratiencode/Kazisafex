@@ -106,6 +106,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
   la fin de l'écriture SQLite (`.join()`) avant de rendre la main.
 - **Corrigé B6 (partiel)** : `CompterService.updateCompter` refuse la
   modification d'un comptage dont l'inventaire est `Terminé` ; garde testée.
+- **Ajout B6** : `Inventaire.valide_par` / `valide_le` renseignés à la clôture,
+  exclus du payload serveur (`@JsonIgnore`) tant que l'API ne les accepte pas.
 - **Corrigé B3 (partiel)** : la clôture crée d'abord les comptages zéro, puis
   marque l'inventaire `Terminé`. Une interruption laisse l'inventaire ouvert
   et la clôture reste rejouable ; la transaction unique reste à faire.

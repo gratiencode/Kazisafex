@@ -8194,6 +8194,8 @@ public class PosController implements Initializable {
                     inv.setValeurTotalEcart(valeurTotalEcart);
                     inv.setEtat("Terminé");
                     inv.setDateFin(LocalDate.now());
+                    inv.setValidePar(pref.get("operator", null));
+                    inv.setValideLe(LocalDateTime.now());
                     InventaireDelegate.updateInventaire(inv);
                     this.syncInventaireHttp(inv);
                 }
@@ -8245,6 +8247,8 @@ public class PosController implements Initializable {
                 inv.setEtat(closePreviousEtat);
                 if (!"Terminé".equalsIgnoreCase(closePreviousEtat)) {
                     inv.setDateFin(null);
+                    inv.setValidePar(null);
+                    inv.setValideLe(null);
                 }
                 InventaireDelegate.updateInventaire(inv);
             }
