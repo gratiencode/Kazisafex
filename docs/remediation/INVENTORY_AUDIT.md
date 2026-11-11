@@ -79,18 +79,30 @@ stratégie explicite pour les mouvements postérieurs.
 
 ### B3 — Clôture non atomique
 
-`cloturerInventaire` :
+Ancien ordre :
 
-1. met `etat = Terminé` et sauvegarde ;
-2. synchronise l'inventaire ;
-3. crée les comptages zéro des non-comptés ;
-4. calcule et écrit les totaux.
+1. `etat = Terminé` et sauvegarde ;
+2. synchronisation ;
+3. comptages zéro des produits non comptés ;
+4. totaux.
 
-Ces étapes sont séparées. Une interruption entre 1 et 3 laisse un inventaire « Terminé »
-sans régularisation complète. L'annulation existe mais n'est pas une transaction.
+Une interruption entre 1 et 3 laissait un inventaire « Terminé » sans
+régularisation complète.
 
-**Risque** : inventaire clôturé partiellement, stock incohérent.  
-**Statut** : **ouvert**.
+**Correction appliquée** : l'ordre est maintenant :
+
+1. création idempotente des comptages zéro ;
+2. contrôle d'annulation ;
+3. calcul des totaux ;
+4. `etat = Terminé`, `date_fin`, sauvegarde ;
+5. synchronisation.
+
+Une interruption pendant l'étape 1 laisse l'inventaire ouvert ; une nouvelle
+clôture est idempotente (les comptages zéro déjà présents sont ignorés).
+La clôture reste une suite d'écritures séparées, pas une transaction unique.
+
+**Statut** : **partiellement corrigé** — reste à encapsuler dans une transaction
+ou une saga idempotente avec verrou.
 
 ### B4 — Produits sans lot ignorés à la clôture
 
