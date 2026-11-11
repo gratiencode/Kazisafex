@@ -41,6 +41,9 @@ public class ImmobilisationDelegate {
     }
 
     public static void deleteImmobilisation(Immobilisation obj) {
+        if (obj == null || obj.getUid() == null) {
+            return;
+        }
         List<data.ImmobilisationAgregate> ags = getAgregateStorage().findByImmobilisation(obj.getUid());
         if (ags != null && !ags.isEmpty()) {
             for (data.ImmobilisationAgregate ag : ags) {
@@ -49,8 +52,7 @@ public class ImmobilisationDelegate {
         }
         getImmobilisationStorage().deleteImmobilisation(obj);
         services.AggregateTriggerService.getInstance().notifyImmobilisation(
-                obj == null ? null : obj.getDateAcquisition(),
-                obj == null ? null : obj.getRegion());
+                obj.getDateAcquisition(), obj.getRegion());
     }
 
     public static Immobilisation findImmobilisation(String objId) {

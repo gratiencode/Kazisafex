@@ -264,3 +264,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `client` après un test nul ; noms/téléphones nuls gérés.
 - `pos.close()` n'est plus appelé si le flux d'imprimante n'a pas été créé.
 - Suite complète 200/200.
+
+## Campagne 6 quater — Corrections SpotBugs supplémentaires (2026-11-11)
+
+- `ImmobilisationDelegate.deleteImmobilisation` refuse désormais une entité
+  nulle avant tout accès au stockage ; test ajouté.
+- `PVUnit` implémente `Serializable` : le champ `Input.pvus` n'est plus un
+  champ non sérialisable signalé par SpotBugs.
+- Suite complète 201/201.

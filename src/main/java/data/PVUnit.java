@@ -5,13 +5,15 @@
  */
 package data; import com.fasterxml.jackson.annotation.JsonFormat;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
  *
  * @author gratien
  */
-public class PVUnit {
+public class PVUnit implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String devise;
     private String uid;
     private Double qMin;
