@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import tools.SyncLogger;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -26,7 +27,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import org.eclipse.persistence.config.EntityManagerProperties;
-import services.utils.SecurePreferences;
 import tools.MemoryGuard;
 import tools.SyncEngine;
 
@@ -64,7 +64,7 @@ public class ManagedSessionFactory {
                 pref.getInt("default_mysql_port", 3306)
             );
             String dbHost = pref.get("default_mysql_host", "localhost");
-            boolean useSsl = pref.getBoolean("default_mysql_ssl", false);
+            String sslMode = resolveMySqlSslMode();
             String dbUrl =
                 "jdbc:mysql://" +
                 dbHost +
@@ -72,13 +72,24 @@ public class ManagedSessionFactory {
                 dbPort +
                 "/ksf_" +
                 databaseName +
-                "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=" +
-                useSsl +
+                "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&sslMode=" +
+                sslMode +
                 "&" +
                 "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''" +
                 "&tcpKeepAlive=true&autoReconnect=true&connectTimeout=10000";
             String dbUser = resolveDbUser();
-            String dbPassword = resolveDbPassword();
+            String dbPassword;
+            try {
+                dbPassword = resolveDbPassword();
+            } catch (IllegalStateException missing) {
+                // Fail-soft : aucune valeur par defaut n'est embarquee (C2/H4).
+                // Sans mot de passe configure, l'application demarre quand meme
+                // (l'utilisateur peut le saisir dans Parametres) ; les
+                // connexions MySQL echoueront explicitement (Access denied).
+                SyncLogger.getInstance().log(missing,
+                    "ManagedSessionFactory: mot de passe MySQL non configure");
+                dbPassword = "";
+            }
             properties.put(
                 EntityManagerProperties.JDBC_DRIVER,
                 "com.mysql.cj.jdbc.Driver"
@@ -174,25 +185,35 @@ public class ManagedSessionFactory {
                 "hibernate.session_factory.statement_inspector",
                 "services.dialect.SqliteStatementInspector"
             );
-            if (!SecurePreferences.hasStoredValue()) {
+            if (!services.utils.SecretStore.has("local_db_secret")) {
+                // Secret local fort, genere aleatoirement a la premiere
+                // utilisation et conserve chiffre (passphrase device, pas le
+                // nom de la base). Reserve au futur chiffrement au repos :
+                // voir docs/remediation/MANUAL_ACTIONS.md - le driver xerial
+                // actuel ne chiffre pas la base et l'ancien mecanisme
+                // (customizer EclipseLink + PRAGMA key) etait inoperant.
                 try {
-                    String localDbSecret = resolveLocalDbSecret(databaseName);
-                    SecurePreferences.storeEncryptedValue(
-                        databaseName,
-                        localDbSecret
-                    );
-                } catch (Exception ex) {
+                    String legacy = pref.get("local_db_secret", null);
+                    String secret;
+                    if (legacy != null && !legacy.isBlank()) {
+                        // Compatibilite : valeur existante conservee telle
+                        // quelle, migree vers le magasin chiffre.
+                        secret = legacy.trim();
+                    } else {
+                        byte[] key = new byte[32];
+                        new java.security.SecureRandom().nextBytes(key);
+                        secret = java.util.Base64.getEncoder().encodeToString(key);
+                    }
+                    services.utils.SecretStore.store("local_db_secret", secret);
+                    pref.remove("local_db_secret");
+                } catch (RuntimeException ex) {
                     Logger.getLogger(ManagedSessionFactory.class.getName()).log(
-                        Level.SEVERE,
-                        null,
+                        Level.WARNING,
+                        "Initialisation du secret local impossible",
                         ex
                     );
                 }
             }
-            properties.put(
-                "eclipselink.session.customizer",
-                "services.utils.SQLiteSessionCustomizer"
-            );
             emf = Persistence.createEntityManagerFactory(
                 "SQlitePU",
                 properties
@@ -497,34 +518,57 @@ public class ManagedSessionFactory {
         }, 30, 30, TimeUnit.SECONDS);
     }
 
-    private static String resolveDbUser() {
+    /**
+     * Utilisateur MySQL : variable d'environnement prioritaire, sinon
+     * preference (historiquement en clair, migree vers le magasin chiffre).
+     *
+     * <p>Aucun compte par defaut n'est embarque : en mode serveur, un compte
+     * applicatif dedie doit etre configure (voir
+     * docs/remediation/MANUAL_ACTIONS.md).</p>
+     */
+    static String resolveDbUser() {
         String fromEnv = System.getenv("KAZISAFE_DB_USER");
         if (fromEnv != null && !fromEnv.isBlank()) {
             return fromEnv;
         }
-        return pref.get("default_mysql_user", "root");
+        return pref.get("default_mysql_user", null);
     }
 
-    private static String resolveDbPassword() {
+    /**
+     * Mot de passe MySQL : variable d'environnement prioritaire, sinon
+     * preference chiffree (migration de l'ancien stockage en clair incluse).
+     * Aucun mot de passe par defaut embarque : l'absence de configuration est
+     * une erreur explicite.
+     */
+    static String resolveDbPassword() {
         String fromEnv = System.getenv("KAZISAFE_DB_PASSWORD");
         if (fromEnv != null) {
             return fromEnv;
         }
-        String prefVal = pref.get("default_mysql_password", "Admin*21");
-        if (prefVal != null && !prefVal.isBlank()) {
-            return prefVal;
+        String stored = services.utils.SecretStore.load("default_mysql_password");
+        if (stored == null || stored.isBlank()) {
+            stored = services.utils.SecretStore.migrateFromPlainPref("default_mysql_password");
+        }
+        if (stored != null && !stored.isBlank()) {
+            return stored;
         }
         throw new IllegalStateException(
-            "Database password not configured. Set KAZISAFE_DB_PASSWORD or preference 'default_mysql_password'."
+            "Mot de passe MySQL non configure. Definissez KAZISAFE_DB_PASSWORD ou saisissez-le dans Parametres (stocke chiffre)."
         );
     }
 
-    private static String resolveLocalDbSecret(String databaseName) {
-        String fromEnv = System.getenv("KAZISAFE_LOCAL_DB_SECRET");
-        if (fromEnv != null && !fromEnv.isBlank()) {
-            return fromEnv;
-        }
-        return pref.get("local_db_secret", databaseName);
+    /**
+     * Mode TLS MySQL : REQUIRED par defaut (transport chiffre ; verification
+     * de certificat via VERIFY_CA/VERIFY_IDENTITY a activer quand le serveur
+     * fournit un certificat valide - voir MANUAL_ACTIONS.md). Les deploiements
+     * qui avaient explicitement desactive TLS conservent leur choix.
+     */
+    static String resolveMySqlSslMode() {
+        return services.utils.MySqlTls.resolve(pref);
+    }
+
+    static String normalizeSslMode(String value) {
+        return services.utils.MySqlTls.normalize(value);
     }
 
     private static int resolveMySqlPoolMaxSize() {

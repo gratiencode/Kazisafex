@@ -73,8 +73,8 @@ public class JpaUtil {
                 String dbPort = String.valueOf(pref.getInt("default_mysql_port", 3306));
                 String dbHost = pref.get("default_mysql_host", "localhost");
                 String dbUrl = "jdbc:mysql://" + dbHost + ":" + dbPort + "/ksf_" + databaseName
-                        + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL="
-                        + pref.getBoolean("default_mysql_ssl", false) + "&"
+                        + "?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&sslMode="
+                        + resolveMySqlSslMode() + "&"
                         + "zeroDateTimeBehavior=convertToNull&sessionVariables=sql_mode=''";
                 String dbUser = resolveDbUser();
                 String dbPassword = resolveDbPassword();
@@ -114,26 +114,37 @@ public class JpaUtil {
         }
     }
 
-    private static String resolveDbUser() {
+    static String resolveDbUser() {
         String fromEnv = System.getenv("KAZISAFE_DB_USER");
         if (fromEnv != null && !fromEnv.isBlank()) {
             return fromEnv;
         }
-        return pref.get("default_mysql_user", "root");
+        return pref.get("default_mysql_user", null);
     }
 
-    private static String resolveDbPassword() {
+    static String resolveDbPassword() {
         String fromEnv = System.getenv("KAZISAFE_DB_PASSWORD");
         if (fromEnv != null) {
             return fromEnv;
         }
-        String prefVal = pref.get("default_mysql_password", null);
-        if (prefVal != null && !prefVal.isBlank()) {
-            return prefVal;
+        String stored = services.utils.SecretStore.load("default_mysql_password");
+        if (stored == null || stored.isBlank()) {
+            stored = services.utils.SecretStore.migrateFromPlainPref("default_mysql_password");
+        }
+        if (stored != null && !stored.isBlank()) {
+            return stored;
         }
         throw new IllegalStateException(
-            "Database password not configured. Set KAZISAFE_DB_PASSWORD or preference 'default_mysql_password'."
+            "Mot de passe MySQL non configure. Definissez KAZISAFE_DB_PASSWORD ou saisissez-le dans Parametres (stocke chiffre)."
         );
+    }
+
+    static String resolveMySqlSslMode() {
+        return services.utils.MySqlTls.resolve(pref);
+    }
+
+    static String normalizeSslMode(String value) {
+        return services.utils.MySqlTls.normalize(value);
     }
 
 }
