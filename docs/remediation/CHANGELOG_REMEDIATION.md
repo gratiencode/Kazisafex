@@ -413,3 +413,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `FINAL_REPORT.md` remis à jour : 209 tests, outbox atomique, sauvegardes,
   WebSocket supprimé, SpotBugs opérationnel, tests UI réels et risques
   résiduels exacts.
+
+## Campagne 8 bis — Artefacts de tests en CI (2026-11-11)
+
+- La CI publie `target/surefire-reports/` en artefact, en plus du rapport
+  SpotBugs déjà archivé.
