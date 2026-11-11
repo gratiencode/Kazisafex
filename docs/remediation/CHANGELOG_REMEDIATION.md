@@ -480,3 +480,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   un avertissement `INVENTORY-CLOSE` est journalisé par produit concerné.
 - La correction complète de B4 (soldure réelle) reste ouverte.
 - Suite complète 213/213.
+
+## Campagne 4 septies — Fermeture des lectures MySQL de stock (2026-11-11)
+
+- `findLotStock` et `hasStockWithoutLot` passent par `executeRead` : l'EntityManager
+  MySQL est toujours fermé, y compris en cas de `NoResultException`.
+- Suite complète 213/213.

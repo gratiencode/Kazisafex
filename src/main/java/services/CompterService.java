@@ -524,25 +524,15 @@ public class CompterService implements CompterStorage {
             StringBuilder sb = new StringBuilder();
             sb.append(
                     "SELECT * FROM stock_agregate p WHERE p.product_id = ? AND p.num_lot = ? AND p.date BETWEEN ? AND ? AND p.region = ? ORDER BY p.date DESC");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
-                    query.setParameter(1, pId);
-                    query.setParameter(2, lot);
-                    query.setParameter(3, now.atStartOfDay());
-                    query.setParameter(4, now.atTime(23, 59, 59));
-                    query.setParameter(5, region).setMaxResults(1);
-                    return (StockAgregate) query.getSingleResult();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(),
-                    StockAgregate.class);
-            query.setParameter(1, pId);
-            query.setParameter(2, lot);
-            query.setParameter(3, now.atStartOfDay());
-            query.setParameter(4, now.atTime(23, 59, 59));
-            query.setParameter(5, region).setMaxResults(1);
-            return (StockAgregate) query.getSingleResult();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
+                query.setParameter(1, pId);
+                query.setParameter(2, lot);
+                query.setParameter(3, now.atStartOfDay());
+                query.setParameter(4, now.atTime(23, 59, 59));
+                query.setParameter(5, region).setMaxResults(1);
+                return (StockAgregate) query.getSingleResult();
+            });
         } catch (NoResultException e) {
             return null;
         }
@@ -968,20 +958,12 @@ public class CompterService implements CompterStorage {
         String sql = "SELECT COUNT(*) FROM stock_agregate WHERE product_id = ? AND region = ? "
                 + "AND (num_lot IS NULL OR num_lot = '')";
         try {
-            Object result;
-            if (ManagedSessionFactory.isEmbedded()) {
-                result = ManagedSessionFactory.executeRead(em -> {
-                    Query q = em.createNativeQuery(sql);
-                    q.setParameter(1, productId);
-                    q.setParameter(2, region);
-                    return q.getSingleResult();
-                });
-            } else {
-                Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sql);
+            Object result = ManagedSessionFactory.executeRead(em -> {
+                Query q = em.createNativeQuery(sql);
                 q.setParameter(1, productId);
                 q.setParameter(2, region);
-                result = q.getSingleResult();
-            }
+                return q.getSingleResult();
+            });
             return result instanceof Number && ((Number) result).longValue() > 0;
         } catch (RuntimeException ex) {
             tools.SyncLogger.getInstance().log(ex, "CompterService.hasStockWithoutLot");
