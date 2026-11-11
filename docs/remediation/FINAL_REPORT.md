@@ -160,7 +160,7 @@ couverture JavaFX.
 | Manifeste de mise à jour signé | **Non déployé** — serveur/clé requis |
 | Rotation clé Ollama / mot de passe MySQL | **Action externe requise** |
 | SpotBugs | **Opérationnel**, findings historiques à trier |
-| Packaging Windows/Linux | **Non automatisé** |
+| Packaging Windows/Linux | **Image Linux testée** ; Windows non testé |
 | God Classes / journalisation | **Partiel** — plan seulement |
 
 ---

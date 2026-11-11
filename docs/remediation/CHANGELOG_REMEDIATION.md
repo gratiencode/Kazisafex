@@ -460,3 +460,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Test ajouté : si `tx.begin()` échoue, l'EntityManager est fermé et
   l'exception remonte.
 - Suite complète 213/213.
+
+## Campagne 10 — Image applicative jpackage (2026-11-11)
+
+- `scripts/package-app-image.sh` construit une image autonome avec jpackage.
+- Image Linux testée avec préférences isolées : écran de connexion OK.
+- `PACKAGING.md` documente Linux/Windows et les limites.
