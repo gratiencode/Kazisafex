@@ -246,3 +246,7 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `Util.findLigneVenteForVente`, `Util.findSaleItemsFor` et `Util.getVente`.
 - `findSaleItemsFor` protège aussi une référence de vente nulle.
 - Tests `UtilTest` ajoutés ; suite complète 198/198.
+
+- PlanStep : identifiant stable sans `Math.abs(Integer.MIN_VALUE)`.
+- SecretStore : `writeDeviceKeyFile` accepte un chemin relatif sans parent.
+- Tests PlanStep/SecretStore ; suite complète 200/200.
