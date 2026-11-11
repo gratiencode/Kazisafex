@@ -111,19 +111,48 @@ public final class DatabaseBackup {
     }
 
     private static void writeChecksum(Path target) throws IOException {
+        String hex = sha256Hex(target);
+        Path checksum = Path.of(target.toString() + ".sha256");
+        Files.writeString(checksum, hex + "  " + target.getFileName() + System.lineSeparator());
+        DatabaseFileSecurity.harden(checksum.toString());
+    }
+
+    /**
+     * Verifie l'empreinte SHA-256 d'une sauvegarde avant restauration.
+     *
+     * @return true si la sauvegarde et son empreinte existent et concordent.
+     */
+    public static boolean verify(Path backup) {
+        if (backup == null || !Files.isRegularFile(backup)) {
+            return false;
+        }
+        Path checksumFile = Path.of(backup.toString() + ".sha256");
+        if (!Files.isRegularFile(checksumFile)) {
+            return false;
+        }
+        try {
+            String expected = Files.readString(checksumFile).trim().split("\\s+")[0];
+            String actual = sha256Hex(backup);
+            return java.security.MessageDigest.isEqual(
+                    expected.toLowerCase(java.util.Locale.ROOT).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                    actual.toLowerCase(java.util.Locale.ROOT).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        } catch (IOException | RuntimeException ex) {
+            LOGGER.log(Level.WARNING, "Verification de sauvegarde impossible : " + ex.getMessage());
+            return false;
+        }
+    }
+
+    private static String sha256Hex(Path file) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (var in = Files.newInputStream(target)) {
+            try (var in = Files.newInputStream(file)) {
                 byte[] buffer = new byte[8192];
                 int n;
                 while ((n = in.read(buffer)) > 0) {
                     digest.update(buffer, 0, n);
                 }
             }
-            String hex = java.util.HexFormat.of().formatHex(digest.digest());
-            Path checksum = Path.of(target.toString() + ".sha256");
-            Files.writeString(checksum, hex + "  " + target.getFileName() + System.lineSeparator());
-            DatabaseFileSecurity.harden(checksum.toString());
+            return java.util.HexFormat.of().formatHex(digest.digest());
         } catch (java.security.NoSuchAlgorithmException ex) {
             throw new IOException("SHA-256 indisponible", ex);
         }

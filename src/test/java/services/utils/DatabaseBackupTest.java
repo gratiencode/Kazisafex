@@ -3,6 +3,7 @@ package services.utils;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +30,17 @@ class DatabaseBackupTest {
         assertTrue(Files.readString(backup).contains("sqlite-content"));
         Path second = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
         assertEquals(backup, second, "une seule sauvegarde par jour");
+    }
+
+    @Test
+    void verifyDetectsIntactAndCorruptedBackups() throws Exception {
+        Path database = dir.resolve("kazi-verify.db");
+        Files.writeString(database, "sqlite-content");
+        Path backup = DatabaseBackup.backupNow(database.toString(), "verify", 5);
+
+        assertTrue(DatabaseBackup.verify(backup));
+        Files.writeString(backup, "corrupted");
+        assertFalse(DatabaseBackup.verify(backup));
     }
 
     @Test

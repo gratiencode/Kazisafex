@@ -549,3 +549,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Les empreintes sont exclues de la détection de sauvegarde du jour et de la
   rétention ; elles sont supprimées avec leur sauvegarde.
 - Test ajouté ; suite complète 214/214.
+
+## Campagne 7 octodecies — Vérification SHA-256 des sauvegardes (2026-11-11)
+
+- `DatabaseBackup.verify` compare la copie à son `.sha256` et détecte une
+  altération avant restauration.
+- Test ajouté (intègre puis corrompu) ; suite complète 215/215.
