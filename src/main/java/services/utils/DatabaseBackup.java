@@ -168,6 +168,7 @@ public final class DatabaseBackup {
                                 && !name.endsWith("-shm")
                                 && !name.endsWith(".sha256");
                     })
+                    .filter(DatabaseBackup::verify)
                     .findFirst()
                     .orElse(null);
         } catch (IOException ex) {

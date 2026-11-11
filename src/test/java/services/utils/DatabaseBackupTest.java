@@ -33,6 +33,21 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void validSameDayBackupIsReusedEvenIfAnotherIsCorrupted() throws Exception {
+        Path database = dir.resolve("kazi-daily-mixed.db");
+        Files.writeString(database, "sqlite-content");
+        Path first = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
+        Thread.sleep(5);
+        Path second = DatabaseBackup.backupNow(database.toString(), "daily-mixed", 5);
+        Files.writeString(first, "corrupted");
+
+        Path selected = DatabaseBackup.backupBeforeMigration(database.toString(), 5);
+
+        assertTrue(DatabaseBackup.verify(selected));
+        assertNotEquals(first, selected, "la copie corrompue ne doit pas être réutilisée");
+    }
+
+    @Test
     void corruptedSameDayBackupIsReplaced() throws Exception {
         Path database = dir.resolve("kazi-corrupt-daily.db");
         Files.writeString(database, "sqlite-content");

@@ -585,3 +585,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - Test ajouté : `verify` retourne false si le fichier `.sha256` est absent.
 - Suite complète 217/217.
+
+## Campagne 7 vigesies quinquies — Sauvegarde valide du jour réutilisée (2026-11-11)
+
+- La recherche de sauvegarde du jour ignore les copies corrompues et
+  privilégie une copie dont le SHA-256 est valide.
+- Test ajouté (une copie corrompue + une valide) ; suite complète 218/218.
