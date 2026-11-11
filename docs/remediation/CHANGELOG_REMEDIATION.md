@@ -356,3 +356,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   une copie de plusieurs dizaines de Mo à chaque démarrage.
 - Le nettoyage de rétention ignore les fichiers WAL/SHM.
 - Test mis à jour ; suite complète 205/205.
+
+## Campagne 1 septies — Garde-fou désérialisation (2026-11-11)
+
+- `security-regression.sh` échoue désormais si `new ObjectInputStream` ou
+  `XMLDecoder` réapparaît dans le code de production.
+- Vérification locale : OK.

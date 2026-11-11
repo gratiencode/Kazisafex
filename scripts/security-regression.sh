@@ -20,6 +20,8 @@ patterns=(
   'TrustAll'
   'ALLOW_ALL_HOSTNAME_VERIFIER'
   'setDefaultHostnameVerifier'
+  'new ObjectInputStream'
+  'XMLDecoder'
 )
 
 failed=0
