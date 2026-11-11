@@ -52,9 +52,6 @@ public class KazisafeServiceFactory {
             //            "wss://localhost:8181";
             //    "ws://192.168.43.184:8080";
             "wss://cloud.kazisafe.com";
-    public static final String WIFI_TEST_URL = "http://172.20.10.6:8020/erp/v1/";
-    public static final String WIFI2_TEST_URL = "http://192.168.88.243/erp/v1/";
-    public static final String HOTSPOT_TEST_URL = "http://192.168.43.120:8020/erp/v1/";
     private static Retrofit retrofitRefresh = null;
     private static Retrofit retrofit = null;
     private static final Preferences PREFS = Preferences.userNodeForPackage(SyncEngine.class);
@@ -69,7 +66,7 @@ public class KazisafeServiceFactory {
     private static void notifytoken(Token token) {
         if (token != null && token.getToken() != null && !token.getToken().isBlank()) {
             currentAccessToken = normalizeToken(token.getToken());
-            PREFS.put("token", currentAccessToken);
+            TokenStore.store(currentAccessToken);
         }
         if (onTokenRefreshedListener != null) {
             onTokenRefreshedListener.onTokenRefreshed(token);
@@ -84,10 +81,15 @@ public class KazisafeServiceFactory {
     private static Retrofit getRetrofitInstance(String token) {
         String effectiveToken = effectiveToken(token);
         Builder builder = new Builder();
-        builder.connectTimeout(300L, TimeUnit.SECONDS)
+        builder.connectTimeout(30L, TimeUnit.SECONDS)
                 .writeTimeout(5L, TimeUnit.MINUTES)
-                .retryOnConnectionFailure(true)
-                .readTimeout(5L, TimeUnit.MINUTES);
+                // Ne jamais rejouer automatiquement une requete applicative :
+                // un POST de vente ou de reglement peut avoir ete execute par
+                // le serveur avant une coupure de connexion. Les retries sont
+                // explicites et idempotents (outbox, sync), jamais implicites.
+                .retryOnConnectionFailure(false)
+                .readTimeout(5L, TimeUnit.MINUTES)
+                .callTimeout(10L, TimeUnit.MINUTES);
 //        builder.addInterceptor(chain -> {
 //            Response response = chain.proceed(chain.request());
 //            String rawBody = response.peekBody(Long.MAX_VALUE).string();
@@ -187,7 +189,7 @@ public class KazisafeServiceFactory {
     public static Kazisafe createService(String token) {
         if ((currentAccessToken == null || currentAccessToken.isBlank()) && token != null && !token.isBlank()) {
             currentAccessToken = normalizeToken(token);
-            PREFS.put("token", currentAccessToken);
+            TokenStore.store(currentAccessToken);
         }
         return (Kazisafe) getRetrofitInstance(effectiveToken(token)).create(Kazisafe.class);
     }
@@ -204,7 +206,8 @@ public class KazisafeServiceFactory {
                 Builder httpClient = new Builder()
                         .connectTimeout(30L, TimeUnit.SECONDS)
                         .writeTimeout(30L, TimeUnit.SECONDS)
-                        .readTimeout(30L, TimeUnit.SECONDS);
+                        .readTimeout(30L, TimeUnit.SECONDS)
+                        .callTimeout(45L, TimeUnit.SECONDS);
                 TLSSocketFactory ssl = new TLSSocketFactory();
                 if (ssl.getTrustManager() != null) {
                     httpClient.sslSocketFactory(ssl, ssl.getTrustManager());
@@ -229,7 +232,7 @@ public class KazisafeServiceFactory {
             currentAccessToken = normalized;
             return normalized;
         }
-        String stored = normalizeToken(PREFS.get("token", null));
+        String stored = normalizeToken(TokenStore.get());
         if (stored != null && !stored.isBlank()) {
             currentAccessToken = stored;
         }

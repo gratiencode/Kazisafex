@@ -115,3 +115,13 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Documentation : `BUILD_AND_CI.md`, `TEST_STRATEGY.md`.
 - Limites : pas de runner Windows/Linux, pas de MySQL de test, pas de seuil de
   couverture.
+
+## Campagne 2 bis — Retries HTTP (2026-11-11)
+
+- `KazisafeServiceFactory` : `retryOnConnectionFailure(false)` sur le client
+  applicatif. Aucun POST de vente, paiement ou régularisation n'est rejoué
+  implicitement après une coupure ; les retries restent explicites via
+  l'outbox/idempotence.
+- Test ajouté : `KazisafeServiceFactoryHttpPolicyTest` (vérifie la politique
+  OkHttp et les timeouts).
+- `HTTP_ARCHITECTURE.md` mis à jour.
