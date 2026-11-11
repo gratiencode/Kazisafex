@@ -104,6 +104,8 @@ niveau sécurité/fiabilité demandée en 2026-11.
 
 - **Corrigé B1** : `InventaireService.create/update/deleteInventaire` attendent
   la fin de l'écriture SQLite (`.join()`) avant de rendre la main.
+- **Corrigé B6 (partiel)** : `CompterService.updateCompter` refuse la
+  modification d'un comptage dont l'inventaire est `Terminé` ; garde testée.
 - Audit complet : `INVENTORY_AUDIT.md`.
 - Constats ouverts : pas de photographie figée du théorique, clôture non
   atomique, comptages concurrents non protégés, validateur absent, lots

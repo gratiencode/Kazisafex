@@ -121,7 +121,12 @@ purges et recalculs `#INV` peuvent se chevaucher.
 `Inventaire` ne contient ni `validated_by`, ni `validated_at`, ni version. L'audit ne peut
 pas prouver qui a clôturé ni empêcher une modification silencieuse après clôture.
 
-**Statut** : **ouvert**.
+**Correction partielle** : `CompterService.updateCompter` refuse désormais toute
+modification si l'inventaire est `Terminé` (`requireInventoryOpen`), même si
+l'appel ne passe pas par l'UI. Les champs de traçabilité du validateur restent
+absents.
+
+**Statut** : **partiellement corrigé**.
 
 ### B7 — Calcul de l'écart dépendant du stock courant
 

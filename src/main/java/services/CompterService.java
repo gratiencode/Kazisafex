@@ -109,6 +109,7 @@ public class CompterService implements CompterStorage {
             );
             return cat;
         }
+        requireInventoryOpen(cat.getInventaireId());
         try {
             if (ManagedSessionFactory.isEmbedded()) {
                 ManagedSessionFactory.submitWrite(em -> {
@@ -130,6 +131,19 @@ public class CompterService implements CompterStorage {
             System.err.println("Erreur Message : " + e.getMessage());
         }
         return cat;
+    }
+
+    /**
+     * Un inventaire termine ne doit plus etre modifie. La creation reste
+     * volontairement non gardee : la cloture cree elle-meme les comptages
+     * zero des produits non comptes.
+     */
+    static void requireInventoryOpen(Inventaire inv) {
+        if (inv != null && inv.getEtat() != null
+                && "Terminé".equalsIgnoreCase(inv.getEtat().trim())) {
+            throw new IllegalStateException(
+                    "Inventaire clôturé : la modification des comptages est interdite");
+        }
     }
 
     @Override
