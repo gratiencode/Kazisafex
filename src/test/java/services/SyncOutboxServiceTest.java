@@ -1,6 +1,7 @@
 package services;
 
 import data.SyncOutbox;
+import data.core.KazisafeServiceFactory;
 import data.network.dto.SyncOutboxDto;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -148,6 +149,19 @@ class SyncOutboxServiceTest {
     }
 
     @Test
+    @DisplayName("deleteNullPayloadRecords: les REMOVE/DELETE sans payload sont préservés")
+    void testDeleteNullPayloadKeepsRemoveMutations() throws Exception {
+        try (SyncTestDb db = new SyncTestDb()) {
+            SyncOutboxService.deleteNullPayloadRecords();
+
+            assertTrue(db.executedUpdates.stream().anyMatch(q ->
+                            q.contains("s.action NOT IN ('REMOVE','DELETE')")),
+                    "La purge des payloads nuls doit exclure REMOVE/DELETE, "
+                            + "sinon les suppressions distantes sont perdues");
+        }
+    }
+
+    @Test
     @DisplayName("materializeDownsyncRecords: un payload sans uid est ignoré (anti-doublon)")
     void testNullUidPayloadSkipped() throws Exception {
         try (SyncTestDb db = new SyncTestDb()) {
@@ -246,15 +260,16 @@ class SyncOutboxServiceTest {
 
             SyncOutboxService.materializeDownsyncRecords();
 
-            // La valeur serveur est ré-appliquée par bulk UPDATE après le flush :
-            // l'updatedAt de l'objet local n'est pas « maintenant », donc le
-            // backfill ne peut pas croire à une mutation locale (pas de boucle).
+            // Le payload contient un timestamp UTC (via toUtc côté serveur). Le
+            // UtcLocalDateTimeDeserializer le reconvertit au fuseau local avant
+            // comparaison. On évalue donc la même valeur locale que la production.
             assertTrue(db.executedUpdates.stream().anyMatch(q ->
                             q.contains("UPDATE Produit e SET e.updatedAt")),
                     "Le bulk UPDATE de préservation de l'updatedAt serveur doit être émis, "
                             + "exécutés=" + db.executedUpdates);
-            assertEquals(SERVER_TIME, db.updateParams.get("serverUpdatedAt"),
-                    "Le timestamp serveur du payload est la valeur de référence, pas now()");
+            assertEquals(KazisafeServiceFactory.fromUtc(SERVER_TIME),
+                    db.updateParams.get("serverUpdatedAt"),
+                    "Le timestamp serveur UTC reconverti au fuseau local correspond à la valeur attendue");
 
             // Aucun PENDING recréé : le listener est supprimé pendant la
             // matérialisation, aucun enregistrement supplémentaire n'apparaît.

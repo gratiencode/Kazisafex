@@ -578,7 +578,10 @@ public class SyncOutboxService {
 
         List<String> allEntityIds = ManagedSessionFactory.executeRead(em -> {
             try {
-                List<?> rawIds = em.createQuery("SELECT e.uid FROM " + entityClass.getSimpleName() + " e")
+                // Securite (M3) : l'entite doit etre geree par le modele JPA
+                // avant concatenation dans la requete JPQL.
+                String entityName = SqlGuard.requireManagedEntityName(em, entityClass);
+                List<?> rawIds = em.createQuery("SELECT e.uid FROM " + entityName + " e")
                         .getResultList();
                 List<String> strIds = new ArrayList<>(rawIds.size());
                 for (Object id : rawIds) {
@@ -677,10 +680,14 @@ public class SyncOutboxService {
 
     private static int[] backfillBatch(Tables table, Class<?> entityClass, List<String> idsToBackfill, String eUid,
             String region, Map<String, SyncOutbox> latestByEntity, Set<String> downsyncOnlyEntities) {
-        List<?> entities = ManagedSessionFactory.executeRead(em -> em
-                .createQuery("SELECT e FROM " + entityClass.getSimpleName() + " e WHERE e.uid IN :ids", entityClass)
+        List<?> entities = ManagedSessionFactory.executeRead(em -> {
+            // Securite (M3) : whitelist d'entite geree avant concatenation JPQL.
+            String entityName = SqlGuard.requireManagedEntityName(em, entityClass);
+            return em
+                .createQuery("SELECT e FROM " + entityName + " e WHERE e.uid IN :ids", entityClass)
                 .setParameter("ids", idsToBackfill)
-                .getResultList());
+                .getResultList();
+        });
 
         if (entities == null || entities.isEmpty())
             return new int[] { 0, 0 };
@@ -764,18 +771,22 @@ public class SyncOutboxService {
     // ── Downsync materialization ────────────────────────────────────────────
 
     /**
-     * Supprime tous les enregistrements d'outbox dont le payload est null ou vide:
-     * ils ne peuvent pas etre materialises ni synchronises. Aucune exception,
-     * y compris pour les actions REMOVE/DELETE.
+     * Supprime les enregistrements d'outbox sans payload qui ne peuvent pas
+     * etre materialises. Les actions REMOVE/DELETE sont volontairement
+     * epargnees : leur payload est legitimement null (l'entite a deja ete
+     * supprimee localement) et {@link #applyDownsyncMutation} sait les traiter
+     * par identifiant via find + remove. Les supprimer ici perdrait
+     * silencieusement la suppression distante.
      */
     public static void deleteNullPayloadRecords() {
         submitSyncWrite(em -> {
             int deleted = em.createQuery(
-                    "DELETE FROM SyncOutbox s WHERE s.payload IS NULL OR s.payload = ''")
+                    "DELETE FROM SyncOutbox s WHERE (s.payload IS NULL OR s.payload = '') "
+                            + "AND s.action NOT IN ('REMOVE','DELETE')")
                     .executeUpdate();
             if (deleted > 0) {
                 System.out.println("[SYNC-OUTBOX] Removed " + deleted
-                        + " outbox record(s) with null/empty payload.");
+                        + " outbox record(s) with null/empty payload (REMOVE/DELETE preserved).");
             }
             return null;
         });
@@ -1008,7 +1019,10 @@ public class SyncOutboxService {
                 // après le reset du drapeau ThreadLocal.
                 em.flush();
                 if (serverUpdatedAt != null) {
-                    em.createQuery("UPDATE " + entityClass.getSimpleName()
+                    // Securite (M3) : whitelist d'entite geree avant
+                    // concatenation JPQL.
+                    String entityName = SqlGuard.requireManagedEntityName(em, entityClass);
+                    em.createQuery("UPDATE " + entityName
                             + " e SET e.updatedAt = :serverUpdatedAt WHERE e.uid = :entityId")
                             .setParameter("serverUpdatedAt", serverUpdatedAt)
                             .setParameter("entityId", typedId != null ? typedId : entityUid)

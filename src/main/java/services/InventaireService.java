@@ -43,12 +43,13 @@ public class InventaireService implements InventaireStorage {
     @Override
     public Inventaire createInventaire(Inventaire cat) {
         if (ManagedSessionFactory.isEmbedded()) {
+            // Attendre la fin de l'ecriture locale : les appelants (UI, sync HTTP)
+            // doivent voir l'inventaire persiste, pas une ecriture encore en file.
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
-            }).thenAccept(e -> {
-                System.out.println("Element INV " + e.getCodeInventaire() + " enregistree");
-            });
+            }).join();
+            System.out.println("Element INV " + cat.getCodeInventaire() + " enregistree");
             return cat;
         }
         EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -67,9 +68,8 @@ public class InventaireService implements InventaireStorage {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.merge(cat);
                     return cat;
-                }).thenAccept(e -> {
-                    System.out.println("Element INv " + e.getCodeInventaire() + " enregistree");
-                });
+                }).join();
+                System.out.println("Element INv " + cat.getCodeInventaire() + " enregistree");
                 return cat;
             }
             EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
@@ -90,9 +90,8 @@ public class InventaireService implements InventaireStorage {
             ManagedSessionFactory.submitWrite(em -> {
                 em.remove(em.merge(obj));
                 return obj;
-            }).thenAccept(e -> {
-                System.out.println("Element " + e.getCodeInventaire() + " supprimee");
-            });
+            }).join();
+            System.out.println("Element " + obj.getCodeInventaire() + " supprimee");
             return;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
