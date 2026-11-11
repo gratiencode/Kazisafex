@@ -328,3 +328,11 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `Objects.equals`, `|` remplacé par `||`.
 - `ProduitsController`/`ProduitItemController` : `pos.close()` protégé.
 - Suite complète 205/205.
+
+## Campagne 6 octies — Logique POS/constantes (2026-11-11)
+
+- `PosController.loadDefaultImage` : ressource absente gérée, flux fermé via
+  try-with-resources ; plus de déréférencement d'InputStream nul.
+- `SyncOutboxService` : `|` remplacé par `||` dans le filtre de backfill.
+- `Constants`/`NetLoockup` : constantes réellement immuables rendues `final`.
+- Suite complète 205/205.

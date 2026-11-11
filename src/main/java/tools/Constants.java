@@ -241,10 +241,10 @@ public class Constants {
     public static final long ARSENIC = SILVER * 2;
     public static final String DATE = "today";
     public static final String ACTION_READ = "read";
-    public static SimpleDateFormat dateFormater = new ThreadSafeSimpleDateFormat(
+    public static final SimpleDateFormat dateFormater = new ThreadSafeSimpleDateFormat(
         "yyyy-MM-dd"
     );
-    public static String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";
+    public static final String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";
 
     public static class Datetime {
 

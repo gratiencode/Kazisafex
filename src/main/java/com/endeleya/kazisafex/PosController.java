@@ -8381,43 +8381,20 @@ public class PosController implements Initializable {
     }
 
     private byte[] loadDefaultImage() {
-        byte[] byArray;
-        block8:
-        {
-            InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
-            try {
-                byArray = FileUtils.readAllBytes((InputStream) is);
-                if (is == null) {
-                    break block8;
-                }
-            } catch (Throwable throwable) {
-                SyncLogger.getInstance().log(throwable, "PosController.loadDefaultImage");
-                try {
-                    if (is != null) {
-                        try {
-                            is.close();
-                        } catch (Throwable throwable2) {
-                            SyncLogger.getInstance().log(throwable2, "PosController.loadDefaultImage");
-                            throwable.addSuppressed(throwable2);
-                        }
-                    }
-                    throw throwable;
-                } catch (IOException e) {
-                    SyncLogger.getInstance().log(e, "PosController.loadDefaultImage");
-                    System.err.println("Erreur lors du chargement de l'image par d\u00e9faut" + e.getMessage());
-                    return new byte[0];
-                }
-            } finally {
-                try {
-                    is.close();
-                } catch (IOException ex) {
-                    SyncLogger.getInstance().log(ex, "PosController.loadDefaultImage");
-                    Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-
+        InputStream is = MainuiController.class.getResourceAsStream("/icons/gallery.png");
+        if (is == null) {
+            SyncLogger.getInstance().log(
+                    new IllegalStateException("Ressource /icons/gallery.png absente"),
+                    "PosController.loadDefaultImage");
+            return new byte[0];
         }
-        return byArray;
+        try (is) {
+            return FileUtils.readAllBytes(is);
+        } catch (IOException ex) {
+            SyncLogger.getInstance().log(ex, "PosController.loadDefaultImage");
+            Logger.getLogger(PosController.class.getName()).log(Level.SEVERE, null, ex);
+            return new byte[0];
+        }
     }
 
     @FXML

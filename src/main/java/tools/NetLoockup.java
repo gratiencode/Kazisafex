@@ -7,7 +7,6 @@ import java.net.URL;
 
 import java.net.URLConnection;
 import java.util.concurrent.ScheduledExecutorService;
-import tools.SyncLogger;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 
@@ -17,8 +16,8 @@ public class NetLoockup {
 
     public static String NETWORK_ERROR_MESSAGE = "Unable to resolve host";
     public static String NETWORK_ERROR_MESSAGE2 = "Failed to connect to";
-    public static String NETWORK_STATUS = "Network-status";
-    public static boolean NETWORK_STATUS_DEFAULT = false;
+    public static final String NETWORK_STATUS = "Network-status";
+    public static final boolean NETWORK_STATUS_DEFAULT = false;
     public static boolean NETWORK_STATUS_ON = true;
     public static String NETWORK_RESET_ERROR_MESSAGE = "recvfrom failed: ECONNRESET (Connection reset by peer)";
     Preferences pref;
@@ -37,12 +36,10 @@ public class NetLoockup {
                      NETWORK_STATUS_ON = true;
                     notifyNetwork(true);
                 } catch (MalformedURLException e) {
-                    SyncLogger.getInstance().log(e, "NetLoockup.run");
                     pref.putBoolean(NETWORK_STATUS, NETWORK_STATUS_DEFAULT);
                     notifyNetwork(false);
                     NETWORK_STATUS_ON = false;
                 } catch (IOException e) {
-                    SyncLogger.getInstance().log(e, "NetLoockup.run");
                     pref.putBoolean(NETWORK_STATUS, NETWORK_STATUS_DEFAULT);
                     notifyNetwork(false);
                     NETWORK_STATUS_ON = false;
