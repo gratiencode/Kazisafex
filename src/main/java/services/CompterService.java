@@ -926,6 +926,13 @@ public class CompterService implements CompterStorage {
                 continue;
             }
             List<String> allLots = findAllDistinctLots(produit.getUid(), inv.getRegion());
+            if (hasStockWithoutLot(produit.getUid(), inv.getRegion())) {
+                tools.SyncLogger.getInstance().logMessage(
+                        "INVENTORY-CLOSE",
+                        "Produit " + produit.getUid()
+                                + " : stock sans numéro de lot non soldé automatiquement ;"
+                                + " vérification manuelle requise.");
+            }
             for (String lot : allLots) {
                 if (Thread.currentThread().isInterrupted()) {
                     throw new RuntimeException("Cloture annulee par l'utilisateur");
@@ -954,6 +961,31 @@ public class CompterService implements CompterStorage {
                 createCompter(co);
                 if (onCreated != null) onCreated.accept(co);
             }
+        }
+    }
+
+    private boolean hasStockWithoutLot(String productId, String region) {
+        String sql = "SELECT COUNT(*) FROM stock_agregate WHERE product_id = ? AND region = ? "
+                + "AND (num_lot IS NULL OR num_lot = '')";
+        try {
+            Object result;
+            if (ManagedSessionFactory.isEmbedded()) {
+                result = ManagedSessionFactory.executeRead(em -> {
+                    Query q = em.createNativeQuery(sql);
+                    q.setParameter(1, productId);
+                    q.setParameter(2, region);
+                    return q.getSingleResult();
+                });
+            } else {
+                Query q = ManagedSessionFactory.getEntityManager().createNativeQuery(sql);
+                q.setParameter(1, productId);
+                q.setParameter(2, region);
+                result = q.getSingleResult();
+            }
+            return result instanceof Number && ((Number) result).longValue() > 0;
+        } catch (RuntimeException ex) {
+            tools.SyncLogger.getInstance().log(ex, "CompterService.hasStockWithoutLot");
+            return false;
         }
     }
 

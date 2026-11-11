@@ -473,3 +473,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `DeliveryController` et `TresorerieController` ; la construction (qui
   enregistre les listeners d'autocomplétion) est conservée.
 - Suite complète 213/213.
+
+## Campagne 4 sexies — Alerte stock sans lot (2026-11-11)
+
+- À la clôture, un stock `num_lot` NULL/vide n'est plus ignoré silencieusement :
+  un avertissement `INVENTORY-CLOSE` est journalisé par produit concerné.
+- La correction complète de B4 (soldure réelle) reste ouverte.
+- Suite complète 213/213.
