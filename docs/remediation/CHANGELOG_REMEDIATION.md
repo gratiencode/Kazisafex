@@ -168,3 +168,4 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `maven-dependency-plugin` passé de 3.5.0 à 3.8.1 ; l'analyse de dépendances
   reste bloquée par le bytecode Java 25 (`Unsupported class file major version 69`).
 - Build et suite complète vérifiés après nettoyage.
+- HikariCP aligné sur la propriété `${hikaricp.version}` (5.1.0) au lieu du 5.0.1 figé.
