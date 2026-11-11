@@ -3,6 +3,7 @@ package services.utils;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -40,6 +41,20 @@ class DatabaseBackupTest {
         assertNotNull(backup);
         assertTrue(backup.getFileName().toString().contains("inventory-close"));
         assertTrue(Files.readString(backup).contains("sqlite-content"));
+    }
+
+    @Test
+    void sameLabelBackupsDoNotCollide() throws Exception {
+        Path database = dir.resolve("kazi-collision.db");
+        Files.writeString(database, "sqlite-content");
+
+        Path first = DatabaseBackup.backupNow(database.toString(), "inventory-close", 5);
+        Thread.sleep(5);
+        Path second = DatabaseBackup.backupNow(database.toString(), "inventory-close", 5);
+
+        assertNotEquals(first, second);
+        assertTrue(Files.isRegularFile(first));
+        assertTrue(Files.isRegularFile(second));
     }
 
     @Test

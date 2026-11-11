@@ -536,3 +536,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - Les noms de sauvegarde incluent les millisecondes : deux copies dans la même
   seconde ne s'écrasent plus.
 - Suite complète 213/213.
+
+## Campagne 7 quindecies — Test anti-collision des sauvegardes (2026-11-11)
+
+- Test ajouté : deux sauvegardes du même label à quelques millisecondes
+  d'intervalle produisent deux fichiers distincts.
+- Suite complète 214/214.
