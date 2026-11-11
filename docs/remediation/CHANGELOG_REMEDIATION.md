@@ -257,3 +257,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
   sur un flux WebSocket, signalé `OBJECT_DESERIALIZATION` par FindSecBugs.
 - Il n'était référencé que par le `SyncEndpoint` legacy jamais instancié.
 - Aucun autre décodeur n'utilise la désérialisation Java.
+
+## Campagne 6 ter — NPE CompactMode (2026-11-11)
+
+- `CompactMode.printWithThermal` : le libellé client ne déréférence plus
+  `client` après un test nul ; noms/téléphones nuls gérés.
+- `pos.close()` n'est plus appelé si le flux d'imprimante n'a pas été créé.
+- Suite complète 200/200.

@@ -793,13 +793,22 @@ public class CompactMode {
             printer.writeLF(right, (dv == null ? LocalDateTime.now().toString() : dv.toString()));
 
             printer.write("Client : ");
-            printer.writeLF(client_style, client != null ? ((client.getNomClient().equalsIgnoreCase("Anonyme")
-                    || client.getNomClient().equalsIgnoreCase("Unknown"))
-                            ? (client.getPhone().length() < 10 ? "Anonyme" : client.getPhone())
-                            : client.getNomClient())
-                    : !client.getPhone().isEmpty() || !client.getNomClient().isEmpty()
-                            ? client.getNomClient() + ", " + client.getPhone()
-                            : "Anonyme");
+            String clientLabel;
+            if (client == null) {
+                clientLabel = "Anonyme";
+            } else {
+                String nom = client.getNomClient();
+                String phone = client.getPhone();
+                if (nom != null && (nom.equalsIgnoreCase("Anonyme")
+                        || nom.equalsIgnoreCase("Unknown"))) {
+                    clientLabel = phone != null && phone.length() >= 10 ? phone : "Anonyme";
+                } else if ((nom != null && !nom.isEmpty()) || (phone != null && !phone.isEmpty())) {
+                    clientLabel = (nom == null ? "" : nom) + ", " + (phone == null ? "" : phone);
+                } else {
+                    clientLabel = "Anonyme";
+                }
+            }
+            printer.writeLF(client_style, clientLabel);
             printer.writeLF("-".repeat(48));
             String heads = String.format("""
                     %-4s  %-18s   %-10s   %-10s
@@ -901,11 +910,13 @@ public class CompactMode {
             SyncLogger.getInstance().log(ex, "CompactMode.printWithThermal");
             Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
-            try {
-                pos.close();
-            } catch (IOException ex) {
-                SyncLogger.getInstance().log(ex, "CompactMode.printWithThermal.finally");
-                Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+            if (pos != null) {
+                try {
+                    pos.close();
+                } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "CompactMode.printWithThermal.finally");
+                    Logger.getLogger(PaymentController.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 
