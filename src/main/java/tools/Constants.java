@@ -53,15 +53,15 @@ public class Constants {
     public static final String CAISSES = "finance-ui";
     public static final String REPPORTS = "repport-ui";
 
-    public static final SimpleDateFormat DATE_HEURE_FORMAT =
+    public static final ThreadSafeSimpleDateFormat DATE_HEURE_FORMAT =
         new ThreadSafeSimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-    public static final SimpleDateFormat DATE_ONLY_FORMAT =
+    public static final ThreadSafeSimpleDateFormat DATE_ONLY_FORMAT =
         new ThreadSafeSimpleDateFormat("yyyy-MM-dd");
-    public static final SimpleDateFormat YEAR_AND_MONTH_FORMAT =
+    public static final ThreadSafeSimpleDateFormat YEAR_AND_MONTH_FORMAT =
         new ThreadSafeSimpleDateFormat("yyyy-MM");
-    public static final SimpleDateFormat YEAR_ONLY_FORMAT =
+    public static final ThreadSafeSimpleDateFormat YEAR_ONLY_FORMAT =
         new ThreadSafeSimpleDateFormat("yyyy");
-    public static final SimpleDateFormat TIMESTAMPED_FORMAT =
+    public static final ThreadSafeSimpleDateFormat TIMESTAMPED_FORMAT =
         new ThreadSafeSimpleDateFormat("yyyyMMddHHmmss");
 
     /**
@@ -241,7 +241,7 @@ public class Constants {
     public static final long ARSENIC = SILVER * 2;
     public static final String DATE = "today";
     public static final String ACTION_READ = "read";
-    public static final SimpleDateFormat dateFormater = new ThreadSafeSimpleDateFormat(
+    public static final ThreadSafeSimpleDateFormat dateFormater = new ThreadSafeSimpleDateFormat(
         "yyyy-MM-dd"
     );
     public static final String MANUFACTURING_LEVEL_MIDDLE_END_PRODUCT = "PSF";

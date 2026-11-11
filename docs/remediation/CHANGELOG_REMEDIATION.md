@@ -336,3 +336,10 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `SyncOutboxService` : `|` remplacé par `||` dans le filtre de backfill.
 - `Constants`/`NetLoockup` : constantes réellement immuables rendues `final`.
 - Suite complète 205/205.
+
+## Campagne 6 nonies — Typage des formateurs (2026-11-11)
+
+- Les champs de `Constants` sont déclarés explicitement en
+  `ThreadSafeSimpleDateFormat` (sous-type compatible) : les faux positifs
+  SpotBugs `STCAL` sont évités sans changer les 94 appelants.
+- Suite complète 205/205.
