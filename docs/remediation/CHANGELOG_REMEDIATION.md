@@ -506,3 +506,9 @@ niveau sécurité/fiabilité demandée en 2026-11.
   `(..., lot)` passent par `executeRead` : plus de session MySQL laissée
   ouverte sur ces lectures.
 - Suite complète 213/213.
+
+## Campagne 4 undecies — Fermeture session liste des comptages (2026-11-11)
+
+- `findComptages(inventaireId, region)` passe par `executeRead` ; lecture
+  seule utilisée pour l'ajustement après inventaire et l'UI.
+- Suite complète 213/213.

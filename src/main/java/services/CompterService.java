@@ -596,18 +596,12 @@ public class CompterService implements CompterStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT * FROM compter p WHERE p.inventaire_id = ? AND p.region = ?");
-            if (ManagedSessionFactory.isEmbedded()) {
-                return ManagedSessionFactory.executeRead(em -> {
-                    Query query = em.createNativeQuery(sb.toString(), Compter.class);
-                    query.setParameter(1, inventaireId);
-                    query.setParameter(2, region);
-                    return query.getResultList();
-                });
-            }
-            Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString(), Compter.class);
-            query.setParameter(1, inventaireId);
-            query.setParameter(2, region);
-            return query.getResultList();
+            return ManagedSessionFactory.executeRead(em -> {
+                Query query = em.createNativeQuery(sb.toString(), Compter.class);
+                query.setParameter(1, inventaireId);
+                query.setParameter(2, region);
+                return query.getResultList();
+            });
         } catch (Exception e) {
             return Collections.emptyList();
         }
