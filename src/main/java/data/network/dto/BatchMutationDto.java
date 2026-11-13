@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public class BatchMutationDto {
+    /** Uid de la ligne outbox : cle d'idempotence si le serveur l'echo. */
+    public String mutationId;
     public String entityId;
     public String entityType;
     public String payload;
@@ -16,7 +18,8 @@ public class BatchMutationDto {
 
     public BatchMutationDto() {}
 
-    public BatchMutationDto(String entityId, String entityType, String payload, LocalDateTime updatedAt, String mutationType, String entrepriseId, String region) {
+    public BatchMutationDto(String mutationId, String entityId, String entityType, String payload, LocalDateTime updatedAt, String mutationType, String entrepriseId, String region) {
+        this.mutationId = mutationId;
         this.entityId = entityId;
         this.entityType = entityType;
         this.payload = payload;

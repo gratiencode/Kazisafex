@@ -541,7 +541,7 @@ public class ProductionController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         bundle = rb;
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         taux = pref.getDouble("taux2change", 2300);
         anchorpn_depot_intrant.setVisible(false);
 

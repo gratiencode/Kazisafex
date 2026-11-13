@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Assure les ajustements minimaux de schema au demarrage pour rester coherent
@@ -15,7 +16,50 @@ import java.util.Locale;
  */
 public final class SchemaAutoUpdater {
 
+    private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern SAFE_TYPE = Pattern.compile("[A-Za-z0-9_(), '\"]+");
+
     private SchemaAutoUpdater() {
+    }
+
+    /**
+     * Les noms de tables/colonnes proviennent de constantes internes, mais on
+     * refuse tout identifiant hors du format attendu avant concatenation dans
+     * un DDL (les identifiants SQL ne peuvent pas etre parametres).
+     */
+    private static String safeIdentifier(String value) {
+        if (value == null || !SAFE_IDENTIFIER.matcher(value).matches()) {
+            throw new IllegalArgumentException("Identifiant SQL invalide: " + value);
+        }
+        return value;
+    }
+
+    private static String safeColumns(String columns) {
+        if (columns == null || columns.isBlank()) {
+            throw new IllegalArgumentException("Liste de colonnes vide");
+        }
+        StringBuilder result = new StringBuilder();
+        for (String column : columns.split(",")) {
+            String trimmed = column.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (result.length() > 0) {
+                result.append(", ");
+            }
+            result.append(safeIdentifier(trimmed));
+        }
+        if (result.length() == 0) {
+            throw new IllegalArgumentException("Liste de colonnes vide");
+        }
+        return result.toString();
+    }
+
+    private static String safeType(String type) {
+        if (type == null || !SAFE_TYPE.matcher(type).matches()) {
+            throw new IllegalArgumentException("Type SQL invalide: " + type);
+        }
+        return type;
     }
 
     public static void ensureCoreSchema(boolean embedded, String dbUrl, String dbUser, String dbPassword) {
@@ -26,6 +70,7 @@ public final class SchemaAutoUpdater {
         try (Connection connection = openConnection(embedded, dbUrl, dbUser, dbPassword)) {
             ensureAggregateSchema(connection);
             ensureStockAgregateSchema(connection);
+            ensureCompterSchema(connection);
             ensureFinancialStatementSchema(connection);
             ensureSyncOutboxSchema(connection);
         } catch (SQLException ex) {
@@ -47,6 +92,18 @@ public final class SchemaAutoUpdater {
         }
         addColumnIfMissing(connection, "stock_agregate", "num_lot", "VARCHAR(100)");
         addColumnIfMissing(connection, "stock_agregate", "date_expiration", "DATE");
+    }
+
+    /**
+     * Colonne de photographie immuable du stock theorique (campagne 4).
+     * Migration non destructive : les anciennes lignes restent NULL et le
+     * service retombe alors sur la reference historique.
+     */
+    private static void ensureCompterSchema(Connection connection) throws SQLException {
+        if (!tableExists(connection, "compter")) {
+            return;
+        }
+        addColumnIfMissing(connection, "compter", "theoretical_snapshot", "DOUBLE");
     }
 
     private static void ensureAggregateSchema(Connection connection) throws SQLException {
@@ -169,7 +226,8 @@ public final class SchemaAutoUpdater {
     }
 
     private static void createFinancialStatementTableIfMissing(Connection connection, String table) throws SQLException {
-        createTableIfMissing(connection, table, """
+        String safeTable = safeIdentifier(table);
+        createTableIfMissing(connection, safeTable, """
                 CREATE TABLE IF NOT EXISTS %s (
                     uid VARCHAR(64) NOT NULL PRIMARY KEY,
                     statement_type VARCHAR(80),
@@ -187,7 +245,7 @@ public final class SchemaAutoUpdater {
                     total_line BOOLEAN,
                     updated_at DATETIME
                 )
-                """.formatted(table));
+                """.formatted(safeTable));
     }
 
     private static void ensureSyncOutboxSchema(Connection connection) throws SQLException {
@@ -198,7 +256,7 @@ public final class SchemaAutoUpdater {
     }
 
     private static void createTableIfMissing(Connection connection, String table, String sql) throws SQLException {
-        if (tableExists(connection, table)) {
+        if (tableExists(connection, safeIdentifier(table))) {
             return;
         }
         try (Statement statement = connection.createStatement()) {
@@ -208,10 +266,12 @@ public final class SchemaAutoUpdater {
 
     private static void addColumnIfMissing(Connection connection, String table, String column, String type)
             throws SQLException {
-        if (columnExists(connection, table, column)) {
+        String safeTable = safeIdentifier(table);
+        String safeColumn = safeIdentifier(column);
+        if (columnExists(connection, safeTable, safeColumn)) {
             return;
         }
-        String sql = "ALTER TABLE " + table + " ADD COLUMN " + column + " " + type;
+        String sql = "ALTER TABLE " + safeTable + " ADD COLUMN " + safeColumn + " " + safeType(type);
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
@@ -242,7 +302,7 @@ public final class SchemaAutoUpdater {
 
     private static boolean columnExists(Connection connection, String table, String column) throws SQLException {
         if (isSQLite(connection)) {
-            String sql = "PRAGMA table_info(" + table + ")";
+            String sql = "PRAGMA table_info(" + safeIdentifier(table) + ")";
             try (Statement statement = connection.createStatement();
                     ResultSet rs = statement.executeQuery(sql)) {
                 while (rs.next()) {
@@ -271,16 +331,35 @@ public final class SchemaAutoUpdater {
 
     private static void createIndexIfMissing(Connection connection, String indexName, String table, String columns)
             throws SQLException {
-        if (!tableExists(connection, table)) {
+        String safeIndex = safeIdentifier(indexName);
+        String safeTable = safeIdentifier(table);
+        if (!tableExists(connection, safeTable)) {
             return;
         }
-        if (indexExists(connection, table, indexName)) {
+        if (indexExists(connection, safeTable, safeIndex)) {
             return;
         }
-        String sql = "CREATE INDEX " + indexName + " ON " + table + " (" + columns + ")";
+        String sql = "CREATE INDEX " + safeIndex + " ON " + safeTable + " (" + safeColumns(columns) + ")";
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate(sql);
+        } catch (SQLException ex) {
+            // Course possible au demarrage (plusieurs instances/threads): l'index a
+            // ete cree entre le test et le CREATE. On ignore uniquement le doublon.
+            if (!isDuplicateIndexError(ex)) {
+                throw ex;
+            }
         }
+    }
+
+    static boolean isDuplicateIndexError(SQLException ex) {
+        if (ex.getErrorCode() == 1061) {
+            return true;
+        }
+        String state = ex.getSQLState();
+        String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
+        return message.contains("duplicate key name")
+                || message.contains("already exists")
+                || ("42000".equals(state) && message.contains("index"));
     }
 
     private static boolean indexExists(Connection connection, String table, String indexName) throws SQLException {
@@ -294,8 +373,28 @@ public final class SchemaAutoUpdater {
             }
         }
 
-        DatabaseMetaData metaData = connection.getMetaData();
         String catalog = connection.getCatalog();
+        if (catalog != null && !catalog.isBlank()) {
+            // MySQL: les metadonnees JDBC getIndexInfo sont peu fiables selon le
+            // catalogue/dialecte; information_schema.statistics est exact.
+            String sql = "SELECT 1 FROM information_schema.statistics "
+                    + "WHERE lower(table_schema)=lower(?) AND lower(table_name)=lower(?) "
+                    + "AND lower(index_name)=lower(?) LIMIT 1";
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, catalog);
+                ps.setString(2, table);
+                ps.setString(3, indexName);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return true;
+                    }
+                }
+            } catch (SQLException ignored) {
+                // Base sans information_schema (H2, etc.) -> repli sur getIndexInfo.
+            }
+        }
+
+        DatabaseMetaData metaData = connection.getMetaData();
         for (String tableCandidate : variants(table)) {
             try (ResultSet rs = metaData.getIndexInfo(catalog, null, tableCandidate, false, false)) {
                 while (rs.next()) {

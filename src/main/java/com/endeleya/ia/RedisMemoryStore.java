@@ -27,6 +27,7 @@ public class RedisMemoryStore {
     private final int maxMessages;
     private final int ttlSeconds;
     private final boolean enabled;
+    private final String password;
     private final InMemoryStorage fallback;
     private volatile boolean redisAvailable;
 
@@ -45,6 +46,15 @@ public class RedisMemoryStore {
         this.maxMessages = Math.max(1, maxMessages);
         this.ttlSeconds = intSetting("kazisafex.redis.ttl.seconds", "REDIS_TTL_SECONDS", DEFAULT_TTL_SECONDS);
         this.enabled = booleanSetting("kazisafex.redis.enabled", "REDIS_ENABLED", true);
+        // Securite (M2) : mot de passe Redis. Ordre : propriete systeme,
+        // variable d'environnement, puis SecretStore (mot de passe genere
+        // par RedisBootstrap pour l'instance qu'il demarre). Vide = Redis
+        // local historique sans AUTH (service systeme preexistant).
+        String resolvedPassword = setting("kazisafex.redis.password", "REDIS_PASSWORD", null);
+        if (resolvedPassword == null || resolvedPassword.isBlank()) {
+            resolvedPassword = services.utils.SecretStore.load("redis_password");
+        }
+        this.password = resolvedPassword == null ? "" : resolvedPassword;
         this.fallback = new InMemoryStorage(this.maxMessages);
         this.redisAvailable = enabled && ping();
     }
@@ -174,9 +184,21 @@ public class RedisMemoryStore {
             socket.connect(new InetSocketAddress(host, port), timeoutMillis);
             socket.setSoTimeout(timeoutMillis);
             OutputStream out = socket.getOutputStream();
+            if (password != null && !password.isBlank()) {
+                // Securite (M2) : AUTH sur chaque connexion (une connexion
+                // est ouverte par commande).
+                out.write(encode("AUTH", password));
+            }
             out.write(encode(parts));
             out.flush();
-            return readReply(new BufferedInputStream(socket.getInputStream()));
+            BufferedInputStream in = new BufferedInputStream(socket.getInputStream());
+            if (password != null && !password.isBlank()) {
+                Object authReply = readReply(in);
+                if (!"OK".equalsIgnoreCase(String.valueOf(authReply))) {
+                    throw new IOException("Authentification Redis refusee");
+                }
+            }
+            return readReply(in);
         }
     }
 

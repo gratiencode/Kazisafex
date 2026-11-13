@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 
 public final class GratienAssistantClient {
 
-    private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String MODEL_NAME = AiAgents.MODEL_NAME;
     private static final int MAX_FILE_CHARS = 18_000;
     private static final int VISION_RETRY_ATTEMPTS = 1;
@@ -53,7 +52,8 @@ public final class GratienAssistantClient {
 
     private GratienAssistantClient() {
         model = OllamaStreamingChatModel.builder()
-                .baseUrl(OLLAMA_BASE_URL)
+                .baseUrl(AiAgents.ollamaBaseUrl())
+                .customHeaders(AiAgents.ollamaAuthHeaders())
                 .modelName(MODEL_NAME)
                 .temperature(0.25)
                 .timeout(Duration.ofMinutes(5))
@@ -67,6 +67,10 @@ public final class GratienAssistantClient {
     }
 
     public void stream(String question, List<File> attachments,String entreprise, StreamCallback callback) {
+        // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+        ToolTrace.log("PROMPT", "entreprise=" + entreprise
+                + " piecesJointes=" + (attachments == null ? 0 : attachments.size())
+                + " question=" + question);
         aiAgents.startForCurrentSession();
         // Le compactage de memoire et le mode swarm (sous-agents) signalent leur execution via le canal de progression du chat.
         aiAgents.setCompactionSignal(callback::onProcess);
@@ -143,7 +147,7 @@ public final class GratienAssistantClient {
             return;
         }
 
-        String toolResult = tryLocalTool(question);
+        String toolResult = tryLocalTool(question, callback::onProcess);
         if (toolResult != null) {
             aiAgents.appendMemory("user", question);
             aiAgents.appendMemory("assistant", toolResult);
@@ -156,6 +160,9 @@ public final class GratienAssistantClient {
         // La vision ne peut pas streame vers ce serveur (500 sur image en streaming):
         // on fait un appel chat() non-streaming, avec une nouvelle tentative si le serveur echoue.
         // En cas d'echec d'un modele, OllamaModelFallback bascule sur le modele suivant.
+        // L'appel est bloquant (jusqu'a 5 min): on signale la reflexion dans le chat
+        // pour que l'utilisateur voie que Gratien travaille sur les pieces jointes.
+        callback.onProcess("👁️ Analyse des pièces jointes en cours...");
         String visionAnswer = null;
         Throwable lastError = null;
         for (int attempt = 0; attempt <= VISION_RETRY_ATTEMPTS; attempt++) {
@@ -165,6 +172,7 @@ public final class GratienAssistantClient {
             } catch (Exception ex) {
                 lastError = ex;
                 if (attempt < VISION_RETRY_ATTEMPTS) {
+                    callback.onProcess("👁️ Analyse des pièces jointes en cours... (nouvelle tentative)");
                     try {
                         Thread.sleep(1000L);
                     } catch (InterruptedException ie) {
@@ -187,7 +195,7 @@ public final class GratienAssistantClient {
         callback.onComplete();
     }
 
-    private String tryLocalTool(String question) {
+    private String tryLocalTool(String question, java.util.function.Consumer<String> progress) {
         if (question == null) {
             return null;
         }
@@ -197,6 +205,9 @@ public final class GratienAssistantClient {
                 || value.contains("compte de resultat"))) {
             return null;
         }
+        // Appel synchrone (base + generation de fichier): on signale la reflexion
+        // dans le chat pour que l'utilisateur voie que Gratien travaille.
+        progress.accept("📊 Préparation des états financiers en cours...");
         if (requestsQuarterlyYear(value)) {
             int anchorYear = requestedAnchorYear(question);
             if (value.contains("excel") || value.contains("xlsx")) {

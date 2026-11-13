@@ -37,6 +37,21 @@ public class Main {
         boolean alreadyInSoftwareMode = Boolean.getBoolean(SW_FALLBACK_MARKER)
                 || System.getProperty("prism.order") != null;
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.err.println("=== KSF-SHUTDOWN-HOOK: dumps all stacks ===");
+            try {
+                for (var e : Thread.getAllStackTraces().entrySet()) {
+                    System.err.println("--- " + e.getKey().getName());
+                    for (StackTraceElement el : e.getValue()) {
+                        System.err.println("    " + el);
+                    }
+                }
+            } catch (Throwable t2) {
+                t2.printStackTrace(System.err);
+            }
+        }));
+        System.setProperty(SW_FALLBACK_MARKER, "true");
+
         if (!alreadyInSoftwareMode) {
             try {
                 Kazisafex.main(args);

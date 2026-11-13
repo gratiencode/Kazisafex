@@ -14,6 +14,16 @@ import java.util.List;
 public class LangChainRedisChatMemoryStore implements ChatMemoryStore {
 
     private static final int DEFAULT_MAX_MESSAGES = 40;
+    /**
+     * Taille max d'un message unique persisté/relue en memoire. Un resultat
+     * d'outil geant (ex: tableau integral de doublons) gonfle chaque requete
+     * HTTP vers l'IA jusqu'au 413 du serveur, ce qui bloque ensuite TOUS les
+     * appels d'outils. La troncature garde la tete (identifiants de lots /
+     * workflows emisen tete par convention) et s'applique aussi a la lecture
+     * pour guerir des la prochaine requete les memoires deja polluees.
+     */
+    private static final int MAX_MEMORY_TEXT_CHARS = 24_000;
+    private static final String TRUNCATION_MARKER = "\n[…contenu tronqué pour la mémoire de Gratien…]";
     private final RedisMemoryStore redisMemoryStore;
     private final int maxMessages;
 
@@ -95,10 +105,17 @@ public class LangChainRedisChatMemoryStore implements ChatMemoryStore {
     }
 
     private String encode(String value) {
-        return Base64.getEncoder().encodeToString((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(capLength(value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
     }
 
     private String decode(String value) {
-        return new String(Base64.getDecoder().decode(value == null ? "" : value), StandardCharsets.UTF_8);
+        return capLength(new String(Base64.getDecoder().decode(value == null ? "" : value), StandardCharsets.UTF_8));
+    }
+
+    private String capLength(String value) {
+        if (value != null && value.length() > MAX_MEMORY_TEXT_CHARS) {
+            return value.substring(0, MAX_MEMORY_TEXT_CHARS) + TRUNCATION_MARKER;
+        }
+        return value == null ? "" : value;
     }
 }

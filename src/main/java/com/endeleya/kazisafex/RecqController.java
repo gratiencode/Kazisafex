@@ -283,7 +283,7 @@ public class RecqController implements Initializable {
             setChoosenDelivery(liv);
             
         }
-        ksf = KazisafeServiceFactory.createService(pref.get("token", null));
+        ksf = KazisafeServiceFactory.createService(data.core.TokenStore.get());
 
         new ComboBoxAutoCompletion<>(cbx_ref_req);
         new ComboBoxAutoCompletion<>(cbx_choose_livraison);
@@ -623,32 +623,32 @@ public class RecqController implements Initializable {
         tf_quant_req.textProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                if (tf_cout_achat_req.getText().isEmpty() || newValue == null) {
+                if (newValue == null || newValue.isBlank() || tf_cout_achat_req.getText().isBlank()) {
+                    txt_somme_ct_lot1.setText("");
                     return;
                 }
                 try {
-                    double cu = Double.parseDouble(tf_cout_achat_req.getText());
-                    double qt = Double.parseDouble(newValue);
+                    double cu = Double.parseDouble(tf_cout_achat_req.getText().trim());
+                    double qt = Double.parseDouble(newValue.trim());
                     txt_somme_ct_lot1.setText("Total : " + (qt * cu));
                 } catch (NumberFormatException e) {
-                    SyncLogger.getInstance().log(e, "RecqController.initialize");
-
+                    txt_somme_ct_lot1.setText("");
                 }
             }
         });
         tf_cout_achat_req.textProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                if (tf_quant_req.getText().isEmpty() || newValue == null) {
+                if (newValue == null || newValue.isBlank() || tf_quant_req.getText().isBlank()) {
+                    txt_somme_ct_lot1.setText("");
                     return;
                 }
                 try {
-                    double qt = Double.parseDouble(tf_quant_req.getText());
-                    double cu = Double.parseDouble(newValue);
+                    double qt = Double.parseDouble(tf_quant_req.getText().trim());
+                    double cu = Double.parseDouble(newValue.trim());
                     txt_somme_ct_lot1.setText("Total : " + (qt * cu));
                 } catch (NumberFormatException e) {
-                    SyncLogger.getInstance().log(e, "RecqController.initialize");
-
+                    txt_somme_ct_lot1.setText("");
                 }
             }
         });
@@ -1058,7 +1058,7 @@ public class RecqController implements Initializable {
     @FXML
     private void createNewProductIfnotExist(ActionEvent e) {
         MainuiController.getInstance().switchToProduct(e);
-        MainUI.floatDialog(tools.Constants.PRODUCT_DLG, 600, 790, pref.get("token", ""), ksf, null, null);
+        MainUI.floatDialog(tools.Constants.PRODUCT_DLG, 600, 790, java.util.Objects.toString(data.core.TokenStore.get(), ""), ksf, null, null);
     }
 
     @FXML

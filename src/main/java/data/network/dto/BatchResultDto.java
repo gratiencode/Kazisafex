@@ -17,12 +17,21 @@ public class BatchResultDto {
     public BatchResultDto() {}
 
     public static class EntryResult {
+        /** Echo optionnel du mutationId envoye : permet un acquittement 1:1. */
+        public String mutationId;
         public String entityId;
         public String entityType;
         public String reason;
 
         public EntryResult() {}
         public EntryResult(String entityId, String entityType, String reason) {
+            this.entityId = entityId;
+            this.entityType = entityType;
+            this.reason = reason;
+        }
+
+        public EntryResult(String mutationId, String entityId, String entityType, String reason) {
+            this.mutationId = mutationId;
             this.entityId = entityId;
             this.entityType = entityType;
             this.reason = reason;

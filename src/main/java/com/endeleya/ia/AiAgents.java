@@ -16,6 +16,7 @@ import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
+import dev.langchain4j.service.tool.ToolErrorContext;
 import dev.langchain4j.service.tool.ToolErrorHandlerResult;
 import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import java.io.File;
@@ -26,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,19 +57,42 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 public final class AiAgents {
 
     /**
-     * Contournement du bug LangChain4j 1.5.0 : quand l'argument parsing d'un
-     * outil échoue, ToolService.executeWithErrorHandling appelle le handler
-     * avec une cause null (ToolArgumentsException(String) a une cause null),
-     * et le handler par défaut fait error.getMessage() => NullPointerException
-     * qui tue le thread de streaming. Ces handlers null-safe renvoient un
-     * message lisible à la place, et le modèle peut se corriger.
+     * Contournement du bug LangChain4j 1.5.0 : quand la resolution/execution
+     * d'un outil echoue, le handler par defaut peut lever une NullPointerException
+     * (cause null) et tuer le thread de streaming. Ces handlers null-safe
+     * renvoient un message ACTIONNABLE (jamais "Réflexion en cours...", qui
+     * laissait croire au modele que l'outil tournait encore et le faisait
+     * boucler) afin que le modele corrige l'appel ou reponde en texte.
      */
     private static final ToolArgumentsErrorHandler NULL_SAFE_TOOL_ARGUMENTS_ERROR_HANDLER =
             (error, context) -> ToolErrorHandlerResult.text(
-                    safeErrorMessage(error, "Réflexion en cours..."));
+                    toolErrorText(error, context, "arguments invalides ou incomplets"));
     private static final ToolExecutionErrorHandler NULL_SAFE_TOOL_EXECUTION_ERROR_HANDLER =
             (error, context) -> ToolErrorHandlerResult.text(
-                    safeErrorMessage(error, "Réflexion en cours..."));
+                    toolErrorText(error, context, "echec sans message d'erreur"));
+
+    static String toolErrorText(Throwable error, ToolErrorContext context, String fallback) {
+        // TRACE TEMPORAIRE (A RETIRER avec ToolTrace): reveler la vraie cause,
+        // sinon avalee par le handler LangChain4j.
+        if (error != null) {
+            ToolTrace.log("TOOL-ERROR-HANDLER", "class=" + error.getClass().getName()
+                    + " msg=" + error.getMessage());
+        }
+        String name = "l'outil";
+        try {
+            if (context != null && context.toolExecutionRequest() != null) {
+                String n = context.toolExecutionRequest().name();
+                if (n != null && !n.isBlank()) {
+                    name = n;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        String detail = safeErrorMessage(error, fallback);
+        return "Erreur de l'outil " + name + ": " + detail + ". "
+                + "N'invente pas de valeurs. Corrige l'appel UNE SEULE fois, "
+                + "ou reponds maintenant a l'utilisateur sans appeler d'outil.";
+    }
 
     private static String safeErrorMessage(Throwable error, String fallback) {
         if (error == null) {
@@ -116,7 +141,65 @@ public final class AiAgents {
         return null;
     }
 
-    public static final String OLLAMA_BASE_URL = "https://ai.kazisafe.com";
+    /**
+     * Base URL de l'assistant Gratien (Ollama Cloud) et cle API lues depuis
+     * une configuration securisee. La cle API est modifiable depuis le Menu
+     * Parametre (com.endeleya.kazisafex.ParametreController) et est stockee
+     * chiffree au repos via {@link services.utils.SecretStore}.
+     *
+     * <p>Aucune cle n'est embarquee dans le binaire : un ancien incident a
+     * expose une cle par defaut dans l'historique Git ; elle est consideree
+     * comme compromise et doit etre revoquee cote fournisseur (voir
+     * docs/remediation/MANUAL_ACTIONS.md). En cas d'absence, l'assistant IA
+     * refuse simplement de s'authentifier.</p>
+     */
+    public static final String PREF_IA_BASE_URL = "ia_ollama_base_url";
+    public static final String PREF_IA_API_KEY = "ia_api_key";
+    public static final String ENV_OLLAMA_API_KEY = "KAZISAFE_OLLAMA_API_KEY";
+    public static final String DEFAULT_OLLAMA_BASE_URL = "https://ollama.com";
+
+    public static String ollamaBaseUrl() {
+        String value = aiPreferences().get(PREF_IA_BASE_URL, DEFAULT_OLLAMA_BASE_URL);
+        return value == null || value.isBlank() ? DEFAULT_OLLAMA_BASE_URL : value.trim();
+    }
+
+    /**
+     * Cle API Ollama Cloud : variable d'environnement prioritaire, sinon
+     * valeur chiffree du magasin local (avec migration de l'ancien stockage
+     * en clair). Aucune valeur par defaut embarquee.
+     *
+     * @return la cle, ou {@code null} si non configuree
+     */
+    public static String ollamaApiKey() {
+        String fromEnv = System.getenv(ENV_OLLAMA_API_KEY);
+        if (fromEnv != null && !fromEnv.isBlank()) {
+            return fromEnv.trim();
+        }
+        if (services.utils.SecretStore.has(PREF_IA_API_KEY)) {
+            String stored = services.utils.SecretStore.load(PREF_IA_API_KEY);
+            if (stored != null && !stored.isBlank()) {
+                return stored.trim();
+            }
+        }
+        String migrated = services.utils.SecretStore.migrateFromPlainPref(PREF_IA_API_KEY);
+        return migrated == null || migrated.isBlank() ? null : migrated.trim();
+    }
+
+    /**
+     * Entetes d'authentification (Authorization: Bearer) a appliquer a chaque
+     * appel modele vers Ollama Cloud. Vides si la cle est absente.
+     */
+    public static java.util.Map<String, String> ollamaAuthHeaders() {
+        String key = ollamaApiKey();
+        if (key == null || key.isBlank()) {
+            return java.util.Map.of();
+        }
+        return java.util.Map.of("Authorization", "Bearer " + key.trim());
+    }
+
+    private static java.util.prefs.Preferences aiPreferences() {
+        return java.util.prefs.Preferences.userNodeForPackage(SyncEngine.class);
+    }
     /**
      * Modele unique de Gratien, force en dur: gemma4:31b-cloud.
      * Aucun override (propriete/variable d'environnement) n'est applique.
@@ -137,6 +220,11 @@ public final class AiAgents {
      */
     private static final int MAX_MEMORY_MESSAGES = 40;
     private static final int COMPACTION_THRESHOLD = 10;
+    /**
+     * Nombre de messages conversationnels recents conserves (apres le resume)
+     * lors d'un compactage. Evite de perdre le fil des derniers echanges.
+     */
+    private static final int RECENT_MESSAGES_KEPT_AFTER_COMPACTION = 10;
     private static final String COMPACTION_MARKER = "[Contexte compacte] ";
     private static final java.io.File MEMORY_FILE = new java.io.File(
             java.nio.file.Paths.get(System.getProperty("user.dir"), "Media", "ia", "gratien").toString(),
@@ -193,7 +281,8 @@ public final class AiAgents {
         this.chatMemoryStore = new LangChainRedisChatMemoryStore(memoryStore, MAX_MEMORY_MESSAGES + COMPACTION_THRESHOLD);
         this.memoryProvider = memoryProvider(chatMemoryStore);
         StreamingChatModel oschatmodel = OllamaStreamingChatModel.builder()
-                .baseUrl(OLLAMA_BASE_URL)
+                .baseUrl(ollamaBaseUrl())
+                .customHeaders(ollamaAuthHeaders())
                 .modelName(MODEL_NAME)
                 .temperature(0.25)
                 .returnThinking(true)
@@ -247,8 +336,20 @@ public final class AiAgents {
     }
 
     public void startForUser(String userId, String entrepriseId) {
-        String user = safe(userId, "unknown-user");
         String enterprise = safe(entrepriseId, pref.get("eUid", "unknown-enterprise"));
+        String user = safe(userId, "");
+        if (user.isEmpty() || "unknown-user".equals(user)) {
+            // Ne jamais dégrader une identité déjà connue : si l'utilisateur connecté
+            // est identifié pour cette entreprise (dernier sessionId), on le conserve
+            // au lieu de retomber sur "unknown-user" quand les prefs sont absentes.
+            String known = knownUserForEnterprise(enterprise);
+            if (known != null) {
+                user = known;
+            }
+        }
+        if (user.isEmpty()) {
+            user = "unknown-user";
+        }
         String previous = lastSessionId;
         sessionId = enterprise + ":" + user;
         if (previous != null && !previous.equals(sessionId)) {
@@ -271,6 +372,26 @@ public final class AiAgents {
                     + ", entreprise=" + enterprise
                     + ", utilisateur=" + user);
         }
+    }
+
+    /**
+     * Utilisateur réel du dernier sessionId de la même entreprise, ou {@code null}
+     * s'il n'y en a pas (jamais "unknown-user", jamais d'entreprise inconnue).
+     */
+    private String knownUserForEnterprise(String enterprise) {
+        if (enterprise == null || enterprise.isBlank() || "unknown-enterprise".equals(enterprise)) {
+            return null;
+        }
+        String previous = lastSessionId;
+        if (previous == null || !previous.startsWith(enterprise + ":")) {
+            return null;
+        }
+        String previousUser = previous.substring(enterprise.length() + 1);
+        if (previousUser == null || previousUser.isBlank()
+                || "unknown-user".equals(previousUser)) {
+            return null;
+        }
+        return previousUser;
     }
 
     public boolean hasPendingWorkflowCancellationRequest() {
@@ -678,16 +799,20 @@ public final class AiAgents {
         startForCurrentSession();
         String date=LocalDateTime.now().toString();
         GratienTools.setCurrentSessionId(sessionId);
+        // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+        ToolTrace.log("PROMPT-CONTEXTUALISE", "session=" + sessionId + " entreprise=" + entreprise + " question=" + question);
         TokenStream stream = assistant.chat(sessionId,date,entreprise == null ? "" : entreprise, safe(question, ""));
         Set<String> toolsStarted = ConcurrentHashMap.newKeySet();
         AtomicBoolean toolWasStarted = new AtomicBoolean(false);
         AtomicBoolean toolWasExecuted = new AtomicBoolean(false);
-        AtomicBoolean reflectionShown = new AtomicBoolean(false);
         AtomicReference<String> lastToolName = new AtomicReference<>("");
         AtomicReference<String> lastToolResult = new AtomicReference<>("");
         StringBuilder bufferedToolResponse = new StringBuilder();
         stream.beforeToolExecution(tool -> {
             String toolName = tool.request() == null ? "outil" : tool.request().name();
+            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+            ToolTrace.log("TOOL-START", "session=" + sessionId + " name=" + toolName
+                    + " args=" + (tool.request() == null ? "" : tool.request().arguments()));
             toolWasStarted.set(true);
             lastToolName.set(toolName);
             String toolKey = toolExecutionKey(toolName, tool.request() == null ? "" : tool.request().arguments());
@@ -696,18 +821,20 @@ public final class AiAgents {
                 return;
             }
             appendMemory("tool-start", toolLabel(toolName, true));
-            // Le chat n'affiche qu'une seule ligne pendant le traitement, sans deverser
-            // le raisonnement ni les statuts verbeux de chaque outil.
-            if (reflectionShown.compareAndSet(false, true)) {
-                onProcess.accept("*Réflexion en cours...*");
-            }
+            // Après approbation du plan, le raisonnement de Gratien est affiché en
+            // temps réel dans la ligne de progression du chat.
+            onProcess.accept("⚙️ " + toolLabel(toolName, true));
         }).onPartialThinking(thinking -> {
-            if (reflectionShown.compareAndSet(false, true)) {
+            String thinkingText = thinking == null ? "" : (thinking.text() == null ? "" : thinking.text());
+            if (thinkingText.isBlank()) {
                 onProcess.accept("*Réflexion en cours...*");
+            } else {
+                onProcess.accept(thinkingText);
             }
         }).onPartialResponse(token -> {
             if (toolWasStarted.get()) {
                 bufferedToolResponse.append(token);
+                onProcess.accept(bufferedToolResponse.toString());
             } else {
                 onToken.accept(sanitizeToolNamesForDisplay(token));
             }
@@ -718,10 +845,17 @@ public final class AiAgents {
             String toolKey = toolExecutionKey(toolName, tool.request() == null ? "" : tool.request().arguments());
             String result = tool.result() == null ? "" : tool.result();
             lastToolResult.set(result);
+            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+            ToolTrace.log("TOOL-RESULT", "session=" + sessionId + " name=" + toolName + " result=" + result);
             appendMemory("tool-result", toolName + " => " + result);
         }).onCompleteResponse(response -> {
-                    if (toolWasExecuted.get()) {
-                        String finalAnswer = toolFinalAnswer(lastToolName.get(), lastToolResult.get());
+                    String finalAnswer = toolWasExecuted.get()
+                            ? toolFinalAnswer(lastToolName.get(), lastToolResult.get()) : null;
+                    // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                    ToolTrace.log("COMPLETE", "session=" + sessionId + " outilsExecutes=" + toolWasExecuted.get()
+                            + " dernierOutil=" + lastToolName.get()
+                            + " reponse=" + (finalAnswer == null ? "(texte direct)" : finalAnswer));
+                    if (finalAnswer != null) {
                         appendMemory("assistant", finalAnswer);
                         onToken.accept(sanitizeToolNamesForDisplay(finalAnswer));
                     }
@@ -729,6 +863,8 @@ public final class AiAgents {
                     onComplete.run();
                 })
                 .onError(error -> {
+                    // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                    ToolTrace.log("ERROR", "session=" + sessionId + " error=" + throwableMessage(error));
                     appendMemory("error", throwableMessage(error));
                     finishStreaming();
                     onError.accept(error);
@@ -965,14 +1101,18 @@ public final class AiAgents {
                         + "Les messages reçus pendant ce temps seront traités juste après.");
         try {
             String summary = summarize(raw);
-            // Eviction: la memoire de chat reelle est entierement purgee, seul le
-            // contexte compacte subsiste en message system numero 1.
+            // Eviction: l'historique brut est remplace par le contexte compacte
+            // (message systeme numero 1) SUIVI des derniers messages
+            // conversationnels reels, afin de ne pas perdre le fil en cours.
             List<ChatMessage> renewed = new ArrayList<>();
             renewed.add(SystemMessage.from(COMPACTION_MARKER + summary));
+            List<ChatMessage> recent = recentConversationalTail(raw, RECENT_MESSAGES_KEPT_AFTER_COMPACTION);
+            renewed.addAll(recent);
             chatMemoryStore.updateMessages(sessionId, renewed);
-            persistMemoryToFile(raw, summary);
-            LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": purgee, "
-                    + renewed.size() + " message de contexte compacte en numero 1.");
+            persistMemoryToFile(recent, summary);
+            LOGGER.log(Level.INFO, "Memoire compactee pour " + sessionId + ": "
+                    + renewed.size() + " message(s) conserve(s) (" + recent.size()
+                    + " recents + resume) sur " + raw.size() + ".");
             emitCompactionSignal("\u2705 Mémoire compactée.");
         } finally {
             compacting.set(false);
@@ -980,10 +1120,43 @@ public final class AiAgents {
     }
 
     /**
-     * Ecrit l'historique complet + le resume de compactage dans MEMORY.md
-     * pour que Gratien puisse recharger son contexte a chaque demarrage.
+     * Retourne une queue de messages conversationnels reels (sans spam d'outils
+     * ni messages systeme), du plus ancien au plus recent, en commencant sur un
+     * message utilisateur pour rester une sequence valide pour le modele.
      */
-    private void persistMemoryToFile(List<ChatMessage> rawMessages, String summary) {
+    static List<ChatMessage> recentConversationalTail(List<ChatMessage> raw, int keep) {
+        List<ChatMessage> tail = new ArrayList<>();
+        if (raw == null || keep <= 0) {
+            return tail;
+        }
+        for (int i = raw.size() - 1; i >= 0 && tail.size() < keep; i--) {
+            ChatMessage message = raw.get(i);
+            if (message instanceof SystemMessage) {
+                continue;
+            }
+            if (message instanceof ToolExecutionResultMessage) {
+                continue;
+            }
+            if (message instanceof AiMessage ai && (ai.text() == null || ai.text().isBlank())) {
+                continue;
+            }
+            tail.add(message);
+        }
+        Collections.reverse(tail);
+        while (!tail.isEmpty() && !(tail.get(0) instanceof UserMessage)) {
+            tail.remove(0);
+        }
+        return tail;
+    }
+
+    /**
+     * Ecrit le resume de compactage + les derniers messages conversationnels
+     * dans MEMORY.md pour que Gratien puisse recharger son contexte a chaque
+     * demarrage. On n'ecrit PAS l'historique brut: le spam d'outils (anciens
+     * placeholders, resultats techniques) ne doit pas polluer le contexte
+     * reinjecte a chaque tour.
+     */
+    private void persistMemoryToFile(List<ChatMessage> recentMessages, String summary) {
         try {
             File dir = MEMORY_FILE.getParentFile();
             if (dir != null && !dir.exists()) dir.mkdirs();
@@ -992,7 +1165,7 @@ public final class AiAgents {
             md.append("## Dernier compactage: ").append(LocalDateTime.now()).append("\n\n");
             md.append("## Resume compacte\n\n").append(summary).append("\n\n");
             md.append("## Historique des echanges\n\n");
-            for (ChatMessage msg : rawMessages) {
+            for (ChatMessage msg : recentMessages) {
                 String role = memoryRole(msg);
                 String content = memoryContent(msg);
                 if (content == null || content.isBlank()) continue;
@@ -1086,7 +1259,8 @@ public final class AiAgents {
         ChatModel model = summaryModel;
         if (model == null) {
             model = OllamaChatModel.builder()
-                    .baseUrl(OLLAMA_BASE_URL)
+                    .baseUrl(ollamaBaseUrl())
+                    .customHeaders(ollamaAuthHeaders())
                     .modelName(MODEL_NAME)
                     .temperature(0.2)
                     .timeout(Duration.ofSeconds(60))
@@ -1137,27 +1311,46 @@ public final class AiAgents {
             // geree par LangChain4j (comme pour le chat principal) : appendMemory
             // devient no-op et signale seulement une eventuelle limite atteinte.
             streamingActive.set(true);
+            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+            ToolTrace.log("AGENT-START", "session=" + sessionId + " agent=" + agentName);
             try {
                 streamSupplier.get()
                         .beforeToolExecution(tool -> {
                             String toolName = tool.request() == null ? "outil" : tool.request().name();
+                            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                            ToolTrace.log("AGENT-TOOL-START", "session=" + sessionId + " agent=" + agentName
+                                    + " name=" + toolName
+                                    + " args=" + (tool.request() == null ? "" : tool.request().arguments()));
                             emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, true)));
                         })
                         .onToolExecuted(tool -> {
                             String toolName = tool.request() == null ? "outil" : tool.request().name();
                             String result = tool.result() == null ? "" : tool.result();
                             lastToolResult.set(result);
+                            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                            ToolTrace.log("AGENT-TOOL-RESULT", "session=" + sessionId + " agent=" + agentName
+                                    + " name=" + toolName + " result=" + result);
                             emitProgress(sanitizeToolNamesForDisplay(toolLabel(toolName, false) + "\n\n" + result));
                         })
                         .onPartialThinking(thinking -> {
-                            if (thinking != null && thinking.text() != null && !thinking.text().isBlank()) {
+                            String thinkingText = thinking == null ? "" : (thinking.text() == null ? "" : thinking.text());
+                            if (thinkingText.isBlank()) {
                                 // Le chat n'affiche qu'une seule ligne pendant le raisonnement du sous-agent.
                                 emitProgress("*Réflexion en cours...*");
+                            } else {
+                                emitProgress(thinkingText);
                             }
                         })
                         .onPartialResponse(answer::append)
-                        .onCompleteResponse(response -> latch.countDown())
+                        .onCompleteResponse(response -> {
+                            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                            ToolTrace.log("AGENT-COMPLETE", "session=" + sessionId + " agent=" + agentName);
+                            latch.countDown();
+                        })
                         .onError(ex -> {
+                            // TRACE TEMPORAIRE (A RETIRER avec ToolTrace).
+                            ToolTrace.log("AGENT-ERROR", "session=" + sessionId + " agent=" + agentName
+                                    + " error=" + throwableMessage(ex));
                             error.set(ex);
                             latch.countDown();
                         })
@@ -1217,37 +1410,37 @@ public final class AiAgents {
         return cleanResult.isBlank() ? toolLabel(toolName, false) : cleanResult;
     }
 
+    /**
+     * Noms techniques de tous les outils exposes a Gratien, decouverts par
+     * reflexion sur {@link GratienTools} (+ delegation swarm). La liste est
+     * calculee une fois: tout nouveau {@code @Tool} est masque automatiquement
+     * dans le chat, sans mise a jour manuelle. Tri par longueur decroissante
+     * pour ne jamais remplacer un prefixe avant le nom complet.
+     */
+    private static final List<String> ALL_TOOL_NAMES = allToolNames();
+
+    private static List<String> allToolNames() {
+        Set<String> names = new java.util.LinkedHashSet<>();
+        for (java.lang.reflect.Method method : GratienTools.class.getMethods()) {
+            if (method.isAnnotationPresent(dev.langchain4j.agent.tool.Tool.class)) {
+                names.add(method.getName());
+            }
+        }
+        names.add("delegateTask");
+        List<String> ordered = new ArrayList<>(names);
+        ordered.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        return List.copyOf(ordered);
+    }
+
     private String sanitizeToolNamesForDisplay(String text) {
         if (text == null || text.isBlank()) {
             return text;
         }
         String sanitized = text;
-        for (String toolName : List.of(
-                "generateMysqlReplicaConfiguration",
-                "executeMysqlReplicaConfiguration",
-                "testMysqlReplicaStatus",
-                "deleteCategory",
-                "createCategory",
-                "findCategories",
-                "listAllProducts",
-                "searchProductsByCriteria",
-                "bulkUpdateProducts",
-                "createProductsAndAskMeasures",
-                "createProductMeasures",
-                "createSaleAndLines",
-                "createSaleTreasuryAndSync",
-                "prepareExpenseCategoryAndAccount",
-                "createExpenseTreasuryAndOperation",
-                "requestWorkflowCancellation",
-                "answerWorkflowCancellation",
-                "fixEmptyProductBarcodes",
-                "createProductsAndMeasures",
-                "createSupplierAndDelivery",
-                "createRequisitionsAndSalePrices",
-                "insertInvoiceSupply",
-                "generateFinancialStatementsPdf",
-                "generateFinancialStatementsExcel")) {
-            sanitized = sanitized.replace(toolName, toolLabel(toolName, false));
+        for (String toolName : ALL_TOOL_NAMES) {
+            if (sanitized.contains(toolName)) {
+                sanitized = sanitized.replace(toolName, toolLabel(toolName, false));
+            }
         }
         return sanitized;
     }
@@ -1338,6 +1531,114 @@ public final class AiAgents {
             case "testMysqlReplicaStatus" ->
                 running ? "Le test de réplication MySQL est en cours..."
                 : "Le test de réplication MySQL est terminé.";
+            case "planExecution" ->
+                running ? "Préparation du plan d'exécution en étapes..."
+                : "Plan d'exécution en étapes prêt (en attente de votre confirmation).";
+            case "answerPlanExecution" ->
+                running ? "Traitement de votre confirmation du plan..."
+                : "Confirmation du plan traitée.";
+            case "detectDuplicateProductsForDeletion" ->
+                running ? "Détection des produits doublons..."
+                : "Détection des produits doublons.";
+            case "detectDuplicateClientsForDeletion" ->
+                running ? "Détection des clients doublons..."
+                : "Détection des clients doublons.";
+            case "detectDuplicateSuppliersForDeletion" ->
+                running ? "Détection des fournisseurs doublons..."
+                : "Détection des fournisseurs doublons.";
+            case "detectDuplicateCompteTresorsForDeletion" ->
+                running ? "Détection des comptes trésor doublons..."
+                : "Détection des comptes trésor doublons.";
+            case "detectDuplicateLivraisonsForDeletion" ->
+                running ? "Détection des livraisons doublons..."
+                : "Détection des livraisons doublons.";
+            case "detectDuplicateDepensesForDeletion" ->
+                running ? "Détection des dépenses doublons..."
+                : "Détection des dépenses doublons.";
+            case "detectDuplicateCategoriesForDeletion" ->
+                running ? "Détection des catégories doublons..."
+                : "Détection des catégories doublons.";
+            case "detectDuplicateMesuresForDeletion" ->
+                running ? "Détection des mesures doublons..."
+                : "Détection des mesures doublons.";
+            case "detectDuplicateVentesForDeletion" ->
+                running ? "Détection des ventes doublons..."
+                : "Détection des ventes doublons.";
+            case "detectDuplicateLigneVentesForDeletion" ->
+                running ? "Détection des lignes de vente doublons..."
+                : "Détection des lignes de vente doublons.";
+            case "detectDuplicateTraisoreriesForDeletion" ->
+                running ? "Détection des mouvements de trésorerie doublons..."
+                : "Détection des mouvements de trésorerie doublons.";
+            case "detectDuplicateOperationsForDeletion" ->
+                running ? "Détection des opérations doublons..."
+                : "Détection des opérations doublons.";
+            case "detectDuplicateRecquisitionsForDeletion" ->
+                running ? "Détection des réquisitions doublons..."
+                : "Détection des réquisitions doublons.";
+            case "detectDuplicateProductionsForDeletion" ->
+                running ? "Détection des productions doublons..."
+                : "Détection des productions doublons.";
+            case "detectDuplicateStockersForDeletion" ->
+                running ? "Détection des stocks doublons..."
+                : "Détection des stocks doublons.";
+            case "detectDuplicateDestockersForDeletion" ->
+                running ? "Détection des sorties de stock doublons..."
+                : "Détection des sorties de stock doublons.";
+            case "detectDuplicateAretirersForDeletion" ->
+                running ? "Détection des retraits doublons..."
+                : "Détection des retraits doublons.";
+            case "detectDuplicateRetourMagasinsForDeletion" ->
+                running ? "Détection des retours magasin doublons..."
+                : "Détection des retours magasin doublons.";
+            case "detectDuplicateRetourDepotsForDeletion" ->
+                running ? "Détection des retours dépôt doublons..."
+                : "Détection des retours dépôt doublons.";
+            case "detectDuplicateImputersForDeletion" ->
+                running ? "Détection des imputations doublons..."
+                : "Détection des imputations doublons.";
+            case "detectDuplicatePrixDeVentesForDeletion" ->
+                running ? "Détection des prix de vente doublons..."
+                : "Détection des prix de vente doublons.";
+            case "detectDuplicatePeriodesForDeletion" ->
+                running ? "Détection des périodes doublons..."
+                : "Détection des périodes doublons.";
+            case "detectDuplicateFacturesForDeletion" ->
+                running ? "Détection des factures doublons..."
+                : "Détection des factures doublons.";
+            case "detectDuplicateMatieresForDeletion" ->
+                running ? "Détection des matières doublons..."
+                : "Détection des matières doublons.";
+            case "detectDuplicateMatiereSkusForDeletion" ->
+                running ? "Détection des skus de matière doublons..."
+                : "Détection des skus de matière doublons.";
+            case "detectDuplicateDepotsForDeletion" ->
+                running ? "Détection des dépôts doublons..."
+                : "Détection des dépôts doublons.";
+            case "detectDuplicateInventairesForDeletion" ->
+                running ? "Détection des inventaires doublons..."
+                : "Détection des inventaires doublons.";
+            case "detectDuplicateClientOrganisationsForDeletion" ->
+                running ? "Détection des organisations client doublons..."
+                : "Détection des organisations client doublons.";
+            case "detectDuplicateComptersForDeletion" ->
+                running ? "Détection des comptages doublons..."
+                : "Détection des comptages doublons.";
+            case "detectDuplicateTaxesForDeletion" ->
+                running ? "Détection des taxes doublons..."
+                : "Détection des taxes doublons.";
+            case "detectDuplicateTaxersForDeletion" ->
+                running ? "Détection des lignes de taxation doublons..."
+                : "Détection des lignes de taxation doublons.";
+            case "deleteConfirmedDuplicateProducts" ->
+                running ? "Suppression/fusion des produits doublons confirmés (le plus complet conservé, dépendances réassignées)..."
+                : "Suppression/fusion des produits doublons confirmés.";
+            case "deleteConfirmedDuplicateEntities" ->
+                running ? "Fusion des doublons confirmés (le plus complet conservé, dépendances réassignées)..."
+                : "Fusion des doublons confirmés.";
+            case "mergeDuplicateClients" ->
+                running ? "Fusion automatique des clients doublons (le plus complet conservé)..."
+                : "Fusion automatique des clients doublons.";
             default ->
                 running ? "La tâche demandée est en cours..."
                 : "La tâche demandée est terminée.";

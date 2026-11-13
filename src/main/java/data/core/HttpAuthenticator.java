@@ -49,7 +49,7 @@ public class HttpAuthenticator implements Authenticator {
         try {
             String accessToken = tokenRefreshClient.refreshAccessToken(tokenState.getToken());
             if (accessToken != null && !accessToken.isBlank()) {
-                LOGGER.info("Affichage authenticator old = "+htkn+" new = "+accessToken);
+                LOGGER.info("Authenticator refreshed access token successfully");
                 tokenState.setToken(accessToken);
                 notifyTokenRefresh(accessToken);
                 return rspns.request().newBuilder()

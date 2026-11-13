@@ -57,7 +57,11 @@ public class BluetoothPrintService implements PrintService {
 
     @Override
     public DocFlavor[] getSupportedDocFlavors() {
-        return new DocFlavor[]{DocFlavor.SERVICE_FORMATTED.PRINTABLE, DocFlavor.BYTE_ARRAY.AUTOSENSE};
+        return new DocFlavor[]{
+            DocFlavor.INPUT_STREAM.AUTOSENSE,
+            DocFlavor.BYTE_ARRAY.AUTOSENSE,
+            DocFlavor.SERVICE_FORMATTED.PRINTABLE
+        };
     }
 
     @Override
@@ -138,27 +142,36 @@ public class BluetoothPrintService implements PrintService {
         public void print(Doc doc, PrintRequestAttributeSet attributes) throws PrintException {
             StreamConnection connection = null;
             OutputStream out = null;
+            long started = System.currentTimeMillis();
+            byte[] payload = new byte[0];
+            long sent = 0L;
+            boolean failed = false;
             try {
+                // escpos-coffee fournit le flux ESC/POS via DocFlavor.INPUT_STREAM :
+                // lire uniquement getPrintData() renvoyait null et l'imprimante
+                // ne recevait rien (papier sorti vide).
+                payload = EscPosPrintSupport.docToBytes(doc);
                 connection = (StreamConnection) Connector.open(service.getUrl());
                 out = connection.openOutputStream();
-                Object data = doc.getPrintData();
-                if (data instanceof byte[]) {
-                    out.write((byte[]) data);
-                } else if (data instanceof java.io.InputStream) {
-                    byte[] buffer = new byte[1024];
-                    int len;
-                    java.io.InputStream in = (java.io.InputStream) data;
-                    while ((len = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, len);
-                    }
-                }
+                // Envoi par blocs : une imprimante thermique d'entree de gamme
+                // deborde de son tampon si on lui vide 30 Ko d'un seul coup, ce qui
+                // la desynchronise et fait sortir du papier vierge.
+                sent = EscPosPrintSupport.writeChunked(out, payload);
                 out.flush();
+                EscPosPrintSupport.pause(EscPosPrintSupport.CUT_DELAY_MS);
             } catch (IOException e) {
+                failed = true;
                 tools.SyncLogger.getInstance().log(e, "BluetoothPrintService.print");
+                EscPosPrintSupport.logPayload("BluetoothPrintService.print (ECHEC)",
+                        service.getName(), payload, sent, System.currentTimeMillis() - started);
                 throw new PrintException("Bluetooth printing failed: " + e.getMessage(), e);
             } finally {
                 if (out != null) try { out.close(); } catch (IOException e) {}
                 if (connection != null) try { connection.close(); } catch (IOException e) {}
+                if (!failed) {
+                    EscPosPrintSupport.logPayload("BluetoothPrintService.print",
+                            service.getName(), payload, sent, System.currentTimeMillis() - started);
+                }
             }
         }
     }

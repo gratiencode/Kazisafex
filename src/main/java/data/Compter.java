@@ -4,11 +4,10 @@
  */
 package data;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -71,6 +70,14 @@ public class Compter extends BaseModel implements Serializable {
     private double coutAchat;
     @Column(name = "quantite_theorik", columnDefinition = "DOUBLE")
     private Double quantiteTheorik;
+    /**
+     * Photographie immuable du stock theorique au moment de l'ouverture de
+     * l'inventaire. Elle n'est plus recalculee apres coup : les ventes/achats
+     * survenus pendant le comptage ne doivent pas deplacer la reference.
+     */
+    @JsonIgnore
+    @Column(name = "theoretical_snapshot", columnDefinition = "DOUBLE")
+    private Double theoreticalSnapshot;
     @Column(name = "ecart", columnDefinition = "DOUBLE")
     private Double ecart;
     @Column(name = "observation", columnDefinition = "TEXT")
@@ -210,6 +217,15 @@ public class Compter extends BaseModel implements Serializable {
 
     public void setQuantiteTheorik(Double quantiteTheorik) {
         this.quantiteTheorik = quantiteTheorik;
+    }
+
+    @JsonIgnore
+    public Double getTheoreticalSnapshot() {
+        return theoreticalSnapshot;
+    }
+
+    public void setTheoreticalSnapshot(Double theoreticalSnapshot) {
+        this.theoreticalSnapshot = theoreticalSnapshot;
     }
 
     public Double getEcart() {

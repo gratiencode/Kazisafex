@@ -32,6 +32,11 @@ public class FileUtils {
         return new FileInputStream(f);
 
     }
+    
+    public static boolean isExist(String file){
+        File f=new File(file);
+        return f.exists();
+    }
 
     public static byte[] readAllBytes(InputStream is) throws IOException {
         int nRead;

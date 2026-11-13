@@ -127,14 +127,17 @@ public class DepenseAgregateService implements DepenseAgregateStorage {
     
      @Override
     public List<DepenseAgregate> findDepenseAgregates(LocalDate date1,LocalDate date2,String region) {
-        String jpql = "SELECT da FROM DepenseAgregate da WHERE da.region LIKE :reg AND da.date BETWEEN :d0 AND :d1 ORDER BY da.date DESC";
+        String reg = (region == null || region.isBlank()) ? "%" : region;
+        String jpql = "SELECT da FROM DepenseAgregate da "
+                + "WHERE (da.region LIKE :reg OR da.region IS NULL) AND da.date BETWEEN :d0 AND :d1 "
+                + "ORDER BY da.date DESC";
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> em.createQuery(jpql, DepenseAgregate.class)
-                    .setParameter("reg", region).setParameter("d0", date1.atStartOfDay()).setParameter("d1", date2.atTime(23, 59, 59))
+                    .setParameter("reg", reg).setParameter("d0", date1.atStartOfDay()).setParameter("d1", date2.atTime(23, 59, 59))
                     .getResultList());
         }
         return ManagedSessionFactory.getEntityManager().createQuery(jpql, DepenseAgregate.class)
-                .setParameter("reg", region).setParameter("d0", date1.atStartOfDay()).setParameter("d1", date2.atTime(23, 59, 59))
+                .setParameter("reg", reg).setParameter("d0", date1.atStartOfDay()).setParameter("d1", date2.atTime(23, 59, 59))
                 .getResultList();
     }
 

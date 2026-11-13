@@ -337,7 +337,17 @@ public class FinancialStatementSyncService {
         return nativeDouble(em, sql, Map.of("endDate", end, "region", region));
     }
 
+    /**
+     * Tables natives autorisees pour les agreagats financiers (securite M3 :
+     * whitelist avant concatenation SQL native).
+     */
+    private static final java.util.Set<String> ALLOWED_AMOUNT_TABLES =
+            java.util.Set.of("creance_agregate", "dette_fournisseur_agregate");
+
     private double latestAmount(EntityManager em, String table, LocalDate end, String region) {
+        if (!ALLOWED_AMOUNT_TABLES.contains(table)) {
+            throw new IllegalArgumentException("Table d'agregat non autorisee : " + table);
+        }
         String sql = "SELECT COALESCE(SUM(COALESCE(montant_usd, 0)), 0) FROM " + table
                 + " WHERE date = (SELECT MAX(date) FROM " + table + " WHERE date <= :endDate AND region LIKE :region)"
                 + " AND region LIKE :region";

@@ -36,6 +36,7 @@ import tools.SyncEngine;
  */
 public class ManagedSessionFactory {
 
+    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
     private static Preferences pref;
     private static final EntityManagerFactory emf;
     private static final ThreadLocal<EntityManager> threadLocal;
@@ -206,7 +207,7 @@ public class ManagedSessionFactory {
                         secret = legacy.trim();
                     } else {
                         byte[] key = new byte[32];
-                        new java.security.SecureRandom().nextBytes(key);
+                        SECURE_RANDOM.nextBytes(key);
                         secret = java.util.Base64.getEncoder().encodeToString(key);
                     }
                     services.utils.SecretStore.store("local_db_secret", secret);
@@ -335,6 +336,10 @@ public class ManagedSessionFactory {
     public static <T> CompletableFuture<T> submitWrite(
         Function<EntityManager, T> action
     ) {
+        EntityManager transactionEm = currentTransactionEm.get();
+        if (transactionEm != null) {
+            return CompletableFuture.completedFuture(action.apply(transactionEm));
+        }
         if (embedded) {
             return writeQueue.submit(action);
         }
@@ -376,12 +381,20 @@ public class ManagedSessionFactory {
     }
 
     public static <T> T executeRead(Function<EntityManager, T> action) {
+        EntityManager transactionEm = currentTransactionEm.get();
+        if (transactionEm != null) {
+            return action.apply(transactionEm);
+        }
         try (EntityManager em = emf.createEntityManager()) {
             return action.apply(em);
         }
     }
 
     public static <T> T executeWrite(Function<EntityManager, T> action) {
+        EntityManager transactionEm = currentTransactionEm.get();
+        if (transactionEm != null) {
+            return action.apply(transactionEm);
+        }
         if (embedded) {
             try {
                 return submitWrite(action).get();

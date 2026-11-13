@@ -188,7 +188,7 @@ public class ClotureController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         // TODO
         mouvGroup = new ToggleGroup();
-        kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
+        kazisafe = KazisafeServiceFactory.createService(data.core.TokenStore.get());
         entr = pref.get("eUid", "");
         role = UserRoleRegistry.getRole(pref);
         region = pref.get("region", "...");

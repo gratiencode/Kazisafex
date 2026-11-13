@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.prefs.Preferences;
@@ -150,7 +151,15 @@ public final class PosViewCache {
     }
 
     private static double asDouble(Object o) {
-        return o instanceof Number n ? n.doubleValue() : 0d;
+        if (o instanceof Number n) {
+            double value = n.doubleValue();
+            return Double.isFinite(value) ? value : 0d;
+        }
+        return 0d;
+    }
+
+    private static List<Object[]> rows(List<Object[]> values) {
+        return values == null ? List.of() : values;
     }
 
     private static Map<String, Double> lotSums(List<Object[]> rows) {
@@ -179,26 +188,36 @@ public final class PosViewCache {
         }
 
         Map<String, Produit> produits = new HashMap<>();
-        for (Produit p : ProduitDelegate.findProduits()) {
-            produits.put(p.getUid(), p);
+        List<Produit> allProduits = ProduitDelegate.findProduits();
+        if (allProduits != null) {
+            for (Produit p : allProduits) {
+                if (p != null && p.getUid() != null) {
+                    produits.put(p.getUid(), p);
+                }
+            }
         }
         Map<String, Mesure> mesures = new HashMap<>();
-        for (Mesure m : MesureDelegate.findMesures()) {
-            mesures.put(m.getUid(), m);
+        List<Mesure> allMesures = MesureDelegate.findMesures();
+        if (allMesures != null) {
+            for (Mesure m : allMesures) {
+                if (m != null && m.getUid() != null) {
+                    mesures.put(m.getUid(), m);
+                }
+            }
         }
 
-        List<Object[]> priceRows = RecquisitionDelegate.loadPriceRows();
-        List<Object[]> allRecqRows = RecquisitionDelegate.loadAllRecqs();
+        List<Object[]> priceRows = rows(RecquisitionDelegate.loadPriceRows());
+        List<Object[]> allRecqRows = rows(RecquisitionDelegate.loadAllRecqs());
         Map<String, String[]> recqOwner = new HashMap<>();
         Map<String, LocalDate> recqDate = new HashMap<>();
         for (Object[] rr : allRecqRows) {
-            if (rr[0] == null) {
+            if (rr == null || rr.length < 4 || rr[0] == null) {
                 continue;
             }
             recqOwner.put((String) rr[0], new String[]{(String) rr[1], String.valueOf(rr[2])});
             recqDate.put((String) rr[0], toLocalDate(rr[3]));
         }
-        List<Object[]> reqRows = RecquisitionDelegate.loadHeaderRecqs(region);
+        List<Object[]> reqRows = rows(RecquisitionDelegate.loadHeaderRecqs(region));
         Map<String, Double> entrees = lotSums(RecquisitionDelegate.loadRecqLotEntrees(region));
         Map<String, Double> sorties = lotSums(RecquisitionDelegate.loadLigneVenteLotSorties(region));
         Map<String, Double> retours = lotSums(RecquisitionDelegate.loadRetourDepotLotReturns(region));
@@ -222,13 +241,13 @@ public final class PosViewCache {
         }
         Map<String, List<Object[]>> recqsByProduct = new HashMap<>();
         for (Object[] rr : reqRows) {
-            if (rr != null && rr[1] != null) {
+            if (rr != null && rr.length >= 5 && rr[1] != null) {
                 recqsByProduct.computeIfAbsent((String) rr[1], k -> new ArrayList<>()).add(rr);
             }
         }
         Map<String, List<Object[]>> allRecqsByProduct = new HashMap<>();
         for (Object[] rr : allRecqRows) {
-            if (rr != null && rr[1] != null) {
+            if (rr != null && rr.length >= 4 && rr[1] != null) {
                 allRecqsByProduct.computeIfAbsent((String) rr[1], k -> new ArrayList<>()).add(rr);
             }
         }
@@ -242,7 +261,7 @@ public final class PosViewCache {
                 continue;
             }
             double pieces = asDouble(row[7]);
-            if (pieces <= 0) {
+            if (!Double.isFinite(pieces) || pieces <= 0) {
                 continue;
             }
             // Aucun lot actif exposable dans le scope -> même comportement que l'ancien lotToshow()
@@ -256,7 +275,7 @@ public final class PosViewCache {
             String headLotMesureUid = (String) row[11];
             Double headQc = row[12] instanceof Number n ? n.doubleValue() : null;
             Mesure mesureUi = headLotMesureUid == null ? null : mesures.get(headLotMesureUid);
-            if (mesureUi == null || headQc == null || headQc <= 0) {
+            if (mesureUi == null || headQc == null || !Double.isFinite(headQc) || headQc <= 0) {
                 String smallUid = (String) row[14];
                 mesureUi = smallUid == null ? null : mesures.get(smallUid);
                 if (mesureUi == null) {
@@ -330,13 +349,13 @@ public final class PosViewCache {
                 List<Object[]> headerPrices = priceRowsByRecq.getOrDefault(headerUid, List.of());
                 List<Object[]> gros = new ArrayList<>();
                 for (Object[] pr : headerPrices) {
-                    if (asDouble(pr[1]) > 1 && !achatUid.equals(pr[3])) {
+                    if (asDouble(pr[1]) > 1 && !Objects.equals(achatUid, pr[3])) {
                         gros.add(pr);
                     }
                 }
                 if (gros.isEmpty()) {
                     for (Object[] pr : headerPrices) {
-                        if (asDouble(pr[1]) > 1 && achatUid.equals(pr[3])) {
+                        if (asDouble(pr[1]) > 1 && Objects.equals(achatUid, pr[3])) {
                             gros.add(pr);
                         }
                     }
@@ -354,7 +373,12 @@ public final class PosViewCache {
                 }
             }
 
-            double resteMesureUi = BigDecimal.valueOf(pieces / mesureUi.getQuantContenu())
+            double quantContenu = mesureUi.getQuantContenu() == null
+                    ? 0d : mesureUi.getQuantContenu();
+            if (!Double.isFinite(quantContenu) || quantContenu <= 0) {
+                quantContenu = 1d;
+            }
+            double resteMesureUi = BigDecimal.valueOf(pieces / quantContenu)
                     .setScale(3, RoundingMode.HALF_EVEN)
                     .doubleValue();
             ListViewItem item = new ListViewItem();

@@ -681,7 +681,7 @@ public class DestockController implements Initializable {
         });
 
         pref = Preferences.userNodeForPackage(SyncEngine.class);
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         entr = pref.get("eUid", "f3d81978a5524681bf1090d1d41edb15");
         region = pref.get("region", "...");
         role = UserRoleRegistry.getRole(pref);
@@ -868,7 +868,13 @@ public class DestockController implements Initializable {
             try {
                 for (Destocker s : toSave) {
                     s.setReference(locref);
-                    Destocker saved = DestockerDelegate.saveDestocker(s);
+                    // Une ligne venant du menu "Modifier" porte l'uid d'un
+                    // destockage existant : la mettre a jour au lieu de la
+                    // re-inserer (sinon echec PK ou doublon).
+                    boolean isUpdate = DestockerDelegate.findDestocker(s.getUid()) != null;
+                    Destocker saved = isUpdate
+                            ? DestockerDelegate.updateDestocker(s)
+                            : DestockerDelegate.saveDestocker(s);
                     if (saved != null) {
                         saveDestockerWithRetry(saved);
                         savedList.add(saved);

@@ -84,6 +84,7 @@ public class FullResyncService {
                         // Convert to BatchMutationDto
                         List<BatchMutationDto> mutations = chunk.stream().map(r -> {
                             BatchMutationDto dto = new BatchMutationDto();
+                            dto.mutationId = r.getUid();
                             dto.entityId = r.getEntityId();
                             dto.entityType = r.getTableName();
                             dto.payload = r.getPayload();
@@ -107,11 +108,11 @@ public class FullResyncService {
 
                             // Handle Successes
                             if (result.successes != null && !result.successes.isEmpty()) {
-                                successUids = chunk.stream()
-                                        .filter(r -> result.successes.stream().anyMatch(s -> s.entityId.equals(r.getEntityId())
-                                                && s.entityType.equals(r.getTableName())))
-                                        .map(SyncOutbox::getUid)
-                                        .collect(Collectors.toList());
+                                // Un seul acquittement par resultat : evite de
+                                // marquer APPLIED des mutations distinctes de la
+                                // meme entite que le serveur n'a pas appliquees.
+                                successUids = tools.sync.SyncAcknowledgements
+                                        .matchOnePerResult(chunk, result.successes);
 
                                 if (!successUids.isEmpty()) {
                                     logger.info("[FullResync] Successfully synced " + successUids.size() + "/" + mutations.size() + " records.");
@@ -219,8 +220,13 @@ public class FullResyncService {
                 "Depense",
             };
             for (String table : tables) {
+                // Securite (M3) : whitelist - l'entite doit exister dans le
+                // modele de persistance avant concatenation JPQL. Une entite
+                // inconnue refuse la suppression plutot que d'executer une
+                // requete construite a partir d'une valeur non validee.
+                String entityName = SqlGuard.requireKnownEntityName(em, table);
                 em.createQuery(
-                    "DELETE FROM " + table + " e WHERE e.region = :region"
+                    "DELETE FROM " + entityName + " e WHERE e.region = :region"
                 )
                     .setParameter("region", regionId)
                     .executeUpdate();

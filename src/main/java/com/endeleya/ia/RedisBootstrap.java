@@ -99,9 +99,27 @@ public final class RedisBootstrap {
         if (pingRedis()) {
             return true;
         }
+        // Securite (M2) : l'instance demarree par Kazisafex exige une
+        // authentification. Le mot de passe (aleatoire, genere une seule
+        // fois par installation) est stocke chiffre via SecretStore et
+        // utilise par RedisMemoryStore (AUTH sur chaque commande).
         runCommand(List.of(binary, "--daemonize", "yes",
-                "--bind", "127.0.0.1", "--port", "6379"));
+                "--bind", "127.0.0.1", "--port", "6379",
+                "--protected-mode", "yes",
+                "--requirepass", redisPassword()));
         return pingRedis();
+    }
+
+    private static String redisPassword() {
+        String existing = services.utils.SecretStore.load("redis_password");
+        if (existing != null && !existing.isBlank()) {
+            return existing;
+        }
+        byte[] bytes = new byte[24];
+        new java.security.SecureRandom().nextBytes(bytes);
+        String generated = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        services.utils.SecretStore.store("redis_password", generated);
+        return generated;
     }
 
     private static boolean installRedis() {

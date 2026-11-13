@@ -111,4 +111,13 @@ public class GratienSaleWorkflowTest {
         String cancelResponse = workflow.handle("non", null);
         assertEquals("D'accord, la vente n'est pas enregistrée.", cancelResponse);
     }
+
+    @Test
+    public void dedupIntentIsNeverRoutedToSaleWorkflow() {
+        assertFalse(workflow.shouldHandle("élimine les doublons clients dans la base", new ArrayList<>()),
+                "Une demande de dédoublonnage contenant 'client' ne doit pas être interceptée par la vente");
+        assertFalse(workflow.shouldHandle("fusionne les doublons produits et clients", new ArrayList<>()));
+        assertTrue(workflow.shouldHandle("vente, 3, lait", null),
+                "Une vente classique doit toujours être interceptée");
+    }
 }

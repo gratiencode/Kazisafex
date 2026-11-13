@@ -129,17 +129,18 @@ Résultat : **succès**. Le test de préservation des `REMOVE` est vert.
 ### Priorité 1 — sans changement serveur
 
 1. Ajouter un état `DEAD_LETTER` (ou `FAILED_PERMANENT`) après un nombre borné de tentatives, avec conservation de la mutation et bouton de rejeu.
-2. Ajouter des tests de reprise avec une base SQLite temporaire réelle :
-   - outbox non vide au démarrage ;
-   - coupure entre écriture métier et outbox ;
-   - relance après réponse perdue.
-3. Vérifier l'atomicité de l'écriture métier + outbox pour chaque listener.
+2. ~~Tests de reprise avec une base SQLite temporaire réelle~~ — scénarios
+   simulés ajoutés ; la coupure réelle reste à instrumenter.
+3. ~~Vérifier l'atomicité de l'écriture métier + outbox~~ — fait
+   (`SyncOutboxListenerAtomicTest`).
+4. ~~Limiter la sur-acquittement~~ — fait : `SyncAcknowledgements.matchOnePerResult`
+   n'acquitte qu'une mutation par résultat serveur.
 
 ### Priorité 2 — nécessite le serveur
 
-4. Ajouter un `mutationId` (UID outbox) dans `BatchMutationDto` et dans les succès/échecs serveur ; acquitter par mutation, pas par entité.
-5. Rendre l'upsync idempotent côté serveur sur ce `mutationId`.
-6. Confirmer le contrat des suppressions distantes (payload null autorisé).
+5. Ajouter un `mutationId` (UID outbox) dans `BatchMutationDto` et dans les succès/échecs serveur ; acquitter par mutation, pas par entité.
+6. Rendre l'upsync idempotent côté serveur sur ce `mutationId`.
+7. Confirmer le contrat des suppressions distantes (payload null autorisé).
 
 ### Priorité 3 — observabilité
 

@@ -2,11 +2,15 @@ package services;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,6 +21,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -156,5 +161,44 @@ class ManagedSessionFactoryTransactionTest {
         } finally {
             tearDown();
         }
+    }
+
+    @Test
+    @DisplayName("Une écriture imbriquée rejoint la transaction au lieu de la file")
+    void nestedWritesJoinTheCurrentTransactionInsteadOfQueueing() {
+        EntityManager nestedEm = mock(EntityManager.class);
+
+        String result = ManagedSessionFactory.withCurrentEntityManager(nestedEm, () -> {
+            CompletableFuture<String> nested = ManagedSessionFactory.submitWrite(ignored -> "ok");
+            assertTrue(nested.isDone(), "une écriture imbriquée doit s'exécuter immédiatement");
+            return nested.join();
+        });
+
+        assertEquals("ok", result);
+        verifyNoInteractions(nestedEm);
+    }
+
+    @Test
+    @DisplayName("Les lectures/écritures imbriquées réutilisent l'EntityManager courant")
+    void nestedReadsAndWritesReuseTheCurrentEntityManager() {
+        EntityManager nestedEm = mock(EntityManager.class);
+        AtomicReference<EntityManager> readEm = new AtomicReference<>();
+        AtomicReference<EntityManager> writeEm = new AtomicReference<>();
+
+        ManagedSessionFactory.withCurrentEntityManager(nestedEm, () -> {
+            ManagedSessionFactory.executeRead(ignored -> {
+                readEm.set(ignored);
+                return null;
+            });
+            ManagedSessionFactory.executeWrite(ignored -> {
+                writeEm.set(ignored);
+                return null;
+            });
+            return null;
+        });
+
+        assertSame(nestedEm, readEm.get());
+        assertSame(nestedEm, writeEm.get());
+        verifyNoInteractions(nestedEm);
     }
 }

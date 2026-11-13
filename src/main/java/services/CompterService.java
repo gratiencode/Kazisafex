@@ -13,7 +13,6 @@ import data.PrixDeVente;
 import data.Produit;
 import data.Recquisition;
 import data.Vente;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -33,11 +32,14 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import tools.Agregator;
 import tools.ComptageItem;
 import tools.Constants;
 import tools.DataId;
+import tools.LotKeys;
 import tools.SyncEngine;
 import tools.SyncLogger;
 
@@ -46,6 +48,8 @@ import tools.SyncLogger;
  * @author endeleya
  */
 public class CompterService implements CompterStorage {
+
+    private static final Logger LOG = Logger.getLogger(CompterService.class.getName());
 
     /**
      * Sérialise les ajustements d'un même inventaire dans ce processus. Le
@@ -136,13 +140,25 @@ public class CompterService implements CompterStorage {
 
     private Compter createCompterLocked(Compter cat) {
         boolean isDeleted = cat.getDeletedAt() != null;
+        if (!isDeleted) {
+            // Photographie immuable : figee a la creation du comptage, elle
+            // sert de reference pour tous les recalculs ulterieurs.
+            if (cat.getTheoreticalSnapshot() == null) {
+                cat.setTheoreticalSnapshot(theoreticalStockAtOpening(
+                        cat.getProductId(), cat.getNumlot(), cat.getInventaireId(), cat.getRegion()));
+            }
+            if (cat.getQuantiteTheorik() == null) {
+                double qc = contentFactor(cat.getMesureId());
+                cat.setQuantiteTheorik(cat.getTheoreticalSnapshot() / qc);
+            }
+        }
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
                 em.persist(cat);
                 return cat;
             }).join();
             if (!isDeleted) editStock(cat, true);
-            System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " comptee");
+            LOG.fine(() -> "Comptage cree pour " + productLabel(cat));
             return cat;
         }
         ManagedSessionFactory.executeWrite(em -> {
@@ -184,7 +200,7 @@ public class CompterService implements CompterStorage {
                     return cat;
                 }).join();
                 if (!isDeleted) editStock(cat, false);
-                System.out.println("Element " + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?") + " recomptee");
+                LOG.fine(() -> "Comptage mis a jour pour " + productLabel(cat));
                 return cat;
             }
             ManagedSessionFactory.executeWrite(em -> {
@@ -193,9 +209,17 @@ public class CompterService implements CompterStorage {
             });
             if (!isDeleted) editStock(cat, false);
         } catch (jakarta.persistence.EntityNotFoundException e) {
-            System.err.println("Erreur Message : " + e.getMessage());
+            LOG.log(Level.WARNING, "Comptage introuvable lors de la mise a jour", e);
         }
         return cat;
+    }
+
+    private static String productLabel(Compter compter) {
+        if (compter == null || compter.getProductId() == null) {
+            return "?";
+        }
+        String name = compter.getProductId().getNomProduit();
+        return name == null || name.isBlank() ? compter.getProductId().getUid() : name;
     }
 
     /**
@@ -204,11 +228,15 @@ public class CompterService implements CompterStorage {
      * zero des produits non comptes.
      */
     static void requireInventoryOpen(Inventaire inv) {
-        if (inv != null && inv.getEtat() != null
-                && "Terminé".equalsIgnoreCase(inv.getEtat().trim())) {
+        if (isInventoryClosed(inv)) {
             throw new IllegalStateException(
                     "Inventaire clôturé : la modification des comptages est interdite");
         }
+    }
+
+    static boolean isInventoryClosed(Inventaire inv) {
+        return inv != null && inv.getEtat() != null
+                && "Terminé".equalsIgnoreCase(inv.getEtat().trim());
     }
 
     @Override
@@ -240,7 +268,7 @@ public class CompterService implements CompterStorage {
                 return null;
             });
         }
-        System.out.println("Element " + (prod != null ? prod.getNomProduit() : "?") + " comptee supprimee");
+        LOG.fine(() -> "Comptage supprime pour " + (prod != null ? prod.getNomProduit() : "?"));
 
         // Revertir les ajustements de stock generes par ce comptage
         revertCompterAdjustments(prod, lot, region, inv, dateCount, mesure, coutAchat, dateExp);
@@ -260,13 +288,15 @@ public class CompterService implements CompterStorage {
 
         if (remainingReel > 0) {
             // 3. Recalculer les ajustements avec les lignes restantes, sur la
-            // reference temporelle de l'inventaire (ouverture), pas le stock courant.
-            double stockTheorik = theoreticalStockAtOpening(prod, lot, inv, region);
+            // photographie immuable prise a l'ouverture de l'inventaire.
+            Double snapshot = snapshotOfRemaining(prod, lot, inv, region);
+            double stockTheorik = snapshot != null
+                    ? snapshot
+                    : theoreticalStockAtOpening(prod, lot, inv, region);
             double difference = remainingReel - stockTheorik;
 
             // Mettre a jour les metadonnees des comptages restants
-            double qc = (mesure != null && mesure.getQuantContenu() != null && mesure.getQuantContenu() > 0)
-                    ? mesure.getQuantContenu() : 1.0;
+            double qc = contentFactor(mesure);
             double ecartEnMesure = difference / qc;
             double thEnMesure = stockTheorik / qc;
             updateCompterMeta(prod.getUid(), inv.getUid(), lot, region, ecartEnMesure, thEnMesure);
@@ -519,15 +549,51 @@ public class CompterService implements CompterStorage {
                 prod.getUid(), lot, region);
     }
 
+    /**
+     * Reference theorique d'un comptage : la photographie persistee si elle
+     * existe, sinon (anciennes lignes) la valeur calculee a l'ouverture.
+     */
+    double resolveTheoreticalReference(Compter compter, Produit prod, String lot,
+            Inventaire inv, String region) {
+        if (compter != null && compter.getTheoreticalSnapshot() != null
+                && Double.isFinite(compter.getTheoreticalSnapshot())) {
+            return compter.getTheoreticalSnapshot();
+        }
+        return theoreticalStockAtOpening(prod, lot, inv, region);
+    }
+
+    private Double snapshotOfRemaining(Produit prod, String lot, Inventaire inv, String region) {
+        if (prod == null || inv == null || inv.getUid() == null) {
+            return null;
+        }
+        List<Compter> remaining = findComptageForProduit(prod.getUid(), inv.getUid(), lot, region);
+        if (remaining == null) {
+            return null;
+        }
+        for (Compter line : remaining) {
+            if (line != null && line.getTheoreticalSnapshot() != null
+                    && Double.isFinite(line.getTheoreticalSnapshot())) {
+                return line.getTheoreticalSnapshot();
+            }
+        }
+        return null;
+    }
+
+    private static double contentFactor(Mesure mesure) {
+        return (mesure != null && mesure.getQuantContenu() != null && mesure.getQuantContenu() > 0)
+                ? mesure.getQuantContenu()
+                : 1.0;
+    }
+
     public StockAgregate findLotStock(String pId, String lot, LocalDate now, String region) {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(
-                    "SELECT * FROM stock_agregate p WHERE p.product_id = ? AND p.num_lot = ? AND p.date BETWEEN ? AND ? AND p.region = ? ORDER BY p.date DESC");
+                    "SELECT * FROM stock_agregate p WHERE p.product_id = ? AND COALESCE(p.num_lot, '') = ? AND p.date BETWEEN ? AND ? AND p.region = ? ORDER BY p.date DESC");
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), StockAgregate.class);
                 query.setParameter(1, pId);
-                query.setParameter(2, lot);
+                query.setParameter(2, LotKeys.normalize(lot));
                 query.setParameter(3, now.atStartOfDay());
                 query.setParameter(4, now.atTime(23, 59, 59));
                 query.setParameter(5, region).setMaxResults(1);
@@ -559,12 +625,12 @@ public class CompterService implements CompterStorage {
     public List<Compter> findComptageForProduit(String puid, String inventaireId, String lot) {
         try {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND p.numlot = ? ");
+            sb.append("SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND COALESCE(p.numlot, '') = ? ");
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), Compter.class);
                 query.setParameter(1, puid);
                 query.setParameter(2, inventaireId);
-                query.setParameter(3, lot);
+                query.setParameter(3, LotKeys.normalize(lot));
                 return query.getResultList();
             });
         } catch (NoResultException e) {
@@ -577,12 +643,12 @@ public class CompterService implements CompterStorage {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(
-                    "SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND p.numlot = ? AND p.region = ? ");
+                    "SELECT * FROM compter p WHERE p.product_id =  ? AND p.inventaire_id = ? AND COALESCE(p.numlot, '') = ? AND p.region = ? ");
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), Compter.class);
                 query.setParameter(1, puid);
                 query.setParameter(2, inventaireId);
-                query.setParameter(3, lot);
+                query.setParameter(3, LotKeys.normalize(lot));
                 query.setParameter(4, region);
                 return query.getResultList();
             });
@@ -646,13 +712,13 @@ public class CompterService implements CompterStorage {
     public double sommeComptage(Produit p, String lot, Inventaire inv) {
         StringBuilder sb = new StringBuilder();
         sb.append(
-                "SELECT SUM(COALESCE(c.quantite,0)*COALESCE(m.quantcontenu,0)) s FROM compter c,mesure m WHERE c.product_id = ? AND c.inventaire_id = ? AND c.numlot = ? AND c.mesure_id=m.uid");
+                "SELECT SUM(COALESCE(c.quantite,0)*COALESCE(m.quantcontenu,0)) s FROM compter c,mesure m WHERE c.product_id = ? AND c.inventaire_id = ? AND COALESCE(c.numlot, '') = ? AND c.mesure_id=m.uid");
         if (ManagedSessionFactory.isEmbedded()) {
             return ManagedSessionFactory.executeRead(em -> {
                 Query query = em.createNativeQuery(sb.toString(), Double.class);
                 query.setParameter(1, p.getUid());
                 query.setParameter(2, inv.getUid());
-                query.setParameter(3, lot);
+                query.setParameter(3, LotKeys.normalize(lot));
                 Object result = query.getSingleResult();
                 return result == null ? 0 : ((Number) result).doubleValue();
             });
@@ -660,7 +726,7 @@ public class CompterService implements CompterStorage {
         Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sb.toString());
         query.setParameter(1, p.getUid());
         query.setParameter(2, inv.getUid());
-        query.setParameter(3, lot);
+        query.setParameter(3, LotKeys.normalize(lot));
         Object result = query.getSingleResult();
         return result == null ? 0 : ((Number) result).doubleValue();
     }
@@ -694,50 +760,47 @@ public class CompterService implements CompterStorage {
 
     private void updateCompterMeta(String productId, String inventaireId, String lot, String region, double ecart,
             double th) {
-        String sql = "UPDATE compter SET ecart = ?, quantite_theorik = ? WHERE product_id = ? AND inventaire_id = ? AND numlot = ? AND region = ?";
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                Query query = em.createNativeQuery(sql);
-                query.setParameter(1, ecart);
-                query.setParameter(2, th);
-                query.setParameter(3, productId);
-                query.setParameter(4, inventaireId);
-                query.setParameter(5, lot);
-                query.setParameter(6, region);
-                query.executeUpdate();
-                return null;
-            }).join();
-            return;
-        }
-        EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!tx.isActive()) {
-            tx.begin();
-        }
-        Query query = ManagedSessionFactory.getEntityManager().createNativeQuery(sql);
-        query.setParameter(1, ecart);
-        query.setParameter(2, th);
-        query.setParameter(3, productId);
-        query.setParameter(4, inventaireId);
-        query.setParameter(5, lot);
-        query.setParameter(6, region);
-        query.executeUpdate();
-        tx.commit();
+        String sql = "UPDATE compter SET ecart = ?, quantite_theorik = ? WHERE product_id = ? AND inventaire_id = ? AND COALESCE(numlot, '') = ? AND region = ?";
+        // executeWrite gere deja la transaction et la fermeture de l'EntityManager
+        // dans les deux modes. L'ancien chemin MySQL commitait une transaction
+        // potentiellement ouverte par l'appelant, ce qui validait des ecritures
+        // metier partielles.
+        ManagedSessionFactory.executeWrite(em -> {
+            Query query = em.createNativeQuery(sql);
+            query.setParameter(1, ecart);
+            query.setParameter(2, th);
+            query.setParameter(3, productId);
+            query.setParameter(4, inventaireId);
+            query.setParameter(5, LotKeys.normalize(lot));
+            query.setParameter(6, region);
+            query.executeUpdate();
+            return null;
+        });
     }
     
     @Override
-    public void confirmerComptage(ComptageItem comptage){
-        Compter c= new Compter();
+    public void confirmerComptage(ComptageItem comptage) {
+        if (comptage == null || comptage.getProduit() == null) {
+            return;
+        }
+        Compter c = new Compter();
         c.setProductId(comptage.getProduit());
         c.setMesureId(comptage.getMesure());
-        Inventaire inv=delegates.InventaireDelegate.
+        Inventaire inv = delegates.InventaireDelegate.
                 findInventaireByCode(comptage.getCodeInventaire());
-        if(inv!=null){
+        if (inv != null) {
+            // editStock(..., false) lit dateCount pour construire la reference
+            // d'ajustement : sans date, la confirmation levait une NPE.
+            LocalDateTime dateCompter = comptage.getDateCompter() != null
+                    ? comptage.getDateCompter() : LocalDateTime.now();
+            c.setDateCount(dateCompter);
+            c.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
             c.setRegion(inv.getRegion());
             c.setInventaireId(inv);
             c.setNumlot(comptage.getNumlot());
             c.setCoutAchat(comptage.getCoutAchat());
             c.setDateExpiration(comptage.getDateExpiration());
-            editStock(c,false);
+            editStock(c, false);
         }
     }
 
@@ -750,25 +813,24 @@ public class CompterService implements CompterStorage {
         // Avant tout ajustement : purger les anciens enregistrements #INV pour ce produit/lot
         // (évite le doublon lors d'une mise à jour de comptage)
         // On purge d'abord pour que le calcul du théorique suivant soit basé sur le stock "propre"
-        String refJour = (inv.getCodeInventaire() + "-" +(isNew? LocalDate.now().toString():
-                compter.getDateCount().toLocalDate().toString()));
+        LocalDate reference = (!isNew && compter.getDateCount() != null)
+                ? compter.getDateCount().toLocalDate() : LocalDate.now();
+        String refJour = inv.getCodeInventaire() + "-" + reference;
         purgeAjustementLigneVente(refJour, prod.getUid(), compter.getNumlot(), region);
         purgeAjustementRecquisition("#INV-" + inv.getCodeInventaire(), prod.getUid(), compter.getNumlot(), region);
 
         // 1. Somme physique cumulée pour ce lot (tous les comptages de cet inventaire)
         double stockReel = sommeComptage(prod, compter.getNumlot(), inv);
-        System.out.println("Stock reel = pc " + stockReel);
-        // 2. Reference theorique : quantite a la date d'ouverture de l'inventaire.
-        double stockTheorik = theoreticalStockAtOpening(prod, compter.getNumlot(), inv, region);
-        System.out.println("Stock theorik (ouverture) = pc " + stockTheorik);
+        LOG.fine(() -> "Stock physique cumule = " + stockReel);
+        // 2. Reference theorique : photographie immuable de l'ouverture.
+        // Les mouvements survenus pendant le comptage ne la modifient pas.
+        double stockTheorik = resolveTheoreticalReference(compter, prod, compter.getNumlot(), inv, region);
         // 3. Différence à ajuster en pièces (Stock Physique Souhaité - Stock Actuel)
         double difference = stockReel - stockTheorik;
-        System.out.println("diff = pc " + difference);
 
         // Mise à jour de l'écart et du théorique sur l'objet compter pour reflet en
         // base de données
-        double qc = (mz != null && mz.getQuantContenu() != null && mz.getQuantContenu() > 0) ? mz.getQuantContenu()
-                : 1.0;
+        double qc = contentFactor(mz);
         double ecartEnMesure = difference / qc;
         double thEnMesure = stockTheorik / qc;
 
@@ -796,7 +858,7 @@ public class CompterService implements CompterStorage {
             lv.setQuantite(Math.abs(difference));
             lv.setReference(found);
             createLigneVente(inv, lv);
-            System.out.println("Soustraction de " + Math.abs(difference) + " pieces pour ajuster le stock");
+            LOG.info(() -> "Inventaire : sortie de " + Math.abs(difference) + " unites pour ajuster le stock");
         } else if (difference > 0) {
             // Entrée de stock par une réquisition d'ajustement (ex: +3 pièces)
             Recquisition last = getLastEntry(prod.getUid());
@@ -834,9 +896,9 @@ public class CompterService implements CompterStorage {
                     }
                 }
             }
-            System.out.println("Addition de " + difference + " pieces pour ajuster le stock");
+            LOG.info(() -> "Inventaire : entree de " + difference + " unites pour ajuster le stock");
         } else {
-            System.out.println("Aucun ajustement nécessaire : stock physique = stock théorique");
+            LOG.fine("Inventaire : aucun ajustement, stock physique = stock theorique");
         }
 
         // 4. Clôturer à nouveau pour mettre à jour l'agrégat daily avec les nouvelles
@@ -860,14 +922,24 @@ public class CompterService implements CompterStorage {
 
     @Override
     public void removeNoCountedProducts(Inventaire inv, java.util.function.Consumer<Compter> onCreated) {
+        if (isInventoryClosed(inv)) {
+            // Clôture rejouable : une seconde invocation ne doit pas recréer
+            // de comptages zéro ni de régularisation.
+            tools.SyncLogger.getInstance().logMessage(
+                    "INVENTORY-CLOSE",
+                    "Inventaire " + inv.getUid() + " déjà clôturé : clôture ignorée (idempotente).");
+            return;
+        }
         withInventoryLock(inv, () -> {
-            // La clôture n'est pas encore une transaction unique : une sauvegarde
-            // immédiate limite l'impact d'une interruption au milieu des
-            // ajustements. Elle est prise sous le verrou pour ne pas copier deux
-            // fois la base lors de clôtures concurrentes.
+            // Sauvegarde immédiate sous le verrou (clôtures concurrentes) puis
+            // transaction unique : les comptages zéro et tous les ajustements
+            // de stock sont validés ou annulés ensemble.
             services.utils.DatabaseBackup.backupNow(
                     ManagedSessionFactory.localDatabasePath(), "inventory-close", 10);
-            removeNoCountedProductsLocked(inv, onCreated);
+            ManagedSessionFactory.executeWrite(em -> {
+                removeNoCountedProductsLocked(inv, onCreated);
+                return null;
+            });
         });
     }
 
@@ -888,18 +960,11 @@ public class CompterService implements CompterStorage {
                 continue;
             }
             List<String> allLots = findAllDistinctLots(produit.getUid(), inv.getRegion());
-            if (hasStockWithoutLot(produit.getUid(), inv.getRegion())) {
-                tools.SyncLogger.getInstance().logMessage(
-                        "INVENTORY-CLOSE",
-                        "Produit " + produit.getUid()
-                                + " : stock sans numéro de lot non soldé automatiquement ;"
-                                + " vérification manuelle requise.");
-            }
             for (String lot : allLots) {
                 if (Thread.currentThread().isInterrupted()) {
                     throw new RuntimeException("Cloture annulee par l'utilisateur");
                 }
-                if (lot == null || lot.isBlank()) continue;
+                lot = LotKeys.normalize(lot);
                 List<Compter> existing = findComptageForProduit(produit.getUid(), inv.getUid(), lot, inv.getRegion());
                 if (existing != null && !existing.isEmpty()) continue;
                 StockAgregate stock = findLotStock(produit.getUid(), lot,
@@ -909,6 +974,11 @@ public class CompterService implements CompterStorage {
                         : delegates.RecquisitionDelegate.sumLatestLotFinalQuantityFromStockAggregate(
                                 produit.getUid(), lot, inv.getRegion());
                 Compter co = new Compter();
+                // Uid deterministe : une cloture rejouee (ou concurrente sur un
+                // autre poste) vise la meme ligne, la cle primaire empeche alors
+                // un second comptage zero et un double ajustement de stock.
+                co.setUid(DataId.deterministic("compter-zero", inv.getUid(),
+                        produit.getUid(), lot, inv.getRegion()));
                 co.setCoutAchat(stock != null && stock.getCoutAchat() != null ? stock.getCoutAchat() : 0d);
                 co.setDateCount(LocalDateTime.now());
                 co.setEcart(-stockTheorik);
@@ -917,37 +987,46 @@ public class CompterService implements CompterStorage {
                 co.setNumlot(lot);
                 co.setProductId(produit);
                 co.setQuantite(0);
+                co.setTheoreticalSnapshot(stockTheorik);
                 co.setQuantiteTheorik(stockTheorik);
                 co.setRegion(inv.getRegion());
                 co.setTimestamp(BigInteger.valueOf(System.currentTimeMillis()));
-                createCompter(co);
+                try {
+                    createCompter(co);
+                } catch (RuntimeException ex) {
+                    if (isDuplicateKey(ex)) {
+                        tools.SyncLogger.getInstance().logMessage("INVENTORY-CLOSE",
+                                "Comptage zero deja present pour " + produit.getUid()
+                                        + " / lot " + lot + " (cloture concurrente ignoree).");
+                        continue;
+                    }
+                    throw ex;
+                }
                 if (onCreated != null) onCreated.accept(co);
             }
         }
     }
 
-    private boolean hasStockWithoutLot(String productId, String region) {
-        String sql = "SELECT COUNT(*) FROM stock_agregate WHERE product_id = ? AND region = ? "
-                + "AND (num_lot IS NULL OR num_lot = '')";
-        try {
-            Object result = ManagedSessionFactory.executeRead(em -> {
-                Query q = em.createNativeQuery(sql);
-                q.setParameter(1, productId);
-                q.setParameter(2, region);
-                return q.getSingleResult();
-            });
-            return result instanceof Number && ((Number) result).longValue() > 0;
-        } catch (RuntimeException ex) {
-            tools.SyncLogger.getInstance().log(ex, "CompterService.hasStockWithoutLot");
-            return false;
+    private static boolean isDuplicateKey(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String msg = current.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("unique constraint") || lower.contains("duplicate entry")
+                        || lower.contains("constraint failed") || lower.contains("primary key")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
         }
+        return false;
     }
 
     private List<String> findAllDistinctLots(String productId, String region) {
-        String sql = "SELECT DISTINCT numlot FROM recquisition WHERE product_id = ? AND region = ? "
+        String sql = "SELECT DISTINCT COALESCE(numlot, '') FROM recquisition WHERE product_id = ? AND region = ? "
                 + "UNION "
-                + "SELECT DISTINCT num_lot FROM stock_agregate WHERE product_id = ? AND region = ? "
-                + "AND num_lot IS NOT NULL AND num_lot != ''";
+                + "SELECT DISTINCT COALESCE(num_lot, '') FROM stock_agregate WHERE product_id = ? AND region = ?";
         return ManagedSessionFactory.executeRead(em -> {
             Query q = em.createNativeQuery(sql);
             q.setParameter(1, productId);
@@ -965,17 +1044,12 @@ public class CompterService implements CompterStorage {
     public double findOnlyStockUnits(Produit produit, String lot, String region, LocalDate datedebut,
             LocalDate datefin) {
         double E = sommeEntreeSurPeriode(produit.getUid(), lot, datedebut, datefin, region);
-        System.out.println("Stockonly E = " + E);
         double SV = sommeSortieSurPeriode(produit.getUid(), lot, datedebut, datefin, region);
-        System.out.println("Stockonly SV = " + SV);
         double stockInit = calculerStockInitialEnUnite(produit.getUid(), lot, datedebut, region);
-        System.out.println("Stockonly SI = " + stockInit);
+        LOG.fine(() -> "Stock uniquement : entrees=" + E + ", sorties=" + SV + ", initial=" + stockInit);
         // double expiree = getStockExpiree(produit.getUid(), datedebut, datefin,
         // region);
         double stockFinal = stockInit + E - SV;
-        // System.out.println("Stockonly SF = " + stockInit + "+" + E + "-" + SV + "=" +
-        // stockFinal);
-        // double stockFinalValid = stockFinal - expiree;
         return stockFinal;
     }
 
@@ -1004,9 +1078,8 @@ public class CompterService implements CompterStorage {
         String refJour = codeInventaire + "-" + LocalDate.now().toString();
         Vente vente = findAjuVente(refJour);
         if (vente == null) {
-            System.out.println("Vente aju not exist " + refJour);
-            int id = (int) (Math.random() * 1094061);
-            Vente aju = new Vente(id);
+            LOG.fine(() -> "Creation de la vente d'ajustement " + refJour);
+            Vente aju = new Vente(DataId.generateInt());
             aju.setReference(refJour);
             aju.setDateVente(LocalDateTime.now());
             aju.setClientId(getAnonymousClient());
@@ -1222,7 +1295,7 @@ public class CompterService implements CompterStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            System.out.println("Element prix " + cat.getPrixUnitaire() + " enregistree");
+            LOG.fine(() -> "Prix de vente enregistre : " + cat.getPrixUnitaire());
             return cat;
         }
         ManagedSessionFactory.executeWrite(em -> {
@@ -1258,7 +1331,7 @@ public class CompterService implements CompterStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            System.out.println("Element Recq inv " + cat.getReference() + " enregistree");
+            LOG.fine(() -> "Recquisition inventaire enregistree : " + cat.getReference());
             return cat;
         }
         ManagedSessionFactory.executeWrite(em -> {
@@ -1274,13 +1347,13 @@ public class CompterService implements CompterStorage {
      */
     private void purgeAjustementLigneVente(String venteRef, String prodId, String numlot, String region) {
         try {
-            String sql = "DELETE FROM ligne_vente WHERE product_id = ? AND numlot = ? AND clientid = '#INV'"
+            String sql = "DELETE FROM ligne_vente WHERE product_id = ? AND COALESCE(numlot, '') = ? AND clientid = '#INV'"
                     + " AND reference_uid IN (SELECT uid FROM vente WHERE reference = ? AND region = ?)";
             if (ManagedSessionFactory.isEmbedded()) {
                 ManagedSessionFactory.submitWrite(em -> {
                     em.createNativeQuery(sql)
                             .setParameter(1, prodId)
-                            .setParameter(2, numlot)
+                            .setParameter(2, LotKeys.normalize(numlot))
                             .setParameter(3, venteRef)
                             .setParameter(4, region)
                             .executeUpdate();
@@ -1290,7 +1363,7 @@ public class CompterService implements CompterStorage {
                 ManagedSessionFactory.executeWrite(em -> {
                     em.createNativeQuery(sql)
                             .setParameter(1, prodId)
-                            .setParameter(2, numlot)
+                            .setParameter(2, LotKeys.normalize(numlot))
                             .setParameter(3, venteRef)
                             .setParameter(4, region)
                             .executeUpdate();
@@ -1304,7 +1377,7 @@ public class CompterService implements CompterStorage {
                 RecquisitionDelegate.rectifyStock(p, leo, leo, region, numlot);
             }
         } catch (Exception e) {
-            System.err.println("purgeAjustementLigneVente: " + e.getMessage());
+            LOG.log(Level.WARNING, "Echec de purge des lignes de vente d'ajustement", e);
         }
     }
 
@@ -1319,29 +1392,20 @@ public class CompterService implements CompterStorage {
         Recquisition r = delegates.RecquisitionDelegate.findRecquisition(ref, prodId, numlot, region);
         if (r != null) {
             List<PrixDeVente> lps = findPricesForRecq(r.getUid());
-            System.out.println("Ajustement des prix... " + r);
+            LOG.fine(() -> "Purge des prix d'ajustement pour " + r);
             for (PrixDeVente lp : lps) {
-                System.out.println("Prix a associe a supprimer " + lp);
+                LOG.fine(() -> "Suppression du prix associe " + lp);
                 deletePrixDeVente(lp);
             }
         }
     }
 
     public void deletePrixDeVente(PrixDeVente cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.remove(em.merge(cat));
-                return cat;
-            }).join();
-            System.out.println("Element " + cat.getPrixUnitaire() + " enregistree");
-            return;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
-        if (!etr.isActive()) {
-            etr.begin();
-        }
-        ManagedSessionFactory.getEntityManager().remove(ManagedSessionFactory.getEntityManager().merge(cat));
-        etr.commit();
+        ManagedSessionFactory.executeWrite(em -> {
+            em.remove(em.merge(cat));
+            return null;
+        });
+        LOG.fine(() -> "Prix de vente supprime : " + cat.getPrixUnitaire());
     }
 
     /**
@@ -1354,30 +1418,16 @@ public class CompterService implements CompterStorage {
             purgeAjustementPrices(ref, prodId, numlot, region);
 
             // 2. Delete the adjustment requisitions
-            String sql = "DELETE FROM recquisition WHERE product_id = ? AND numlot = ? AND reference = ? AND region = ?";
-            if (ManagedSessionFactory.isEmbedded()) {
-                ManagedSessionFactory.submitWrite(em -> {
-                    em.createNativeQuery(sql)
-                            .setParameter(1, prodId)
-                            .setParameter(2, numlot)
-                            .setParameter(3, ref)
-                            .setParameter(4, region)
-                            .executeUpdate();
-                    return null;
-                }).join();
-            } else {
-                EntityTransaction tx = ManagedSessionFactory.getEntityManager().getTransaction();
-                if (!tx.isActive()) {
-                    tx.begin();
-                }
-                ManagedSessionFactory.getEntityManager().createNativeQuery(sql)
+            String sql = "DELETE FROM recquisition WHERE product_id = ? AND COALESCE(numlot, '') = ? AND reference = ? AND region = ?";
+            ManagedSessionFactory.executeWrite(em -> {
+                em.createNativeQuery(sql)
                         .setParameter(1, prodId)
-                        .setParameter(2, numlot)
+                        .setParameter(2, LotKeys.normalize(numlot))
                         .setParameter(3, ref)
                         .setParameter(4, region)
                         .executeUpdate();
-                tx.commit();
-            }
+                return null;
+            });
 
             // 3. Update stock aggregate to maintain coherence after deletion
             Produit p = findProduitById(prodId);
@@ -1386,7 +1436,7 @@ public class CompterService implements CompterStorage {
                 RecquisitionDelegate.rectifyStock(p, leo, leo, region, numlot);
             }
         } catch (Exception e) {
-            System.err.println("purgeAjustementRecquisition: " + e.getMessage());
+            LOG.log(Level.WARNING, "Echec de purge des requisations d'ajustement", e);
         }
     }
 
@@ -1396,7 +1446,8 @@ public class CompterService implements CompterStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            System.out.println("Element lv invent" + cat.getProductId().getNomProduit() + " vendu");
+            LOG.fine(() -> "Ligne de vente inventaire creee pour "
+                    + (cat.getProductId() != null ? cat.getProductId().getNomProduit() : "?"));
             return cat;
         }
         try {
@@ -1416,7 +1467,7 @@ public class CompterService implements CompterStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            System.out.println("Element vente inv" + cat.getReference() + " enregistree");
+            LOG.fine(() -> "Vente d'ajustement inventaire creee : " + cat.getReference());
             return cat;
         }
         try {
@@ -1476,29 +1527,21 @@ public class CompterService implements CompterStorage {
     }
 
     public Client createClient(Client cat) {
-        if (ManagedSessionFactory.isEmbedded()) {
-            ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
-            }).join();
-            System.out.println("Element " + cat.getNomClient() + " enregistree");
-            return cat;
-        }
-        EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         try {
-            if (!etr.isActive()) {
-                etr.begin();
-            }
-            ManagedSessionFactory.getEntityManager().persist(cat);
-            etr.commit();
+            ManagedSessionFactory.executeWrite(em -> {
+                em.persist(cat);
+                return null;
+            });
+            LOG.fine(() -> "Client enregistre : " + cat.getNomClient());
             return cat;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             if (isUniqueConstraintViolation(e)) {
-                etr.rollback();
+                LOG.fine(() -> "Client deja present : " + cat.getUid());
                 return cat;
             }
+            LOG.log(Level.WARNING, "Echec de creation du client " + cat.getUid(), e);
+            return null;
         }
-        return null;
     }
 
     private boolean isUniqueConstraintViolation(Exception e) {

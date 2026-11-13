@@ -25,7 +25,6 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
 public class GratienInvoiceWorkflow {
 
-    private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
     private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
     private static final Logger LOGGER = Logger.getLogger(GratienInvoiceWorkflow.class.getName());

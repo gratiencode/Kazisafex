@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.Event;
@@ -56,6 +58,7 @@ import javafx.print.PrinterJob;
 import javafx.stage.Stage;
 
 import data.Client;
+import data.DepenseAgregate;
 import data.Entreprise;
 import data.Immobilisation;
 import data.Operation;
@@ -79,6 +82,7 @@ import data.helpers.Role;
 import data.network.Kazisafe;
 import data.core.KazisafeServiceFactory;
 import delegates.PeriodeDelegate;
+import delegates.DepenseAgregateDelegate;
 import delegates.RepportDelegate;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Executors;
@@ -140,7 +144,7 @@ public class RepportController implements Initializable {
     @FXML
     private Label txt_result_report;
     @FXML
-    private ComboBox<String> cbx_duration_report, cbx_regions;
+    private ComboBox<String> cbx_duration_report, cbx_regions, cbx_dep_region;
     ToggleGroup rbtngroup;
     Preferences pref;
     String role, region, devise;
@@ -164,6 +168,7 @@ public class RepportController implements Initializable {
     private final FinancialStatementSyncService financialSyncService = new FinancialStatementSyncService();
 
     private static RepportController instance;
+    private static final DateTimeFormatter DATE_DAY_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     Entreprise entreprise;
 
     /**
@@ -278,6 +283,24 @@ public class RepportController implements Initializable {
     @FXML
     Label totalDepenses;
 
+    // detail des depenses realisees (comme l'onglet gestion de depenses)
+    @FXML
+    TableView<DepenseAgregate> tb_depenses_detail;
+    @FXML
+    TableColumn<DepenseAgregate, String> col_dep_detail_date;
+    @FXML
+    TableColumn<DepenseAgregate, String> col_dep_detail_imputation;
+    @FXML
+    TableColumn<DepenseAgregate, String> col_dep_detail_nom;
+    @FXML
+    TableColumn<DepenseAgregate, Number> col_dep_detail_usd;
+    @FXML
+    TableColumn<DepenseAgregate, Number> col_dep_detail_cdf;
+    @FXML
+    TextField searchDepDetail;
+    @FXML
+    Label totalDepensesDetail;
+
     double taux;
 
     ObservableList<Vente> lsventes;
@@ -290,6 +313,7 @@ public class RepportController implements Initializable {
     ObservableList<PurchaseByProduct> achatProduit;
     ObservableList<PurchaseByMonth> achatMois;
     ObservableList<ExpenseByImputation> depensesParImputation;
+    ObservableList<DepenseAgregate> depensesDetail;
     List<List<ChartItem>> cis;
 
     private boolean achatSourceDepot = true;
@@ -564,12 +588,7 @@ public class RepportController implements Initializable {
         clt_type.setCellValueFactory((TableColumn.CellDataFeatures<VenteReporter, String> param) -> {
             VenteReporter im = param.getValue();
             Client c = im.getClient();
-            String typecli = c.getTypeClient().equals("#0") ? bundle.getString("consumer")
-                    : c.getTypeClient().equals("#1") ? bundle.getString("wholesaler")
-                            : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
-                                    : c.getTypeClient().equals("#3") ? bundle.getString("subscriber")
-                                            : bundle.getString("consumer");
-            return new SimpleStringProperty(typecli);
+            return new SimpleStringProperty(c == null ? "" : clientTypeLabel(c));
         });
         clt_chiffreAffaire.setCellValueFactory((TableColumn.CellDataFeatures<VenteReporter, Number> param) -> {
             VenteReporter im = param.getValue();
@@ -757,6 +776,40 @@ public class RepportController implements Initializable {
                         tb_depenses.setItems(rsult);
                     });
         }
+
+        if (col_dep_detail_date != null && col_dep_detail_imputation != null
+                && col_dep_detail_nom != null && col_dep_detail_usd != null && col_dep_detail_cdf != null) {
+            col_dep_detail_date.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getDate() == null
+                    ? "-" : param.getValue().getDate().format(DATE_DAY_FORMAT)));
+            col_dep_detail_imputation.setCellValueFactory(param -> new SimpleStringProperty(
+                    param.getValue().getImputation() == null ? "-" : param.getValue().getImputation()));
+            col_dep_detail_nom.setCellValueFactory(param -> new SimpleStringProperty(
+                    param.getValue().getDepenseId() != null ? param.getValue().getDepenseId().getNomDepense()
+                            : param.getValue().getUid()));
+            col_dep_detail_usd.setCellValueFactory(param -> new SimpleDoubleProperty(
+                    param.getValue().getMontantUsd() == null ? 0d : param.getValue().getMontantUsd()));
+            col_dep_detail_cdf.setCellValueFactory(param -> new SimpleDoubleProperty(
+                    param.getValue().getMontantCdf() == null ? 0d : param.getValue().getMontantCdf()));
+        }
+
+        if (searchDepDetail != null) {
+            searchDepDetail.textProperty()
+                    .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                        if (newValue == null || newValue.isBlank()) {
+                            tb_depenses_detail.setItems(depensesDetail);
+                            return;
+                        }
+                        ObservableList<DepenseAgregate> rsult = FXCollections.observableArrayList();
+                        for (DepenseAgregate d : depensesDetail) {
+                            String nom = d.getDepenseId() != null ? d.getDepenseId().getNomDepense() : "";
+                            String q = (d.getImputation() == null ? "" : d.getImputation()) + " " + (nom == null ? "" : nom);
+                            if (q.toUpperCase().contains(newValue.toUpperCase())) {
+                                rsult.add(d);
+                            }
+                        }
+                        tb_depenses_detail.setItems(rsult);
+                    });
+        }
     }
 
     private void loadExpenseReports() {
@@ -772,16 +825,36 @@ public class RepportController implements Initializable {
         String usedRegion = (region == null || region.isBlank()) ? "%" : region;
         Executors.newSingleThreadExecutor()
                 .submit(() -> {
-                    List<ExpenseByImputation> items = DataCache.getOrLoad(
-                            "report-expense-imputation-" + d1 + "-" + d2 + "-" + usedRegion,
-                            () -> RepportDelegate.findExpenseReportByImputation(d1, d2, usedRegion));
+                    List<DepenseAgregate> raw = DataCache.getOrLoad(
+                            "report-expense-detail-" + d1 + "-" + d2 + "-" + usedRegion,
+                            () -> DepenseAgregateDelegate.findDepenseAgregates(d1, d2, usedRegion));
+                    List<ExpenseByImputation> byImputation = RepportDelegate.groupExpensesByImputation(raw);
+                    List<DepenseAgregate> details = RepportDelegate.groupExpenseDetails(raw);
                     Platform.runLater(() -> {
                         if (depensesParImputation != null) {
-                            depensesParImputation.setAll(items == null ? List.of() : items);
+                            depensesParImputation.setAll(byImputation == null ? List.of() : byImputation);
+                        }
+                        if (depensesDetail != null) {
+                            depensesDetail.setAll(details == null ? List.of() : details);
                         }
                         updateExpenseTotals();
+                        updateExpenseDetailTotals();
                     });
                 });
+    }
+
+    private void updateExpenseDetailTotals() {
+        if (totalDepensesDetail == null || depensesDetail == null) {
+            return;
+        }
+        double totalUsd = 0;
+        double totalCdf = 0;
+        for (DepenseAgregate d : depensesDetail) {
+            totalUsd += d.getMontantUsd() == null ? 0 : d.getMontantUsd();
+            totalCdf += d.getMontantCdf() == null ? 0 : d.getMontantCdf();
+        }
+        totalDepensesDetail.setText("Depenses total : " + Util.toPlain(scale(totalUsd)) + " USD, "
+                + Util.toPlain(scale(totalCdf)) + " CDF");
     }
 
     private void updateExpenseTotals() {
@@ -805,6 +878,26 @@ public class RepportController implements Initializable {
         return libelle + " - " + r + " du " + d1 + " au " + d2;
     }
 
+    private String clientTypeLabel(Client c) {
+        if (c == null) {
+            return "";
+        }
+        String t = c.getTypeClient();
+        if (t == null) {
+            return bundle.getString("consumer");
+        }
+        switch (t) {
+            case "#1":
+                return bundle.getString("wholesaler");
+            case "#2":
+                return bundle.getString("detailor");
+            case "#3":
+                return bundle.getString("subscriber");
+            default:
+                return bundle.getString("consumer");
+        }
+    }
+
     @FXML
     public void exportExpenses(Event event) {
         new Thread(new Runnable() {
@@ -823,6 +916,30 @@ public class RepportController implements Initializable {
                     }
                 } catch (IOException ex) {
                     SyncLogger.getInstance().log(ex, "RepportController.exportExpenses");
+                    Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }).start();
+    }
+
+    @FXML
+    public void exportExpenseDetails(Event event) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<DepenseAgregate> items = new ArrayList<>(tb_depenses_detail.getItems());
+                    if (items.isEmpty()) {
+                        Platform.runLater(() -> MainUI.notify(null, "Export", "Aucune donnée à exporter", 3, "error"));
+                        return;
+                    }
+                    File xlsrep = Util.exportXlsExpenseDetails(items,
+                            expenseReportTitle("Rapport des depenses detaillees"));
+                    if (xlsrep != null) {
+                        Desktop.getDesktop().open(xlsrep);
+                    }
+                } catch (IOException ex) {
+                    SyncLogger.getInstance().log(ex, "RepportController.exportExpenseDetails");
                     Logger.getLogger(RepportController.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
@@ -982,6 +1099,7 @@ public class RepportController implements Initializable {
         achatProduit = FXCollections.observableArrayList();
         achatMois = FXCollections.observableArrayList();
         depensesParImputation = FXCollections.observableArrayList();
+        depensesDetail = FXCollections.observableArrayList();
         immobilisations = FXCollections.observableArrayList();
         lsoperations = FXCollections.observableArrayList();
         ltxt_result_reporterie = FXCollections.observableArrayList();
@@ -1006,6 +1124,9 @@ public class RepportController implements Initializable {
         }
         if (tb_depenses != null) {
             tb_depenses.setItems(depensesParImputation);
+        }
+        if (tb_depenses_detail != null) {
+            tb_depenses_detail.setItems(depensesDetail);
         }
         configTableAchats();
         configTableDepenses();
@@ -1032,12 +1153,13 @@ public class RepportController implements Initializable {
                         ObservableList<VenteReporter> rsult = FXCollections.observableArrayList();
                         for (VenteReporter vpr : ventePerClient) {
                             Client c = vpr.getClient();
-                            String typecli = c.getTypeClient().equals("#0") ? bundle.getString("consumer")
-                                    : c.getTypeClient().equals("#1") ? bundle.getString("wholesaler")
-                                            : c.getTypeClient().equals("#2") ? bundle.getString("detailor")
-                                                    : c.getTypeClient().equals("#3") ? bundle.getString("subscriber")
-                                                            : bundle.getString("consumer");
-                            String q = c.getNomClient() + " " + typecli + " " + c.getAdresse() + " " + c.getPhone();
+                            if (c == null) {
+                                continue;
+                            }
+                            String typecli = clientTypeLabel(c);
+                            String q = (c.getNomClient() == null ? "" : c.getNomClient()) + " " + typecli + " "
+                                    + (c.getAdresse() == null ? "" : c.getAdresse()) + " "
+                                    + (c.getPhone() == null ? "" : c.getPhone());
                             if (q.toUpperCase().contains(newValue.toUpperCase())) {
                                 rsult.add(vpr);
                             }
@@ -1108,7 +1230,6 @@ public class RepportController implements Initializable {
                                 });
                             });
                     loadPurchaseReports(newValue);
-                    loadExpenseReports(newValue);
                     summarise();
                 });
         dpk_debut_report.valueProperty().addListener(
@@ -1147,7 +1268,46 @@ public class RepportController implements Initializable {
         }
         RegionRegistry.loadAndSync(pref, kazisafe, regions);
         RegionRegistry.bindSavedRegion(pref, cbx_regions, regions);
+        if (cbx_dep_region != null) {
+            configureExpenseRegionFilter();
+        }
 
+    }
+
+    private void configureExpenseRegionFilter() {
+        String allLabel = "Toutes succursales";
+        ObservableList<String> options = FXCollections.observableArrayList();
+        options.add(allLabel);
+        options.addAll(regions);
+        cbx_dep_region.setItems(options);
+        cbx_dep_region.getSelectionModel().selectFirst();
+        cbx_dep_region.getSelectionModel().selectedItemProperty()
+                .addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) ->
+                        loadExpenseReports(expenseRegionValue(newValue)));
+        regions.addListener((ListChangeListener<String>) change -> {
+            String selected = cbx_dep_region.getValue();
+            ObservableList<String> rebuilt = FXCollections.observableArrayList();
+            rebuilt.add(allLabel);
+            rebuilt.addAll(regions);
+            cbx_dep_region.setItems(rebuilt);
+            if (selected != null && rebuilt.contains(selected)) {
+                cbx_dep_region.getSelectionModel().select(selected);
+            } else {
+                cbx_dep_region.getSelectionModel().selectFirst();
+                loadExpenseReports("%");
+            }
+        });
+    }
+
+    private String expenseRegionValue(String label) {
+        if (label == null || label.isBlank()) {
+            return "%";
+        }
+        String trimmed = label.trim();
+        if (trimmed.equalsIgnoreCase("toutes succursales") || trimmed.equals("%")) {
+            return "%";
+        }
+        return trimmed;
     }
 
     private void configureFinancialTables() {

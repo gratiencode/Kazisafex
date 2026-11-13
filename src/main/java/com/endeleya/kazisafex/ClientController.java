@@ -420,7 +420,7 @@ public class ClientController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
-                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom ? Tous leurs historiques seront consolidés.",
                         ButtonType.YES, ButtonType.CANCEL);
                 alertdlg.setTitle(bundle.getString("warning"));
                 alertdlg.setHeaderText(null);
@@ -899,7 +899,7 @@ public class ClientController implements Initializable {
             @Override
             public void handle(ActionEvent event) {
                 Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION, 
-                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom et téléphone ? Tous leurs historiques seront consolidés.",
+                        bundle.containsKey("sure2mergeduplicates") ? bundle.getString("sure2mergeduplicates") : "Êtes-vous sûr de vouloir fusionner tous les clients en double ayant le même nom ? Tous leurs historiques seront consolidés.",
                         ButtonType.YES, ButtonType.CANCEL);
                 alertdlg.setTitle(bundle.getString("warning"));
                 alertdlg.setHeaderText(null);

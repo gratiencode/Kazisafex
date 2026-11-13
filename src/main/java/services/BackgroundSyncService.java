@@ -21,20 +21,24 @@ import tools.SyncEngine;
 import tools.SyncLogger;
 import tools.Tables;
 import tools.Util;
+import tools.sync.SyncAcknowledgements;
 
 public class BackgroundSyncService extends Service<Void> {
 
     private final Kazisafe kazisafe;
     private final int pollIntervalSeconds;
     private final Consumer<String> uiStatusUpdater;
-    private boolean isPaused = false;
-    private static BackgroundSyncService instance;
+    private final Object pauseMonitor = new Object();
+    private volatile boolean isPaused = false;
+    private static final java.util.concurrent.atomic.AtomicReference<BackgroundSyncService> INSTANCE
+            = new java.util.concurrent.atomic.AtomicReference<>();
 
     private static final int DEFAULT_BATCH_SIZE = 50;
     private static final int MIN_BATCH_SIZE = 5;
     private static final int MAX_BATCH_SIZE = 200;
-    private int adaptiveBatchSize = DEFAULT_BATCH_SIZE;
-    private long adaptivePauseUntilEpochMs = 0L;
+    private final java.util.concurrent.atomic.AtomicInteger adaptiveBatchSize
+            = new java.util.concurrent.atomic.AtomicInteger(DEFAULT_BATCH_SIZE);
+    private volatile long adaptivePauseUntilEpochMs = 0L;
 
     /**
      * Garde-fou anti-à-vide : si plusieurs cycles consécutifs ne font appliquer
@@ -44,7 +48,8 @@ public class BackgroundSyncService extends Service<Void> {
      */
     private static final int NO_PROGRESS_BACKOFF_THRESHOLD = 3;
     private static final long MAX_BACKOFF_MILLIS = 5 * 60 * 1000L;
-    private int consecutiveNoProgressCycles = 0;
+    private final java.util.concurrent.atomic.AtomicInteger consecutiveNoProgressCycles
+            = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * Garde-fou anti-resync-complet-perpétuel : le full resync (backfill +
@@ -56,7 +61,7 @@ public class BackgroundSyncService extends Service<Void> {
      * bloquée sur les mêmes données à since=0.
      */
     private static final long FULL_RESYNC_MIN_INTERVAL_MILLIS = 10 * 60 * 1000L;
-    private long lastFullResyncEpochMs = 0L;
+    private volatile long lastFullResyncEpochMs = 0L;
 
     /**
      * Moniteur de réveil : permet de demander un nouveau cycle sans annuler
@@ -64,7 +69,7 @@ public class BackgroundSyncService extends Service<Void> {
      * complètement avant que le suivant démarre.
      */
     private final Object wakeMonitor = new Object();
-    private boolean cycleRequested = false;
+    private volatile boolean cycleRequested = false;
 
     public BackgroundSyncService(Kazisafe kazisafe, int pollIntervalSeconds) {
         this(kazisafe, pollIntervalSeconds, null);
@@ -78,11 +83,11 @@ public class BackgroundSyncService extends Service<Void> {
         this.kazisafe = kazisafe;
         this.pollIntervalSeconds = pollIntervalSeconds;
         this.uiStatusUpdater = uiStatusUpdater;
-        instance = this;
+        INSTANCE.set(this);
     }
 
     public static BackgroundSyncService getInstance() {
-        return instance;
+        return INSTANCE.get();
     }
 
     /**
@@ -103,32 +108,38 @@ public class BackgroundSyncService extends Service<Void> {
         }
     }
 
-    public synchronized void pauseSync() {
-        if (!isPaused) {
-            isPaused = true;
-            System.out.println(
-                    "BackgroundSyncService: Paused due to network/connectivity changes."
-            );
-            publishStatus(
-                    "Synchronisation en pause - connexion perdue, en attente de reconnexion..."
-            );
+    public void pauseSync() {
+        synchronized (pauseMonitor) {
+            if (!isPaused) {
+                isPaused = true;
+                System.out.println(
+                        "BackgroundSyncService: Paused due to network/connectivity changes."
+                );
+                publishStatus(
+                        "Synchronisation en pause - connexion perdue, en attente de reconnexion..."
+                );
+            }
         }
     }
 
-    public synchronized void resumeSync() {
-        if (isPaused) {
-            isPaused = false;
-            System.out.println(
-                    "BackgroundSyncService: Resumed sync operations."
-            );
-            publishStatus(
-                    "Synchronisation reprise - connexion restaurée."
-            );
+    public void resumeSync() {
+        synchronized (pauseMonitor) {
+            if (isPaused) {
+                isPaused = false;
+                System.out.println(
+                        "BackgroundSyncService: Resumed sync operations."
+                );
+                publishStatus(
+                        "Synchronisation reprise - connexion restaurée."
+                );
+            }
         }
     }
 
-    public synchronized boolean isPaused() {
-        return isPaused;
+    public boolean isPaused() {
+        synchronized (pauseMonitor) {
+            return isPaused;
+        }
     }
 
     /**
@@ -314,8 +325,8 @@ public class BackgroundSyncService extends Service<Void> {
 
                                 int total = pendingList.size();
                                 int appliedThisPass = 0;
-                                for (int i = 0; i < total && !isCancelled(); i += adaptiveBatchSize) {
-                                    int end = Math.min(i + adaptiveBatchSize, total);
+                                for (int i = 0; i < total && !isCancelled(); i += adaptiveBatchSize.get()) {
+                                    int end = Math.min(i + adaptiveBatchSize.get(), total);
                                     List<SyncOutbox> chunk = pendingList.subList(i, end);
                                     for (SyncOutbox r : chunk) {
                                         attemptedThisCycle.add(r.getUid());
@@ -383,12 +394,12 @@ public class BackgroundSyncService extends Service<Void> {
                     // appliqué → recul exponentiel (plafonné) du prochain cycle.
                     long nextWaitMillis = effectivePollIntervalSeconds() * 1000L;
                     if (cycleCompleted && cycleApplied == 0) {
-                        consecutiveNoProgressCycles++;
+                        consecutiveNoProgressCycles.incrementAndGet();
                     } else if (cycleCompleted) {
-                        consecutiveNoProgressCycles = 0;
+                        consecutiveNoProgressCycles.set(0);
                     }
-                    if (consecutiveNoProgressCycles >= NO_PROGRESS_BACKOFF_THRESHOLD) {
-                        long backoff = (1L << Math.min(consecutiveNoProgressCycles, 5))
+                    if (consecutiveNoProgressCycles.get() >= NO_PROGRESS_BACKOFF_THRESHOLD) {
+                        long backoff = (1L << Math.min(consecutiveNoProgressCycles.get(), 5))
                                 * effectivePollIntervalSeconds() * 1000L;
                         nextWaitMillis = Math.min(backoff, MAX_BACKOFF_MILLIS);
                         publishStatus(
@@ -465,6 +476,7 @@ public class BackgroundSyncService extends Service<Void> {
                 .stream()
                 .map(r -> {
                     BatchMutationDto dto = new BatchMutationDto();
+                    dto.mutationId = r.getUid();
                     dto.entityId = r.getEntityId();
                     dto.entityType = r.getTableName();
                     dto.payload = r.getPayload();
@@ -494,12 +506,11 @@ public class BackgroundSyncService extends Service<Void> {
 
                 // Handle Successes
                 if (result.successes != null) {
-                    List<String> successUids = effectiveChunk
-                            .stream()
-                            .filter(r-> result.successes.stream().anyMatch(s-> s.entityId != null && s.entityId.equals(r.getEntityId())
-                                            && s.entityType != null && s.entityType.equalsIgnoreCase(r.getTableName())))
-                            .map(SyncOutbox::getUid)
-                            .collect(Collectors.toList());
+                    // Au plus une mutation acquittee par resultat serveur : une
+                    // entite peut avoir plusieurs mutations distinctes dans le
+                    // meme lot, le serveur ne les distingue pas encore.
+                    List<String> successUids = SyncAcknowledgements
+                            .matchOnePerResult(effectiveChunk, result.successes);
 
                     if (!successUids.isEmpty()) {
                         System.out.println("[SYNC-UPSYNC] Successfully synced "+ successUids.size()+ "/"+mutations.size()+" records.");
@@ -557,7 +568,7 @@ public class BackgroundSyncService extends Service<Void> {
                 String retryBatchHeader = response.headers().get("Retry-With-Batch-Size"); 
                 String retryAfterHeader = response.headers().get("Retry-After"); 
                 System.out.println("[SYNC-UPSYNC] HTTP 429 Rate Limit. Reducing batch size.");
-                return SyncOutcome.rateLimited(parsePositiveInt(retryBatchHeader,Math.max(MIN_BATCH_SIZE, adaptiveBatchSize / 2)),
+                return SyncOutcome.rateLimited(parsePositiveInt(retryBatchHeader,Math.max(MIN_BATCH_SIZE, adaptiveBatchSize.get() / 2)),
                         parsePositiveInt(retryAfterHeader, 5));
             } else {
                 System.err.println("[SYNC-UPSYNC] Server error: " + response.code());
@@ -601,16 +612,16 @@ public class BackgroundSyncService extends Service<Void> {
     }
 
     private void handleRateLimit(SyncOutcome outcome) {
-        adaptiveBatchSize = Math.max(
+        adaptiveBatchSize.set(Math.max(
                 MIN_BATCH_SIZE,
                 Math.min(MAX_BATCH_SIZE, outcome.suggestedBatchSize)
-        );
+        ));
         int retryAfterSeconds = Math.max(2, outcome.retryAfterSeconds);
         adaptivePauseUntilEpochMs
                 = System.currentTimeMillis() + retryAfterSeconds * 1000L;
         publishStatus(
                 "Server busy - slowing down sync rate... (batch="
-                + adaptiveBatchSize
+                + adaptiveBatchSize.get()
                 + ", pause="
                 + retryAfterSeconds
                 + "s)"
@@ -618,13 +629,11 @@ public class BackgroundSyncService extends Service<Void> {
     }
 
     private void maybeIncreaseBatchSize() {
-        if (adaptiveBatchSize < DEFAULT_BATCH_SIZE) {
-            adaptiveBatchSize = Math.min(
-                    DEFAULT_BATCH_SIZE,
-                    adaptiveBatchSize + 5
-            );
-        } else if (adaptiveBatchSize < MAX_BATCH_SIZE) {
-            adaptiveBatchSize = Math.min(MAX_BATCH_SIZE, adaptiveBatchSize + 2);
+        int current = adaptiveBatchSize.get();
+        if (current < DEFAULT_BATCH_SIZE) {
+            adaptiveBatchSize.set(Math.min(DEFAULT_BATCH_SIZE, current + 5));
+        } else if (current < MAX_BATCH_SIZE) {
+            adaptiveBatchSize.set(Math.min(MAX_BATCH_SIZE, current + 2));
         }
     }
 

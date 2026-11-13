@@ -43,9 +43,9 @@ Relations : `Inventaire 1 → N Compter`, `Produit 1 → N Compter`, `Mesure 0..
 | Statut de session typé | **Absent** : `etat` est une chaîne libre (`Non commencé`, `En cours...`, `Terminé`) |
 | Responsable / validateur / date de validation | **Absent** de l'entité |
 | Recompte formalisé | Partiel : mise à jour manuelle d'un comptage ; pas de cycle de recompte |
-| Produits non comptés | Partiel : clôture crée des comptages zéro, mais uniquement pour les lots connus |
+| Produits non comptés | **Corrigé côté local** : clôture crée des comptages zéro pour tous les lots connus, y compris le lot vide |
 | Calcul d'écart et valorisation | Présent, mais calculé sur le stock théorique courant |
-| Validation atomique de la clôture | **Absent** : enchaînement d'écritures séparées |
+| Validation atomique de la clôture | **Corrigée** : régularisation de clôture dans une transaction unique |
 | Verrouillage / versionnage | **Absent** : pas de `@Version`, pas de contrainte d'unicité |
 | Idempotence de la régularisation | Partielle : purge/réécriture, pas de clé d'idempotence |
 | Rapport d'inventaire complet | Partiel : totaux et export, pas de rapport validé/validateur |
@@ -73,13 +73,21 @@ ajustements. Les ventes/achats/retours effectués pendant le comptage modifient 
 référence. Le cahier des charges exige une photographie figée à l'ouverture et une
 stratégie explicite pour les mouvements postérieurs.
 
-**Correction partielle** : `editStock` et `removeNoCountedProducts` utilisent désormais la date d'ouverture (`dateDebut`) pour interroger le stock théorique, avec repli explicite sur le stock courant si aucun agrégat n'existe. Les mouvements postérieurs à l'ouverture ne modifient plus la référence.
+**Correction appliquée** : la photographie théorique est persistée dans
+`compter.theoretical_snapshot` à la création du comptage, puis utilisée par
+`editStock`, `revertCompterAdjustments` et la clôture. La colonne est ajoutée
+par une migration idempotente (`SchemaAutoUpdater.ensureCompterSchema`) et
+exclue du payload serveur (`@JsonIgnore`). Les anciennes lignes sans snapshot
+retombent sur la référence à la date d'ouverture, puis sur le stock courant.
 
-**Limites** : pas de snapshot immuable dédié ; dépend de la présence d'un agrégat à la date d'ouverture ; les anciens inventaires sans date gardent le comportement courant.
+**Limites** : les comptages zéro créés par une clôture utilisent le stock à la
+date de référence ; la réconciliation des très anciens comptages reste à faire.
 
-**Test** : `openingTheoreticalStockUsesInventoryOpeningDate` vérifie que la date transmise est bien `dateDebut` et que la quantité d'ouverture est utilisée.
+**Tests** : `openingTheoreticalStockUsesInventoryOpeningDate`,
+`CompterServiceInventoryGuardTest` (snapshot prioritaire, repli ancien) et
+`SchemaAutoUpdaterTest` (migration SQLite réelle).
 
-**Statut** : **partiellement corrigé**.
+**Statut** : **corrigé** (avec repli historique).
 
 ### B3 — Clôture non atomique
 
@@ -102,29 +110,43 @@ régularisation complète.
 5. synchronisation.
 
 Une interruption pendant l'étape 1 laisse l'inventaire ouvert ; une nouvelle
-clôture est idempotente (les comptages zéro déjà présents sont ignorés).
-La clôture reste une suite d'écritures séparées, pas une transaction unique.
+clôture est idempotente (les comptages zéro déjà présents sont ignorés, et
+`removeNoCountedProducts` ne fait rien si l'inventaire est déjà `Terminé`).
+Les comptages zéro utilisent un uid déterministe
+(`DataId.deterministic("compter-zero", inventaire, produit, lot, région)`) :
+eux clôtures concurrentes visent la même ligne et la clé primaire empêche le
+double ajustement ; un doublon de clé est journalisé puis ignoré.
+La régularisation de clôture (comptages zéro, purges et ajustements de stock)
+est désormais exécutée dans **une transaction unique** : `ManagedSessionFactory`
+réutilise l'`EntityManager` de la transaction courante pour les écritures
+imbriquées, et `removeNoCountedProducts` enveloppe tout le traitement dans
+`executeWrite`. Une erreur ou une annulation au milieu de la clôture annule
+donc l'ensemble des ajustements. La sauvegarde immédiate reste prise avant la
+transaction.
 
-**Statut** : **partiellement corrigé** — reste à encapsuler dans une transaction
-ou une saga idempotente avec verrou.
+**Statut** : **corrigé côté poste local** — idempotence, concurrence et
+atomicité de la régularisation traitées ; une saga multi-instances (verrou
+serveur, clé d'idempotence distante) reste nécessaire pour plusieurs postes.
 
-### B4 — Produits sans lot ignorés à la clôture
+### B4 — Produits sans lot soldés à la clôture
 
-`removeNoCountedProducts` parcourt les lots renvoyés par `findAllDistinctLots`
-(`recquisition.numlot` et `stock_agregate.num_lot`) et ignore les lots nuls/vides :
+`removeNoCountedProducts` parcourt les lots renvoyés par `findAllDistinctLots`.
+Cette méthode renvoie maintenant `COALESCE(numlot, '')` /
+`COALESCE(num_lot, '')` et n’exclut plus les lots nuls ou vides. La clôture
+normalise chaque lot avec `tools.LotKeys.normalize` (`null`/espaces → `""`)
+et ne saute plus le lot vide.
 
-```java
-if (lot == null || lot.isBlank()) continue;
-```
+Les lectures et écritures concernées (`findLotStock`, `findComptageForProduit`,
+`sommeComptage`, `updateCompterMeta`, purges `#INV`, `rectifyStock`,
+`findClosedStockByLot`, agrégats `stock_agregate`) comparent désormais avec
+`COALESCE(colonne, '')`, ce qui couvre aussi les lignes historiques en
+`NULL`.
 
-Un produit sans lot (ou dont le stock est porté par un lot vide) n'est donc pas mis à
-zéro, malgré le message « les non comptés seront mis à ZERO ».
+**Risque résiduel** : un lot vide sans aucune réquisition ni agrégat reste
+invisible ; il est recommandé de valider le scénario sur une base réelle.
 
-**Risque** : stock résiduel non inventorié.  
-**Statut** : **ouvert, désormais signalé** — les lots `NULL`/vides restent
-non soldés, mais la clôture journalise un avertissement explicite par produit
-concerné ; la normalisation des requêtes et un test sur base réelle restent
-requis.
+**Statut** : **corrigé côté poste local** — les lots `NULL`/vides sont soldés
+comme les autres ; un test d’intégration SQLite/MySQL réel reste souhaitable.
 
 ### B5 — Comptages concurrents non protégés
 
@@ -268,7 +290,7 @@ JavaFX (PosController)
 |---|---|
 | `InventaireServiceTest` avec SQLite temporaire réel | intégration |
 | Attente du commit local avant retour | intégration |
-| Produit non compté avec lot null/vide | unité/integration |
+| Produit non compté avec lot null/vide | unité ajoutée (`CompterServiceLotNormalizationTest`) ; intégration base réelle à faire |
 | Double clôture | unité |
 | Comptage concurrent | intégration |
 | Écart avec vente pendant comptage | intégration |
@@ -290,9 +312,10 @@ JavaFX (PosController)
 ## 8. Conclusion de l'audit
 
 Le module existe réellement et couvre la création, la saisie, l'ajustement et la clôture.
-Il n'est cependant **pas encore un inventaire physique professionnel** : la référence
-théorique n'est pas figée, la clôture n'est pas atomique, les comptages concurrents ne
-sont pas protégés et la traçabilité du validateur est absente.
+Il n'est cependant **pas encore un inventaire physique professionnel au sens
+multi-postes** : la référence théorique et l'atomicité locale de la clôture sont
+corrigées, mais les comptages concurrents entre plusieurs postes ne sont pas
+protégés par le serveur et la traçabilité du validateur reste à compléter.
 
 La correction B1 est appliquée. Les autres corrections nécessitent des migrations de
 schéma et des tests d'intégration réels ; elles ne doivent pas être improvisées sur une

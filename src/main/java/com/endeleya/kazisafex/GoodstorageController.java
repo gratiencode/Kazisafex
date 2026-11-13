@@ -2504,7 +2504,7 @@ public class GoodstorageController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         region = pref.get("region", "...");
         role = UserRoleRegistry.getRole(pref);
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         entr = pref.get("eUid", "");
         applyPermissionUiState();
         pane_wait_import.setVisible(false);

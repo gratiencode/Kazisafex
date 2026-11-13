@@ -13,12 +13,16 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
  * @author endeleya
  */
 public class InventaireService implements InventaireStorage {
+
+    private static final Logger LOG = Logger.getLogger(InventaireService.class.getName());
 
     @Override
     public boolean isExists(String uid) {
@@ -48,7 +52,7 @@ public class InventaireService implements InventaireStorage {
                 em.persist(cat);
                 return cat;
             }).join();
-            System.out.println("Element INV " + cat.getCodeInventaire() + " enregistree");
+            LOG.fine(() -> "Inventaire enregistre : " + cat.getCodeInventaire());
             return cat;
         }
         ManagedSessionFactory.executeWrite(em -> {
@@ -66,7 +70,7 @@ public class InventaireService implements InventaireStorage {
                     em.merge(cat);
                     return cat;
                 }).join();
-                System.out.println("Element INv " + cat.getCodeInventaire() + " enregistree");
+                LOG.fine(() -> "Inventaire mis a jour : " + cat.getCodeInventaire());
                 return cat;
             }
             ManagedSessionFactory.executeWrite(em -> {
@@ -74,7 +78,7 @@ public class InventaireService implements InventaireStorage {
                 return null;
             });
         } catch (jakarta.persistence.EntityNotFoundException e) {
-            System.err.println("Erreur Message : " + e.getMessage());
+            LOG.log(Level.WARNING, "Inventaire introuvable lors de la mise a jour", e);
         }
         return cat;
     }
@@ -86,7 +90,7 @@ public class InventaireService implements InventaireStorage {
                 em.remove(em.merge(obj));
                 return obj;
             }).join();
-            System.out.println("Element " + obj.getCodeInventaire() + " supprimee");
+            LOG.fine(() -> "Inventaire supprime : " + obj.getCodeInventaire());
             return;
         }
         ManagedSessionFactory.executeWrite(em -> {

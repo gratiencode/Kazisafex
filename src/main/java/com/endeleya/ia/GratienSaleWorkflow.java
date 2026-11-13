@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import tools.Util;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.io.File;
@@ -29,12 +30,12 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
 public class GratienSaleWorkflow {
 
-    private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
     private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 
     private final ChatModel model = OllamaChatModel.builder()
-            .baseUrl(OLLAMA_BASE_URL)
+            .baseUrl(AiAgents.ollamaBaseUrl())
+            .customHeaders(AiAgents.ollamaAuthHeaders())
             .modelName(TEXT_MODEL_NAME)
             .temperature(0.0)
             .timeout(Duration.ofMinutes(5))
@@ -69,6 +70,11 @@ public class GratienSaleWorkflow {
             return !looksLikeInfoQuery(question);
         }
         String value = question == null ? "" : question.toLowerCase(Locale.ROOT);
+        if (Util.isDedupEliminationIntent(value)) {
+            // Elimination/fusion de doublons: ne jamais le detourner vers la vente,
+            // meme si le message contient "client". Le plan en etapes est gere par Gratien.
+            return false;
+        }
         if (looksLikeInfoQuery(value)) {
             return false;
         }

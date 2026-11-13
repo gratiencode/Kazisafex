@@ -44,6 +44,10 @@ public class CompterDelegate {
         getStorage().removeNoCountedProducts(inv, onCreated);
     }
 
+    public static List<Compter> findCompters() {
+        return getStorage().findCompters();
+    }
+
     public static Compter findCompter(String uid) {
         return getStorage().findCompter(uid);
     }

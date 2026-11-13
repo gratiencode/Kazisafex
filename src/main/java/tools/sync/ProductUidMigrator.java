@@ -109,7 +109,8 @@ public final class ProductUidMigrator {
             if (ManagedSessionFactory.isEmbedded()) {
                 @SuppressWarnings("unchecked")
                 List<Object[]> rows = em.createNativeQuery(
-                        "PRAGMA table_info('" + table + "')").getResultList();
+                        "PRAGMA table_info('" + services.SqlGuard.requireSafeIdentifier(
+                                table, "table") + "')").getResultList();
                 for (Object[] row : rows) {
                     if (row != null && row.length > 1 && row[1] != null) {
                         names.add(String.valueOf(row[1]));
@@ -154,7 +155,8 @@ public final class ProductUidMigrator {
             if (ManagedSessionFactory.isEmbedded()) {
                 @SuppressWarnings("unchecked")
                 List<Object[]> rows = em.createNativeQuery(
-                        "PRAGMA foreign_key_list('" + parentTable + "')").getResultList();
+                        "PRAGMA foreign_key_list('" + services.SqlGuard.requireSafeIdentifier(
+                                parentTable, "table") + "')").getResultList();
                 for (Object[] row : rows) {
                     // id, seq, table, from, to, ...
                     if (row != null && row.length > 3) {
@@ -222,6 +224,13 @@ public final class ProductUidMigrator {
             }
             String t = key.substring(0, idx);
             String col = key.substring(idx + 1);
+            // Securite (M3) : whitelist d'identifiants. Les couples
+            // (table, colonne) proviennent pour partie de l'introspection
+            // SGBD : format strict requis avant toute concatenation SQL,
+            // sinon la paire est ignoree.
+            if (!services.SqlGuard.isSafeIdentifier(t) || !services.SqlGuard.isSafeIdentifier(col)) {
+                continue;
+            }
             // Ne jamais executer un UPDATE sur une colonne qui n'existe pas :
             // "Unknown column 'xxx_uid' in 'where clause'".
             //  - Si l'introspection a reussi (set non vide) : on ne touche que

@@ -509,6 +509,12 @@ public class NotificationHandler implements EventHandler {
                                         Produit rp = recquisition.getProductId();
                                         if (rp != null && rp.getUid() != null) {
                                             Mesure fallback = MesureDelegate.findByProduitAndQuant(rp.getUid(), 1d);
+                                            if (fallback == null) {
+                                                List<Mesure> produitMesures = MesureDelegate.findMesureByProduit(rp.getUid());
+                                                if (produitMesures != null && !produitMesures.isEmpty()) {
+                                                    fallback = produitMesures.get(0);
+                                                }
+                                            }
                                             if (fallback != null) {
                                                 recquisition.setMesureId(fallback);
                                                 recqMesOk = true;
@@ -1503,7 +1509,7 @@ public class NotificationHandler implements EventHandler {
         if (kazisafeClient == null) {
             synchronized (NotificationHandler.class) {
                 if (kazisafeClient == null) {
-                    String token = pref != null ? pref.get("token", null) : null;
+                    String token = pref != null ? data.core.TokenStore.get() : null;
                     kazisafeClient = KazisafeServiceFactory.createService(token);
                 }
             }
@@ -1606,6 +1612,29 @@ public class NotificationHandler implements EventHandler {
                 // dependance satisfaite, on laisse l'appelant reprendre la
                 // persistance.
                 return true;
+            }
+            if (obj instanceof Recquisition r) {
+                Produit p = r.getProductId();
+                String prodUid = p != null ? p.getUid() : null;
+                boolean ok = true;
+                if (prodUid != null && !ProduitDelegate.isExists(prodUid)) {
+                    ok = tryFullDownsyncProduit(prodUid);
+                }
+                if (ok && r.getMesureId() != null && r.getMesureId().getUid() != null) {
+                    String mesUid = r.getMesureId().getUid();
+                    if (!MesureDelegate.isExists(mesUid)) {
+                        String mapped = mappedNewMesureUid(r.getPayload(), mesUid);
+                        String target = mapped != null ? mapped : mesUid;
+                        if (!MesureDelegate.isExists(target)) {
+                            ok = tryFullDownsyncMesure(target, prodUid);
+                        }
+                        if (!ok && prodUid != null) {
+                            List<Mesure> produitMesures = MesureDelegate.findMesureByProduit(prodUid);
+                            ok = produitMesures != null && !produitMesures.isEmpty();
+                        }
+                    }
+                }
+                return ok;
             }
             return false;
         } catch (Exception e) {
@@ -2217,6 +2246,20 @@ public class NotificationHandler implements EventHandler {
             return;
         }
 
+        for (int attempt = 1; ; attempt++) {
+            try {
+                runDownsyncMutationOnce(action);
+                return;
+            } catch (RuntimeException ex) {
+                if (attempt == 1 && isUniqueConstraintViolation(ex)) {
+                    continue;
+                }
+                throw ex;
+            }
+        }
+    }
+
+    private void runDownsyncMutationOnce(Runnable action) {
         ManagedSessionFactory.runInSession(em -> {
             // Un message SSE = un contexte persistant propre : une tentative
             // precedente en erreur (rollback) laisse des entites managed dans
@@ -2236,13 +2279,30 @@ public class NotificationHandler implements EventHandler {
                     tx.commit();
                 }
             } catch (RuntimeException ex) {
-                SyncLogger.getInstance().log(ex, "NotificationHandler.runInTransaction");
                 if (started && tx.isActive()) {
                     tx.rollback();
+                }
+                if (!isUniqueConstraintViolation(ex)) {
+                    SyncLogger.getInstance().log(ex, "NotificationHandler.runInTransaction");
                 }
                 throw ex;
             }
         });
+    }
+
+    private static boolean isUniqueConstraintViolation(Throwable ex) {
+        Throwable t = ex;
+        while (t != null) {
+            String msg = t.getMessage() != null ? t.getMessage().toLowerCase() : "";
+            if (t instanceof java.sql.SQLIntegrityConstraintViolationException
+                    || t instanceof org.hibernate.exception.ConstraintViolationException
+                    || msg.contains("duplicate entry")
+                    || msg.contains("unique constraint")) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     @Override
@@ -2251,6 +2311,13 @@ public class NotificationHandler implements EventHandler {
     }
 
     private com.launchdarkly.eventsource.EventSource eventSource;
+
+    private static volatile Runnable sseReconnectHook;
+    private static long last401RecoveryMs;
+
+    public static void setSseReconnectHook(Runnable hook) {
+        sseReconnectHook = hook;
+    }
 
     public void setEventSource(
         com.launchdarkly.eventsource.EventSource eventSource
@@ -2270,7 +2337,43 @@ public class NotificationHandler implements EventHandler {
             if (this.eventSource != null) {
                 this.eventSource.close();
             }
+            schedule401Recovery();
         }
+    }
+
+    /**
+     * Apres un 401 SSE (jeton expire), tente de rafraichir le jeton puis de
+     * relancer le flux via le hook enregistre par l'UI. Backoff d'une minute
+     * pour eviter une boucle de reconnexion serree si le refresh echoue.
+     */
+    private static void schedule401Recovery() {
+        synchronized (NotificationHandler.class) {
+            long now = System.currentTimeMillis();
+            if (now - last401RecoveryMs < 60_000L) {
+                return;
+            }
+            last401RecoveryMs = now;
+        }
+        retryExecutor.schedule(
+            () -> {
+                try {
+                    String stale = data.core.TokenStore.get();
+                    if (stale != null && !stale.isBlank()) {
+                        new data.core.TokenRefreshClient()
+                            .refreshAccessToken(stale);
+                    }
+                    Runnable hook = sseReconnectHook;
+                    if (hook != null) {
+                        hook.run();
+                    }
+                } catch (Exception ex) {
+                    Logger.getLogger(NotificationHandler.class.getName())
+                        .log(Level.WARNING, "SSE 401 recovery failed", ex);
+                }
+            },
+            30,
+            java.util.concurrent.TimeUnit.SECONDS
+        );
     }
 
     private void removeOldLigneVente(Vente vente) {

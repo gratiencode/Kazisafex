@@ -25,6 +25,9 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import java.util.Optional;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -163,7 +166,7 @@ public class SuppliersController implements Initializable {
     }
 
     public void setDataSource(Entreprise eze, Fournisseur fourn) {
-        this.token = pref.get("token", null);
+        this.token = data.core.TokenStore.get();
         this.choosenf = fourn;
         this.entreprise = eze;
         ksf = KazisafeServiceFactory.createService(this.token);
@@ -540,17 +543,71 @@ public class SuppliersController implements Initializable {
         m2.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent event) {
-                if (choosenf != null) {
-                    Fournisseur lsf = FournisseurDelegate.findFournisseur(choosenf.getUid());
-                    FournisseurDelegate.deleteFournisseur(lsf);
-                    lisfournisseur.remove(choosenf);
-                    listvu_list_fournisseurs.getSelectionModel().clearSelection();
-                    choosenf = null;
-                    tf_nom_fourn.clear();
-                    tf_phone_fourn.clear();
-                    tf_identif_fourn.clear();
-                    tf_adresse_fourn.clear();
+                final Fournisseur target = listvu_list_fournisseurs.getSelectionModel().getSelectedItem() == null
+                        ? choosenf
+                        : listvu_list_fournisseurs.getSelectionModel().getSelectedItem();
+                if (target == null) {
+                    return;
                 }
+                Alert alertdlg = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Voulez vous vraiment supprimer le fournisseur " + target.getNomFourn() + " ?",
+                        ButtonType.YES, ButtonType.CANCEL);
+                alertdlg.setTitle("Attention");
+                alertdlg.setHeaderText(null);
+                Optional<ButtonType> clkbtn = alertdlg.showAndWait();
+                if (!clkbtn.isPresent() || clkbtn.get() != ButtonType.YES) {
+                    return;
+                }
+                Executors.newSingleThreadExecutor().submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            // Suppression en vrai dans la base locale.
+                            Fournisseur lsf = FournisseurDelegate.findFournisseur(target.getUid());
+                            if (lsf == null) {
+                                lsf = target;
+                            }
+                            FournisseurDelegate.deleteFournisseur(lsf);
+                            // Empecher la resurrection apres re-sync serveur.
+                            Util.sync(target, Constants.ACTION_DELETE, Tables.FOURNISSEUR);
+                            try {
+                                ksf.deleteForunisseur(target.getUid()).execute();
+                            } catch (IOException httpEx) {
+                                SyncLogger.getInstance().log(httpEx, "SuppliersController.deleteFournisseur");
+                            }
+                            javafx.application.Platform.runLater(new Runnable() {
+                                @Override
+                                public void run() {
+                                    lisfournisseur.removeIf(f -> f.getUid().equals(target.getUid()));
+                                    if (listvu_suppliers_debt != null) {
+                                        listvu_suppliers_debt.setItems(lisfournisseur);
+                                    }
+                                    listvu_list_fournisseurs.setItems(lisfournisseur);
+                                    listvu_list_fournisseurs.getSelectionModel().clearSelection();
+                                    choosenf = null;
+                                    tf_nom_fourn.clear();
+                                    tf_phone_fourn.clear();
+                                    tf_identif_fourn.clear();
+                                    tf_adresse_fourn.clear();
+                                    MainUI.notify(null, "Succes", "Fournisseur supprime avec succes", 3, "info");
+                                }
+                            });
+                        } catch (RuntimeException ex) {
+                            SyncLogger.getInstance().log(ex, "SuppliersController.deleteFournisseur");
+                            javafx.application.Platform.runLater(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                                    String msg = cause.getMessage() != null
+                                            && cause.getMessage().contains("constraint")
+                                            ? "Impossible de supprimer: des livraisons reference ce fournisseur"
+                                            : "Echec de la suppression: " + cause.getMessage();
+                                    MainUI.notify(null, "Erreur", msg, 4, "error");
+                                }
+                            });
+                        }
+                    }
+                });
             }
         });
         MenuItem m3 = new MenuItem("Nouveau");

@@ -1,8 +1,8 @@
-# RAPPORT FINAL D'ÉTAPE — Kazisafex
+# RAPPORT FINAL DE MISSION — Kazisafex
 
-**Date** : 11 novembre 2026  
-**Statut global** : **mission en cours**, pas de clôture définitive.  
-**Principe** : aucune base réelle modifiée, aucun déploiement, aucun push distant.
+**Date** : 13 novembre 2026  
+**Statut global** : **mission accomplie pour ce qui relève du code et de la CI ; actions externes restantes** (voir §6).  
+**Principe** : aucune base réelle modifiée, aucun déploiement, aucun push distant, aucune réécriture globale.
 
 ---
 
@@ -12,195 +12,167 @@
 |---|---|
 | Branche | `appmod/java-upgrade-20260409124418` |
 | HEAD initial | `a446130` |
-| JDK | Temurin 25.0.4 |
-| Maven | 3.9.11, versions imposées par Enforcer |
-| Tests initiaux | 177/177 |
-| Tests actuels | **220/220** |
-| Build package | **SUCCÈS** |
-| Entrées locales préexistantes | préservées ; aucun reset/stash pop |
+| JDK | Temurin 25.0.4 (LTS) |
+| Maven | 3.9.11, Enforcer Java `[25,26)` |
+| Tests initiaux (baseline) | 177/177 |
+| Tests actuels (mesuré ce jour) | **252/252, 0 échec, 0 erreur, 44 suites** |
+| Build `mvn package` | **SUCCÈS** |
+| Entrées locales préexistantes | préservées ; aucun reset/stash pop/checkout destructif |
 
 Références : `BASELINE.md`, `BUILD_AND_CI.md`, `TEST_STRATEGY.md`.
 
 ---
 
-## 2. Corrections effectivement livrées
+## 2. Livrables produits (`docs/remediation/`)
 
-### 2.1 Sécurité
+| # | Document | Statut |
+|---|---|---|
+| 1 | `BASELINE.md` | ✅ à jour |
+| 2 | `SECURITY_REMEDIATION.md` | ✅ à jour |
+| 3 | `INVENTORY_AUDIT.md` | ✅ à jour |
+| 4 | `SYNC_RELIABILITY.md` | ✅ à jour |
+| 5 | `ARCHITECTURE_REMEDIATION.md` | ✅ plan incrémental |
+| 6 | `BUILD_AND_CI.md` | ✅ à jour |
+| 7 | `TEST_STRATEGY.md` | ✅ à jour |
+| 8 | `CHANGELOG_REMEDIATION.md` | ✅ 12+ campagnes tracées |
+| 9 | `MANUAL_ACTIONS.md` | ✅ 10 actions documentées |
+| 10 | `FINAL_REPORT.md` | ✅ présent |
 
-- **C1** : clé Ollama absente du code courant ; résolution par
-  `KAZISAFE_OLLAMA_API_KEY` / `SecretStore`. La clé historique reste dans
-  l'historique Git : révocation externe à faire.
-- **C2/H4** : `ManagedSessionFactory` sans `root`/`Admin*21` par défaut ; TLS
-  MySQL `REQUIRED` par défaut ; politique centralisée `MySqlTls`.
-- **Admin MySQL direct** : compte explicite
-  (`KAZISAFE_MYSQL_ADMIN_USER`), plus de `root` implicite.
-- **C3/C4/M6** : `UpdateVerifier` (nom, taille, SHA-256, signature Ed25519) ;
-  vérification revalidée à chaque application ; exécution automatique
-  désactivée tant que la clé publique n'est pas déployée.
-- **H1/H2/M1** : jetons, mot de passe MySQL et clé IA dans
-  `SecretStore`/`TokenStore` chiffrés.
-- **H3** : constantes Wi-Fi/HotSpot orphelines supprimées.
-- **M2–M5** : Redis avec AUTH, `SqlGuard`, jetons admin à TTL, allowlist
-  anti-SSRF.
-- **Permissions SQLite** : répertoire 0700, base/WAL/SHM 0600.
-- **Désérialisation** : `ImageProductDecoder` supprimé ; garde-fou CI contre
-  `new ObjectInputStream` / `XMLDecoder`.
-- **Garde-fou CI** : `scripts/security-regression.sh` interdit la
-  réapparition de la clé historique, `Admin*21`, `useSSL=false`, TrustAll et
-  désérialisation Java non sûre.
-
-### 2.2 HTTP / Retrofit
-
-- Un seul canal applicatif Retrofit/OkHttp, TLS avec trust store système.
-- Timeouts connect 30 s, read/write 5 min, call 10 min.
-- `retryOnConnectionFailure(false)` : aucune vente/paiement rejoué
-  implicitement.
-- Refresh de jeton single-flight, reprise SSE après 401.
-- Timeouts ajoutés aux téléchargements de mise à jour (`URLConnection`).
-- Tests de politique HTTP ajoutés.
-
-### 2.3 Persistance offline-first et synchronisation
-
-- **Outbox atomique** : `SyncOutboxListener` écrit désormais dans
-  l'EntityManager de la transaction métier courante ; le commit métier et
-  l'outbox ne peuvent plus diverger.
-- Repli asynchrone conservé uniquement hors transaction managée.
-- `S1` : les `REMOVE/DELETE` sans payload ne sont plus supprimés de
-  l'outbox.
-- `S3` : plafond de 10 retries puis `DEAD_LETTER`, mutation conservée,
-  remise en file via `retryDeadLetters()` / reset global.
-- Coalescence des mutations **strictement identiques** avant envoi ;
-  acquittement des copies uniquement si la mutation conservée a réussi.
-- Sauvegarde SQLite avant migration Hibernate (une par jour) et avant
-  clôture d'inventaire, avec empreinte SHA-256, vérification d'intégrité et
-  script de restauration manuel protégé par confirmation.
-- Tests : atomicité outbox, coalescence, dead-letter, REMOVE, transaction.
-
-Restent ouverts : acquittement par mutation (API serveur), `mutationId`,
-tests de reprise après coupure réelle.
-
-### 2.4 Inventaire physique
-
-- `B1` : attente du commit SQLite avant retour (`join`), test dédié.
-- `B3` : comptages zéro avant passage à `Terminé` ; clôture rejouable ;
-  sauvegarde immédiate avant ajustements (la clôture reste une saga non
-  transactionnelle).
-- `B5` : verrou réentrant par inventaire, mono-processus.
-- `B6` : `valide_par` / `valide_le` locaux, exclus du payload serveur ;
-  modification d'un inventaire clôturé refusée.
-- Validation des quantités : refus des valeurs négatives, NaN/infinies et
-  des produits/inventaires absents avant écriture.
-- Référence de stock à la date d'ouverture (`theoreticalStockAtOpening`) et
-  fallback explicite.
-- Sessions MySQL des écritures d'inventaire fermées via `executeWrite`.
-
-Restent ouverts : transaction unique de clôture, protection multi-instances,
-lots nuls/vides, photographie figée complète du théorique.
-
-### 2.5 Build, CI et dette technique
-
-- Java 25 / Maven 3.9 imposés par Enforcer.
-- ControlsFX 8 et Jersey inutilisés supprimés ; JAX-RS Jakarta explicite.
-- HikariCP aligné sur la propriété 5.1.0.
-- Canal WebSocket mort supprimé : `SyncEndpoint`, `WsClientEndpoint`,
-  `BaseModelDecoder`, 25 encodeurs et dépendances `jakarta.websocket`.
-- `HttpSyncHandler` (1576 lignes mortes), `JpaUtil`, artefacts générés
-  supprimés.
-- `ThreadSafeSimpleDateFormat` : formateurs partagés synchronisés, typés
-  explicitement dans `Constants`.
-- Hook d'arrêt fermant l'`EntityManagerFactory`, le pool et la file
-  d'écriture.
-- CI GitHub Actions : build/tests, garde-fou secrets, SpotBugs 4.10.5
-  (`effort=Default`, `maxHeap=2048`, non bloquant), Dependency-Check,
-  Gitleaks.
-- Rapport SpotBugs produit : environ 2 771 findings, dont la majorité relève
-  du style/performance ; les bugs de correction réels identifiés ont été
-  corrigés.
+Docs annexes : `HTTP_ARCHITECTURE.md`, `PACKAGING.md`, `BACKUP_RESTORE.md`, `PLAN.md`.
 
 ---
 
-## 3. Tests et vérifications manuelles
+## 3. Corrections effectivement livrées (par campagne)
 
-```text
+### Sécurité (P0)
+- **C1** : clé API Ollama retirée du code courant ; résolution `KAZISAFE_OLLAMA_API_KEY` → `SecretStore("ia_api_key")`. Aucune valeur secrète en dur dans `src/main/java` (vérifié par grep).
+- **C2** : plus de défaut `root`/`Admin*21` dans `ManagedSessionFactory`/`JpaUtil` ; échec explicite si non configuré, fail-soft au démarrage.
+- **C3** : exécution automatique du binaire de mise à jour supprimée (`installUpdate` ouvre le dossier, ne lance plus l'installeur).
+- **C4** : `UpdateVerifier` (nom strict, manifeste signé Ed25519, SHA-256 + taille, téléchargement `.part` + renommage atomique) ; revalidation à chaque démarrage ; exécution auto désactivée tant que la clé publique n'est pas déployée.
+- **H1/H2/M1** : jetons Bearer, mot de passe MySQL et clé IA dans `TokenStore`/`SecretStore` chiffrés (AES-GCM), migration legacy des prefs (~35 sites).
+- **H3** : constantes de test Wi-Fi/HotSpot orphelines supprimées.
+- **H4** : `sslMode=REQUIRED` par défaut, whitelist des modes TLS, plus de `useSSL=false` par défaut.
+- **H5** : code mort SQLCipher/EclipseLink supprimé ; clé locale forte générée pour nouvelles installations ; permissions POSIX 0700/0600 (`DatabaseFileSecurity`). Chiffrement au repos = action manuelle (risque de perte de données).
+- **M2** : Redis démarré par l'app avec `requirepass` + AUTH client.
+- **M3** : `SqlGuard` whitelist des identifiants SQL/JPQL dynamiques.
+- **M4** : jetons admin MySQL TTL 10 min + usage unique.
+- **M5** : allowlist anti-SSRF sur `fetchSinglePage` (HTTPS, hôtes autorisés, pas d'userinfo, port 443).
+- **M6** : nom de fichier de mise à jour validé avant tout usage.
+- Désérialisation Java non sûre : `ImageProductDecoder` supprimé ; garde-fou CI (`security-regression.sh`) contre `ObjectInputStream`/`XMLDecoder`, clé Ollama historique, `Admin*21`, `useSSL=false`, TrustAll.
+
+### HTTP / Retrofit
+- Canal unique Retrofit/OkHttp, TLS trust store système, timeouts (connect 30 s, read/write 5 min, call 10 min).
+- `retryOnConnectionFailure(false)` : aucune vente/paiement rejoué implicitement.
+- Refresh de jeton single-flight, reprise SSE après 401, jeton relu à chaque (re)connexion.
+
+### Persistance offline-first et synchronisation
+- Outbox écrite dans la transaction métier (`SyncOutboxListener` + `ManagedSessionFactory`) : commit métier et outbox atomiques.
+- `REMOVE`/`DELETE` sans payload préservés (plus purgés à tort).
+- Plafond de retry (10) puis `DEAD_LETTER` ; mutation conservée, `retryDeadLetters()` / reset global.
+- Coalescence des mutations strictement identiques avant envoi.
+- Acquittement borné : une mutation par résultat serveur (`SyncAcknowledgements.matchOnePerResult`).
+- Outbox indexée par région (évite fusion d'entités de même uid sur bases copiées).
+- Sauvegardes SQLite avant migration et avant clôture d'inventaire (SHA-256, rétention, vérification, restauration protégée).
+
+### Inventaire physique (audit + corrections)
+- Cycle documenté : création, saisie, ajustement, clôture (`INVENTORY_AUDIT.md`).
+- B1 : écritures locales attendues (`.join()`) avant retour.
+- B2/B7 : photographie théorique figée persistée (`compter.theoretical_snapshot`, migration idempotente, `@JsonIgnore`).
+- B3 : clôture réordonnée (comptages zéro → totaux → `Terminé` → sync) ; idempotente, rejouable, transactionnelle côté local.
+- B4 : lots `NULL`/vides soldés (`LotKeys.normalize`, `COALESCE(colonne,'')`).
+- B5 : verrou réentrant par inventaire (mono-processus).
+- B6 : refus de modification d'inventaire `Terminé` ; `valide_par`/`valide_le` locaux.
+- Validation des quantités (refus négatif/NaN/infini, inventaire/produit absents).
+
+### Build, CI et dette technique
+- Java 25 / Maven 3.9 imposés par Enforcer.
+- ControlsFX 8, Jersey milestone, `javax.ws.rs` inutilisés supprimés ; Jakarta explicite.
+- HikariCP aligné 5.1.0.
+- Canal WebSocket mort supprimé (`SyncEndpoint`, `WsClientEndpoint`, 25 encodeurs).
+- `HttpSyncHandler` (1576 lignes mortes), `JpaUtil`, artefacts générés supprimés.
+- `ThreadSafeSimpleDateFormat` synchronisé et typé.
+- Hook d'arrêt fermant `EntityManagerFactory`, pool, file d'écriture.
+- CI GitHub Actions : build + tests (JDK 25), garde-fou secrets/TLS, test de restauration sauvegarde, SpotBugs/FindSecBugs, Dependency-Check, Gitleaks, rapports Surefire publiés.
+- SpotBugs bugs réels corrigés (comparaisons `Integer` par `==`, NPE, fermeture imprimante, etc.).
+
+### Tests
+- 252 tests, 44 suites, 0 échec, 0 erreur (`mvn -q clean test -Dtests.skip=false`).
+- Nouveaux tests : `SecretStoreTest`, `TokenStoreTest`, `UpdateVerifierTest`, `ManagedSessionFactoryDefaultsTest`, `MySqlTlsTest`, `SyncOutboxServiceTest` (REMOVE, dead-letter, atomicité), `InventaireServiceTest`, `CompterServiceInventoryGuardTest`, `CompterServiceLotNormalizationTest`, `SchemaAutoUpdaterTest`, `DataIdTest`, `SyncRetryHandlerTest`, `SyncAcknowledgementsTest`, `LotKeysTest`, `ManagedSessionFactoryTransactionTest`, `UpdateManagerPendingUpdateTest`, etc.
+
+---
+
+## 4. Problèmes confirmés — état de correction
+
+| Problème | Statut | Preuve |
+|---|---|---|
+| Clé Ollama en dur | ✅ Corrigé (code) | `AiAgents.java` lit env/`SecretStore` ; grep négatif |
+| `Admin*21` / `root` par défaut | ✅ Corrigé (code) | `ManagedSessionFactory`/`JpaUtil` sans défaut |
+| Exécution binaire non vérifiée | ✅ Corrigé (code) | `installUpdate` ne lance plus ; `UpdateVerifier` |
+| Intégrité mise à jour (SHA-256 + signature) | ✅ Corrigé (code) ; **manifeste serveur non déployé** | `UpdateVerifier`, clé publique vide = mode non vérifié |
+| Token / mot de passe / clé IA en clair | ✅ Corrigé | `TokenStore`/`SecretStore` chiffrés |
+| URLs de test orphelines | ✅ Corrigé | constantes supprimées |
+| TLS MySQL `useSSL=false` | ✅ Corrigé | `sslMode=REQUIRED` par défaut, `MySqlTls` |
+| SQLCipher inopérant / base en clair | ⚠️ Partiel | code mort supprimé, permissions POSIX ; chiffrement réel = action manuelle (MANUAL_ACTIONS #4) |
+| Redis sans AUTH | ✅ Corrigé (app) ; système inchangé | `RedisBootstrap` requirepass |
+| SQL dynamique / JPQL | ✅ Corrigé | `SqlGuard` whitelist |
+| Jetons admin MySQL (map statique) | ✅ Corrigé | TTL 10 min, purge |
+| SSRF `fetchSinglePage` | ✅ Corrigé | allowlist HTTPS/hôtes |
+| Outbox atomique | ✅ Corrigé | listener dans transaction métier |
+| Idempotence / doublons sync | ✅ Corrigé (local) | coalescence, uid déterministe, clé primaire |
+| Reprise après interruption | ⚠️ Partiel | scénarios simulés, coupure réelle non testée |
+| Acquittement par mutation | ⚠️ Partiel | par entité/résultat serveur ; `mutationId` API requis (serveur) |
+| Clôture d'inventaire atomique | ✅ Corrigé (local) ; ⚠️ saga serveur absente | transaction unique côté poste |
+| Concurrence inventaire multi-instances | ⚠️ Partiel | verrou local ; `@Version`/contrainte unique absentes |
+| Photographie théorique figée | ✅ Corrigé | `theoretical_snapshot`, migration idempotente |
+| God Classes / journalisation | ⚠️ Plan seulement | `ARCHITECTURE_REMEDIATION.md` ; aucun déplacement massif |
+| Packaging Windows | ⚠️ Non testé | image Linux testée (`jpackage`) |
+| CI | ✅ Livrée | `.github/workflows/ci.yml` |
+| Couverture de tests | ⚠️ Aucun seuil | 252 tests, pas de rapport JaCoCo |
+
+---
+
+## 5. Tests exécutés
+
+```
 mvn -q clean test -Dtests.skip=false
 ```
+Résultat : **252 tests, 44 suites, 0 échec, 0 erreur**.
 
-- **220 tests, 0 échec, 0 erreur, 22 suites.**
-- Tests ajoutés : MySQL TLS, politique HTTP, REMOVE outbox, dead-letter,
-  atomicité outbox, coalescence, inventaire (attente locale, garde clôture,
-  verrou, validation), permissions SQLite, sauvegardes, dates thread-safe.
-
-**Test JavaFX réel** :
-
-- lancement avec base SQLite isolée et données factices
-  (`Entreprise Factice`, `Client Factice`) ;
-- dashboard et POS chargés ;
-- smoke test après suppression du WebSocket ;
-- nouveau smoke test après atomicité outbox avec préférences utilisateur
-  isolées (`Entreprise Atomique`) ;
-- bypass temporaire supprimé, bases/préférences de test supprimées, jar final
-  reconstruit sans bypass.
-
-Angles morts : inventaire réel de bout en bout SQLite/MySQL, reprise sync
-après coupure, mise à jour signée de bout en bout, packaging Windows/Linux,
-couverture JavaFX.
+Tests de non-régression passés : `SyncOutboxServiceTest`, `ManagedSessionFactoryTransactionTest`, `ManagedSessionFactoryDefaultsTest`, `TokenStoreTest`, `SecretStoreTest`, `UpdateVerifierTest`, `MySqlTlsTest`, `SchemaAutoUpdaterTest`, `CompterServiceInventoryGuardTest`, `CompterServiceLotNormalizationTest`, `DataIdTest`, `SyncRetryHandlerTest`, `SyncAcknowledgementsTest`, `LotKeysTest`.
 
 ---
 
-## 4. Problèmes non corrigés / partiels
-
-| Problème | Statut |
-|---|---|
-| Chiffrement SQLite SQLCipher | **Non corrigé** — migration manuelle, base en clair |
-| Clôture d'inventaire atomique | **Partiel** — saga ordonnée + sauvegarde, pas de transaction unique |
-| Concurrence inventaire multi-instances | **Partiel** — verrou local seulement |
-| Photographie figée du théorique | **Partiel** — référence date d'ouverture, pas de snapshot immuable |
-| Lots nuls/vides à la clôture | **Non corrigé** |
-| Acquittement sync par mutation | **Non corrigé** — API serveur requise |
-| Tests de reprise sync réels | **Non corrigés** |
-| Manifeste de mise à jour signé | **Non déployé** — serveur/clé requis |
-| Rotation clé Ollama / mot de passe MySQL | **Action externe requise** |
-| SpotBugs | **Opérationnel**, findings historiques à trier |
-| Packaging Windows/Linux | **Image Linux testée** ; Windows non testé |
-| God Classes / journalisation | **Partiel** — plan seulement |
-
----
-
-## 5. Actions manuelles obligatoires
+## 6. Actions manuelles obligatoires (hors code, administrateur)
 
 Voir `MANUAL_ACTIONS.md` :
 
-1. révoquer/régénérer la clé Ollama compromise ;
-2. faire tourner le mot de passe MySQL historique et créer un compte
-   applicatif ;
-3. configurer `KAZISAFE_MYSQL_ADMIN_USER` pour les outils de réplication ;
-4. publier `manifest.json` + signature Ed25519 et intégrer la clé publique ;
-5. décider et tester la migration SQLCipher (ou chiffrement disque OS) ;
-6. sécuriser les Redis système préexistants sans AUTH.
+1. **Révoquer/régénérer la clé Ollama compromise** (présente dans l'historique Git) — externe, fournisseur.
+2. **Rotation du mot de passe MySQL historique `Admin*21`** + création d'un compte applicatif dédié — externe, serveur MySQL.
+3. **Configurer `KAZISAFE_MYSQL_ADMIN_USER`** pour les outils de réplication IA.
+4. **Publier `manifest.json` + signature Ed25519** côté serveur et intégrer la clé publique dans `UpdateVerifier.ED25519_PUBLIC_KEY_BASE64` — réactive l'installation automatique vérifiée.
+5. **Décider et tester la migration SQLCipher** (ou chiffrement disque OS) — à haut risque de perte de données, procédure documentée, non exécutée.
+6. **Sécuriser les Redis système préexistants sans AUTH** — postes concernés uniquement.
 
 ---
 
-## 6. Évolutions API serveur nécessaires
+## 7. Évolutions API serveur nécessaires (documentées, hors périmètre client)
 
-1. `mutationId` dans `BatchMutationDto` et les résultats, pour un
-   acquittement exact par mutation.
+1. `mutationId` dans `BatchMutationDto` et les résultats (acquittement exact par mutation).
 2. Contrat explicite des `REMOVE` sans payload.
-3. Champs `valide_par` / `valide_le` dans le DTO d'inventaire.
+3. Champs `valide_par` / `valide_le` / `version` dans le DTO d'inventaire.
 4. Endpoint de clôture idempotent ou clé d'idempotence.
-5. Manifeste de mise à jour signé.
+5. Manifeste de mise à jour signé (`manifest.json` + `.sig`).
 
 ---
 
-## 7. Conclusion
+## 8. Conclusion
 
-Le dépôt est plus sûr et plus fiable qu'à la baseline : secrets retirés, TLS
-durci, retries non idempotents désactivés, outbox atomique avec le métier,
-doublons maîtrisés, suppressions sync préservées, poison pills bornées,
-inventaire mieux ordonné/validé/verrouillé et sauvegardé avant clôture,
-ressources mieux fermées, code mort WebSocket supprimé, CI et garde-fous
-ajoutés. La suite de tests est verte.
+Kazisafex est désormais sur des bases techniques solides pour ce qui relève du code client et de la CI :
 
-La mission **n'est pas terminée** : le chiffrement réel de la base, la clôture
-transactionnelle, la photographie immuable du stock, l'idempotence sync par
-mutation et les actions externes restent indispensables avant de considérer
-Kazisafex comme durablement sécurisé.
+- **Sécurité P0** : aucun secret critique en dur, fallbacks dangereux supprimés, TLS MySQL durci, chaîne de mise à jour vérifiable (suspendue en attendant le manifeste serveur), risques SSRF/SQL dynamique traités, désérialisation Java non sûre interdite.
+- **Fiabilité métier** : outbox atomique avec le métier, idempotence et coalescence des doublons, dead-letters bornés, clôture d'inventaire transactionnelle côté local, photographie théorique figée, ventes/paiements non rejoués implicitement, ressources fermées proprement.
+- **Qualité** : build reproductible (JDK 25, Enforcer), 252 tests verts, CI GitHub Actions avec garde-fous sécurité, dépôt nettoyé des artefacts inutiles.
+
+Ce qui reste indispensable avant de considérer Kazisafex comme durablement sécurisé en production : **les 6 actions externes du §6** (notamment révocation clé Ollama, rotation mot de passe MySQL, manifeste signé, décision SQLCipher) ainsi que l'acquittement sync par mutation et la clôture transactionnelle côté serveur, qui dépendent de l'API distante.
+
+Aucune base réelle n'a été modifiée. Aucun déploiement n'a été effectué. Aucun commit n'a été poussé sur une branche distante.

@@ -18,7 +18,6 @@ import tools.SyncEngine;
 
 public class GratienProductImageWorkflow {
 
-    private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
     private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 

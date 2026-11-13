@@ -153,3 +153,36 @@ Le mot de passe reste demandé explicitement à l'utilisateur lors de l'appel.
 
 Sans cette configuration, l'outil renvoie un message explicite et ne tente
 aucune connexion.
+
+## 9. Migration de schéma `compter.theoretical_snapshot` — AUTOMATIQUE
+
+Au premier démarrage de la version corrigée, `SchemaAutoUpdater` ajoute la
+colonne `theoretical_snapshot` (DOUBLE) à la table `compter` si elle manque.
+La migration est idempotente et ne supprime aucune ligne.
+
+**Procédure**
+1. Laisser l'application effectuer une sauvegarde avant migration (mécanisme
+   existant) ou faire une copie manuelle de `kazi_<eUid>.db`.
+2. Démarrer une fois l'application ; vérifier dans les logs l'absence
+   d'erreur de migration.
+3. Les anciens comptages sans snapshot utilisent automatiquement le stock à
+   la date d'ouverture, puis le stock courant en dernier recours.
+
+**Rollback** : restaurer la sauvegarde `kazi_<eUid>.db` ; la colonne
+supplémentaire n'empêche pas une version antérieure de fonctionner (elle
+l'ignore).
+
+
+## 10. Clôture d'inventaire et lots NULL
+
+- La régularisation de clôture est transactionnelle côté poste local. En cas de
+  plusieurs postes, prévoir un verrou/idempotence serveur avant d'autoriser des
+  clôtures simultanées.
+- Les stocks portés par un lot `NULL` ou vide sont désormais soldés avec les
+  autres : `tools.LotKeys.normalize` ramène `null`/espaces à `""`, et les
+  requêtes de stock, de comptage, de purge et `rectifyStock` comparent via
+  `COALESCE(colonne, '')`. Les lignes historiques en `NULL` sont donc vues
+  comme le lot vide.
+- Valider malgré tout ce scénario sur une copie de base réelle avant une
+  clôture de production : le test automatisé actuel vérifie la normalisation
+  et la génération SQL, pas le résultat métier complet sur SQLite/MySQL.

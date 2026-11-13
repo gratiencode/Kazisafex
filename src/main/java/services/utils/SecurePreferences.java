@@ -23,6 +23,13 @@ public final class SecurePreferences {
 
     private static final String PREF_KEY_NAME = "enc_db_key"; // emplacement dans Preferences
 
+    /**
+     * Cle de preference chiffree portant le plafond de tokens du chef d'orchestration
+     * (clé « tsub ») : la valeur stockee est un entier en clair, mais chiffre (AES-GCM)
+     * au repos. Dechiffree puis convertie en entier par {@link TokenBudget}.
+     */
+    public static final String KEY_TSUB = "tsub";
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int SALT_LEN = 16;     // bytes
     private static final int IV_LEN = 12;       // bytes for GCM
@@ -48,6 +55,27 @@ public final class SecurePreferences {
    
     // Chiffre la valeur et la sauvegarde dans Preferences
     public static void storeEncryptedValue(String masterPassphrase, String plainValue) throws Exception {
+        storeEncryptedValue(PREF_KEY_NAME, masterPassphrase, plainValue);
+    }
+
+    // Récupère la valeur chiffrée depuis Preferences et la déchiffre
+    public static String loadDecryptedValue(String masterPassphrase) throws Exception {
+        return loadDecryptedValue(PREF_KEY_NAME, masterPassphrase);
+    }
+
+    public static boolean hasStoredValue() {
+        return hasStoredValue(PREF_KEY_NAME);
+    }
+
+    /**
+     * Chiffre (AES/GCM) une valeur en clair et la range dans Preferences sous la clé
+     * donnée. La même clé sert lors du déchiffrement via {@link #loadDecryptedValue}.
+     *
+     * @param key             nom de la cle Preferences (ex. {@link #KEY_TSUB})
+     * @param masterPassphrase passphrase locale dérivée en clé AES
+     * @param plainValue      valeur en clair a proteger au repos
+     */
+    public static void storeEncryptedValue(String key, String masterPassphrase, String plainValue) throws Exception {
         byte[] salt = new byte[SALT_LEN];
         RANDOM.nextBytes(salt);
 
@@ -69,13 +97,18 @@ public final class SecurePreferences {
         System.arraycopy(cipherText, 0, out, salt.length + iv.length, cipherText.length);
 
         String b64 = Base64.getEncoder().encodeToString(out);
-        Preferences.userNodeForPackage(SyncEngine.class).put(PREF_KEY_NAME, b64);
-        System.out.println("CHIF-" + b64);
+        Preferences.userNodeForPackage(SyncEngine.class).put(key, b64);
     }
 
-    // Récupère la valeur chiffrée depuis Preferences et la déchiffre
-    public static String loadDecryptedValue(String masterPassphrase) throws Exception {
-        String b64 = Preferences.userNodeForPackage(SyncEngine.class).get(PREF_KEY_NAME, null);
+    /**
+     * Déchiffre la valeur chiffrée sous la clé donnée.
+     *
+     * @param key             cle Preferences
+     * @param masterPassphrase passphrase locale derivee en cle AES
+     * @return la valeur en clair, ou {@code null} si absente
+     */
+    public static String loadDecryptedValue(String key, String masterPassphrase) throws Exception {
+        String b64 = Preferences.userNodeForPackage(SyncEngine.class).get(key, null);
         if (b64 == null) {
             return null;
         }
@@ -103,7 +136,43 @@ public final class SecurePreferences {
         return new String(plain, "UTF-8");
     }
 
-    public static boolean hasStoredValue() {
-        return Preferences.userNodeForPackage(SyncEngine.class).get(PREF_KEY_NAME, null) != null;
+    public static boolean hasStoredValue(String key) {
+        return Preferences.userNodeForPackage(SyncEngine.class).get(key, null) != null;
+    }
+
+    /**
+     * Stocke un entier sous forme de valeur chiffree (ex. plafond de tokens « tsub »).
+     *
+     * @param key             cle Preferences
+     * @param masterPassphrase passphrase locale
+     * @param value           entier a proteger
+     */
+    public static void storeEncryptedInt(String key, String masterPassphrase, int value) throws Exception {
+        storeEncryptedValue(key, masterPassphrase, Integer.toString(value));
+    }
+
+    /**
+     * Lit un entier depuis une preference chiffree: valeur prise dans Preferences,
+     * dechiffree, puis convertie en entier. Toute erreur (absente, corrompue,
+     * passphrase indisponible) replie sur {@code fallback}.
+     *
+     * @param key             cle Preferences
+     * @param masterPassphrase passphrase locale (null = fallback)
+     * @param fallback        valeur par defaut
+     * @return l'entier decrypté, ou {@code fallback}
+     */
+    public static int loadDecryptedInt(String key, String masterPassphrase, int fallback) {
+        if (masterPassphrase == null || masterPassphrase.isBlank()) {
+            return fallback;
+        }
+        try {
+            String decrypted = loadDecryptedValue(key, masterPassphrase);
+            if (decrypted == null || decrypted.isBlank()) {
+                return fallback;
+            }
+            return Integer.parseInt(decrypted.trim());
+        } catch (Exception ex) {
+            return fallback;
+        }
     }
 }

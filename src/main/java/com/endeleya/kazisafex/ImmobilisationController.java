@@ -159,7 +159,7 @@ public class ImmobilisationController implements Initializable {
     public void init(Entreprise entreprise, Kazisafe service) {
         this.kazisafe = service;
         if (this.kazisafe == null) {
-            String token = pref.get("token", null);
+            String token = data.core.TokenStore.get();
             if (token != null) {
                 this.kazisafe = KazisafeServiceFactory.createService(token);
             }

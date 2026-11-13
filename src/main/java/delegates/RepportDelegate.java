@@ -106,7 +106,14 @@ public class RepportDelegate {
     }
 
     public static List<ExpenseByImputation> findExpenseReportByImputation(LocalDate date1, LocalDate date2, String region) {
-        List<data.DepenseAgregate> rows = DepenseAgregateDelegate.findDepenseAgregates(date1, date2, region);
+        return groupExpensesByImputation(DepenseAgregateDelegate.findDepenseAgregates(date1, date2, region));
+    }
+
+    /**
+     * Agrege une liste brute de lignes de depense par imputation (montants USD et
+     * CDF cumules). Utilise par l'onglet Rapport de depense et les outils IA.
+     */
+    public static List<ExpenseByImputation> groupExpensesByImputation(List<data.DepenseAgregate> rows) {
         if (rows == null || rows.isEmpty()) {
             return new ArrayList<>();
         }
@@ -123,6 +130,60 @@ public class RepportDelegate {
         List<ExpenseByImputation> result = new ArrayList<>();
         grouped.forEach((k, v) -> result.add(new ExpenseByImputation(k, v[0], v[1])));
         result.sort(Comparator.comparingDouble((ExpenseByImputation e) -> e.montantUsd() + e.montantCdf()).reversed());
+        return result;
+    }
+
+    /**
+     * Detail des depenses realisees : une ligne par couple
+     * (date / imputation / depense), montants USD et CDF cumules, comme la table
+     * "gestion de depenses" de la tresorerie. Les lignes sont triees de la plus
+     * recente a la plus ancienne.
+     */
+    public static List<data.DepenseAgregate> groupExpenseDetails(List<data.DepenseAgregate> rows) {
+        List<data.DepenseAgregate> result = new ArrayList<>();
+        if (rows == null || rows.isEmpty()) {
+            return result;
+        }
+        Map<String, data.DepenseAgregate> grouped = new LinkedHashMap<>();
+        for (data.DepenseAgregate row : rows) {
+            if (row == null) {
+                continue;
+            }
+            String depId = row.getDepenseId() != null ? row.getDepenseId().getUid() : "OTHERS";
+            String imputation = row.getImputation() == null || row.getImputation().isBlank() ? "Divers" : row.getImputation();
+            String day = row.getDate() != null ? row.getDate().toLocalDate().toString() : "NODATE";
+            String key = depId + "|" + imputation + "|" + day;
+            data.DepenseAgregate existing = grouped.get(key);
+            if (existing != null) {
+                existing.setMontantUsd((existing.getMontantUsd() == null ? 0 : existing.getMontantUsd())
+                        + (row.getMontantUsd() == null ? 0 : row.getMontantUsd()));
+                existing.setMontantCdf((existing.getMontantCdf() == null ? 0 : existing.getMontantCdf())
+                        + (row.getMontantCdf() == null ? 0 : row.getMontantCdf()));
+            } else {
+                data.DepenseAgregate detail = new data.DepenseAgregate();
+                detail.setUid(row.getUid());
+                detail.setDepenseId(row.getDepenseId());
+                detail.setRegion(row.getRegion());
+                detail.setImputation(imputation);
+                detail.setDate(row.getDate() != null ? row.getDate().toLocalDate().atStartOfDay() : null);
+                detail.setMontantUsd(row.getMontantUsd() == null ? 0 : row.getMontantUsd());
+                detail.setMontantCdf(row.getMontantCdf() == null ? 0 : row.getMontantCdf());
+                grouped.put(key, detail);
+            }
+        }
+        result.addAll(grouped.values());
+        result.sort((a, b) -> {
+            if (a.getDate() == null && b.getDate() == null) {
+                return 0;
+            }
+            if (a.getDate() == null) {
+                return 1;
+            }
+            if (b.getDate() == null) {
+                return -1;
+            }
+            return b.getDate().compareTo(a.getDate());
+        });
         return result;
     }
 

@@ -66,7 +66,8 @@ public final class OllamaModelFallback {
                 continue;
             }
             built.add(OllamaChatModel.builder()
-                    .baseUrl(AiAgents.OLLAMA_BASE_URL)
+                    .baseUrl(AiAgents.ollamaBaseUrl())
+                    .customHeaders(AiAgents.ollamaAuthHeaders())
                     .modelName(modelName)
                     .temperature(temperature)
                     .numPredict(numPredict)

@@ -515,49 +515,113 @@
                   </AnchorPane>
                </content>
              </Tab>
-             <Tab fx:id="tab_depenses" closable="false" text="Rapport de dépense">
-               <content>
-                 <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                      <children>
-                         <Label layoutX="14.0" layoutY="16.0" text="Depenses agregees par imputation" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="16.0">
-                            <font>
-                               <Font size="23.0" />
-                            </font>
-                         </Label>
-                         <TableView fx:id="tb_depenses" layoutX="14.0" layoutY="65.0" prefHeight="374.0" prefWidth="1180.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="49.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="15.0" AnchorPane.topAnchor="65.0">
-                           <columns>
-                             <TableColumn fx:id="col_dep_imputation" prefWidth="380.0" text="Imputation" />
-                               <TableColumn fx:id="col_dep_usd" prefWidth="200.0" text="Montant USD" />
-                               <TableColumn fx:id="col_dep_cdf" prefWidth="200.0" text="Montant CDF" />
-                           </columns>
-                            <columnResizePolicy>
-                               <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
-                            </columnResizePolicy>
-                         </TableView>
-                         <Label fx:id="totalDepenses" layoutX="14.0" layoutY="468.0" text="Depenses total :" AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="14.0">
-                            <font>
-                               <Font size="17.0" />
-                            </font>
-                         </Label>
-                         <Pane layoutX="244.0" layoutY="16.0" prefHeight="31.0" prefWidth="646.0" style="-fx-background-radius: 20; -fx-border-radius: 20; -fx-background-color: white; -fx-border-color: #eeeeee;" AnchorPane.leftAnchor="244.0" AnchorPane.topAnchor="16.0">
-                            <children>
-                               <ImageView fitHeight="20.0" fitWidth="15.0" layoutX="625.0" layoutY="8.0" pickOnBounds="true" preserveRatio="true">
-                                  <image>
-                                     <Image url="@../icons/search32.png" />
-                                  </image>
-                               </ImageView>
-                                <TextField fx:id="searchDep" layoutX="11.0" layoutY="3.0" prefHeight="24.0" prefWidth="607.0" promptText="Search" style="-fx-background-color: white;" />
-                             </children>
-                          </Pane>
-                          <ImageView fitHeight="36.0" fitWidth="29.0" layoutX="1152.0" layoutY="11.0" onMouseClicked="#exportExpenses" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="28.0" AnchorPane.topAnchor="16.0">
-                             <image>
-                                <Image url="@../icons/excel.png" />
-                             </image>
-                             <cursor>
-                                <Cursor fx:constant="HAND" />
-                             </cursor>
-                          </ImageView>
-                       </children></AnchorPane>
+<Tab fx:id="tab_depenses" closable="false" text="Rapport de dépense">
+                <content>
+                  <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="537.0" prefWidth="1209.0">
+                       <children>
+                          <Label layoutX="840.0" layoutY="12.0" text="Région :" AnchorPane.rightAnchor="320.0" AnchorPane.topAnchor="14.0">
+                             <font>
+                                <Font size="15.0" />
+                             </font>
+                          </Label>
+                          <ComboBox fx:id="cbx_dep_region" layoutX="900.0" layoutY="9.0" prefWidth="300.0" promptText="Toutes succursales" AnchorPane.rightAnchor="14.0" AnchorPane.topAnchor="9.0" />
+                          <TabPane layoutX="0.0" layoutY="44.0" prefHeight="493.0" prefWidth="1209.0" tabClosingPolicy="UNAVAILABLE" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="44.0">
+                            <tabs>
+                               <Tab text="Par imputation">
+                                  <content>
+                                     <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                                          <children>
+                                             <Label layoutX="14.0" layoutY="16.0" text="Depenses agregees par imputation" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="16.0">
+                                                <font>
+                                                   <Font size="23.0" />
+                                                </font>
+                                             </Label>
+                                             <TableView fx:id="tb_depenses" layoutX="14.0" layoutY="65.0" prefHeight="374.0" prefWidth="1180.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="49.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="15.0" AnchorPane.topAnchor="65.0">
+                                               <columns>
+                                                 <TableColumn fx:id="col_dep_imputation" prefWidth="380.0" text="Imputation" />
+                                                   <TableColumn fx:id="col_dep_usd" prefWidth="200.0" text="Montant USD" />
+                                                   <TableColumn fx:id="col_dep_cdf" prefWidth="200.0" text="Montant CDF" />
+                                               </columns>
+                                                <columnResizePolicy>
+                                                   <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                </columnResizePolicy>
+                                             </TableView>
+                                             <Label fx:id="totalDepenses" layoutX="14.0" layoutY="468.0" text="Depenses total :" AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="14.0">
+                                                <font>
+                                                   <Font size="17.0" />
+                                                </font>
+                                             </Label>
+                                             <Pane layoutX="244.0" layoutY="16.0" prefHeight="31.0" prefWidth="646.0" style="-fx-background-radius: 20; -fx-border-radius: 20; -fx-background-color: white; -fx-border-color: #eeeeee;" AnchorPane.leftAnchor="244.0" AnchorPane.topAnchor="16.0">
+                                                <children>
+                                                   <ImageView fitHeight="20.0" fitWidth="15.0" layoutX="625.0" layoutY="8.0" pickOnBounds="true" preserveRatio="true">
+                                                      <image>
+                                                         <Image url="@../icons/search32.png" />
+                                                      </image>
+                                                   </ImageView>
+                                                    <TextField fx:id="searchDep" layoutX="11.0" layoutY="3.0" prefHeight="24.0" prefWidth="607.0" promptText="Search" style="-fx-background-color: white;" />
+                                                 </children>
+                                              </Pane>
+                                              <ImageView fitHeight="36.0" fitWidth="29.0" layoutX="1152.0" layoutY="11.0" onMouseClicked="#exportExpenses" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="28.0" AnchorPane.topAnchor="16.0">
+                                                 <image>
+                                                    <Image url="@../icons/excel.png" />
+                                                 </image>
+                                                 <cursor>
+                                                    <Cursor fx:constant="HAND" />
+                                                 </cursor>
+                                              </ImageView>
+                                           </children></AnchorPane>
+                                  </content>
+                               </Tab>
+                               <Tab text="Détail par dépense">
+                                  <content>
+                                     <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                                          <children>
+                                             <Label layoutX="14.0" layoutY="16.0" text="Detail des depenses realisees" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="16.0">
+                                                <font>
+                                                   <Font size="23.0" />
+                                                </font>
+                                             </Label>
+                                             <TableView fx:id="tb_depenses_detail" layoutX="14.0" layoutY="65.0" prefHeight="374.0" prefWidth="1180.0" tableMenuButtonVisible="true" AnchorPane.bottomAnchor="49.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="15.0" AnchorPane.topAnchor="65.0">
+                                               <columns>
+                                                 <TableColumn fx:id="col_dep_detail_date" prefWidth="150.0" text="Date" />
+                                                   <TableColumn fx:id="col_dep_detail_imputation" prefWidth="200.0" text="Imputation" />
+                                                   <TableColumn fx:id="col_dep_detail_nom" prefWidth="400.0" text="Nom de la dépense" />
+                                                   <TableColumn fx:id="col_dep_detail_usd" prefWidth="200.0" text="Montant USD" />
+                                                   <TableColumn fx:id="col_dep_detail_cdf" prefWidth="200.0" text="Montant CDF" />
+                                               </columns>
+                                                <columnResizePolicy>
+                                                   <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                                                </columnResizePolicy>
+                                             </TableView>
+                                             <Label fx:id="totalDepensesDetail" layoutX="14.0" layoutY="468.0" text="Depenses total :" AnchorPane.bottomAnchor="13.0" AnchorPane.leftAnchor="14.0">
+                                                <font>
+                                                   <Font size="17.0" />
+                                                </font>
+                                             </Label>
+                                             <Pane layoutX="244.0" layoutY="16.0" prefHeight="31.0" prefWidth="646.0" style="-fx-background-radius: 20; -fx-border-radius: 20; -fx-background-color: white; -fx-border-color: #eeeeee;" AnchorPane.leftAnchor="244.0" AnchorPane.topAnchor="16.0">
+                                                <children>
+                                                   <ImageView fitHeight="20.0" fitWidth="15.0" layoutX="625.0" layoutY="8.0" pickOnBounds="true" preserveRatio="true">
+                                                      <image>
+                                                         <Image url="@../icons/search32.png" />
+                                                      </image>
+                                                   </ImageView>
+                                                    <TextField fx:id="searchDepDetail" layoutX="11.0" layoutY="3.0" prefHeight="24.0" prefWidth="607.0" promptText="Search" style="-fx-background-color: white;" />
+                                                 </children>
+                                              </Pane>
+                                              <ImageView fitHeight="36.0" fitWidth="29.0" layoutX="1152.0" layoutY="11.0" onMouseClicked="#exportExpenseDetails" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="28.0" AnchorPane.topAnchor="16.0">
+                                                 <image>
+                                                    <Image url="@../icons/excel.png" />
+                                                 </image>
+                                                 <cursor>
+                                                    <Cursor fx:constant="HAND" />
+                                                 </cursor>
+                                              </ImageView>
+                                           </children></AnchorPane>
+                                  </content>
+                               </Tab>
+                            </tabs>
+                         </TabPane>
+                      </children></AnchorPane>
                  </content>
              </Tab>
              <Tab fx:id="tab_immobilisation" closable="false" text="Immobilisations">

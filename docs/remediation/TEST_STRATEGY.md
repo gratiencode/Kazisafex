@@ -1,7 +1,7 @@
 # STRATÉGIE DE TESTS — Kazisafex
 
-**Date** : 11 novembre 2026  
-**Baseline** : 213 tests verts (dont inventaire, outbox atomique, sauvegardes, dates thread-safe).
+**Date** : 13 novembre 2026  
+**Baseline** : 250 tests verts (dont inventaire, outbox atomique, sauvegardes, dates thread-safe).
 
 ---
 
@@ -22,15 +22,15 @@ qualité. La stratégie cible les **risques métier** :
 | Domaine | Fichiers principaux | Couverture |
 |---|---|---|
 | Secrets | `SecretStoreTest`, `TokenStoreTest` | Bonne (chiffrement, migration, suppression) |
-| Mise à jour | `UpdateVerifierTest` | Bonne (noms, SHA-256, manifeste) |
+| Mise à jour | `UpdateVerifierTest` | Bonne (noms, SHA-256, manifeste, lecture bornée) |
 | MySQL/TLS | `ManagedSessionFactoryDefaultsTest`, `ManagedSessionFactoryTransactionTest`, `MySqlTlsTest` | Bonne (modes TLS, défauts, transactions) |
-| Sync | `SyncOutboxServiceTest`, `BackgroundSyncServiceTest`, `SyncOutboxListenerAtomicTest` | Bonne sur UPSERT/ordre/REMOVE, dead-letter, atomicité, coalescence ; reprise réelle incomplète |
-| Inventaire | `CompterServiceInventoryGuardTest`, `CompterServiceValidationTest`, `InventaireServiceTest` | Bonne sur garde/validation/attente locale ; intégration SQLite réelle limitée |
+| Sync | `SyncOutboxServiceTest`, `BackgroundSyncServiceTest`, `SyncOutboxListenerAtomicTest`, `SyncAcknowledgementsTest` | Bonne sur UPSERT/ordre/REMOVE, dead-letter, atomicité, coalescence, acquittement ; reprise réelle incomplète |
+| Inventaire | `CompterServiceInventoryGuardTest`, `CompterServiceValidationTest`, `InventaireServiceTest` | Bonne sur garde/validation/attente locale/clôture idempotente/photographie ; intégration SQLite réelle limitée |
 | Ventes | `GratienSaleWorkflowTest`, `ClientServiceTest` | Partielle |
 | IA | `GratienMemoryCompactionTest`, `GratienGenericToolsTest`, `OllamaModelFallbackTest` | Partielle |
 | Impression | `PaymentControllerThermalPrintTest`, `SerializationMigrationTest` | Partielle |
 | UI JavaFX | `PosListViewDisplayTest` | Faible |
-| Migration | `SchemaAutoUpdaterTest` | Partielle |
+| Migration | `SchemaAutoUpdaterTest`, `DataIdTest` | Bonne (migration SQLite réelle, identifiants déterministes) |
 
 ## 3. Tests prioritaires à ajouter
 

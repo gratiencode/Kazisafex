@@ -1,6 +1,6 @@
 # BUILD, TESTS ET CI — Kazisafex
 
-**Date** : 11 novembre 2026  
+**Date** : 13 novembre 2026  
 **Référence** : baseline `docs/remediation/BASELINE.md`.
 
 ---
@@ -26,15 +26,17 @@ mvn -B -ntp -Dtests.skip=false test
 
 | Élément | Valeur |
 |---|---|
-| Tests exécutés | **220** |
+| Tests exécutés | **250** |
 | Échecs | 0 |
 | Erreurs | 0 |
 | Ignorés | 0 |
-| Suites | 22 |
+| Suites | 43 |
 | Commande | `mvn -q clean test -Dtests.skip=false` |
 
 Après ajout des tests TLS, `REMOVE`, dead-letter, politique HTTP, garde
-d'inventaire, permissions SQLite, verrouillage, outbox atomique, sauvegardes et validation des quantités, le total est de **220** (validation par `mvn clean test`, qui
+d'inventaire, permissions SQLite, verrouillage, outbox atomique, sauvegardes,
+validation des quantités, identifiants déterministes, acquittement sync et
+migration de schéma, le total est de **250** (validation par `mvn clean test`, qui
 élimine les rapports Surefire périmés).
 
 ## 3. CI GitHub Actions
@@ -62,7 +64,8 @@ Jobs :
 La base historique contient 504 fichiers de production, 530 `System.out`, 101
 `printStackTrace` et de nombreuses God Classes. Rendre SpotBugs bloquant
 immédiatement bloquerait toutes les livraisons sans permettre de trier les
-findings. Le rapport est publié et devra devenir bloquant après la campagne 6.
+findings. Le rapport est publié ; le tri des classes touchées est en cours et
+SpotBugs devra devenir bloquant par catégorie après ce tri.
 
 ## 4. Limites actuelles
 

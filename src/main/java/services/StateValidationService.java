@@ -116,8 +116,11 @@ public class StateValidationService {
 
     private static String fetchStats(String entity, String regionId) {
         return ManagedSessionFactory.executeRead(em -> {
+            // Securite (M3) : whitelist - l'entite doit exister dans le
+            // modele de persistance avant concatenation JPQL.
+            String entityName = SqlGuard.requireKnownEntityName(em, entity);
             String jpql =
-                "SELECT count(e), max(e.updatedAt) FROM " + entity + " e ";
+                "SELECT count(e), max(e.updatedAt) FROM " + entityName + " e ";
             if (regionId != null) {
                 jpql += " WHERE e.region = :region";
             }

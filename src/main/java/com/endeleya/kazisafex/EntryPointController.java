@@ -262,17 +262,18 @@ public class EntryPointController implements Initializable {
 
     private void tryAutoLoginWithSavedSession() {
         boolean keepSession = pref.getBoolean("session", false);
+        //
         if (!keepSession) {
             return;
         }
 
-        String token = pref.get("token", null);
+        String token = data.core.TokenStore.get();
         String euid = pref.get("eUid", null);
-        if (
-            token == null || token.isBlank() || euid == null || euid.isBlank()
-        ) {
-            return;
-        }
+//        if (
+//            token == null || token.isBlank() || euid == null || euid.isBlank()
+//        ) {
+//            return;
+//        }
         String region = pref.get("region", "Lubumbashi");
         String rl = UserRoleRegistry.getRole(pref);
         String uname = pref.get("uname", "");
@@ -376,7 +377,7 @@ public class EntryPointController implements Initializable {
                                 pref.put("uname", lr.getPhone());
                                 pref.put("userid", lr.getUserId());
                                 pref.put("region", lr.getRegion());
-                                pref.put("token", lr.getToken());
+                                data.core.TokenStore.saveFromLogin(lr.getToken());
                                 pref.put("ucontract", lr.getUserContract());
                                 UserRoleRegistry.saveRole(pref, lr.getRole());
                                 genResult = lr;
@@ -428,7 +429,7 @@ public class EntryPointController implements Initializable {
                 boolean sopen = pref.getBoolean("session", true);
                 if (sopen) {
                     String euid = pref.get("eUid", "__Generic_");
-                    String token = pref.get("token", null);
+                    String token = data.core.TokenStore.get();
                     String rl = UserRoleRegistry.getRole(pref);
                     String region = pref.get("region", "Lubumbashi");
                     if (token == null || token.isBlank()) {

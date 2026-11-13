@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import tools.Util;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,7 +18,6 @@ import org.bsc.langgraph4j.state.Channels;
 
 public class GratienExpenseWorkflow {
 
-    private static final String OLLAMA_BASE_URL = AiAgents.OLLAMA_BASE_URL;
     private static final String VISION_MODEL_NAME = AiAgents.VISION_MODEL_NAME;
     private static final String TEXT_MODEL_NAME = AiAgents.MODEL_NAME;
 
@@ -42,6 +42,11 @@ public class GratienExpenseWorkflow {
             return true;
         }
         String value = question == null ? "" : question.toLowerCase(Locale.ROOT);
+        if (Util.isDedupEliminationIntent(value)) {
+            // Elimination/fusion de doublons: ne jamais la detourner vers le workflow
+            // de depenses, meme si le message contient "depense".
+            return false;
+        }
         if (looksLikeInfoQuery(value)) {
             return false;
         }

@@ -1,5 +1,6 @@
 package com.endeleya.kazisafex;
 
+import com.endeleya.ia.AiAgents;
 import com.endeleya.kazisafex.Kazisafex;
 import com.fazecast.jSerialComm.SerialPort;
 import java.awt.Desktop;
@@ -168,8 +169,17 @@ public class ParametreController implements Initializable {
     @FXML
     private Hyperlink logFileHyperlink;
 
+    @FXML
+    private PasswordField pf_ia_api_key;
+
     public void onCachedPageShown() {
         // No longer needed — views are rebuilt fresh each time.
+        if (pref != null && pf_ia_api_key != null) {
+            String storedKey = services.utils.SecretStore.has(AiAgents.PREF_IA_API_KEY)
+                ? services.utils.SecretStore.load(AiAgents.PREF_IA_API_KEY)
+                : services.utils.SecretStore.migrateFromPlainPref(AiAgents.PREF_IA_API_KEY);
+            pf_ia_api_key.setText(java.util.Objects.toString(storedKey, ""));
+        }
     }
 
     public ParametreController() {
@@ -490,9 +500,11 @@ public class ParametreController implements Initializable {
         String host = this.pref.get("default_mysql_host", "localhost");
         this.tf_ip_serveur.setText(host);
         this.tf_port_serveur.setText(Integer.toString(port));
-        this.tf_mysql_user.setText(this.pref.get("default_mysql_user", "root"));
-        this.pf_mysql_password.setText(this.pref.get("default_mysql_password", ""));
-        this.cb_mysql_ssl.setSelected(this.pref.getBoolean("default_mysql_ssl", false));
+        this.tf_mysql_user.setText(this.pref.get("default_mysql_user", ""));
+        this.pf_mysql_password.setText(
+            java.util.Objects.toString(services.utils.SecretStore.load("default_mysql_password"), "")
+        );
+        this.cb_mysql_ssl.setSelected(this.pref.getBoolean("default_mysql_ssl", true));
         this.mm80
             .selectedProperty()
             .addListener((ov, t, t1) ->
@@ -809,6 +821,12 @@ public class ParametreController implements Initializable {
                 }
             });
         this.logFileHyperlink.setText(getLogPath());
+        if (this.pf_ia_api_key != null) {
+            String storedKey = services.utils.SecretStore.has(AiAgents.PREF_IA_API_KEY)
+                ? services.utils.SecretStore.load(AiAgents.PREF_IA_API_KEY)
+                : services.utils.SecretStore.migrateFromPlainPref(AiAgents.PREF_IA_API_KEY);
+            this.pf_ia_api_key.setText(java.util.Objects.toString(storedKey, ""));
+        }
         this.methodGroup = new ToggleGroup();
         this.mode_stock = new ToggleGroup();
         this.mode_printer = new ToggleGroup();
@@ -846,6 +864,28 @@ public class ParametreController implements Initializable {
     }
 
     @FXML
+    private void configIaApiKey(ActionEvent event) {
+        String key = pf_ia_api_key.getText() == null ? "" : pf_ia_api_key.getText().trim();
+        if (key.isEmpty()) {
+            // Cle vide : suppression de la cle enregistree. Aucune cle par
+            // defaut n'est embarquee : l'assistant devra etre reconfigure.
+            services.utils.SecretStore.remove(AiAgents.PREF_IA_API_KEY);
+            this.pref.remove(AiAgents.PREF_IA_API_KEY);
+            pf_ia_api_key.clear();
+        } else {
+            services.utils.SecretStore.store(AiAgents.PREF_IA_API_KEY, key);
+            this.pref.remove(AiAgents.PREF_IA_API_KEY);
+        }
+        MainUI.notify(
+            null,
+            (String) "Succes",
+            (String) "Cle API de l'assistant Gratien enregistree (appliquee au prochain redemarrage de l'assistant).",
+            (long) 4L,
+            (String) "info"
+        );
+    }
+
+    @FXML
     private void saveConfigurations(ActionEvent event) {
         boolean go = true;
         if (this.tf_ip_serveur.getText().isEmpty()) {
@@ -875,10 +915,14 @@ public class ParametreController implements Initializable {
                             ? ""
                             : this.tf_mysql_user.getText().trim()
                     );
-                    this.pref.put(
-                        "default_mysql_password",
-                        this.pf_mysql_password.getText()
-                    );
+                    String password = this.pf_mysql_password.getText();
+                    if (password == null || password.isBlank()) {
+                        services.utils.SecretStore.remove("default_mysql_password");
+                        this.pref.remove("default_mysql_password");
+                    } else {
+                        services.utils.SecretStore.store("default_mysql_password", password);
+                        this.pref.remove("default_mysql_password");
+                    }
                     this.pref.putBoolean(
                         "default_mysql_ssl",
                         this.cb_mysql_ssl.isSelected()

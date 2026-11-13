@@ -23,7 +23,7 @@ public final class CurrencyConverter {
     private static final String PREF_MAIN_CURRENCY = "mainCur";
     private static final String PREF_LEGACY_CDF_RATE = "taux2change";
     private static final String PREF_RATE_PREFIX = "currency.rate.";
-    private static final double DEFAULT_CDF_RATE = 2000.0;
+    private static final double DEFAULT_CDF_RATE = 2300.0;
 
     private CurrencyConverter() {
     }
@@ -230,6 +230,9 @@ public final class CurrencyConverter {
     }
 
     public static double round(double value) {
+        if (!Double.isFinite(value)) {
+            return 0d;
+        }
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
     }
 
@@ -314,6 +317,9 @@ public final class CurrencyConverter {
 
     /** Arrondi CDF sans decimales (usage panier). */
     public static double roundCdf(double value) {
+        if (!Double.isFinite(value)) {
+            return 0d;
+        }
         return BigDecimal.valueOf(value).setScale(0, RoundingMode.HALF_EVEN).doubleValue();
     }
 

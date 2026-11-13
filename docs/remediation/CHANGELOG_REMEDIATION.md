@@ -617,3 +617,59 @@ niveau sécurité/fiabilité demandée en 2026-11.
 - `GratienTools.purchaseAmount` arrondit désormais en BigDecimal HALF_UP à
   2 décimales ; `1.005` devient `1.01` (Math.round binaire donnait `1`).
 - Test ajouté (entier, centimes, décimal) ; suite complète 220/220.
+
+## Campagne 12 — Durcissement final (2026-11-13)
+
+- **DataId** : `generateInt`/`generateLong` utilisent `SecureRandom`
+  (plage 31/63 bits positives), ce qui supprime l'avertissement SpotBugs
+  `PREDICTABLE_RANDOM`. L'ancien générateur borné à ~3 144 valeurs
+  pouvait provoquer une collision de clé primaire sur `vente`.
+- **Identifiants déterministes** : `DataId.deterministic(...)` (SHA-256,
+  32 hex) pour les comptages zéro de clôture ; une clôture rejouée ou
+  concurrente vise la même ligne, la clé primaire empêche un double
+  ajustement. Les doublons de clé sont journalisés et ignorés.
+- **Photographie théorique** : colonne `compter.theoretical_snapshot`,
+  migration idempotente `SchemaAutoUpdater.ensureCompterSchema`, utilisée
+  par `editStock`, `revertCompterAdjustments` et la clôture. `@JsonIgnore`
+  pour ne pas modifier le contrat serveur.
+- **Clôture idempotente** : `removeNoCountedProducts` ne fait rien si
+  l'inventaire est déjà `Terminé` ; test dédié.
+- **Clôture atomique** : les écritures/lectures imbriquées réutilisent
+  l'`EntityManager` de la transaction courante (`ManagedSessionFactory`), et
+  `removeNoCountedProducts` enveloppe comptages zéro + purges + ajustements
+  dans un seul `executeWrite`. Une erreur annule toute la régularisation.
+- **Journalisation** : plus de payload complet dans `System.out`
+  (`SyncOutboxListener`) ; `System.out/err` remplacés par `java.util.logging`
+  dans `CompterService` et `InventaireService`.
+- **Mise à jour** : lecture du manifeste bornée à 1 Mio
+  (`UpdateVerifier.readBounded`) contre un flux infini.
+- **Acquittement sync** : `SyncAcknowledgements.matchOnePerResult` limite à
+  un acquittement par résultat serveur, sans sur-acquitter plusieurs
+  mutations distinctes d'une même entité.
+- **Outbox** : la recherche de mutation en attente inclut désormais la région,
+  pour ne pas fusionner deux entités de même uid issues de bases copiées.
+- **CI** : suppression du second upload d'artefact `surefire-reports`
+  (nom dupliqué, échec `upload-artifact@v4`).
+- **Transactions MySQL** : `updateCompterMeta`, `deletePrixDeVente`,
+  `purgeAjustementRecquisition` et `createClient` passent par `executeWrite`
+  au lieu de committer une transaction potentiellement ouverte par
+  l'appelant.
+- **Confirmation de comptage** : `confirmerComptage` refuse les entrées
+  vides et fixe `dateCount`/`timestamp` avant `editStock` ; `editStock`
+  retombe sur la date du jour si `dateCount` manque (plus de NPE).
+- **Lots nuls/vides** : nouvelle clé canonique `tools.LotKeys.normalize`
+  (`null` → `""`, espaces retirés) et comparaisons `COALESCE(colonne, '')`
+  dans les lectures/écritures de stock et d’ajustements. La clôture d’inventaire
+  inclut désormais le lot vide : les produits sans numéro de lot sont soldés
+  comme les autres au lieu d’être seulement avertis.
+- **SpotBugs** : identifiants de tables/colonnes/types validés avant
+  concaténation DDL dans `SchemaAutoUpdater` ; état partagé de
+  `BackgroundSyncService` (`isPaused`, tailles de lot, pauses, backoff,
+  instance) rendu `volatile`.
+- **Tests** : `ManagedSessionFactoryTransactionTest` (composition des écritures
+  imbriquées), `SyncRetryHandlerTest` (retry transitoire, erreur définitive,
+  interruption), `DataIdTest` (dont déterminisme), `SyncAcknowledgementsTest`,
+  `SchemaAutoUpdaterTest` (migration SQLite réelle), garde de clôture,
+  confirmation de comptage, `UpdateVerifierTest`, `LotKeysTest` et
+  `CompterServiceLotNormalizationTest` étendus. Suite complète
+  **250/250, 43 suites**.

@@ -131,7 +131,8 @@ public class SyncOutboxListener {
             return;
         }
 
-        System.out.println("========================= L'etat de final payload "+finalPayload+"===============================");
+        // Ne jamais journaliser le payload complet : il contient des donnees
+        // commerciales et potentiellement des informations client.
         outboxExecutor.submit(() -> {
             int attempt = 0;
             while (true) {
@@ -201,7 +202,7 @@ public class SyncOutboxListener {
             String finalEntityId, String finalPayload, Object entity,
             String eUid, String region) {
         LocalDateTime updatedAt = getUpdatedAt(entity);
-        SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+        SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId, region);
         boolean created = false;
         if (outbox == null) {
             outbox = new SyncOutbox();
@@ -250,7 +251,7 @@ public class SyncOutboxListener {
         // UPDATE...) jamais consolidé par le backfill.
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
-                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId, region);
                 boolean created = false;
                 // Tous les champs (dont l'action, non-nullable) sont positionnes
                 // AVANT le persist : persister avec action null leve une
@@ -286,7 +287,7 @@ public class SyncOutboxListener {
                 tx.begin();
             }
             try {
-                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId);
+                SyncOutbox outbox = findPendingOutbox(em, finalType, finalEntityId, region);
                 boolean created = false;
                 // Champs configures AVANT le persist : l'action est non-nullable,
                 // persister avant de la positionner leve une PropertyValueException.
@@ -323,19 +324,25 @@ public class SyncOutboxListener {
     private SyncOutbox findPendingOutbox(
         EntityManager em,
         String tableName,
-        String entityId
+        String entityId,
+        String region
     ) {
         // Ne jamais transformer une erreur de requete en "aucun enregistrement" :
         // cela creerait un doublon d'outbox et masquerait une panne de stockage.
         // L'exception remonte et fait annuler la transaction metier ; le chemin
         // asynchrone de repli reessaiera.
+        //
+        // La region fait partie de la cle logique : deux bases copiees peuvent
+        // contenir le meme uid pour des entites distinctes. Sans ce filtre, la
+        // mutation d'une region ecraserait le payload en attente de l'autre.
         List<SyncOutbox> results = em
             .createQuery(
-                "SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.entityId = :entityId AND s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt DESC",
+                "SELECT s FROM SyncOutbox s WHERE s.tableName = :tableName AND s.entityId = :entityId AND s.region = :region AND s.status IN ('PENDING','UNSYNCED','FAILED') ORDER BY s.createdAt DESC",
                 SyncOutbox.class
             )
             .setParameter("tableName", tableName)
             .setParameter("entityId", entityId)
+            .setParameter("region", region)
             .setMaxResults(1)
             .getResultList();
         return results.isEmpty() ? null : results.get(0);

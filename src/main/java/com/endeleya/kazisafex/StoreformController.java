@@ -263,7 +263,7 @@ public class StoreformController implements Initializable {
     }
 
     public void setDatabase(Entreprise eze) {
-        ksf = KazisafeServiceFactory.createService(pref.get("token", null));
+        ksf = KazisafeServiceFactory.createService(data.core.TokenStore.get());
         this.entreprise = eze;
 
         lisfournisseur = FXCollections.observableArrayList(FournisseurDelegate.findFournisseurs());
@@ -1149,7 +1149,7 @@ public class StoreformController implements Initializable {
         pref = Preferences.userNodeForPackage(SyncEngine.class);
         taux = CurrencyConverter.activeRate();
         region = pref.get("region", null);
-        token = pref.get("token", null);
+        token = data.core.TokenStore.get();
         role = UserRoleRegistry.getRole(pref);
         List<Livraison> livrs = LivraisonDelegate.findLivraisons();
         lisvrezon.addAll(livrs);

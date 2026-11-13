@@ -46,25 +46,36 @@ public class TraisorerieService implements TraisorerieStorage {
 
     @Override
     public Traisorerie createTraisorerie(Traisorerie cat) {
+        final Traisorerie value = cat;
         if (ManagedSessionFactory.isEmbedded()) {
             ManagedSessionFactory.submitWrite(em -> {
-                em.persist(cat);
-                return cat;
+                if (value.getUid() != null && em.find(Traisorerie.class, value.getUid()) != null) {
+                    return em.merge(value);
+                }
+                em.persist(value);
+                return value;
             }).thenAccept(e -> {
                 System.out.println("Element TX " + e.getReference() + " enregistree");
                 AggregateTriggerService.getInstance().notifyTraisorerie(e);
             });
-            return cat;
+            return value;
         }
         EntityTransaction etr = ManagedSessionFactory.getEntityManager().getTransaction();
         if (!etr.isActive()) {
             etr.begin();
         }
-        ManagedSessionFactory.getEntityManager().persist(cat);
+        Traisorerie existing = value.getUid() == null ? null
+                : ManagedSessionFactory.getEntityManager().find(Traisorerie.class, value.getUid());
+        Traisorerie saved = existing != null
+                ? ManagedSessionFactory.getEntityManager().merge(value)
+                : value;
+        if (existing == null) {
+            ManagedSessionFactory.getEntityManager().persist(value);
+        }
         etr.commit();
-        AggregateTriggerService.getInstance().notifyTraisorerie(cat);
+        AggregateTriggerService.getInstance().notifyTraisorerie(saved);
         // ManagedSessionFactory.getEntityManager().clear();
-        return cat;
+        return saved;
     }
 
     @Override

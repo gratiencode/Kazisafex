@@ -6,24 +6,41 @@ import data.helpers.Token;
 import data.helpers.TokenRefreshed;
 import data.network.Kazisafe;
 import java.io.IOException;
-import java.util.prefs.Preferences;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
-import tools.SyncEngine;
 
 public final class TokenRefreshClient {
 
     private static final Logger LOGGER = Logger.getLogger(TokenRefreshClient.class.getName());
     private static final ObjectMapper MAPPER = KazisafeServiceFactory.mapper();
-    private static final Preferences PREFS = Preferences.userNodeForPackage(SyncEngine.class);
+    private static final long REFRESH_DEDUPE_MS = 3_000L;
+    private static final Object REFRESH_LOCK = new Object();
+    private static volatile String lastSourceToken;
+    private static volatile String lastFreshToken;
+    private static volatile long lastRefreshAtMs;
 
     public String refreshAccessToken(String currentToken) {
         String normalized = normalize(currentToken);
         if (normalized == null || normalized.isBlank()) {
             return null;
         }
+        synchronized (REFRESH_LOCK) {
+            if (normalized.equals(lastSourceToken)
+                    && System.currentTimeMillis() - lastRefreshAtMs < REFRESH_DEDUPE_MS) {
+                LOGGER.fine("Reusing token refresh result from concurrent call");
+                return lastFreshToken;
+            }
+            String fresh = doRefresh(normalized);
+            lastSourceToken = normalized;
+            lastFreshToken = fresh;
+            lastRefreshAtMs = System.currentTimeMillis();
+            return fresh;
+        }
+    }
+
+    private String doRefresh(String normalized) {
         try {
             Kazisafe apiService = KazisafeServiceFactory.getInstanceRefresh().create(Kazisafe.class);
             Token token = new Token();
@@ -47,7 +64,7 @@ public final class TokenRefreshClient {
             }
             String freshToken = extractToken(body);
             if (freshToken != null && !freshToken.isBlank()) {
-                PREFS.put("token", freshToken);
+                TokenStore.store(freshToken);
                 return freshToken;
             }
         } catch (IOException ex) {

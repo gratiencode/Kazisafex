@@ -377,19 +377,19 @@ public class ClientService implements ClientStorage {
 
         java.util.Map<String, List<Client>> groups = new java.util.HashMap<>();
         for (Client c : clients) {
-            if (c.getNomClient() == null || c.getPhone() == null) {
+            if (c.getNomClient() == null) {
                 continue;
             }
+            // Le client est identifie par son nom uniquement : deux clients qui
+            // portent le meme nom sont consideres comme le meme client.
             String name = c.getNomClient().trim().toLowerCase();
-            String phone = c.getPhone().trim().replaceAll("\\s+", "");
-            if (name.isEmpty() || phone.isEmpty()) {
+            if (name.isEmpty()) {
                 continue;
             }
-            if (phone.equals("09000") || phone.equals("09001") || name.equals("anonyme") || name.equals("importer")) {
+            if (name.equals("anonyme") || name.equals("importer")) {
                 continue;
             }
-            String key = name + "|" + phone;
-            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(c);
+            groups.computeIfAbsent(name, k -> new ArrayList<>()).add(c);
         }
 
         int count = 0;

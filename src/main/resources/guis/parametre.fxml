@@ -33,7 +33,7 @@
       </Label>
       <ScrollPane layoutX="7.0" layoutY="64.0" prefHeight="479.0" prefWidth="1126.0" vvalue="0.64" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" AnchorPane.topAnchor="64.0">
         <content>
-           <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="1640.0" prefWidth="1137.0">
+            <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="1860.0" prefWidth="1137.0">
                <children>
                   <AnchorPane layoutX="241.0" layoutY="11.0" prefHeight="183.0" prefWidth="754.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="142.0" AnchorPane.topAnchor="11.0">
                      <children>
@@ -209,6 +209,16 @@
                               </font>
                            </Button>
                            <Hyperlink fx:id="logFileHyperlink" onAction="#openLogFile" text="chargement..." AnchorPane.leftAnchor="280.0" AnchorPane.topAnchor="136.0" />
+                       </children>
+                    </AnchorPane>
+                    <Label layoutX="15.0" layoutY="1668.0" text="Assistant Gratien (IA)" />
+                    <Separator layoutY="1656.0" prefHeight="3.0" prefWidth="1114.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />
+                     <AnchorPane layoutX="241.0" layoutY="1680.0" prefHeight="150.0" prefWidth="758.0" style="-fx-background-color: white; -fx-border-color: #44cef5;" AnchorPane.leftAnchor="241.0" AnchorPane.rightAnchor="138.0">
+                        <children>
+                           <Label text="Cle API de l'assistant Gratien (Ollama Cloud)" AnchorPane.leftAnchor="30.0" AnchorPane.topAnchor="26.0" />
+                           <PasswordField fx:id="pf_ia_api_key" layoutX="330.0" layoutY="22.0" prefHeight="26.0" prefWidth="290.0" promptText="Cle API Ollama Cloud (https://ollama.com)" AnchorPane.leftAnchor="330.0" AnchorPane.topAnchor="22.0" />
+                           <Button mnemonicParsing="false" onAction="#configIaApiKey" prefHeight="30.0" prefWidth="52.0" style="-fx-background-color: #44cef5;" text="OK" textFill="WHITE" AnchorPane.leftAnchor="640.0" AnchorPane.topAnchor="20.0" />
+                           <Label text="Utilisee par Gratien pour toutes ses analyses. La cle est appliquee au prochain redemarrage de l'assistant." wrapText="true" AnchorPane.bottomAnchor="22.0" AnchorPane.leftAnchor="30.0" AnchorPane.rightAnchor="30.0" />
                        </children>
                     </AnchorPane>
                 </children>

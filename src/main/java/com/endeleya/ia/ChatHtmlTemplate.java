@@ -21,6 +21,131 @@ public final class ChatHtmlTemplate {
                 + "\"";
     }
 
+    public static String planApprovalHtml(String planMarkdown) {
+        Preferences prefs = Preferences.userNodeForPackage(SyncEngine.class);
+        boolean dark = prefs.getBoolean("dark_theme_enabled", false);
+        String planArg = jsString(planMarkdown == null ? "" : planMarkdown);
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <style>
+                body {
+                    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.55;
+                    color: %s;
+                    background: %s;
+                    margin: 4px;
+                    padding: 0;
+                }
+                h1, h2, h3, h4 {
+                    margin: 10px 0 6px;
+                    line-height: 1.3;
+                }
+                table {
+                    border-collapse: collapse;
+                    width: 100%%;
+                    margin: 8px 0;
+                }
+                th, td {
+                    border: 1px solid %s;
+                    padding: 7px 9px;
+                    text-align: left;
+                    vertical-align: top;
+                    overflow-wrap: anywhere;
+                }
+                th {
+                    background: %s;
+                    font-weight: 600;
+                }
+                tr:nth-child(even) td { background: %s; }
+                code {
+                    font-family: Consolas, "DejaVu Sans Mono", monospace;
+                    font-size: 12px;
+                    background: %s;
+                    border-radius: 3px;
+                    padding: 1px 4px;
+                    word-break: break-all;
+                }
+                strong { font-weight: 650; }
+                em { font-style: italic; }
+                ul, ol { margin: 4px 0; padding-left: 22px; }
+                p { margin: 6px 0; }
+            </style>
+            </head>
+            <body>
+            <div id="plan"></div>
+            <script>
+            function escapeHtml(text) {
+                return (text || '').replace(/[&<>"']/g, function(ch) {
+                    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch];
+                });
+            }
+            function renderInline(text) {
+                return escapeHtml(text)
+                   .replace(/`([^`]+)`/g, '<code>$1</code>')
+                   .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
+                   .replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+            }
+            function isSeparator(line) {
+                return /^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(line);
+            }
+            function renderTable(lines, start) {
+                const rows = [];
+                let index = start;
+                while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
+                    if (!isSeparator(lines[index])) {
+                        let cells = lines[index].trim();
+                        if (cells.startsWith('|')) cells = cells.substring(1);
+                        if (cells.endsWith('|')) cells = cells.substring(0, cells.length - 1);
+                        rows.push(cells.split('|').map(cell => renderInline(cell.trim())));
+                    }
+                    index++;
+                }
+                if (rows.length === 0) return { html: '', next: start + 1 };
+                const head = rows[0];
+                const body = rows.slice(1);
+                let h = '<table><thead><tr>' + head.map(cell => '<th>' + cell + '</th>').join('') + '</tr></thead><tbody>';
+                h += body.map(row => '<tr>' + row.map(cell => '<td>' + cell + '</td>').join('') + '</tr>').join('');
+                h += '</tbody></table>';
+                return { html: h, next: index };
+            }
+            function renderMarkdown(text) {
+                const clean = (text || '').replace(/[\\s\\S]*?<\\/think>/g, '').trim();
+                const lines = clean.split(/\\n/);
+                let html = '';
+                for (let i = 0; i < lines.length; i++) {
+                    const t = lines[i].trim();
+                    if (t.includes('|') && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+                        const result = renderTable(lines, i);
+                        html += result.html;
+                        i = result.next - 1;
+                    } else if (/^#{1,4}\\s/.test(t)) {
+                        const level = t.match(/^#+/)[0].length;
+                        html += '<h' + level + '>' + renderInline(t.replace(/^#+\\s*/, '')) + '</h' + level + '>';
+                    } else if (t === '') {
+                        html += '<br>';
+                    } else {
+                        html += '<p>' + renderInline(lines[i]) + '</p>';
+                    }
+                }
+                return html;
+            }
+            document.getElementById('plan').innerHTML = renderMarkdown(%s);
+            </script>
+            </body>
+            </html>
+            """.formatted(dark ? "#e6ebf4" : "#1c2333", dark ? "#0f172a" : "#ffffff",
+                    dark ? "rgba(255,255,255,.18)" : "rgba(18,32,58,.18)",
+                    dark ? "#2c3a55" : "#eef2f8",
+                    dark ? "rgba(255,255,255,.04)" : "rgba(18,32,58,.03)",
+                    dark ? "#2c3a55" : "#eef2f8",
+                    planArg);
+        return html;
+    }
+
     public static String content() {
         String lang = Preferences.userNodeForPackage(SyncEngine.class).get("lang", "fr");
         boolean dark = Preferences.userNodeForPackage(SyncEngine.class).getBoolean("dark_theme_enabled", false);
@@ -503,8 +628,8 @@ public final class ChatHtmlTemplate {
                window.scrollTo(0, document.body.scrollHeight);
            }
 
-           function showBotProcess(text) {
-               if (!currentBotTextDiv) {
+function showBotProcess(text) {
+                if (!currentBotTextDiv || !currentBotIsProcess) {
                    const chat = document.getElementById('chat');
                    const msgDiv = document.createElement('div');
                    msgDiv.className = 'message assistant';

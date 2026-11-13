@@ -71,7 +71,7 @@ public class MezureController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         pref=Preferences.userNodeForPackage(tools.SyncEngine.class);
         bundle = rb;
-        kazisafe = KazisafeServiceFactory.createService(pref.get("token", null));
+        kazisafe = KazisafeServiceFactory.createService(data.core.TokenStore.get());
     }
 
     @FXML

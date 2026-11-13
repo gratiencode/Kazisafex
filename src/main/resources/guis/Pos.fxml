@@ -71,7 +71,7 @@
                                     </ImageView>
                                     <Accordion layoutX="32.0" layoutY="440.0" prefHeight="54.0" prefWidth="263.0" style="-fx-background-color: white;" AnchorPane.bottomAnchor="51.0" AnchorPane.leftAnchor="32.0" AnchorPane.rightAnchor="33.0">
                                       <panes>
-                                        <TitledPane expanded="false" prefHeight="52.0" prefWidth="263.0" style="-fx-background-color: #ffffff; -fx-background-radius: 20; -fx-border-radius: 20;" text="%xplus_option">
+                                        <TitledPane expanded="false" prefHeight="52.0" prefWidth="263.0" style="-fx-background-color: #ffffff; -fx-background-radius: 20; -fx-border-radius: 20;" text="%xplus_option" visible="false">
                                           <content>
                                             <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="95.0" prefWidth="302.0">
                                                    <children>
@@ -82,7 +82,7 @@
                                         </TitledPane>
                                       </panes>
                                     </Accordion>
-                                    <Button fx:id="btn_pay_now" layoutX="32.0" layoutY="499.0" mnemonicParsing="false" onAction="#payNow" prefHeight="37.0" prefWidth="263.0" style="-fx-background-color: #44cef5;" text="%xbtn.pay_now" textFill="#fcfafa" AnchorPane.bottomAnchor="9.0" AnchorPane.leftAnchor="32.0" AnchorPane.rightAnchor="33.0" />
+                                    <Button fx:id="btn_pay_now" layoutX="85.0" layoutY="468.0" mnemonicParsing="false" onAction="#payNow" prefHeight="37.0" prefWidth="207.0" style="-fx-background-color: #44cef5;" text="%xbtn.pay_now" textFill="#fcfafa" AnchorPane.bottomAnchor="40.0" AnchorPane.leftAnchor="85.0" AnchorPane.rightAnchor="34.0" />
                                     <Pane fx:id="motif_declass" layoutX="14.0" layoutY="240.0" prefHeight="156.0" prefWidth="304.0" style="-fx-background-color: white; -fx-border-radius: 20; -fx-background-radius: 20;" AnchorPane.bottomAnchor="149.0" AnchorPane.rightAnchor="8.0">
                                        <effect>
                                           <DropShadow />
@@ -138,6 +138,14 @@
                                     <ImageView fitHeight="37.0" fitWidth="26.0" layoutX="214.0" layoutY="13.0" onMouseClicked="#goToClient" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.rightAnchor="86.0">
                                        <image>
                                           <Image url="@../icons/add-user.png" />
+                                       </image>
+                                       <cursor>
+                                          <Cursor fx:constant="HAND" />
+                                       </cursor>
+                                    </ImageView>
+                                    <ImageView fitHeight="36.0" fitWidth="42.0" layoutX="32.0" layoutY="468.0" onMouseClicked="#payNow" onMouseEntered="#onHoverHome" onMouseExited="#onOutHome" pickOnBounds="true" preserveRatio="true" AnchorPane.bottomAnchor="41.0" AnchorPane.leftAnchor="32.0">
+                                       <image>
+                                          <Image url="@../icons/pay.png" />
                                        </image>
                                        <cursor>
                                           <Cursor fx:constant="HAND" />

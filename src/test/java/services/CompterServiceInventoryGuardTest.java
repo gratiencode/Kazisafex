@@ -2,13 +2,16 @@ package services;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.concurrent.locks.ReentrantLock;
 
+import data.Compter;
 import data.Inventaire;
 import data.Produit;
 import data.StockAgregate;
@@ -69,6 +72,85 @@ class CompterServiceInventoryGuardTest {
 
         assertEquals(42d, quantity);
         assertEquals(opening, seenDate[0]);
+    }
+
+    @Test
+    void persistedSnapshotIsTheImmutableReference() {
+        Inventaire inventory = new Inventaire();
+        inventory.setUid("inv-snapshot");
+        inventory.setDateDebut(LocalDate.of(2026, 11, 1));
+        Produit product = new Produit("prod-snapshot");
+
+        Compter line = new Compter();
+        line.setTheoreticalSnapshot(15d);
+
+        CompterService service = new CompterService();
+        assertEquals(15d, service.resolveTheoreticalReference(
+                line, product, "lot-snapshot", inventory, "Lubumbashi"),
+                "La photographie persistée doit primer sur tout recalcul");
+    }
+
+    @Test
+    void legacyLineWithoutSnapshotFallsBackToOpeningReference() {
+        Inventaire inventory = new Inventaire();
+        inventory.setUid("inv-legacy");
+        inventory.setDateDebut(LocalDate.of(2026, 11, 1));
+        Produit product = new Produit("prod-legacy");
+
+        CompterService service = new CompterService() {
+            @Override
+            public StockAgregate findLotStock(String pId, String lot, LocalDate date, String region) {
+                StockAgregate aggregate = new StockAgregate("stock-legacy");
+                aggregate.setFinalQuantity(7d);
+                return aggregate;
+            }
+        };
+
+        assertEquals(7d, service.resolveTheoreticalReference(
+                new Compter(), product, "lot-legacy", inventory, "Lubumbashi"));
+    }
+
+    @Test
+    void closingAnAlreadyClosedInventoryIsANoOp() {
+        Inventaire closed = new Inventaire();
+        closed.setUid("inv-closed");
+        closed.setEtat("Terminé");
+
+        assertDoesNotThrow(() -> new CompterService().removeNoCountedProducts(closed),
+                "une clôture rejouée ne doit ni recréer de comptages zéro ni ajuster le stock");
+    }
+
+    @Test
+    void closedInventoryIsDetectedForIdempotentClose() {
+        Inventaire closed = new Inventaire();
+        closed.setEtat("Terminé");
+        Inventaire open = new Inventaire();
+        open.setEtat("En cours...");
+
+        assertTrue(CompterService.isInventoryClosed(closed));
+        assertFalse(CompterService.isInventoryClosed(open));
+        assertFalse(CompterService.isInventoryClosed(null));
+    }
+
+    @Test
+    void confirmingEmptyComptageIsIgnoredInsteadOfThrowing() {
+        CompterService service = new CompterService();
+        assertDoesNotThrow(() -> service.confirmerComptage(null));
+        assertDoesNotThrow(() -> service.confirmerComptage(new tools.ComptageItem()));
+    }
+
+    @Test
+    void theoreticalSnapshotIsExcludedFromServerPayload() throws Exception {
+        Compter compter = new Compter();
+        compter.setUid("compter-snapshot");
+        compter.setTheoreticalSnapshot(7.5);
+
+        String json = data.core.KazisafeServiceFactory.mapper()
+                .writeValueAsString(compter);
+
+        assertFalse(json.contains("theoreticalSnapshot"),
+                "la photographie locale ne doit pas modifier le contrat serveur");
+        assertFalse(json.contains("theoretical_snapshot"));
     }
 
     @Test

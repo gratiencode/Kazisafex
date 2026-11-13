@@ -62,7 +62,11 @@ public class SerialPrintService implements PrintService {
 
     @Override
     public DocFlavor[] getSupportedDocFlavors() {
-        return new DocFlavor[]{DocFlavor.SERVICE_FORMATTED.PRINTABLE, DocFlavor.BYTE_ARRAY.AUTOSENSE};
+        return new DocFlavor[]{
+            DocFlavor.INPUT_STREAM.AUTOSENSE,
+            DocFlavor.BYTE_ARRAY.AUTOSENSE,
+            DocFlavor.SERVICE_FORMATTED.PRINTABLE
+        };
     }
 
     @Override
@@ -146,31 +150,39 @@ public class SerialPrintService implements PrintService {
             port.setNumDataBits(8);
             port.setNumStopBits(SerialPort.ONE_STOP_BIT);
             port.setParity(SerialPort.NO_PARITY);
-            
+
+            long started = System.currentTimeMillis();
+            byte[] payload = new byte[0];
+            long sent = 0L;
+            boolean failed = false;
             if (port.openPort()) {
                 try (OutputStream out = port.getOutputStream()) {
-                    Object data = doc.getPrintData();
-                    if (data instanceof byte[]) {
-                        out.write((byte[]) data);
-                    } else if (data instanceof java.io.InputStream) {
-                        byte[] buffer = new byte[1024];
-                        int len;
-                        java.io.InputStream in = (java.io.InputStream) data;
-                        while ((len = in.read(buffer)) != -1) {
-                            out.write(buffer, 0, len);
-                        }
-                    }
+                    // escpos-coffee fournit le flux ESC/POS via
+                    // DocFlavor.INPUT_STREAM : getPrintData() seul peut renvoyer
+                    // null et l'imprimante ne recoit alors aucun octet.
+                    payload = EscPosPrintSupport.docToBytes(doc);
+                    // Envoi par blocs pour ne pas deborder le tampon de l'imprimante.
+                    sent = EscPosPrintSupport.writeChunked(out, payload);
                     out.flush();
-                    // Wait a bit for the printer to process
-                    Thread.sleep(500);
-                } catch (IOException | InterruptedException e) {
+                    EscPosPrintSupport.pause(EscPosPrintSupport.CUT_DELAY_MS);
+                } catch (IOException e) {
+                    failed = true;
                     tools.SyncLogger.getInstance().log(e, "SerialPrintService.print");
+                    EscPosPrintSupport.logPayload("SerialPrintService.print (ECHEC)",
+                            service.getName(), payload, sent, System.currentTimeMillis() - started);
                     throw new PrintException("Serial printing failed: " + e.getMessage(), e);
                 } finally {
                     port.closePort();
+                    if (!failed) {
+                        EscPosPrintSupport.logPayload("SerialPrintService.print",
+                                service.getName(), payload, sent, System.currentTimeMillis() - started);
+                    }
                 }
             }
             else {
+                  EscPosPrintSupport.logPayload("SerialPrintService.print (PORT IMPOSSIBLE A OUVRIR)",
+                          service.getName() + " / " + service.getPortSystemName(),
+                          new byte[0], 0L, System.currentTimeMillis() - started);
                   tools.MainUI.notify(null, "Impression", "Aucune imprimante trouvée pour ce parametre.", 4, "warning");
 //                throw new PrintException("Could not open serial port: " + service.getPortSystemName());
             }

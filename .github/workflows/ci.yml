@@ -46,14 +46,6 @@ jobs:
           path: target/surefire-reports/
           if-no-files-found: ignore
 
-      - name: Upload surefire reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: surefire-reports
-          path: target/surefire-reports/
-          if-no-files-found: ignore
-
   static-analysis:
     name: Static analysis (non-blocking initial baseline)
     runs-on: ubuntu-latest
